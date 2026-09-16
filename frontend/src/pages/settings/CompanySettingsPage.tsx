@@ -24,9 +24,11 @@ import {
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
 import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
+import { CompanyWhatsAppQuotaSettingsDialog } from "./components/CompanyWhatsAppQuotaSettingsDialog";
 import {
   useCompanyAlertRecipients,
 } from "../../hooks/useCompanyAlertRecipients";
+import { useWhatsAppQuotaSettings } from "../../hooks/useWhatsAppQuotaSettings";
 import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
@@ -34,11 +36,14 @@ import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypeP
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
+import { CompanyShiftTemplatesDialog } from "./components/CompanyShiftTemplatesDialog";
 import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
 import { LocationZonesDialog } from "./components/LocationZonesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import { useShiftTemplates } from "../../hooks/useShiftTemplates";
+import { isOvernightShift } from "../../utils/operation-shift-payload";
 
 type SettingsTab = "company" | "absences";
 
@@ -50,9 +55,11 @@ type DialogKey =
   | "absenceOperationalIntegration"
   | "locationTypes"
   | "workSchedule"
+  | "shiftTemplates"
   | "employeeCategories"
   | "locationZones"
-  | "whatsappAlerts";
+  | "whatsappAlerts"
+  | "whatsappQuotas";
 
 const parseTab = (value: string | null): SettingsTab =>
   value === "absences" ? "absences" : "company";
@@ -68,6 +75,9 @@ export function CompanySettingsPage() {
   const canRead = permissionsQuery.data?.permissions.includes("company:read") ?? false;
   const canUpdate =
     permissionsQuery.data?.permissions.includes("company:settings:update") ?? false;
+  const canManageOperations =
+    permissionsQuery.data?.permissions.includes("operations:manage") ?? false;
+  const canManageShiftTemplates = canManageOperations || canUpdate;
   const canManageLocationZones =
     canUpdate || hasPermission(permissionsQuery.data?.permissions, "employees:manage");
 
@@ -76,7 +86,9 @@ export function CompanySettingsPage() {
 
   const settingsQuery = useCompanySettings(companyTabEnabled || absencesTabEnabled);
   const alertRecipientsQuery = useCompanyAlertRecipients(companyTabEnabled && canRead);
+  const whatsappQuotaQuery = useWhatsAppQuotaSettings(companyTabEnabled && canRead);
   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
+  const shiftTemplatesQuery = useShiftTemplates({}, companyTabEnabled);
   const locationTypesQuery = useCompanyLocationTypes(false);
   const employeeCategoriesQuery = useEmployeeCategories(
     { includeInactive: true },
@@ -121,6 +133,12 @@ export function CompanySettingsPage() {
 
   if (permissionsQuery.isPending) {
     return <LoadingState />;
+  }
+
+  if (!activeCompanyId) {
+    return (
+      <ErrorState message="Seleccioná una empresa activa para ver y editar su configuración." />
+    );
   }
 
   if (!canRead) {
@@ -180,12 +198,26 @@ export function CompanySettingsPage() {
             />
 
             <SettingsSummaryCard
-              title="Alertas WhatsApp"
-              description="Destinatarios explícitos y activación de alertas operativas y de seguridad para administradores."
+              title="Alertas y reporte diario"
+              description="Destinatarios compartidos: WhatsApp administrativo y reporte diario de asistencia por email (D-1)."
               summaryItems={[
                 {
-                  label: "Compañía",
-                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitadas" : "Deshabilitadas",
+                  label: "Modo admin",
+                  value: settingsQuery.data?.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+                },
+                {
+                  label: "WhatsApp admin",
+                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitado" : "Deshabilitado",
+                },
+                {
+                  label: "Reporte email",
+                  value: settingsQuery.data?.dailyAttendanceReportEnabled
+                    ? `Habilitado · ${settingsQuery.data?.dailyAttendanceReportTime?.slice(0, 5) ?? "08:00"}`
+                    : "Deshabilitado",
+                },
+                {
+                  label: "Zona horaria",
+                  value: settingsQuery.data?.operationTimezone ?? "—",
                 },
                 {
                   label: "Destinatarios",
@@ -204,9 +236,42 @@ export function CompanySettingsPage() {
                 void settingsQuery.refetch();
                 void alertRecipientsQuery.refetch();
               }}
-              actionLabel="Gestionar alertas"
+              actionLabel="Gestionar alertas y reporte"
               canEdit={canUpdate && !settingsQuery.isError && !alertRecipientsQuery.isError}
               onAction={() => setOpenDialog("whatsappAlerts")}
+            />
+
+            <SettingsSummaryCard
+              title="Cuotas de WhatsApp"
+              description="Límites de consultas no críticas por empleado y empresa. La asistencia crítica no se bloquea."
+              summaryItems={
+                whatsappQuotaQuery.data
+                  ? [
+                      {
+                        label: "Modo empresa",
+                        value: whatsappQuotaQuery.data.companyMode,
+                      },
+                      {
+                        label: "Modo efectivo",
+                        value: whatsappQuotaQuery.data.effectiveMode,
+                      },
+                      {
+                        label: "Turnos día/semana",
+                        value: `${whatsappQuotaQuery.data.dailyTurns} / ${whatsappQuotaQuery.data.weeklyTurns}`,
+                      },
+                    ]
+                  : []
+              }
+              loading={whatsappQuotaQuery.isLoading}
+              error={
+                whatsappQuotaQuery.isError
+                  ? getApiErrorMessage(whatsappQuotaQuery.error)
+                  : null
+              }
+              onRetry={() => void whatsappQuotaQuery.refetch()}
+              actionLabel="Gestionar cuotas"
+              canEdit={canUpdate && !whatsappQuotaQuery.isError}
+              onAction={() => setOpenDialog("whatsappQuotas")}
             />
 
             <SettingsSummaryCard
@@ -225,6 +290,46 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar horario"
               canEdit={canUpdate && !workScheduleQuery.isError}
               onAction={() => setOpenDialog("workSchedule")}
+            />
+
+            <SettingsSummaryCard
+              title="Plantillas de turnos"
+              description="Turnos reutilizables (mañana, tarde, noche) para operaciones multi-turno."
+              summaryItems={
+                shiftTemplatesQuery.data
+                  ? [
+                      {
+                        label: "Activas",
+                        value: String(
+                          shiftTemplatesQuery.data.filter((template) => template.isActive)
+                            .length,
+                        ),
+                      },
+                      {
+                        label: "Total",
+                        value: String(shiftTemplatesQuery.data.length),
+                      },
+                      {
+                        label: "Nocturnas",
+                        value: String(
+                          shiftTemplatesQuery.data.filter((template) =>
+                            isOvernightShift(template.startTime, template.endTime),
+                          ).length,
+                        ),
+                      },
+                    ]
+                  : []
+              }
+              loading={shiftTemplatesQuery.isLoading}
+              error={
+                shiftTemplatesQuery.isError
+                  ? getApiErrorMessage(shiftTemplatesQuery.error)
+                  : null
+              }
+              onRetry={() => void shiftTemplatesQuery.refetch()}
+              actionLabel="Gestionar plantillas"
+              canEdit={canManageShiftTemplates && !shiftTemplatesQuery.isError}
+              onAction={() => setOpenDialog("shiftTemplates")}
             />
 
             <SettingsSummaryCard
@@ -466,11 +571,26 @@ export function CompanySettingsPage() {
 
       {openDialog === "whatsappAlerts" && settingsQuery.data ? (
         <CompanyWhatsAppAlertsDialog
+          key={`admin-alerts-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
           opened
           onClose={() => setOpenDialog(null)}
           settings={settingsQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "whatsappQuotas" && whatsappQuotaQuery.data ? (
+        <CompanyWhatsAppQuotaSettingsDialog
+          key={`wa-quotas-${whatsappQuotaQuery.data.companyId}-${whatsappQuotaQuery.data.updatedAt}`}
+          opened
+          onClose={() => setOpenDialog(null)}
+          settings={whatsappQuotaQuery.data}
+          canUpdate={canUpdate}
+          onSaved={(message) => {
+            handleSaved(message);
+            void whatsappQuotaQuery.refetch();
+          }}
         />
       ) : null}
 
@@ -557,6 +677,14 @@ export function CompanySettingsPage() {
           schedule={workScheduleQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "shiftTemplates" ? (
+        <CompanyShiftTemplatesDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          canUpdate={canManageShiftTemplates}
         />
       ) : null}
     </Stack>

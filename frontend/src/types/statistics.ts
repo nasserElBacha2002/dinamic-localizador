@@ -249,6 +249,9 @@ export interface AttendanceWorkdayDetailRow {
   workedMinutes: number;
   overtimeMinutes: number;
   absenceTypeName: string | null;
+  /** Present for MULTI_SHIFT workdays; null for SINGLE. */
+  operationShiftId?: string | null;
+  shiftNameSnapshot?: string | null;
   /** @deprecated use effectiveState = JUSTIFIED */
   justified: boolean;
 }
@@ -275,6 +278,8 @@ export interface StatisticsFilters {
   incidentType?: OperationalIncidentType | "";
   openAttendance?: boolean;
   incompleteCoverage?: boolean;
+  operationShiftId?: string;
+  shiftName?: string;
   rankingMode?:
     | "attention_employees"
     | "late_employees"

@@ -69,6 +69,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   adminAlertsEnabledAt: row.admin_alerts_enabled_at
     ? toIsoString(row.admin_alerts_enabled_at as Date | string)
     : null,
+  adminAlertDeliveryMode: (() => {
+    const mode = String(row.admin_alert_delivery_mode ?? "WHATSAPP_LEGACY");
+    return mode === "DAILY_EMAIL" ? "DAILY_EMAIL" : "WHATSAPP_LEGACY";
+  })(),
   adminAttendanceConfirmationMissingEnabled:
     row.admin_attendance_confirmation_missing_enabled == null
       ? true
@@ -106,6 +110,34 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   ),
   attendanceAlertCooldownDays: Number(row.attendance_alert_cooldown_days ?? 7),
   attendanceAlertConfigVersion: Number(row.attendance_alert_config_version ?? 0),
+  dailyAttendanceReportEnabled:
+    row.daily_attendance_report_enabled == null
+      ? false
+      : Boolean(row.daily_attendance_report_enabled),
+  dailyAttendanceReportTime: (() => {
+    const parsed = parseSqlTimeToHHmm(row.daily_attendance_report_time);
+    if (parsed) {
+      return parsed;
+    }
+    return "08:00";
+  })(),
+  whatsappQuotaMode: (() => {
+    const mode = String(row.whatsapp_quota_mode ?? "OFF");
+    return mode === "SHADOW" || mode === "ENFORCE" ? mode : "OFF";
+  })(),
+  whatsappQuotaDailyTurns: Number(row.whatsapp_quota_daily_turns ?? 20),
+  whatsappQuotaWeeklyTurns: Number(row.whatsapp_quota_weekly_turns ?? 60),
+  whatsappQuotaBurstTurns: Number(row.whatsapp_quota_burst_turns ?? 5),
+  whatsappQuotaBurstWindowSeconds: Number(row.whatsapp_quota_burst_window_seconds ?? 60),
+  whatsappQuotaDailyOutbounds: Number(row.whatsapp_quota_daily_outbounds ?? 40),
+  whatsappQuotaWeeklyOutbounds: Number(row.whatsapp_quota_weekly_outbounds ?? 120),
+  whatsappQuotaCompanyDailyOutbounds: Number(
+    row.whatsapp_quota_company_daily_outbounds ?? 500,
+  ),
+  whatsappQuotaLimitNoticeEnabled:
+    row.whatsapp_quota_limit_notice_enabled == null
+      ? true
+      : Boolean(row.whatsapp_quota_limit_notice_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -246,6 +278,7 @@ export const companySettingsRepository = {
         | "absenceAttachmentsEnabled"
         | "absenceOperationalIntegrationEnabled"
         | "adminAlertsEnabled"
+        | "adminAlertDeliveryMode"
         | "adminAttendanceConfirmationMissingEnabled"
         | "adminMissingCheckinEnabled"
         | "adminMissingCheckoutEnabled"
@@ -257,6 +290,8 @@ export const companySettingsRepository = {
         | "attendanceAlertWindowDays"
         | "attendanceAlertMinimumWorkdays"
         | "attendanceAlertCooldownDays"
+        | "dailyAttendanceReportEnabled"
+        | "dailyAttendanceReportTime"
       >
     >,
     transaction?: sql.Transaction,
@@ -397,6 +432,14 @@ export const companySettingsRepository = {
         ELSE admin_alerts_enabled_at
       END`);
     }
+    if (input.adminAlertDeliveryMode !== undefined) {
+      request.input(
+        "adminAlertDeliveryMode",
+        sql.NVarChar(32),
+        input.adminAlertDeliveryMode,
+      );
+      fields.push("admin_alert_delivery_mode = @adminAlertDeliveryMode");
+    }
     if (input.adminAttendanceConfirmationMissingEnabled !== undefined) {
       request.input(
         "adminAttendanceConfirmationMissingEnabled",
@@ -494,6 +537,22 @@ export const companySettingsRepository = {
       fields.push("attendance_alert_cooldown_days = @attendanceAlertCooldownDays");
       bumpAttendanceConfigVersion = true;
     }
+    if (input.dailyAttendanceReportEnabled !== undefined) {
+      request.input(
+        "dailyAttendanceReportEnabled",
+        sql.Bit,
+        input.dailyAttendanceReportEnabled ? 1 : 0,
+      );
+      fields.push("daily_attendance_report_enabled = @dailyAttendanceReportEnabled");
+    }
+    if (input.dailyAttendanceReportTime !== undefined) {
+      request.input(
+        "dailyAttendanceReportTime",
+        sql.VarChar(8),
+        toSqlTimeValue(input.dailyAttendanceReportTime),
+      );
+      fields.push("daily_attendance_report_time = @dailyAttendanceReportTime");
+    }
     if (bumpAttendanceConfigVersion) {
       fields.push(
         "attendance_alert_config_version = ISNULL(attendance_alert_config_version, 0) + 1",
@@ -518,5 +577,89 @@ export const companySettingsRepository = {
     }
 
     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Update only WhatsApp quota columns with optional optimistic concurrency on updated_at.
+   */
+  async updateWhatsAppQuotaSettings(
+    companyId: string,
+    input: {
+      companyMode: "OFF" | "SHADOW" | "ENFORCE";
+      dailyTurns: number;
+      weeklyTurns: number;
+      burstTurns: number;
+      burstWindowSeconds: number;
+      dailyOutbounds: number;
+      weeklyOutbounds: number;
+      companyDailyOutbounds: number;
+      limitNoticeEnabled: boolean;
+      expectedUpdatedAt?: string;
+    },
+  ): Promise<{ settings: CompanySettings } | { conflict: true } | null> {
+    const pool = getPool();
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
+    try {
+      const currentResult = await new sql.Request(tx)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .query(`
+          SELECT * FROM company_settings WITH (UPDLOCK, ROWLOCK)
+          WHERE company_id = @companyId
+        `);
+      const row = currentResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        await tx.rollback();
+        return null;
+      }
+
+      if (input.expectedUpdatedAt) {
+        const currentUpdatedAt = toIsoString(row.updated_at as Date | string);
+        if (new Date(currentUpdatedAt).getTime() !== new Date(input.expectedUpdatedAt).getTime()) {
+          await tx.rollback();
+          return { conflict: true };
+        }
+      }
+
+      const result = await new sql.Request(tx)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("mode", sql.NVarChar(20), input.companyMode)
+        .input("dailyTurns", sql.Int, input.dailyTurns)
+        .input("weeklyTurns", sql.Int, input.weeklyTurns)
+        .input("burstTurns", sql.Int, input.burstTurns)
+        .input("burstWindowSeconds", sql.Int, input.burstWindowSeconds)
+        .input("dailyOutbounds", sql.Int, input.dailyOutbounds)
+        .input("weeklyOutbounds", sql.Int, input.weeklyOutbounds)
+        .input("companyDailyOutbounds", sql.Int, input.companyDailyOutbounds)
+        .input("limitNoticeEnabled", sql.Bit, input.limitNoticeEnabled ? 1 : 0)
+        .query(`
+          UPDATE company_settings
+          SET whatsapp_quota_mode = @mode,
+              whatsapp_quota_daily_turns = @dailyTurns,
+              whatsapp_quota_weekly_turns = @weeklyTurns,
+              whatsapp_quota_burst_turns = @burstTurns,
+              whatsapp_quota_burst_window_seconds = @burstWindowSeconds,
+              whatsapp_quota_daily_outbounds = @dailyOutbounds,
+              whatsapp_quota_weekly_outbounds = @weeklyOutbounds,
+              whatsapp_quota_company_daily_outbounds = @companyDailyOutbounds,
+              whatsapp_quota_limit_notice_enabled = @limitNoticeEnabled,
+              updated_at = SYSUTCDATETIME()
+          OUTPUT INSERTED.*
+          WHERE company_id = @companyId
+        `);
+
+      await tx.commit();
+      if (!result.recordset[0]) {
+        return null;
+      }
+      return { settings: mapSettingsRow(result.recordset[0] as Record<string, unknown>) };
+    } catch (error) {
+      try {
+        await tx.rollback();
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
   },
 };

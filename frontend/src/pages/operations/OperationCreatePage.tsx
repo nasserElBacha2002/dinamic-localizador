@@ -8,42 +8,10 @@ import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCreateOperation } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
-import type { CreateOperationInput } from "../../types/operation";
-import type { WeeklyScheduleDay } from "../../types/schedule";
-import { datetimeLocalToIso } from "../../utils/dates";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { buildOperationCreateDefaultValues } from "../../utils/operation-create-defaults";
-
-function toCreatePayload(values: OperationFormValues): CreateOperationInput {
-  const shared = {
-    serviceId: values.serviceId,
-    earlyToleranceMinutes:
-      values.earlyToleranceSource === "CUSTOM" ? values.earlyToleranceMinutes : null,
-    lateToleranceMinutes:
-      values.lateToleranceSource === "CUSTOM" ? values.lateToleranceMinutes : null,
-  };
-
-  if (values.operationKind === "RECURRING") {
-    return {
-      operationKind: "RECURRING",
-      ...shared,
-      validFrom: values.validFrom,
-      validUntil: values.validUntil?.trim() ? values.validUntil : null,
-      scheduleSource: values.scheduleSource,
-      ...(values.scheduleSource === "CUSTOM"
-        ? { scheduleDays: values.scheduleDays as WeeklyScheduleDay[] }
-        : {}),
-    };
-  }
-
-  return {
-    operationKind: "ONE_TIME",
-    ...shared,
-    scheduledStart: datetimeLocalToIso(values.scheduledStart),
-    scheduledEnd: values.scheduledEnd ? datetimeLocalToIso(values.scheduledEnd) : null,
-  };
-}
+import { buildCreateOperationPayload } from "../../utils/operation-shift-payload";
 
 export function OperationCreatePage() {
   const { goBackToList } = useListBackNavigation("/operations");
@@ -77,7 +45,7 @@ export function OperationCreatePage() {
     setErrorMessage(null);
 
     try {
-      await createMutation.mutateAsync(toCreatePayload(values));
+      await createMutation.mutateAsync(buildCreateOperationPayload(values));
       goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
@@ -116,7 +84,9 @@ export function OperationCreatePage() {
           mode="create"
           defaultValues={defaultValues}
           companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
-          companyWorkScheduleLoading={companyWorkScheduleQuery.isPending || companyWorkScheduleQuery.isFetching}
+          companyWorkScheduleLoading={
+            companyWorkScheduleQuery.isPending || companyWorkScheduleQuery.isFetching
+          }
           submitLabel={`Crear ${terminology.operation.singular.toLowerCase()}`}
           cancelTo="/operations"
           onCancel={goBackToList}

@@ -52,10 +52,14 @@ export const workTeamAssignPreviewSchema = z.object({
   workTeamIds: z.array(uuidSchema).min(1, "Debe seleccionar al menos un grupo"),
   validFrom: z.string().date().optional(),
   validUntil: z.string().date().nullable().optional(),
+  /** Required for MULTI_SHIFT operations. Inherited into each assignment on confirm. */
+  operationShiftId: z.string().uuid("UUID de turno inválido").nullable().optional(),
 });
 
 export const workTeamAssignConfirmSchema = z.object({
   previewToken: uuidSchema,
+  /** Required for MULTI_SHIFT operations — must match the shift chosen at preview. */
+  operationShiftId: z.string().uuid("UUID de turno inválido").nullable().optional(),
 });
 
 export const batchIdParamSchema = z.object({

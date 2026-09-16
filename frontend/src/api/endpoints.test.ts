@@ -6,7 +6,10 @@ import {
   API_ENDPOINTS,
   operationAssignmentPath,
   operationPath,
+  operationScheduleModeMultiPath,
+  operationShiftsPath,
   servicePath,
+  shiftTemplatesPath,
 } from "./endpoints";
 
 describe("API_ENDPOINTS", () => {
@@ -14,6 +17,7 @@ describe("API_ENDPOINTS", () => {
     assert.equal(API_ENDPOINTS.services, "services");
     assert.equal(API_ENDPOINTS.operations, "operations");
     assert.equal(API_ENDPOINTS.employees, "employees");
+    assert.equal(API_ENDPOINTS.shiftTemplates, "shift-templates");
     assert.equal(API_ENDPOINTS.lookups.services, "lookups/services");
     assert.equal(API_ENDPOINTS.lookups.operations, "lookups/operations");
     assert.equal(API_ENDPOINTS.lookups.employees, "lookups/employees");
@@ -23,6 +27,12 @@ describe("API_ENDPOINTS", () => {
     assert.equal(operationAssignmentPath("op-1"), "operations/op-1/employees");
     assert.equal(operationPath("op-1"), "operations/op-1");
     assert.equal(servicePath("svc-1"), "services/svc-1");
+    assert.equal(shiftTemplatesPath(), "shift-templates");
+    assert.equal(operationShiftsPath("op-1"), "operations/op-1/shifts");
+    assert.equal(
+      operationScheduleModeMultiPath("op-1"),
+      "operations/op-1/schedule-mode/multi-shift",
+    );
   });
 });
 

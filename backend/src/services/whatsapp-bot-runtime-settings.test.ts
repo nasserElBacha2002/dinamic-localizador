@@ -36,6 +36,7 @@ const checkoutCandidate = {
   serviceLongitude: -58.4,
   allowedRadiusMeters: 0,
   operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
   workDate: "2026-07-05",
   expectedStartAt: "2026-07-05T15:00:00.000Z",
   expectedEndAt: "2026-07-05T21:00:00.000Z",

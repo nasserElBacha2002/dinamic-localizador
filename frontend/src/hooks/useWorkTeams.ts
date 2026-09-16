@@ -131,8 +131,12 @@ export function useDeactivateWorkTeam() {
 
 export function usePreviewWorkTeamAssignment(operationId: string) {
   return useMutation({
-    mutationFn: (input: { workTeamIds: string[]; validFrom?: string; validUntil?: string | null }) =>
-      previewWorkTeamAssignment(operationId, input),
+    mutationFn: (input: {
+      workTeamIds: string[];
+      validFrom?: string;
+      validUntil?: string | null;
+      operationShiftId?: string | null;
+    }) => previewWorkTeamAssignment(operationId, input),
   });
 }
 
@@ -141,7 +145,8 @@ export function useConfirmWorkTeamAssignment(operationId: string) {
   const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
-    mutationFn: (previewToken: string) => confirmWorkTeamAssignment(operationId, previewToken),
+    mutationFn: (input: { previewToken: string; operationShiftId?: string | null }) =>
+      confirmWorkTeamAssignment(operationId, input),
     onSettled: async (_data, error) => {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;

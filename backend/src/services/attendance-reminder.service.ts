@@ -14,8 +14,11 @@ import {
 import { AppError } from "../errors/app-error";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
 import { companyRepository } from "../repositories/company.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
+import { assertSingleScheduleModeOrReject } from "../utils/operation-schedule-mode-guard";
+import { logMultiShiftAttendanceEvent } from "../utils/multi-shift-attendance-observability";
 import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
 import { countCandidatesByOperationKind } from "../utils/workday-reminder-eligibility";
 import {
@@ -29,6 +32,12 @@ import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { normalizePhoneNumber } from "../utils/phone";
 import { logWhatsAppNotificationEvent } from "../utils/whatsapp-notification-observability";
 import type { BotSession } from "../types/twilio.types";
+import { whatsappSystemInteractionService } from "./whatsapp-system-interaction.service";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
+import {
+  classifyTwilioOutboundError,
+  isAmbiguousTwilioSendFailure,
+} from "../utils/twilio-error-classifier";
 
 export type ReminderSendOutcome =
   | "sent"
@@ -183,6 +192,7 @@ const sendReminderForCandidate = async (
     notificationType,
     scheduleVersion,
     reminderSource: "AUTOMATIC",
+    employeeWorkdayId: candidate.employeeWorkdayId ?? null,
   });
 
   if (!claimed) {
@@ -194,7 +204,37 @@ const sendReminderForCandidate = async (
       existingReminderId: null,
       ...reminderCandidateLogFields(candidate),
     });
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: candidate.operationId,
+      employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+      operationWorkdayId: candidate.operationWorkdayId ?? null,
+      action: "reminder_skipped",
+      outcome: "skipped",
+      reason: "CLAIM_UNAVAILABLE",
+    });
     return "skipped";
+  }
+
+  logMultiShiftAttendanceEvent({
+    companyId,
+    operationId: candidate.operationId,
+    employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+    operationWorkdayId: candidate.operationWorkdayId ?? null,
+    action: "reminder_claimed",
+    outcome: "ok",
+    reason: notificationType,
+  });
+  if (claimed.attemptCount > 1) {
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: candidate.operationId,
+      employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+      operationWorkdayId: candidate.operationWorkdayId ?? null,
+      action: "retry_recovered",
+      outcome: "ok",
+      reason: `attempt_count=${claimed.attemptCount}`,
+    });
   }
 
   if (!hasValidWhatsAppPhone(candidate.employeePhoneNumber)) {
@@ -591,19 +631,80 @@ const sendReminderForCandidate = async (
             ? "ATTENDANCE_CONFIRMATION"
             : "NO_CHECKIN";
 
-    const result = await twilioOutboundService.sendWhatsAppTemplate({
-      toPhoneNumber: candidate.employeePhoneNumber,
-      contentSid,
-      contentVariables,
-      costContext: {
+    const interactionSourceKey =
+      whatsappSystemInteractionService.sourceKeyForAttendanceNotification(claimed.id);
+    const preparedInteraction =
+      await whatsappSystemInteractionService.prepareAttendanceReminderContext({
         companyId,
-        messageKind: "TEMPLATE",
-        flowLabel,
-        templateName: notificationType,
-      },
-    });
+        employeeId: candidate.employeeId,
+        operationId: candidate.operationId,
+        notificationId: claimed.id,
+        notificationType,
+        scheduledStart: candidate.scheduledStart,
+      });
+
+    if (whatsappSystemInteractionService.shouldSkipSend(preparedInteraction)) {
+      console.info("[attendance-reminder] skip Twilio send — durable interaction already terminal/accepted", {
+        notificationId: claimed.id,
+        status: preparedInteraction?.status ?? null,
+        sourceKey: interactionSourceKey,
+      });
+      // Repair ACTIVE if Twilio already accepted previously but notification still claimed.
+      if (
+        preparedInteraction?.status === "ACTIVE" &&
+        preparedInteraction.providerMessageSid
+      ) {
+        return "sent";
+      }
+      if (preparedInteraction?.status === "SEND_AMBIGUOUS") {
+        return "sent_persistence_unknown";
+      }
+      return "skipped";
+    }
+
+    let result: { messageSid: string };
+    try {
+      result = await twilioOutboundService.sendWhatsAppTemplate({
+        toPhoneNumber: candidate.employeePhoneNumber,
+        contentSid,
+        contentVariables,
+        costContext: {
+          companyId,
+          messageKind: "TEMPLATE",
+          flowLabel,
+          templateName: notificationType,
+        },
+      });
+    } catch (sendError) {
+      const classification = classifyTwilioOutboundError(sendError);
+      if (isAmbiguousTwilioSendFailure(classification)) {
+        await whatsappSystemInteractionService.markSendAmbiguousSafe({
+          companyId,
+          sourceKey: interactionSourceKey,
+        });
+      } else {
+        await whatsappSystemInteractionService.markSendFailedSafe({
+          companyId,
+          sourceKey: interactionSourceKey,
+        });
+      }
+      throw sendError;
+    }
 
     const sentAt = new Date();
+
+    await whatsappSystemInteractionService.markSendAcceptedSafe({
+      companyId,
+      sourceKey: interactionSourceKey,
+      providerMessageSid: result.messageSid,
+    });
+    await whatsappTurnClassificationShadowService.recordSystemOutboundExempt({
+      companyId,
+      employeeId: candidate.employeeId,
+      providerMessageSid: result.messageSid,
+      category: flowLabel,
+      relatedOperationId: candidate.operationId,
+    });
 
     let outboundMessageId: string | null = null;
     try {
@@ -743,6 +844,15 @@ const sendReminderForCandidate = async (
             confirmationValidUntil: candidate.scheduledStart,
           }
         : {}),
+    });
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: candidate.operationId,
+      employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+      operationWorkdayId: candidate.operationWorkdayId ?? null,
+      action: "reminder_sent",
+      outcome: "ok",
+      reason: notificationType,
     });
     logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_SENT",
@@ -1028,6 +1138,15 @@ export const attendanceReminderService = {
       scheduleVersion?: number;
     },
   ): Promise<ReminderSendOutcome> {
+    const operation = await operationRepository.findById(companyId, input.operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    assertSingleScheduleModeOrReject(
+      operation.scheduleMode,
+      "MULTI_SHIFT_NOT_SUPPORTED_HERE",
+    );
+
     const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);
     if (!candidate) {
       throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado a la operación");

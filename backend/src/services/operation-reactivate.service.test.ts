@@ -13,6 +13,7 @@ const cancelledOperation = {
   id: OPERATION_ID,
   serviceId: "service-1",
   operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
   scheduledStart: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   scheduledEnd: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
   earlyToleranceMinutes: 60,

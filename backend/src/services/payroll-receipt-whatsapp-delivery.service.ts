@@ -10,6 +10,9 @@ import { classifyTwilioOutboundError } from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { PayrollReceipt } from "../types/payroll-receipt";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
+import { getQuotaTurnScope } from "../utils/whatsapp-quota-turn-scope";
+import { whatsappUsageQuotaService } from "./whatsapp-usage-quota.service";
 
 export type PayrollReceiptDeliveryResult =
   | { kind: "send_accepted"; message: string; messageSid?: string }
@@ -116,6 +119,38 @@ export const payrollReceiptWhatsappDeliveryService = {
 
     const caption = buildCaption(receipt.year, receipt.month);
 
+    const quotaScope = getQuotaTurnScope();
+    let reservationId: string | null = null;
+    if (
+      quotaScope &&
+      (quotaScope.enforceOutbounds || quotaScope.shadowOutbounds) &&
+      input.employeeId &&
+      input.inboundMessageSid
+    ) {
+      const reserved = await whatsappUsageQuotaService.reserveOutbound({
+        companyId: input.companyId ?? receipt.companyId,
+        employeeId: input.employeeId,
+        turnMessageSid: input.inboundMessageSid,
+        logicalOutboundKey: `${input.inboundMessageSid}:doc:${receipt.id}`,
+        policy: quotaScope.policySnapshot,
+      });
+      if (quotaScope.enforceOutbounds && !reserved.ok) {
+        return {
+          kind: "unavailable_temporary",
+          message: temporaryUnavailableMessage(periodLabel),
+        };
+      }
+      reservationId =
+        quotaScope.enforceOutbounds &&
+        reserved.ok &&
+        !reserved.reservationId.startsWith("noop")
+          ? reserved.reservationId
+          : null;
+      if (reservationId) {
+        await whatsappUsageQuotaService.markOutboundAttemptStarted(reservationId);
+      }
+    }
+
     try {
       await input.onSendStarted?.();
       const result = await twilioOutboundService.sendWhatsAppDocument({
@@ -154,12 +189,32 @@ export const payrollReceiptWhatsappDeliveryService = {
         });
       }
 
+      if (input.inboundMessageSid && employeeId) {
+        await whatsappTurnClassificationShadowService.recordDocumentOutbound({
+          companyId,
+          employeeId,
+          providerMessageSid: result.messageSid,
+          causationMessageSid: input.inboundMessageSid,
+          category: "PAYROLL_DOCUMENT",
+        });
+      }
+
+      if (reservationId) {
+        await whatsappUsageQuotaService.markOutboundAccepted({
+          reservationId,
+          providerMessageSid: result.messageSid,
+        });
+      }
+
       return {
         kind: "send_accepted",
         message: caption,
         messageSid: result.messageSid,
       };
     } catch (error) {
+      if (reservationId) {
+        await whatsappUsageQuotaService.markOutboundAmbiguous(reservationId);
+      }
       const classification = classifyTwilioOutboundError(error);
       console.error("[payroll-receipt-delivery] Twilio document send failed", {
         receiptId: receipt.id,

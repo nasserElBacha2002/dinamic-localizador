@@ -34,6 +34,7 @@ export function StatisticsPage() {
         locationStatus={data.locationStatus}
         punctualityStatus={data.punctualityStatus}
         incompleteCoverage={data.incompleteCoverage}
+        shiftName={data.shiftName}
         activeFilterCount={data.activeFilterCount}
         onDateRangeChange={(value) => {
           data.resetAllPages();
@@ -86,6 +87,10 @@ export function StatisticsPage() {
         onIncompleteCoverageChange={(value) => {
           data.resetAllPages();
           data.setIncompleteCoverage(value);
+        }}
+        onShiftNameChange={(value) => {
+          data.resetAllPages();
+          data.setShiftName(value);
         }}
         onClearFilters={data.resetFilters}
       />

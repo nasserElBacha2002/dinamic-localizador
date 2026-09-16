@@ -4,6 +4,7 @@ import type { OperationWorkdayCancellationReason } from "../constants/workday-ca
 import type { OperationWorkday } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { toDateOnlyString } from "../utils/row-mappers";
+import { assertWorkdayWriteAllowed } from "./operation-schedule-mode.repository";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -13,6 +14,12 @@ export const mapOperationWorkdayRow = (row: Record<string, unknown>): OperationW
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
   workDate: toDateOnlyString(row.work_date as Date | string),
+  operationShiftId: row.operation_shift_id ? String(row.operation_shift_id) : null,
+  operationShiftVersionId: row.operation_shift_version_id
+    ? String(row.operation_shift_version_id)
+    : null,
+  shiftCodeSnapshot: row.shift_code_snapshot ? String(row.shift_code_snapshot) : null,
+  shiftNameSnapshot: row.shift_name_snapshot ? String(row.shift_name_snapshot) : null,
   expectedStartAt: toIsoString(row.expected_start_at as Date | string),
   expectedEndAt: row.expected_end_at
     ? toIsoString(row.expected_end_at as Date | string)
@@ -35,6 +42,11 @@ export const mapOperationWorkdayRow = (row: Record<string, unknown>): OperationW
 });
 
 export const operationWorkdayRepository = {
+  /**
+   * SINGLE-mode only: returns the shiftless workday for (operation, date).
+   * Filters `operation_shift_id IS NULL`. Do not use for MULTI_SHIFT — use
+   * `findByOperationWorkDateAndShift` or `listByOperationAndWorkDate` instead.
+   */
   async findByOperationAndWorkDate(
     companyId: string,
     operationId: string,
@@ -52,6 +64,7 @@ export const operationWorkdayRepository = {
         WHERE company_id = @companyId
           AND operation_id = @operationId
           AND work_date = @workDate
+          AND operation_shift_id IS NULL
       `);
 
     if (!result.recordset[0]) {
@@ -59,6 +72,61 @@ export const operationWorkdayRepository = {
     }
 
     return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findByOperationWorkDateAndShift(
+    companyId: string,
+    operationId: string,
+    workDate: string,
+    operationShiftId: string,
+  ): Promise<OperationWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
+      .input("operationShiftId", sql.UniqueIdentifier, operationShiftId)
+      .query(`
+        SELECT *
+        FROM operation_workdays
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND work_date = @workDate
+          AND operation_shift_id = @operationShiftId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /** All shift workdays (and any shiftless rows) for an operation on a calendar date. */
+  async listByOperationAndWorkDate(
+    companyId: string,
+    operationId: string,
+    workDate: string,
+  ): Promise<OperationWorkday[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
+      .query(`
+        SELECT *
+        FROM operation_workdays
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND work_date = @workDate
+        ORDER BY operation_shift_id ASC
+      `);
+
+    return result.recordset.map((row) =>
+      mapOperationWorkdayRow(row as Record<string, unknown>),
+    );
   },
 
   async findById(companyId: string, id: string): Promise<OperationWorkday | null> {
@@ -70,6 +138,27 @@ export const operationWorkdayRepository = {
       .query(`
         SELECT *
         FROM operation_workdays
+        WHERE id = @id AND company_id = @companyId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findByIdInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    id: string,
+  ): Promise<OperationWorkday | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        SELECT *
+        FROM operation_workdays WITH (UPDLOCK, HOLDLOCK)
         WHERE id = @id AND company_id = @companyId
       `);
 
@@ -93,14 +182,30 @@ export const operationWorkdayRepository = {
       scheduleSourceSnapshot?: OperationWorkday["scheduleSourceSnapshot"];
       scheduleTimezoneSnapshot?: string | null;
       status?: OperationWorkday["status"];
+      /** Phase 1 productive path must leave this unset/null (SINGLE mode). */
+      operationShiftId?: string | null;
+      operationShiftVersionId?: string | null;
+      shiftCodeSnapshot?: string | null;
+      shiftNameSnapshot?: string | null;
     },
   ): Promise<OperationWorkday> {
+    // Phase 1: legacy writers only create shiftless workdays; MULTI_SHIFT is blocked here.
+    await assertWorkdayWriteAllowed(companyId, input.operationId, input.operationShiftId ?? null);
+
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("workDate", sql.Date, input.workDate)
+      .input("operationShiftId", sql.UniqueIdentifier, input.operationShiftId ?? null)
+      .input(
+        "operationShiftVersionId",
+        sql.UniqueIdentifier,
+        input.operationShiftVersionId ?? null,
+      )
+      .input("shiftCodeSnapshot", sql.NVarChar(80), input.shiftCodeSnapshot ?? null)
+      .input("shiftNameSnapshot", sql.NVarChar(200), input.shiftNameSnapshot ?? null)
       .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
       .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
@@ -111,13 +216,19 @@ export const operationWorkdayRepository = {
       .input("status", sql.NVarChar(20), input.status ?? "ACTIVE")
       .query(`
         INSERT INTO operation_workdays (
-          company_id, operation_id, work_date, expected_start_at, expected_end_at,
+          company_id, operation_id, work_date,
+          operation_shift_id, operation_shift_version_id,
+          shift_code_snapshot, shift_name_snapshot,
+          expected_start_at, expected_end_at,
           early_tolerance_minutes, late_tolerance_minutes, schedule_version,
           schedule_source_snapshot, schedule_timezone_snapshot, status
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @operationId, @workDate, @expectedStartAt, @expectedEndAt,
+          @companyId, @operationId, @workDate,
+          @operationShiftId, @operationShiftVersionId,
+          @shiftCodeSnapshot, @shiftNameSnapshot,
+          @expectedStartAt, @expectedEndAt,
           @earlyToleranceMinutes, @lateToleranceMinutes, @scheduleVersion,
           @scheduleSourceSnapshot, @scheduleTimezoneSnapshot, @status
         )
@@ -140,12 +251,31 @@ export const operationWorkdayRepository = {
       scheduleSourceSnapshot?: OperationWorkday["scheduleSourceSnapshot"];
       scheduleTimezoneSnapshot?: string | null;
       status?: OperationWorkday["status"];
+      operationShiftId?: string | null;
+      operationShiftVersionId?: string | null;
+      shiftCodeSnapshot?: string | null;
+      shiftNameSnapshot?: string | null;
     },
   ): Promise<OperationWorkday> {
+    await assertWorkdayWriteAllowed(
+      companyId,
+      input.operationId,
+      input.operationShiftId ?? null,
+      transaction,
+    );
+
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("workDate", sql.Date, input.workDate)
+      .input("operationShiftId", sql.UniqueIdentifier, input.operationShiftId ?? null)
+      .input(
+        "operationShiftVersionId",
+        sql.UniqueIdentifier,
+        input.operationShiftVersionId ?? null,
+      )
+      .input("shiftCodeSnapshot", sql.NVarChar(80), input.shiftCodeSnapshot ?? null)
+      .input("shiftNameSnapshot", sql.NVarChar(200), input.shiftNameSnapshot ?? null)
       .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
       .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
@@ -156,13 +286,19 @@ export const operationWorkdayRepository = {
       .input("status", sql.NVarChar(20), input.status ?? "ACTIVE")
       .query(`
         INSERT INTO operation_workdays (
-          company_id, operation_id, work_date, expected_start_at, expected_end_at,
+          company_id, operation_id, work_date,
+          operation_shift_id, operation_shift_version_id,
+          shift_code_snapshot, shift_name_snapshot,
+          expected_start_at, expected_end_at,
           early_tolerance_minutes, late_tolerance_minutes, schedule_version,
           schedule_source_snapshot, schedule_timezone_snapshot, status
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @operationId, @workDate, @expectedStartAt, @expectedEndAt,
+          @companyId, @operationId, @workDate,
+          @operationShiftId, @operationShiftVersionId,
+          @shiftCodeSnapshot, @shiftNameSnapshot,
+          @expectedStartAt, @expectedEndAt,
           @earlyToleranceMinutes, @lateToleranceMinutes, @scheduleVersion,
           @scheduleSourceSnapshot, @scheduleTimezoneSnapshot, @status
         )
@@ -171,6 +307,9 @@ export const operationWorkdayRepository = {
     return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * SINGLE-mode only (operation_shift_id IS NULL). See findByOperationAndWorkDate.
+   */
   async findByOperationAndWorkDateInTransaction(
     companyId: string,
     transaction: sql.Transaction,
@@ -187,6 +326,35 @@ export const operationWorkdayRepository = {
         WHERE company_id = @companyId
           AND operation_id = @operationId
           AND work_date = @workDate
+          AND operation_shift_id IS NULL
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findByOperationWorkDateAndShiftInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationId: string,
+    workDate: string,
+    operationShiftId: string,
+  ): Promise<OperationWorkday | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
+      .input("operationShiftId", sql.UniqueIdentifier, operationShiftId)
+      .query(`
+        SELECT *
+        FROM operation_workdays WITH (UPDLOCK, HOLDLOCK)
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND work_date = @workDate
+          AND operation_shift_id = @operationShiftId
       `);
 
     if (!result.recordset[0]) {
@@ -375,6 +543,9 @@ export const operationWorkdayRepository = {
       scheduleSourceSnapshot: OperationWorkday["scheduleSourceSnapshot"];
       scheduleTimezoneSnapshot: string;
       status: OperationWorkday["status"];
+      operationShiftVersionId?: string | null;
+      shiftCodeSnapshot?: string | null;
+      shiftNameSnapshot?: string | null;
     },
   ): Promise<OperationWorkday | null> {
     const pool = getPool();
@@ -390,6 +561,22 @@ export const operationWorkdayRepository = {
       .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot)
       .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
       .input("status", sql.NVarChar(20), input.status)
+      .input(
+        "operationShiftVersionId",
+        sql.UniqueIdentifier,
+        input.operationShiftVersionId === undefined ? null : input.operationShiftVersionId,
+      )
+      .input("shiftCodeSnapshot", sql.NVarChar(80), input.shiftCodeSnapshot ?? null)
+      .input("shiftNameSnapshot", sql.NVarChar(200), input.shiftNameSnapshot ?? null)
+      .input(
+        "updateShiftSnapshots",
+        sql.Bit,
+        input.operationShiftVersionId !== undefined ||
+          input.shiftCodeSnapshot !== undefined ||
+          input.shiftNameSnapshot !== undefined
+          ? 1
+          : 0,
+      )
       .query(`
         UPDATE operation_workdays
         SET expected_start_at = @expectedStartAt,
@@ -400,6 +587,18 @@ export const operationWorkdayRepository = {
             schedule_source_snapshot = @scheduleSourceSnapshot,
             schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
             status = @status,
+            operation_shift_version_id = CASE
+              WHEN @updateShiftSnapshots = 1 THEN @operationShiftVersionId
+              ELSE operation_shift_version_id
+            END,
+            shift_code_snapshot = CASE
+              WHEN @updateShiftSnapshots = 1 THEN @shiftCodeSnapshot
+              ELSE shift_code_snapshot
+            END,
+            shift_name_snapshot = CASE
+              WHEN @updateShiftSnapshots = 1 THEN @shiftNameSnapshot
+              ELSE shift_name_snapshot
+            END,
             cancellation_reason = CASE WHEN @status = 'ACTIVE' THEN NULL ELSE cancellation_reason END,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
@@ -559,6 +758,177 @@ export const operationWorkdayRepository = {
         throw new Error("OPERATION_WORKDAY_NOT_FOUND");
       }
       return existing;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async cancelWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+    reason: OperationWorkdayCancellationReason,
+  ): Promise<OperationWorkday> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("reason", sql.NVarChar(20), reason)
+      .query(`
+        UPDATE operation_workdays
+        SET status = 'CANCELLED',
+            cancellation_reason = @reason,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND status <> 'CANCELLED'
+      `);
+
+    if (!result.recordset[0]) {
+      const existing = await this.findByIdInTransaction(
+        companyId,
+        transaction,
+        operationWorkdayId,
+      );
+      if (!existing) {
+        throw new Error("OPERATION_WORKDAY_NOT_FOUND");
+      }
+      return existing;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Restores workdays cancelled by a shift date exception (cancellation_reason = EXCEPTION).
+   */
+  async reactivateExceptionCancelledWorkday(
+    companyId: string,
+    operationWorkdayId: string,
+    input: {
+      expectedStartAt: Date;
+      expectedEndAt: Date | null;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      scheduleVersion: number;
+      scheduleSourceSnapshot: OperationWorkday["scheduleSourceSnapshot"];
+      scheduleTimezoneSnapshot: string;
+      operationShiftVersionId: string;
+      shiftCodeSnapshot: string;
+      shiftNameSnapshot: string;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<OperationWorkday | null> {
+    const request = transaction
+      ? new sql.Request(transaction)
+      : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
+      .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
+      .input("operationShiftVersionId", sql.UniqueIdentifier, input.operationShiftVersionId)
+      .input("shiftCodeSnapshot", sql.NVarChar(80), input.shiftCodeSnapshot)
+      .input("shiftNameSnapshot", sql.NVarChar(200), input.shiftNameSnapshot)
+      .query(`
+        UPDATE operation_workdays
+        SET expected_start_at = @expectedStartAt,
+            expected_end_at = @expectedEndAt,
+            early_tolerance_minutes = @earlyToleranceMinutes,
+            late_tolerance_minutes = @lateToleranceMinutes,
+            schedule_version = @scheduleVersion,
+            schedule_source_snapshot = @scheduleSourceSnapshot,
+            schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
+            operation_shift_version_id = @operationShiftVersionId,
+            shift_code_snapshot = @shiftCodeSnapshot,
+            shift_name_snapshot = @shiftNameSnapshot,
+            status = 'ACTIVE',
+            cancellation_reason = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND status = 'CANCELLED'
+          AND cancellation_reason = 'EXCEPTION'
+          AND expected_start_at > SYSUTCDATETIME()
+          AND NOT EXISTS (
+            SELECT 1
+            FROM employee_workdays ew
+            INNER JOIN attendance_records ar
+              ON ar.employee_workday_id = ew.id
+             AND ar.company_id = ew.company_id
+            WHERE ew.company_id = @companyId
+              AND ew.operation_workday_id = @operationWorkdayId
+          )
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async updateMultiShiftSnapshotInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+    input: {
+      expectedStartAt: Date;
+      expectedEndAt: Date | null;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      scheduleVersion: number;
+      scheduleSourceSnapshot: OperationWorkday["scheduleSourceSnapshot"];
+      scheduleTimezoneSnapshot: string;
+      operationShiftVersionId: string;
+      shiftCodeSnapshot: string;
+      shiftNameSnapshot: string;
+      status: OperationWorkday["status"];
+    },
+  ): Promise<OperationWorkday | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
+      .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
+      .input("operationShiftVersionId", sql.UniqueIdentifier, input.operationShiftVersionId)
+      .input("shiftCodeSnapshot", sql.NVarChar(80), input.shiftCodeSnapshot)
+      .input("shiftNameSnapshot", sql.NVarChar(200), input.shiftNameSnapshot)
+      .input("status", sql.NVarChar(20), input.status)
+      .query(`
+        UPDATE operation_workdays
+        SET expected_start_at = @expectedStartAt,
+            expected_end_at = @expectedEndAt,
+            early_tolerance_minutes = @earlyToleranceMinutes,
+            late_tolerance_minutes = @lateToleranceMinutes,
+            schedule_version = @scheduleVersion,
+            schedule_source_snapshot = @scheduleSourceSnapshot,
+            schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
+            operation_shift_version_id = @operationShiftVersionId,
+            shift_code_snapshot = @shiftCodeSnapshot,
+            shift_name_snapshot = @shiftNameSnapshot,
+            status = @status,
+            cancellation_reason = CASE WHEN @status = 'ACTIVE' THEN NULL ELSE cancellation_reason END,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND schedule_version <= @scheduleVersion
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
     }
 
     return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);

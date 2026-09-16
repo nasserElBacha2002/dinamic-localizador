@@ -22,7 +22,7 @@ export function CompanyWhatsAppAlertsDialog({
     <ResponsiveModal
       opened={opened}
       onClose={onClose}
-      title="Alertas WhatsApp"
+      title="Alertas y reporte diario"
       size="xl"
       bodyMode="scroll"
       footer={

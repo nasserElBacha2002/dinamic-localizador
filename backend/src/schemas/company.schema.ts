@@ -230,6 +230,14 @@ export const updateCompanySettingsSchema = z
         "El cooldown no puede superar 90 días.",
       )
       .optional(),
+    dailyAttendanceReportEnabled: z.boolean().optional(),
+    dailyAttendanceReportTime: z
+      .string()
+      .trim()
+      .refine(isValidHHmm, {
+        message: "El horario del reporte diario debe tener formato HH:mm válido.",
+      })
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

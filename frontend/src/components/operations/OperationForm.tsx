@@ -1,8 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Anchor,
+  Badge,
   Box,
+  Button,
+  Checkbox,
+  Group,
   Paper,
+  Select,
+  SimpleGrid,
   Stack,
   Switch,
   Text,
@@ -11,7 +17,7 @@ import {
 } from "@mantine/core";
 import { useEffect, useMemo } from "react";
 import { Link as RouterLink } from "react-router";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { WeeklyScheduleEditor } from "../schedules/WeeklyScheduleEditor";
 import { WeeklySchedulePreview } from "../schedules/WeeklySchedulePreview";
 import {
@@ -23,6 +29,7 @@ import {
   RHFNumberInput,
   RHFSelect,
 } from "../../design-system";
+import { useShiftTemplates } from "../../hooks/useShiftTemplates";
 import {
   createOperationFormSchema,
   operationFormSchema,
@@ -38,7 +45,42 @@ import {
   scheduleSourceLabels,
 } from "../../utils/operation-schedule-display";
 import { operationStatusLabels } from "../../utils/labels";
+import { isOvernightShift, getCompanyWorkingIsoDays } from "../../utils/operation-shift-payload";
 import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
+import { OperationTimeInput } from "../../pages/settings/components/OperationTimeInput";
+
+const ISO_DAY_OPTIONS = [
+  { value: 1, label: "Lun" },
+  { value: 2, label: "Mar" },
+  { value: 3, label: "Mié" },
+  { value: 4, label: "Jue" },
+  { value: 5, label: "Vie" },
+  { value: 6, label: "Sáb" },
+  { value: 7, label: "Dom" },
+] as const;
+
+function ShiftOvernightBadgeField({
+  control,
+  index,
+}: {
+  control: import("react-hook-form").Control<OperationFormValues>;
+  index: number;
+}) {
+  const startTime = useWatch({ control, name: `shifts.${index}.startTime` });
+  const endTime = useWatch({ control, name: `shifts.${index}.endTime` });
+  return <ShiftOvernightBadge startTime={startTime} endTime={endTime} />;
+}
+
+function ShiftOvernightBadge({ startTime, endTime }: { startTime?: string; endTime?: string }) {
+  if (!isOvernightShift(startTime, endTime)) {
+    return null;
+  }
+  return (
+    <Badge color="violet" variant="light" w="fit-content">
+      Turno nocturno (cruza medianoche)
+    </Badge>
+  );
+}
 
 export const OPERATION_DETAIL_FORM_ID = "operation-detail-form";
 
@@ -124,11 +166,23 @@ export function OperationForm({
     handleSubmit,
     reset,
     setValue,
-    formState: { isDirty },
+    formState: { isDirty, errors },
   } = useForm<OperationFormValues>({
     resolver: zodResolver(validationSchema),
     defaultValues,
   });
+
+  const { fields: shiftFields, append, remove } = useFieldArray({
+    control,
+    name: "shifts",
+  });
+
+  const templatesQuery = useShiftTemplates({ activeOnly: true }, mode === "create");
+  const activeTemplates = templatesQuery.data ?? [];
+  const templateOptions = activeTemplates.map((template) => ({
+    value: template.id,
+    label: `${template.name} (${template.code})`,
+  }));
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -142,6 +196,7 @@ export function OperationForm({
 
   const operationKind = useWatch({ control, name: "operationKind" });
   const scheduleSource = useWatch({ control, name: "scheduleSource" });
+  const scheduleMode = useWatch({ control, name: "scheduleMode" });
   const earlyToleranceSource = useWatch({ control, name: "earlyToleranceSource" });
   const lateToleranceSource = useWatch({ control, name: "lateToleranceSource" });
   const lockedKind = mode === "edit" ? (currentOperationKind ?? operationKind) : operationKind;
@@ -149,6 +204,13 @@ export function OperationForm({
   const companyScheduleAvailable = Boolean(companyWorkSchedule);
   const companySourceDisabled =
     serviceFieldDisabled || companyWorkScheduleLoading || !companyScheduleAvailable;
+  const isMultiCreate = mode === "create" && scheduleMode === "MULTI_SHIFT";
+  const companyWorkingIsoDays = useMemo(
+    () => getCompanyWorkingIsoDays(companyWorkSchedule),
+    [companyWorkSchedule],
+  );
+  const defaultShiftEnabledDays =
+    lockedKind === "RECURRING" ? companyWorkingIsoDays : undefined;
 
   useEffect(() => {
     if (
@@ -170,18 +232,25 @@ export function OperationForm({
   ]);
 
   const handleFormSubmit = handleSubmit(async (values) => {
+    const effectiveValues =
+      values.scheduleMode === "MULTI_SHIFT" && values.operationKind === "RECURRING"
+        ? { ...values, scheduleSource: "COMPANY" as const }
+        : values;
+
     if (
-      values.operationKind === "RECURRING" &&
-      values.scheduleSource === "COMPANY" &&
-      !companyScheduleAvailable
+      effectiveValues.operationKind === "RECURRING" &&
+      effectiveValues.scheduleSource === "COMPANY" &&
+      !companyScheduleAvailable &&
+      effectiveValues.scheduleMode !== "MULTI_SHIFT"
     ) {
       return;
     }
 
     const payload =
-      values.operationKind === "RECURRING" && values.scheduleSource === "COMPANY"
-        ? { ...values, scheduleDays: defaultValues.scheduleDays }
-        : values;
+      effectiveValues.operationKind === "RECURRING" &&
+      effectiveValues.scheduleSource === "COMPANY"
+        ? { ...effectiveValues, scheduleDays: defaultValues.scheduleDays }
+        : effectiveValues;
 
     await onSubmit(payload);
   });
@@ -280,6 +349,238 @@ export function OperationForm({
         Zona horaria: America/Argentina/Buenos_Aires
       </Text>
 
+      {mode === "create" ? (
+        <Stack gap="xs">
+          <Text size="sm" fw={500}>
+            Modo de horario
+          </Text>
+          <FormGrid>
+            <Controller
+              name="scheduleMode"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <FormGrid.Full>
+                    <OperationKindCard
+                      selected={field.value === "SINGLE"}
+                      title="Horario único"
+                      description="Un solo horario para toda la operación (comportamiento habitual)."
+                      onClick={() => {
+                        field.onChange("SINGLE");
+                        setValue("shifts", [], { shouldDirty: true, shouldValidate: true });
+                      }}
+                    />
+                  </FormGrid.Full>
+                  <FormGrid.Full>
+                    <OperationKindCard
+                      selected={field.value === "MULTI_SHIFT"}
+                      title="Múltiples turnos"
+                      description="La operación se crea con varios turnos (mañana, tarde, noche, etc.)."
+                      onClick={() => {
+                        field.onChange("MULTI_SHIFT");
+                        if (lockedKind === "RECURRING") {
+                          setValue("scheduleSource", "COMPANY", {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          setValue("scheduleDays", defaultValues.scheduleDays);
+                        }
+                      }}
+                    />
+                  </FormGrid.Full>
+                </>
+              )}
+            />
+          </FormGrid>
+        </Stack>
+      ) : null}
+
+      {isMultiCreate ? (
+        <Stack gap="sm">
+          <Group justify="space-between" align="center">
+            <Text size="sm" fw={500}>
+              Turnos iniciales
+            </Text>
+            <Group gap="xs">
+              <Select
+                placeholder="Desde plantilla"
+                data={templateOptions}
+                searchable
+                clearable
+                disabled={templateOptions.length === 0}
+                value={null}
+                onChange={(templateId) => {
+                  const template = activeTemplates.find((item) => item.id === templateId);
+                  if (!template) {
+                    return;
+                  }
+                  append({
+                    code: template.code,
+                    name: template.name,
+                    templateId: template.id,
+                    startTime: template.startTime,
+                    endTime: template.endTime,
+                    enabledDays: defaultShiftEnabledDays,
+                  });
+                }}
+                w={220}
+              />
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() =>
+                  append({
+                    code: "",
+                    name: "",
+                    startTime: "08:00",
+                    endTime: "16:00",
+                    enabledDays: defaultShiftEnabledDays,
+                  })
+                }
+              >
+                Turno personalizado
+              </Button>
+            </Group>
+          </Group>
+          {errors.shifts?.message || errors.shifts?.root?.message ? (
+            <Text size="xs" c="red">
+              {errors.shifts?.message ?? errors.shifts?.root?.message}
+            </Text>
+          ) : null}
+          {shiftFields.length === 0 ? (
+            <Text size="sm" c="dimmed">
+              Agregá al menos un turno desde plantilla o personalizado.
+            </Text>
+          ) : (
+            <Stack gap="sm">
+              {shiftFields.map((field, index) => (
+                <Paper key={field.id} withBorder p="sm">
+                  <Stack gap="sm">
+                    <Group justify="space-between">
+                      <Text size="sm" fw={600}>
+                        Turno {index + 1}
+                      </Text>
+                      <Button
+                        size="compact-xs"
+                        color="red"
+                        variant="light"
+                        onClick={() => remove(index)}
+                      >
+                        Quitar
+                      </Button>
+                    </Group>
+                    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                      <Controller
+                        name={`shifts.${index}.code`}
+                        control={control}
+                        render={({ field: codeField, fieldState }) => (
+                          <TextInput
+                            label="Código"
+                            value={codeField.value}
+                            onChange={(event) => codeField.onChange(event.currentTarget.value)}
+                            error={fieldState.error?.message}
+                            required
+                          />
+                        )}
+                      />
+                      <Controller
+                        name={`shifts.${index}.name`}
+                        control={control}
+                        render={({ field: nameField, fieldState }) => (
+                          <TextInput
+                            label="Nombre"
+                            value={nameField.value}
+                            onChange={(event) => nameField.onChange(event.currentTarget.value)}
+                            error={fieldState.error?.message}
+                            required
+                          />
+                        )}
+                      />
+                      <Controller
+                        name={`shifts.${index}.startTime`}
+                        control={control}
+                        render={({ field: startField }) => (
+                          <Stack gap={4}>
+                            <Text size="sm" fw={500}>
+                              Inicio
+                            </Text>
+                            <OperationTimeInput
+                              value={startField.value}
+                              onChange={startField.onChange}
+                              aria-label={`Inicio turno ${index + 1}`}
+                            />
+                          </Stack>
+                        )}
+                      />
+                      <Controller
+                        name={`shifts.${index}.endTime`}
+                        control={control}
+                        render={({ field: endField }) => (
+                          <Stack gap={4}>
+                            <Text size="sm" fw={500}>
+                              Fin
+                            </Text>
+                            <OperationTimeInput
+                              value={endField.value}
+                              onChange={endField.onChange}
+                              aria-label={`Fin turno ${index + 1}`}
+                            />
+                          </Stack>
+                        )}
+                      />
+                    </SimpleGrid>
+                    <ShiftOvernightBadgeField control={control} index={index} />
+                    {lockedKind === "RECURRING" ? (
+                      <Controller
+                        name={`shifts.${index}.enabledDays`}
+                        control={control}
+                        render={({ field: daysField, fieldState }) => (
+                          <Stack gap={6}>
+                            <Text size="sm" fw={500}>
+                              Días
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              Inicializados con los días laborables de la empresa. Podés ajustarlos
+                              por turno.
+                            </Text>
+                            <Group gap="xs">
+                              {ISO_DAY_OPTIONS.map((day) => {
+                                const checked = (daysField.value ?? []).includes(day.value);
+                                return (
+                                  <Checkbox
+                                    key={day.value}
+                                    label={day.label}
+                                    checked={checked}
+                                    onChange={(event) => {
+                                      const next = new Set(daysField.value ?? []);
+                                      if (event.currentTarget.checked) {
+                                        next.add(day.value);
+                                      } else {
+                                        next.delete(day.value);
+                                      }
+                                      daysField.onChange([...next].sort((a, b) => a - b));
+                                    }}
+                                  />
+                                );
+                              })}
+                            </Group>
+                            {fieldState.error ? (
+                              <Text size="xs" c="red">
+                                {fieldState.error.message}
+                              </Text>
+                            ) : null}
+                          </Stack>
+                        )}
+                      />
+                    ) : null}
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      ) : null}
+
       {lockedKind === "ONE_TIME" ? (
         <FormGrid>
           <RHFDateTimeInput
@@ -337,6 +638,36 @@ export function OperationForm({
             <Text size="sm" fw={500}>
               Origen del horario
             </Text>
+            {isMultiCreate ? (
+              <Stack gap={6}>
+                <Text size="sm" c="dimmed">
+                  En multi-turno los horarios los definen cada turno. Los días laborables de la
+                  empresa se usan como base al crear turnos; no hace falta configurar un horario
+                  semanal de la operación.
+                </Text>
+                {companyWorkScheduleLoading ? (
+                  <Text size="sm" c="dimmed">
+                    Cargando días laborables de la empresa…
+                  </Text>
+                ) : companyWorkSchedule ? (
+                  <Text size="sm" c="dimmed">
+                    Días laborables de la empresa:{" "}
+                    {buildCompanySchedulePreviewLabel(companyWorkSchedule.days)}
+                  </Text>
+                ) : (
+                  <Stack gap={4}>
+                    <Text size="sm" c="red">
+                      La empresa no tiene un horario laboral semanal configurado. Se usarán lun–vie
+                      por defecto.
+                    </Text>
+                    <Anchor component={RouterLink} to="/settings" size="sm">
+                      Configurar horario de la empresa
+                    </Anchor>
+                  </Stack>
+                )}
+              </Stack>
+            ) : (
+              <>
             <FormGrid>
               <Controller
                 name="scheduleSource"
@@ -381,9 +712,11 @@ export function OperationForm({
                 </Anchor>
               </Stack>
             ) : null}
+              </>
+            )}
           </Stack>
 
-          {scheduleSource === "COMPANY" ? (
+          {isMultiCreate ? null : scheduleSource === "COMPANY" ? (
             <Stack gap={4}>
               <Text size="sm" fw={500}>
                 Horario de la empresa

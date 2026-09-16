@@ -5,6 +5,10 @@ type AdminAlertObservabilityEvent =
   | "ADMIN_ALERT_FAILED"
   | "ADMIN_ALERT_RETRY"
   | "ADMIN_ALERT_RECIPIENT_SKIPPED"
+  | "ADMIN_ALERT_CHANNEL_SUPPRESSED"
+  | "ADMIN_ALERT_CUTOVER_APPLIED"
+  | "ADMIN_ALERT_CUTOVER_ROLLBACK"
+  | "ADMIN_ALERT_PENDING_SUPPRESSED"
   | "ATTENDANCE_ALERT_EVALUATED"
   | "ATTENDANCE_THRESHOLD_CROSSED"
   | "ATTENDANCE_ALERT_BASELINED"
@@ -24,6 +28,14 @@ type AdminAlertObservabilityPayload = {
   rate?: number | null;
   sampleSize?: number;
   crossingSequence?: number;
+  mode?: string;
+  channel?: string;
+  origin?: string;
+  before?: string;
+  after?: string;
+  actorUserId?: string;
+  suppressedCount?: number;
+  configVersion?: string;
 };
 
 export const logAdminAlertEvent = (

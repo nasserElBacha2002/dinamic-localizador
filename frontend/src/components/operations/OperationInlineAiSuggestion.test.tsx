@@ -175,6 +175,53 @@ describe("OperationInlineAiSuggestion", () => {
     await waitFor(() => assert.equal(calls, 1));
   });
 
+  it("MULTI_SHIFT Agregar sends selected operationShiftId", async () => {
+    const user = userEvent.setup({ document: globalThis.document });
+    let sentShiftId: string | null | undefined;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <CompanyContext.Provider
+          value={{
+            companies: [activeCompany],
+            activeCompany,
+            isLoading: false,
+            isReady: true,
+            requiresSelection: false,
+            hasNoCompanies: false,
+            selectCompany: () => {},
+            refreshCompanies: async () => {},
+            clearActiveCompany: () => {},
+          }}
+        >
+          <MantineProvider>
+            <OperationInlineAiSuggestion
+              operationId="op-1"
+              operationKind="ONE_TIME"
+              scheduleMode="MULTI_SHIFT"
+              selectedShiftId="shift-morning"
+              selectedShiftLabel="Turno mañana (MANANA)"
+              excludeEmployeeIds={["emp-a"]}
+              enabled
+              onAssign={async (input) => {
+                sentShiftId = input.operationShiftId;
+                return { status: "success", added: ["emp-b"], skipped: [] };
+              }}
+              onSeeMore={() => undefined}
+            />
+          </MantineProvider>
+        </CompanyContext.Provider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => view.getByText("Juan Pérez"));
+    assert.ok(view.getByText(/Se asignará al turno: Turno mañana/i));
+    await user.click(view.getByRole("button", { name: /Agregar a Juan Pérez/i }));
+    await waitFor(() => assert.equal(sentShiftId, "shift-morning"));
+  });
+
   it("hides when there are no recommendations left", async () => {
     scopedApiClient.get = (async () => {
       getCalls += 1;

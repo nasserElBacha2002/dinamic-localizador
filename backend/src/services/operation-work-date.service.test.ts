@@ -19,6 +19,7 @@ describe("operationWorkDateService", () => {
     mock.method(operationRepository, "findById", async () => ({
       id: operationId,
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       scheduledStart: "2026-07-10T23:30:00.000Z",
     }));
     mock.method(operationWorkdayRepository, "listByOperationId", async () => [
@@ -39,6 +40,7 @@ describe("operationWorkDateService", () => {
     mock.method(operationRepository, "findById", async () => ({
       id: operationId,
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       scheduledStart: "2026-07-10T23:30:00.000Z",
     }));
     mock.method(operationWorkdayRepository, "listByOperationId", async () => []);

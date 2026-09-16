@@ -107,6 +107,8 @@ export interface CompanySettings {
   adminAlertsEnabled: boolean;
   /** UTC frontier: reconciler only considers domain events at/after this instant. */
   adminAlertsEnabledAt: string | null;
+  /** Phase 2 cutover mode. Default WHATSAPP_LEGACY. Independent of daily report enabled. */
+  adminAlertDeliveryMode: "WHATSAPP_LEGACY" | "DAILY_EMAIL";
   adminAttendanceConfirmationMissingEnabled: boolean;
   adminMissingCheckinEnabled: boolean;
   adminMissingCheckoutEnabled: boolean;
@@ -120,6 +122,20 @@ export interface CompanySettings {
   attendanceAlertCooldownDays: number;
   /** Bumped on threshold feature/config changes to force rebaseline. */
   attendanceAlertConfigVersion: number;
+  /** Phase 1 daily attendance email report (default OFF). */
+  dailyAttendanceReportEnabled: boolean;
+  /** Local HH:mm in operationTimezone. */
+  dailyAttendanceReportTime: string;
+  /** Phase 2 WhatsApp usage quotas (default OFF). */
+  whatsappQuotaMode: "OFF" | "SHADOW" | "ENFORCE";
+  whatsappQuotaDailyTurns: number;
+  whatsappQuotaWeeklyTurns: number;
+  whatsappQuotaBurstTurns: number;
+  whatsappQuotaBurstWindowSeconds: number;
+  whatsappQuotaDailyOutbounds: number;
+  whatsappQuotaWeeklyOutbounds: number;
+  whatsappQuotaCompanyDailyOutbounds: number;
+  whatsappQuotaLimitNoticeEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

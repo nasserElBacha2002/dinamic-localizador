@@ -5,6 +5,8 @@ import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-r
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
 import { resolveBotSessionScope } from "../utils/bot-session-scope";
 import { normalizePhoneNumber } from "../utils/phone";
+import { getQuotaTurnScope } from "../utils/whatsapp-quota-turn-scope";
+import { whatsappUsageQuotaService } from "./whatsapp-usage-quota.service";
 
 export type PayrollReceiptPeriodQueryResult =
   | {
@@ -99,6 +101,49 @@ export const payrollReceiptPeriodQueryService = {
     let deliveredCount = deliveries.filter((d) => d.status === "ACCEPTED").length;
     let sawTemporaryFailure = false;
     let sawPermanentFailure = false;
+
+    // Phase 2: ENFORCE pre-reserves all docs; SHADOW evaluates without mutating counters.
+    const quotaScope = getQuotaTurnScope();
+    if (
+      quotaScope &&
+      (quotaScope.enforceOutbounds || quotaScope.shadowOutbounds) &&
+      input.inboundMessageSid
+    ) {
+      const pendingReceipts = receipts.filter((r) => {
+        const existing = deliveryByReceiptId.get(r.id);
+        return existing?.status !== "ACCEPTED";
+      });
+      const preReserved: string[] = [];
+      for (const receipt of pendingReceipts) {
+        const reserved = await whatsappUsageQuotaService.reserveOutbound({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          turnMessageSid: input.inboundMessageSid,
+          logicalOutboundKey: `${input.inboundMessageSid}:doc:${receipt.id}`,
+          policy: quotaScope.policySnapshot,
+        });
+        if (quotaScope.enforceOutbounds && !reserved.ok) {
+          for (const id of preReserved) {
+            await whatsappUsageQuotaService.releaseOutboundIfReserved(id);
+          }
+          return {
+            kind: "failed",
+            message:
+              "No hay cupo suficiente para enviar todos los recibos de este período. " +
+              "Podés seguir registrando llegada y salida.",
+            deliveredCount,
+            totalCount: receipts.length,
+          };
+        }
+        if (
+          quotaScope.enforceOutbounds &&
+          reserved.ok &&
+          !reserved.reservationId.startsWith("noop")
+        ) {
+          preReserved.push(reserved.reservationId);
+        }
+      }
+    }
 
     for (const receipt of receipts) {
       const existing = deliveryByReceiptId.get(receipt.id);

@@ -14,6 +14,7 @@ const mapBatchRow = (row: Record<string, unknown>): WorkTeamAssignmentBatch => (
   id: String(row.id),
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
+  operationShiftId: row.operation_shift_id ? String(row.operation_shift_id) : null,
   requestedBy: row.requested_by ? String(row.requested_by) : null,
   requestedAt: new Date(row.requested_at as Date | string).toISOString(),
   validFrom: row.valid_from ? toDateOnlyString(row.valid_from as Date | string) : null,
@@ -65,6 +66,7 @@ export const workTeamAssignmentBatchRepository = {
     input: {
       companyId: string;
       operationId: string;
+      operationShiftId: string | null;
       requestedBy: string | null;
       validFrom: string | null;
       validUntil: string | null;
@@ -77,6 +79,7 @@ export const workTeamAssignmentBatchRepository = {
       .input("batchId", sql.UniqueIdentifier, batchId)
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("operationShiftId", sql.UniqueIdentifier, input.operationShiftId)
       .input("requestedBy", sql.UniqueIdentifier, input.requestedBy)
       .input("validFrom", sql.Date, input.validFrom)
       .input("validUntil", sql.Date, input.validUntil)
@@ -84,12 +87,12 @@ export const workTeamAssignmentBatchRepository = {
       .input("membersSnapshotHash", sql.NVarChar(128), input.membersSnapshotHash)
       .query(`
         INSERT INTO work_team_assignment_batches (
-          id, company_id, operation_id, requested_by, valid_from, valid_until,
+          id, company_id, operation_id, operation_shift_id, requested_by, valid_from, valid_until,
           status, preview_expires_at, members_snapshot_hash
         )
         OUTPUT INSERTED.*
         VALUES (
-          @batchId, @companyId, @operationId, @requestedBy, @validFrom, @validUntil,
+          @batchId, @companyId, @operationId, @operationShiftId, @requestedBy, @validFrom, @validUntil,
           N'PREVIEWED', @previewExpiresAt, @membersSnapshotHash
         )
       `);

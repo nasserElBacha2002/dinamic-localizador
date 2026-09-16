@@ -4,6 +4,10 @@ export type EmployeeWorkdayAttendanceContext = {
   employeeWorkdayId: string;
   operationWorkdayId: string;
   operationId: string;
+  /** Null for SINGLE-mode workdays. */
+  operationShiftId: string | null;
+  shiftCodeSnapshot: string | null;
+  shiftNameSnapshot: string | null;
   serviceId: string;
   serviceName: string;
   serviceAddress: string | null;
@@ -41,6 +45,9 @@ export type WorkdaySelectionOption = {
   employeeWorkdayId: string;
   operationWorkdayId: string;
   operationId: string;
+  operationShiftId?: string | null;
+  shiftCodeSnapshot?: string | null;
+  shiftNameSnapshot?: string | null;
   attendanceRecordId?: string | null;
   /** Present on mixed llegada/salida action lists (location-first). */
   attendanceAction?: "CHECK_IN" | "CHECK_OUT";

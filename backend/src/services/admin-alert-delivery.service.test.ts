@@ -90,6 +90,9 @@ describe("adminAlertDeliveryService", () => {
     const { companyAlertRecipientRepository } = await import(
       "../repositories/company-alert-recipient.repository"
     );
+    const { companySettingsRepository } = await import(
+      "../repositories/company-settings.repository"
+    );
     const { adminAlertNotificationRepository } = await import(
       "../repositories/admin-alert-notification.repository"
     );
@@ -122,6 +125,11 @@ describe("adminAlertDeliveryService", () => {
       receiveSecurityAlerts: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+    }));
+    mock.method(companySettingsRepository, "findByCompanyId", async () => ({
+      companyId: "company-1",
+      adminAlertsEnabled: true,
+      adminAlertDeliveryMode: "WHATSAPP_LEGACY",
     }));
 
     let failedCode: string | null = null;

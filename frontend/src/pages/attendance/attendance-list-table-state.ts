@@ -8,6 +8,7 @@ export const ATTENDANCE_TABLE_DEFAULTS = {
   operationIds: [] as string[],
   employeeIds: [] as string[],
   serviceIds: [] as string[],
+  operationShiftId: "",
   validationStatus: "",
   locationStatus: "",
   punctualityStatus: "",
@@ -21,6 +22,7 @@ export const ATTENDANCE_TABLE_FIELDS = {
   operationIds: { type: "stringList" as const },
   employeeIds: { type: "stringList" as const },
   serviceIds: { type: "stringList" as const },
+  operationShiftId: { type: "string" as const },
   recordType: { type: "enum", values: ["real", "simulation", "all"] },
   validationStatus: {
     type: "enum",

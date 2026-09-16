@@ -49,6 +49,8 @@ export function getWorkTeamPreviewDisabledReason(input: {
   validFrom: string;
   validUntil: string;
   isRecurring: boolean;
+  requireShift?: boolean;
+  selectedShiftId?: string | null;
 }): string | null {
   if (input.isCompanyLoading || input.teamsLoading || input.teamsError) {
     return null;
@@ -60,6 +62,10 @@ export function getWorkTeamPreviewDisabledReason(input: {
 
   if (input.selectedTeamIds.length === 0) {
     return "Seleccioná al menos un grupo.";
+  }
+
+  if (input.requireShift && !input.selectedShiftId) {
+    return "Seleccioná el turno de destino antes de asignar el grupo.";
   }
 
   if (input.isRecurring) {

@@ -44,6 +44,7 @@ const oneTimeOperation = {
   id: "operation-1",
   serviceId: "service-1",
   operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-08-11T15:00:00.000Z",
   scheduledEnd: "2026-08-11T19:00:00.000Z",
   earlyToleranceMinutes: 15,

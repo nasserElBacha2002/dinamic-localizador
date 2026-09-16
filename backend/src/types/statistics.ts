@@ -274,6 +274,9 @@ export interface AttendanceWorkdayDetailRow {
   workedMinutes: number;
   overtimeMinutes: number;
   absenceTypeName: string | null;
+  /** Present for MULTI_SHIFT workdays; null for SINGLE. */
+  operationShiftId: string | null;
+  shiftNameSnapshot: string | null;
   /** @deprecated use effectiveState = JUSTIFIED */
   justified: boolean;
 }

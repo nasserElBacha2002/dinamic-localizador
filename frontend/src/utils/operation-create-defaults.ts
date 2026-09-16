@@ -25,5 +25,7 @@ export function buildOperationCreateDefaultValues(
     lateToleranceMinutes: settings.defaultLateArrivalToleranceMinutes,
     earlyToleranceSource: "COMPANY_DEFAULT",
     lateToleranceSource: "COMPANY_DEFAULT",
+    scheduleMode: "SINGLE",
+    shifts: [],
   };
 }

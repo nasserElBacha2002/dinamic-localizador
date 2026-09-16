@@ -13,6 +13,11 @@ import {
   workTeamAssignmentBatchRouter,
 } from "./work-team-assignment.routes";
 import { operationRouter } from "./operation.routes";
+import {
+  operationScheduleModeRouter,
+  operationShiftRouter,
+  shiftTemplateRouter,
+} from "./operation-shift.routes";
 import { statisticsRouter } from "./statistics.routes";
 import { serviceRouter } from "./service.routes";
 import { twilioRouter } from "./twilio.routes";
@@ -73,7 +78,14 @@ const mountOperationsServiceRoutes = (router: Router) => {
 
 const mountOperationsOperationRoutes = (router: Router) => {
   const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS);
+  router.use("/shift-templates", moduleGuard, shiftTemplateRouter);
   router.use("/operations", moduleGuard, operationRouter);
+  router.use("/operations/:operationId/shifts", moduleGuard, operationShiftRouter);
+  router.use(
+    "/operations/:operationId/schedule-mode",
+    moduleGuard,
+    operationScheduleModeRouter,
+  );
 };
 
 const mountEmployeeRoutes = (router: Router) => {

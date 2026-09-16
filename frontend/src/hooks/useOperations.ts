@@ -169,8 +169,16 @@ export function useAssignOperationEmployee(operationId: string) {
   const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
-    mutationFn: (input: { employeeId: string; validFrom?: string; validUntil?: string | null }) =>
-      assignEmployeeToOperation(operationId, input),
+    mutationFn: (input: {
+      employeeId: string;
+      validFrom?: string;
+      validUntil?: string | null;
+      operationShiftId?: string | null;
+      asCoverage?: boolean;
+      replacedAssignmentId?: string;
+      replacedEmployeeId?: string;
+      coverageReason?: string;
+    }) => assignEmployeeToOperation(operationId, input),
     onSettled: (_data, error) => {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
@@ -189,6 +197,7 @@ export function useAssignOperationEmployeesBatch(operationId: string) {
       employeeIds: string[];
       validFrom?: string;
       validUntil?: string | null;
+      operationShiftId?: string | null;
     }) => assignEmployeesBatchToOperation(operationId, input),
     onSettled: (_data, error) => {
       if (error && !isRecurringWorkdaySyncError(error)) {
@@ -234,8 +243,11 @@ export function useEndOperationAssignment(operationId: string) {
 export function useOperationAttendanceSummary(
   operationId?: string,
   filters: OperationAttendanceSummaryFilters = {},
+  extraEnabled = true,
 ) {
-  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
+  const { companyId, enabled } = useOperationalQueryEnabled(
+    Boolean(operationId) && extraEnabled,
+  );
 
   return useQuery({
     queryKey: operationAttendanceKeys.summary(companyId, operationId, filters),

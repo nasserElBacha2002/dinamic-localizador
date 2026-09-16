@@ -26,7 +26,7 @@ export const operationWorkDateService = {
     }
 
     const materialized = await operationWorkdayRepository.listByOperationId(companyId, operationId);
-    if (materialized.length > 1) {
+    if (operation.scheduleMode === "SINGLE" && materialized.length > 1) {
       throw new AppError(
         500,
         "ONE_TIME_OPERATION_MULTIPLE_WORKDAYS",

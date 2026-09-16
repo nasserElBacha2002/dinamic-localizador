@@ -72,6 +72,9 @@ export interface WorkdaySessionSelectionOption {
   employeeWorkdayId: string;
   operationWorkdayId: string;
   operationId: string;
+  operationShiftId?: string | null;
+  shiftCodeSnapshot?: string | null;
+  shiftNameSnapshot?: string | null;
   attendanceRecordId?: string | null;
   /** Mixed llegada/salida selection (location-first). */
   attendanceAction?: "CHECK_IN" | "CHECK_OUT";

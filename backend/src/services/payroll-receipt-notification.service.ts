@@ -14,6 +14,7 @@ import {
   isAmbiguousTwilioSendFailure,
 } from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
 
 /**
  * At-least-once Twilio send is possible only via manual reconcile after
@@ -336,6 +337,13 @@ const processClaimedNotification = async (
       providerMessageSid: messageSid,
     });
     payrollReceiptMetrics.notificationSent({ status: "SEND_ACCEPTED" });
+    await whatsappTurnClassificationShadowService.recordSystemOutboundExempt({
+      companyId: notification.companyId,
+      employeeId: employee.id,
+      providerMessageSid: messageSid,
+      category: "PAYROLL_AVAILABLE",
+      relatedOperationId: null,
+    });
     return "sent";
   } catch (markError) {
     const errorMessage =

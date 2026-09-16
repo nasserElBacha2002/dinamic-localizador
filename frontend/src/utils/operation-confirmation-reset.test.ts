@@ -46,7 +46,11 @@ function values(overrides: Partial<OperationFormValues> = {}): OperationFormValu
     scheduleDays: [],
     earlyToleranceMinutes: 15,
     lateToleranceMinutes: 10,
+    earlyToleranceSource: "CUSTOM",
+    lateToleranceSource: "CUSTOM",
     status: "SCHEDULED",
+    scheduleMode: "SINGLE",
+    shifts: [],
     ...overrides,
   };
 }

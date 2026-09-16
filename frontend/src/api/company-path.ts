@@ -31,6 +31,7 @@ export const OPERATIONAL_API_PREFIXES = [
   "settings",
   "shift-templates",
   "company-alert-recipients",
+  "company-report-email-recipients",
   "modules",
   "lookups",
   "work-teams",

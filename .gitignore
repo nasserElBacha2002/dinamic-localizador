@@ -16,6 +16,10 @@ frontend/.env
 .vscode/
 .idea/
 
+# Local AI agent instructions (do not publish)
+AGENTS.md
+**/AGENTS.md
+
 # Local env backups / secrets
 *.env.save
 backend/.env.save

@@ -14,6 +14,7 @@ import type {
 } from "../types/admin-alert";
 import { buildAdminAlertTemplateVariables } from "../utils/admin-alert/template-variables";
 import { logAdminAlertEvent } from "../utils/admin-alert/observability";
+import { decideAdminNotificationChannel } from "../utils/admin-notification-channel-policy";
 import { normalizePhoneNumber } from "../utils/phone";
 
 const isValidE164 = (phone: string): boolean => /^\+[1-9]\d{6,14}$/.test(phone);
@@ -139,6 +140,21 @@ export const adminAlertService = {
       return result;
     }
 
+    const channel = decideAdminNotificationChannel({
+      mode: settings.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+      alertType: input.type,
+    });
+    if (channel !== "WHATSAPP_URGENT") {
+      logAdminAlertEvent("ADMIN_ALERT_CHANNEL_SUPPRESSED", {
+        companyId: input.companyId,
+        alertType: input.type,
+        mode: settings.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+        channel,
+        origin: "live",
+      });
+      return result;
+    }
+
     const category: AdminAlertTemplateCategory =
       input.category ?? adminAlertTypeDefaultCategory(input.type);
     const severity: AdminAlertSeverity = input.severity ?? "INFO";
@@ -221,6 +237,21 @@ export const adminAlertService = {
     const settings = await companySettingsRepository.findByCompanyId(obligation.companyId);
     if (!settings?.adminAlertsEnabled) {
       result.recipientSkipped += 1;
+      return result;
+    }
+
+    const channel = decideAdminNotificationChannel({
+      mode: settings.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+      alertType: obligation.alertType,
+    });
+    if (channel !== "WHATSAPP_URGENT") {
+      logAdminAlertEvent("ADMIN_ALERT_CHANNEL_SUPPRESSED", {
+        companyId: obligation.companyId,
+        alertType: obligation.alertType,
+        mode: settings.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+        channel,
+        origin: "reconcile",
+      });
       return result;
     }
 

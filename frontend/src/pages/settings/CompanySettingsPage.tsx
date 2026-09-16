@@ -198,12 +198,26 @@ export function CompanySettingsPage() {
             />
 
             <SettingsSummaryCard
-              title="Alertas WhatsApp"
-              description="Destinatarios explícitos y activación de alertas operativas y de seguridad para administradores."
+              title="Alertas y reporte diario"
+              description="Destinatarios compartidos: WhatsApp administrativo y reporte diario de asistencia por email (D-1)."
               summaryItems={[
                 {
-                  label: "Compañía",
-                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitadas" : "Deshabilitadas",
+                  label: "Modo admin",
+                  value: settingsQuery.data?.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+                },
+                {
+                  label: "WhatsApp admin",
+                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitado" : "Deshabilitado",
+                },
+                {
+                  label: "Reporte email",
+                  value: settingsQuery.data?.dailyAttendanceReportEnabled
+                    ? `Habilitado · ${settingsQuery.data?.dailyAttendanceReportTime?.slice(0, 5) ?? "08:00"}`
+                    : "Deshabilitado",
+                },
+                {
+                  label: "Zona horaria",
+                  value: settingsQuery.data?.operationTimezone ?? "—",
                 },
                 {
                   label: "Destinatarios",
@@ -222,7 +236,7 @@ export function CompanySettingsPage() {
                 void settingsQuery.refetch();
                 void alertRecipientsQuery.refetch();
               }}
-              actionLabel="Gestionar alertas"
+              actionLabel="Gestionar alertas y reporte"
               canEdit={canUpdate && !settingsQuery.isError && !alertRecipientsQuery.isError}
               onAction={() => setOpenDialog("whatsappAlerts")}
             />
@@ -557,6 +571,7 @@ export function CompanySettingsPage() {
 
       {openDialog === "whatsappAlerts" && settingsQuery.data ? (
         <CompanyWhatsAppAlertsDialog
+          key={`admin-alerts-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
           opened
           onClose={() => setOpenDialog(null)}
           settings={settingsQuery.data}

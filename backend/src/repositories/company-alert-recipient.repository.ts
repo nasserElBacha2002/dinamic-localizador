@@ -85,6 +85,43 @@ export const companyAlertRecipientRepository = {
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
   },
 
+  /**
+   * Enabled WhatsApp alert recipients linked to a company user with a valid email.
+   * Used as the audience for the daily attendance email report (same people as WA alerts).
+   */
+  async listEnabledWithUserEmailForDailyReport(companyId: string): Promise<
+    Array<{ id: string; email: string; displayName: string | null }>
+  > {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT
+          car.id,
+          LOWER(LTRIM(RTRIM(u.email))) AS email,
+          COALESCE(car.display_name, u.name) AS display_name
+        FROM company_alert_recipients car
+        INNER JOIN users u ON u.id = car.user_id
+        INNER JOIN user_company_memberships ucm
+          ON ucm.user_id = u.id
+         AND ucm.company_id = car.company_id
+         AND ucm.status = N'ACTIVE'
+        WHERE car.company_id = @companyId
+          AND car.is_enabled = 1
+          AND car.user_id IS NOT NULL
+          AND car.receive_operational_alerts = 1
+          AND u.email IS NOT NULL
+          AND LTRIM(RTRIM(u.email)) <> N''
+          AND u.email LIKE N'%@%.%'
+        ORDER BY car.created_at ASC
+      `);
+    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      email: String(row.email),
+      displayName: row.display_name ? String(row.display_name) : null,
+    }));
+  },
+
   async create(
     companyId: string,
     input: CompanyAlertRecipientInput,

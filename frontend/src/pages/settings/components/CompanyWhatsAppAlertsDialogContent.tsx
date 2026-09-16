@@ -23,6 +23,8 @@ import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
 import type { CompanySettings } from "../../../types/company-settings";
 import { getApiErrorMessage } from "../../../utils/errors";
 
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
 interface CompanyWhatsAppAlertsDialogContentProps {
   settings: CompanySettings;
   canUpdate: boolean;
@@ -64,23 +66,11 @@ export function CompanyWhatsAppAlertsDialogContent({
     settings.attendanceAlertCooldownDays ?? 7,
   );
 
-  const [confirmationMissingEnabled, setConfirmationMissingEnabled] = useState(
-    settings.adminAttendanceConfirmationMissingEnabled ?? true,
+  const [dailyReportEnabled, setDailyReportEnabled] = useState(
+    settings.dailyAttendanceReportEnabled ?? false,
   );
-  const [missingCheckinEnabled, setMissingCheckinEnabled] = useState(
-    settings.adminMissingCheckinEnabled ?? true,
-  );
-  const [missingCheckoutEnabled, setMissingCheckoutEnabled] = useState(
-    settings.adminMissingCheckoutEnabled ?? true,
-  );
-  const [confirmationEscalationMinutes, setConfirmationEscalationMinutes] = useState<number>(
-    settings.adminConfirmationEscalationMinutes ?? 60,
-  );
-  const [missingCheckoutDelayMinutes, setMissingCheckoutDelayMinutes] = useState<number>(
-    settings.adminMissingCheckoutDelayMinutes ?? 30,
-  );
-  const [alertMaxLatenessMinutes, setAlertMaxLatenessMinutes] = useState<number>(
-    settings.adminAlertMaxLatenessMinutes ?? 60,
+  const [dailyReportTime, setDailyReportTime] = useState(
+    settings.dailyAttendanceReportTime?.slice(0, 5) ?? "08:00",
   );
 
   const busy =
@@ -101,6 +91,14 @@ export function CompanyWhatsAppAlertsDialogContent({
 
   const companyUsers = usersQuery.data?.data ?? [];
 
+  const usersById = useMemo(() => {
+    const map = new Map<string, (typeof companyUsers)[number]>();
+    for (const user of companyUsers) {
+      map.set(user.userId, user);
+    }
+    return map;
+  }, [companyUsers]);
+
   const selectedUser = useMemo(
     () => companyUsers.find((user) => user.userId === selectedUserId) ?? null,
     [companyUsers, selectedUserId],
@@ -117,6 +115,27 @@ export function CompanyWhatsAppAlertsDialogContent({
       }));
   }, [companyUsers, recipientUserIds]);
 
+  const dailyReportTimeError = useMemo(() => {
+    if (!HHMM_RE.test(dailyReportTime.trim())) {
+      return "Usá el formato HH:mm (00:00–23:59).";
+    }
+    return null;
+  }, [dailyReportTime]);
+
+  const dailyReportDirty =
+    dailyReportEnabled !== (settings.dailyAttendanceReportEnabled ?? false) ||
+    dailyReportTime.trim() !== (settings.dailyAttendanceReportTime?.slice(0, 5) ?? "08:00");
+
+  const enabledRecipientsWithEmail = useMemo(() => {
+    return (recipientsQuery.data ?? []).filter((recipient) => {
+      if (!recipient.isEnabled || !recipient.userId) {
+        return false;
+      }
+      const email = usersById.get(recipient.userId)?.email?.trim();
+      return Boolean(email);
+    }).length;
+  }, [recipientsQuery.data, usersById]);
+
   const handleToggleCompanyAlerts = async (checked: boolean) => {
     if (!canUpdate) {
       return;
@@ -125,6 +144,26 @@ export function CompanyWhatsAppAlertsDialogContent({
     try {
       await updateSettings.mutateAsync({ adminAlertsEnabled: checked });
       onSaved("Configuración de alertas actualizada.");
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    }
+  };
+
+  const handleSaveDailyReportSettings = async () => {
+    if (!canUpdate || dailyReportTimeError || !dailyReportDirty) {
+      return;
+    }
+    setSubmitError(null);
+    try {
+      await updateSettings.mutateAsync({
+        dailyAttendanceReportEnabled: dailyReportEnabled,
+        dailyAttendanceReportTime: dailyReportTime.trim(),
+      });
+      onSaved(
+        dailyReportEnabled
+          ? "Reporte diario actualizado. Si hay destinatarios con email, las alertas informativas pasan automáticamente al email."
+          : "Reporte diario de asistencia actualizado.",
+      );
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
     }
@@ -144,26 +183,6 @@ export function CompanyWhatsAppAlertsDialogContent({
         attendanceAlertCooldownDays: Number(cooldownDays),
       });
       onSaved("Alertas por asistencia baja actualizadas.");
-    } catch (error) {
-      setSubmitError(getApiErrorMessage(error));
-    }
-  };
-
-  const handleSaveDynamicAttendanceSettings = async () => {
-    if (!canUpdate) {
-      return;
-    }
-    setSubmitError(null);
-    try {
-      await updateSettings.mutateAsync({
-        adminAttendanceConfirmationMissingEnabled: confirmationMissingEnabled,
-        adminMissingCheckinEnabled: missingCheckinEnabled,
-        adminMissingCheckoutEnabled: missingCheckoutEnabled,
-        adminConfirmationEscalationMinutes: Number(confirmationEscalationMinutes),
-        adminMissingCheckoutDelayMinutes: Number(missingCheckoutDelayMinutes),
-        adminAlertMaxLatenessMinutes: Number(alertMaxLatenessMinutes),
-      });
-      onSaved("Alertas dinámicas de asistencia actualizadas.");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
     }
@@ -268,8 +287,8 @@ export function CompanyWhatsAppAlertsDialogContent({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Elegí destinatarios entre los usuarios de la empresa. El teléfono se toma del perfil del
-        usuario (cargalo en Usuarios si falta). No se suscribe automáticamente por rol.
+        Los mismos usuarios reciben alertas WhatsApp (teléfono del perfil) y el reporte diario por
+        email (email del perfil). No se suscribe automáticamente por rol.
       </Text>
 
       <Switch
@@ -282,83 +301,56 @@ export function CompanyWhatsAppAlertsDialogContent({
 
       <Stack gap="xs">
         <Text fw={600} size="sm">
-          Alertas dinámicas de asistencia
+          Reporte diario de asistencia por email
         </Text>
         <Text size="sm" c="dimmed">
-          Avisos accionables según el horario de cada operación. La falta de llegada usa la
-          tolerancia de llegada ya configurada en la operación. No se envían alertas con más atraso
-          que el máximo indicado.
+          Resumen del día anterior (D-1) en el horario local de la empresa (
+          {settings.operationTimezone ?? "timezone de operación"}). Incluye confirmaciones
+          pendientes, faltas de llegada/salida, llegadas tarde, salidas anticipadas y demás
+          incidencias informativas. Usa los destinatarios activos de abajo que tengan email.
         </Text>
         <Switch
-          label="Avisar por confirmación pendiente"
-          description="Antes del inicio, si el colaborador aún no confirmó."
-          checked={confirmationMissingEnabled}
-          onChange={(event) => setConfirmationMissingEnabled(event.currentTarget.checked)}
-          disabled={!canUpdate || busy || !(settings.adminAlertsEnabled ?? false)}
+          label="Reporte diario por email habilitado"
+          checked={dailyReportEnabled}
+          onChange={(event) => setDailyReportEnabled(event.currentTarget.checked)}
+          disabled={!canUpdate || busy}
         />
-        <Switch
-          label="Avisar por falta de llegada"
-          description="Después del inicio más la tolerancia de llegada de la operación."
-          checked={missingCheckinEnabled}
-          onChange={(event) => setMissingCheckinEnabled(event.currentTarget.checked)}
-          disabled={!canUpdate || busy || !(settings.adminAlertsEnabled ?? false)}
+        <TextInput
+          label="Horario de envío (local)"
+          description="Formato HH:mm en la zona horaria de la empresa."
+          value={dailyReportTime}
+          onChange={(event) => setDailyReportTime(event.currentTarget.value)}
+          error={dailyReportTimeError}
+          disabled={!canUpdate || busy}
+          maw={200}
         />
-        <Switch
-          label="Avisar por falta de salida"
-          description="Después del final previsto más la demora configurada."
-          checked={missingCheckoutEnabled}
-          onChange={(event) => setMissingCheckoutEnabled(event.currentTarget.checked)}
-          disabled={!canUpdate || busy || !(settings.adminAlertsEnabled ?? false)}
-        />
-        <Group grow preventGrowOverflow={false} wrap="wrap">
-          <NumberInput
-            label="Anticipación de confirmación (min)"
-            description="Avisar por falta de confirmación N minutos antes del inicio."
-            min={0}
-            max={1440}
-            value={confirmationEscalationMinutes}
-            onChange={(value) =>
-              setConfirmationEscalationMinutes(
-                typeof value === "number" ? value : Number(value) || 60,
-              )
-            }
-            disabled={!canUpdate || busy}
-          />
-          <NumberInput
-            label="Avisar por falta de salida (min)"
-            description="Minutos después del final previsto."
-            min={0}
-            max={720}
-            value={missingCheckoutDelayMinutes}
-            onChange={(value) =>
-              setMissingCheckoutDelayMinutes(
-                typeof value === "number" ? value : Number(value) || 30,
-              )
-            }
-            disabled={!canUpdate || busy}
-          />
-          <NumberInput
-            label="No enviar con más de (min) de atraso"
-            description="Evita ráfagas históricas si el sistema estuvo detenido."
-            min={1}
-            max={720}
-            value={alertMaxLatenessMinutes}
-            onChange={(value) =>
-              setAlertMaxLatenessMinutes(typeof value === "number" ? value : Number(value) || 60)
-            }
-            disabled={!canUpdate || busy}
-          />
-        </Group>
+        {dailyReportEnabled && enabledRecipientsWithEmail === 0 ? (
+          <Text size="sm" c="orange">
+            No hay destinatarios activos con email. Agregá usuarios con email en el perfil para
+            recibir el reporte.
+          </Text>
+        ) : null}
         {canUpdate ? (
           <Button
             variant="light"
-            onClick={() => void handleSaveDynamicAttendanceSettings()}
-            disabled={busy || !(settings.adminAlertsEnabled ?? false)}
+            onClick={() => void handleSaveDailyReportSettings()}
+            disabled={busy || Boolean(dailyReportTimeError) || !dailyReportDirty}
             style={{ alignSelf: "flex-start" }}
           >
-            Guardar alertas dinámicas
+            Guardar reporte diario
           </Button>
         ) : null}
+      </Stack>
+
+      <Stack gap="xs">
+        <Text fw={600} size="sm">
+          Alertas urgentes por WhatsApp
+        </Text>
+        <Text size="sm" c="dimmed">
+          Solo se notifican por WhatsApp: empleado que informa que no asistirá, y cruce hacia abajo
+          del umbral individual de asistencia. El resto de incidencias va en el reporte diario por
+          email.
+        </Text>
       </Stack>
 
       <Stack gap="xs">
@@ -432,6 +424,9 @@ export function CompanyWhatsAppAlertsDialogContent({
 
       {canUpdate ? (
         <Stack gap="xs">
+          <Text fw={600} size="sm">
+            Destinatarios
+          </Text>
           {usersQuery.isError ? (
             <Text size="sm" c="red">
               No se pudieron cargar los usuarios: {getApiErrorMessage(usersQuery.error)}
@@ -481,7 +476,8 @@ export function CompanyWhatsAppAlertsDialogContent({
           ) : null}
           {selectedUser?.phoneNumber ? (
             <Text size="sm" c="dimmed">
-              Se enviarán alertas a {selectedUser.phoneNumber}.
+              WhatsApp: {selectedUser.phoneNumber}
+              {selectedUser.email ? ` · Email reporte: ${selectedUser.email}` : " · sin email"}
             </Text>
           ) : null}
         </Stack>
@@ -501,11 +497,12 @@ export function CompanyWhatsAppAlertsDialogContent({
 
       {recipientsQuery.data && recipientsQuery.data.length > 0 ? (
         <ScrollArea type="scroll" offsetScrollbars>
-          <Table striped highlightOnHover miw={720}>
+          <Table striped highlightOnHover miw={820}>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Nombre</Table.Th>
                 <Table.Th>Teléfono</Table.Th>
+                <Table.Th>Email</Table.Th>
                 <Table.Th>Activo</Table.Th>
                 <Table.Th>Operativas</Table.Th>
                 <Table.Th>Solicitudes</Table.Th>
@@ -517,6 +514,9 @@ export function CompanyWhatsAppAlertsDialogContent({
               {recipientsQuery.data.map((recipient) => {
                 const isEditing = editingRecipientId === recipient.id;
                 const linkedToUser = Boolean(recipient.userId);
+                const linkedEmail = recipient.userId
+                  ? usersById.get(recipient.userId)?.email?.trim() || null
+                  : null;
                 return (
                   <Table.Tr key={recipient.id}>
                     <Table.Td>
@@ -543,6 +543,7 @@ export function CompanyWhatsAppAlertsDialogContent({
                         recipient.phoneNumber
                       )}
                     </Table.Td>
+                    <Table.Td>{linkedEmail ?? "—"}</Table.Td>
                     <Table.Td>
                       <Switch
                         checked={recipient.isEnabled}

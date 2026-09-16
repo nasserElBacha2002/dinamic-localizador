@@ -25,6 +25,20 @@ import {
   updateCompanyAlertRecipientSchema,
 } from "../schemas/company-alert-recipient.schema";
 import { companyAlertRecipientController } from "../controllers/company-alert-recipient.controller";
+import {
+  companyReportEmailRecipientIdParamSchema,
+  createCompanyReportEmailRecipientSchema,
+  updateCompanyReportEmailRecipientSchema,
+} from "../schemas/company-report-email-recipient.schema";
+import { companyReportEmailRecipientController } from "../controllers/company-report-email-recipient.controller";
+import {
+  dailyAttendanceReportController,
+  triggerDailyAttendanceReportSchema,
+} from "../controllers/daily-attendance-report.controller";
+import {
+  adminAlertCutoverController,
+  setAdminAlertDeliveryModeSchema,
+} from "../controllers/admin-alert-cutover.controller";
 
 export const companyRouter = Router();
 
@@ -60,6 +74,15 @@ companyRouter.patch(
   resolveCompanyContext,
   requirePermission("company:settings:update"),
   asyncHandler(companyController.updateSettings),
+);
+
+companyRouter.put(
+  "/:companyId/settings/admin-alert-delivery-mode",
+  validate(companyIdParamSchema, "params"),
+  validate(setAdminAlertDeliveryModeSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(adminAlertCutoverController.setDeliveryMode),
 );
 
 companyRouter.get(
@@ -197,4 +220,47 @@ companyRouter.delete(
   resolveCompanyContext,
   requirePermission("company:settings:update"),
   asyncHandler(companyAlertRecipientController.remove),
+);
+
+companyRouter.get(
+  "/:companyId/company-report-email-recipients",
+  validate(companyIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyReportEmailRecipientController.list),
+);
+
+companyRouter.post(
+  "/:companyId/company-report-email-recipients",
+  validate(companyIdParamSchema, "params"),
+  validate(createCompanyReportEmailRecipientSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyReportEmailRecipientController.create),
+);
+
+companyRouter.patch(
+  "/:companyId/company-report-email-recipients/:recipientId",
+  validate(companyReportEmailRecipientIdParamSchema, "params"),
+  validate(updateCompanyReportEmailRecipientSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyReportEmailRecipientController.update),
+);
+
+companyRouter.delete(
+  "/:companyId/company-report-email-recipients/:recipientId",
+  validate(companyReportEmailRecipientIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyReportEmailRecipientController.remove),
+);
+
+companyRouter.post(
+  "/:companyId/daily-attendance-reports/trigger",
+  validate(companyIdParamSchema, "params"),
+  validate(triggerDailyAttendanceReportSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(dailyAttendanceReportController.triggerManual),
 );

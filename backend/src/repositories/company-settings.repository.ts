@@ -69,6 +69,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   adminAlertsEnabledAt: row.admin_alerts_enabled_at
     ? toIsoString(row.admin_alerts_enabled_at as Date | string)
     : null,
+  adminAlertDeliveryMode: (() => {
+    const mode = String(row.admin_alert_delivery_mode ?? "WHATSAPP_LEGACY");
+    return mode === "DAILY_EMAIL" ? "DAILY_EMAIL" : "WHATSAPP_LEGACY";
+  })(),
   adminAttendanceConfirmationMissingEnabled:
     row.admin_attendance_confirmation_missing_enabled == null
       ? true
@@ -106,6 +110,17 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   ),
   attendanceAlertCooldownDays: Number(row.attendance_alert_cooldown_days ?? 7),
   attendanceAlertConfigVersion: Number(row.attendance_alert_config_version ?? 0),
+  dailyAttendanceReportEnabled:
+    row.daily_attendance_report_enabled == null
+      ? false
+      : Boolean(row.daily_attendance_report_enabled),
+  dailyAttendanceReportTime: (() => {
+    const parsed = parseSqlTimeToHHmm(row.daily_attendance_report_time);
+    if (parsed) {
+      return parsed;
+    }
+    return "08:00";
+  })(),
   whatsappQuotaMode: (() => {
     const mode = String(row.whatsapp_quota_mode ?? "OFF");
     return mode === "SHADOW" || mode === "ENFORCE" ? mode : "OFF";
@@ -263,6 +278,7 @@ export const companySettingsRepository = {
         | "absenceAttachmentsEnabled"
         | "absenceOperationalIntegrationEnabled"
         | "adminAlertsEnabled"
+        | "adminAlertDeliveryMode"
         | "adminAttendanceConfirmationMissingEnabled"
         | "adminMissingCheckinEnabled"
         | "adminMissingCheckoutEnabled"
@@ -274,6 +290,8 @@ export const companySettingsRepository = {
         | "attendanceAlertWindowDays"
         | "attendanceAlertMinimumWorkdays"
         | "attendanceAlertCooldownDays"
+        | "dailyAttendanceReportEnabled"
+        | "dailyAttendanceReportTime"
       >
     >,
     transaction?: sql.Transaction,
@@ -414,6 +432,14 @@ export const companySettingsRepository = {
         ELSE admin_alerts_enabled_at
       END`);
     }
+    if (input.adminAlertDeliveryMode !== undefined) {
+      request.input(
+        "adminAlertDeliveryMode",
+        sql.NVarChar(32),
+        input.adminAlertDeliveryMode,
+      );
+      fields.push("admin_alert_delivery_mode = @adminAlertDeliveryMode");
+    }
     if (input.adminAttendanceConfirmationMissingEnabled !== undefined) {
       request.input(
         "adminAttendanceConfirmationMissingEnabled",
@@ -510,6 +536,22 @@ export const companySettingsRepository = {
       );
       fields.push("attendance_alert_cooldown_days = @attendanceAlertCooldownDays");
       bumpAttendanceConfigVersion = true;
+    }
+    if (input.dailyAttendanceReportEnabled !== undefined) {
+      request.input(
+        "dailyAttendanceReportEnabled",
+        sql.Bit,
+        input.dailyAttendanceReportEnabled ? 1 : 0,
+      );
+      fields.push("daily_attendance_report_enabled = @dailyAttendanceReportEnabled");
+    }
+    if (input.dailyAttendanceReportTime !== undefined) {
+      request.input(
+        "dailyAttendanceReportTime",
+        sql.VarChar(8),
+        toSqlTimeValue(input.dailyAttendanceReportTime),
+      );
+      fields.push("daily_attendance_report_time = @dailyAttendanceReportTime");
     }
     if (bumpAttendanceConfigVersion) {
       fields.push(

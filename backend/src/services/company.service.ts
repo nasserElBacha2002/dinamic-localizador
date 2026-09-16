@@ -50,6 +50,7 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
   adminAlertsEnabled: settings.adminAlertsEnabled,
   adminAlertsEnabledAt: settings.adminAlertsEnabledAt,
+  adminAlertDeliveryMode: settings.adminAlertDeliveryMode,
   adminAttendanceConfirmationMissingEnabled: settings.adminAttendanceConfirmationMissingEnabled,
   adminMissingCheckinEnabled: settings.adminMissingCheckinEnabled,
   adminMissingCheckoutEnabled: settings.adminMissingCheckoutEnabled,
@@ -62,6 +63,8 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   attendanceAlertMinimumWorkdays: settings.attendanceAlertMinimumWorkdays,
   attendanceAlertCooldownDays: settings.attendanceAlertCooldownDays,
   attendanceAlertConfigVersion: settings.attendanceAlertConfigVersion,
+  dailyAttendanceReportEnabled: settings.dailyAttendanceReportEnabled,
+  dailyAttendanceReportTime: settings.dailyAttendanceReportTime,
   whatsappQuotaMode: settings.whatsappQuotaMode,
   whatsappQuotaDailyTurns: settings.whatsappQuotaDailyTurns,
   whatsappQuotaWeeklyTurns: settings.whatsappQuotaWeeklyTurns,
@@ -106,10 +109,30 @@ export const companyService = {
   async getSettings(companyId: string): Promise<CompanySettingsDto> {
     await this.getCompanyOrThrow(companyId);
 
-    const settings = await companySettingsRepository.findOrCreateByCompanyId(
+    let settings = await companySettingsRepository.findOrCreateByCompanyId(
       companyId,
       toCompanySettingsInput(),
     );
+
+    if (settings.dailyAttendanceReportEnabled) {
+      const { adminAlertCutoverService } = await import("./admin-alert-cutover.service");
+      const cutover = await adminAlertCutoverService.tryAutoCutoverToDailyEmail({
+        companyId,
+        actorUserId: "system:settings-read",
+      });
+      if (cutover) {
+        settings = {
+          ...settings,
+          adminAlertDeliveryMode: cutover.after,
+        };
+      } else {
+        // Reload in case a concurrent worker completed cutover.
+        const refreshed = await companySettingsRepository.findByCompanyId(companyId);
+        if (refreshed) {
+          settings = refreshed;
+        }
+      }
+    }
 
     return toCompanySettingsDto(settings);
   },
@@ -221,6 +244,21 @@ export const companyService = {
         companyId,
         updated.attendanceAlertWindowDays,
       );
+    }
+
+    // Automatic Phase 2 cutover when daily report is (or stays) enabled with preconditions.
+    if (updated.dailyAttendanceReportEnabled) {
+      const { adminAlertCutoverService } = await import("./admin-alert-cutover.service");
+      const cutover = await adminAlertCutoverService.tryAutoCutoverToDailyEmail({
+        companyId,
+        actorUserId: "system:settings-update",
+      });
+      if (cutover) {
+        return toCompanySettingsDto({
+          ...updated,
+          adminAlertDeliveryMode: cutover.after,
+        });
+      }
     }
 
     return toCompanySettingsDto(updated);

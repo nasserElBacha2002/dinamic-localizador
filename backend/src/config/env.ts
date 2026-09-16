@@ -132,6 +132,17 @@ const envSchema = z
       .positive()
       .max(100)
       .default(25),
+    /** Phase 1: daily attendance email report worker (default OFF). */
+    DAILY_ATTENDANCE_REPORT_WORKER_ENABLED: z.stringbool().default(false),
+    DAILY_ATTENDANCE_REPORT_WORKER_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60_000),
+    DAILY_ATTENDANCE_REPORT_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    DAILY_ATTENDANCE_REPORT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    DAILY_ATTENDANCE_REPORT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    DAILY_ATTENDANCE_REPORT_BATCH_SIZE: z.coerce.number().int().positive().max(50).default(10),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),

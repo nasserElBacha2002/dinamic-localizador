@@ -30,6 +30,8 @@ export interface CompanySettings {
   attendanceAlertWindowDays?: number;
   attendanceAlertMinimumWorkdays?: number;
   attendanceAlertCooldownDays?: number;
+  dailyAttendanceReportEnabled?: boolean;
+  dailyAttendanceReportTime?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +68,8 @@ export type UpdateCompanySettingsInput = Partial<
     | "attendanceAlertWindowDays"
     | "attendanceAlertMinimumWorkdays"
     | "attendanceAlertCooldownDays"
+    | "dailyAttendanceReportEnabled"
+    | "dailyAttendanceReportTime"
   >
 >;
 

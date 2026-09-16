@@ -1,0 +1,31 @@
+type DailyAttendanceReportEvent =
+  | "DAILY_ATTENDANCE_REPORT_RUN_CREATED"
+  | "DAILY_ATTENDANCE_REPORT_RUN_CLAIMED"
+  | "DAILY_ATTENDANCE_REPORT_GENERATED"
+  | "DAILY_ATTENDANCE_REPORT_NO_ACTIVITY"
+  | "DAILY_ATTENDANCE_REPORT_NO_RECIPIENTS"
+  | "DAILY_ATTENDANCE_REPORT_DELIVERY_CLAIMED"
+  | "DAILY_ATTENDANCE_REPORT_EMAIL_SENT"
+  | "DAILY_ATTENDANCE_REPORT_EMAIL_FAILED"
+  | "DAILY_ATTENDANCE_REPORT_RETRY_SCHEDULED"
+  | "DAILY_ATTENDANCE_REPORT_LEASE_RECOVERED"
+  | "DAILY_ATTENDANCE_REPORT_DUPLICATE_AVOIDED"
+  | "DAILY_ATTENDANCE_REPORT_RUN_SENT"
+  | "DAILY_ATTENDANCE_REPORT_RUN_PARTIAL"
+  | "DAILY_ATTENDANCE_REPORT_RUN_FAILED"
+  | "DAILY_ATTENDANCE_REPORT_MANUAL_TRIGGERED";
+
+export const logDailyAttendanceReportEvent = (
+  event: DailyAttendanceReportEvent,
+  fields: Record<string, unknown>,
+): void => {
+  console.info(
+    JSON.stringify({
+      schemaVersion: 1,
+      module: "daily-attendance-report",
+      event,
+      timestamp: new Date().toISOString(),
+      ...fields,
+    }),
+  );
+};

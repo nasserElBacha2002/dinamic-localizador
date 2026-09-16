@@ -62,6 +62,8 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   attendanceAlertMinimumWorkdays: settings.attendanceAlertMinimumWorkdays,
   attendanceAlertCooldownDays: settings.attendanceAlertCooldownDays,
   attendanceAlertConfigVersion: settings.attendanceAlertConfigVersion,
+  dailyAttendanceReportEnabled: settings.dailyAttendanceReportEnabled,
+  dailyAttendanceReportTime: settings.dailyAttendanceReportTime,
   whatsappQuotaMode: settings.whatsappQuotaMode,
   whatsappQuotaDailyTurns: settings.whatsappQuotaDailyTurns,
   whatsappQuotaWeeklyTurns: settings.whatsappQuotaWeeklyTurns,

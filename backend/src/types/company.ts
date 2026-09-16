@@ -120,6 +120,10 @@ export interface CompanySettings {
   attendanceAlertCooldownDays: number;
   /** Bumped on threshold feature/config changes to force rebaseline. */
   attendanceAlertConfigVersion: number;
+  /** Phase 1 daily attendance email report (default OFF). */
+  dailyAttendanceReportEnabled: boolean;
+  /** Local HH:mm in operationTimezone. */
+  dailyAttendanceReportTime: string;
   /** Phase 2 WhatsApp usage quotas (default OFF). */
   whatsappQuotaMode: "OFF" | "SHADOW" | "ENFORCE";
   whatsappQuotaDailyTurns: number;

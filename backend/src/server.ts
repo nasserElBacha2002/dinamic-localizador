@@ -34,6 +34,10 @@ import {
   stopAdminAlertJob,
 } from "./jobs/admin-alert.job";
 import {
+  startDailyAttendanceReportJob,
+  stopDailyAttendanceReportJob,
+} from "./jobs/daily-attendance-report.job";
+import {
   startOperationLifecycleJob,
   stopOperationLifecycleJob,
 } from "./jobs/operation-lifecycle.job";
@@ -67,6 +71,7 @@ const stopAllSchedulers = (): void => {
   stopOperationAssignmentNotificationJob();
   stopOperationLifecycleJob();
   stopAdminAlertJob();
+  stopDailyAttendanceReportJob();
   stopWhatsappMessageCostSyncJob();
   stopSystemLogRetentionJob();
 };
@@ -134,6 +139,7 @@ const startServer = async (): Promise<void> => {
   startOperationAssignmentNotificationJob();
   startOperationLifecycleJob();
   startAdminAlertJob();
+  startDailyAttendanceReportJob();
   startWhatsappMessageCostSyncJob();
   startSystemLogRetentionJob();
 

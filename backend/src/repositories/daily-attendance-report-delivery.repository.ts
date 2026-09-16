@@ -12,7 +12,9 @@ const mapDelivery = (row: Record<string, unknown>): DailyAttendanceReportDeliver
   id: String(row.id),
   reportRunId: String(row.report_run_id),
   companyId: String(row.company_id),
-  recipientId: String(row.recipient_id),
+  recipientId: String(row.recipient_id ?? ""),
+  // Historical SNAPSHOT_ONLY rows may have null recipient_id; callers use emailSnapshot.
+  // Empty string preserves prior non-null typing for claim/mark paths that always set FK.
   emailSnapshot: String(row.email_snapshot),
   displayNameSnapshot: row.display_name_snapshot ? String(row.display_name_snapshot) : null,
   status: String(row.status) as DailyAttendanceReportDeliveryStatus,
@@ -30,45 +32,6 @@ const mapDelivery = (row: Record<string, unknown>): DailyAttendanceReportDeliver
 });
 
 export const dailyAttendanceReportDeliveryRepository = {
-  async ensureDeliveries(
-    companyId: string,
-    reportRunId: string,
-    recipients: Array<{ id: string; email: string; displayName: string | null }>,
-  ): Promise<number> {
-    let created = 0;
-    for (const recipient of recipients) {
-      const result = await getPool()
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("reportRunId", sql.UniqueIdentifier, reportRunId)
-        .input("recipientId", sql.UniqueIdentifier, recipient.id)
-        .input("email", sql.NVarChar(320), recipient.email)
-        .input("displayName", sql.NVarChar(200), recipient.displayName)
-        .query(`
-          IF NOT EXISTS (
-            SELECT 1
-            FROM company_daily_attendance_report_deliveries
-            WHERE report_run_id = @reportRunId AND recipient_id = @recipientId
-          )
-          BEGIN
-            INSERT INTO company_daily_attendance_report_deliveries (
-              report_run_id, company_id, recipient_id, email_snapshot, display_name_snapshot, status
-            )
-            VALUES (
-              @reportRunId, @companyId, @recipientId, @email, @displayName, N'PENDING'
-            );
-            SELECT 1 AS created;
-          END
-          ELSE
-            SELECT 0 AS created;
-        `);
-      if (Number(result.recordset[0]?.created ?? 0) === 1) {
-        created += 1;
-      }
-    }
-    return created;
-  },
-
   async listByRun(
     companyId: string,
     reportRunId: string,
@@ -137,16 +100,42 @@ export const dailyAttendanceReportDeliveryRepository = {
     return row ? mapDelivery(row) : null;
   },
 
-  async markSent(
+  async renewLease(
     companyId: string,
     deliveryId: string,
-    providerMessageId: string | null,
-  ): Promise<void> {
-    await getPool()
+    leaseOwner: string,
+    leaseSeconds: number,
+  ): Promise<boolean> {
+    const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, deliveryId)
-      .input("providerMessageId", sql.NVarChar(200), providerMessageId)
+      .input("leaseOwner", sql.NVarChar(100), leaseOwner)
+      .input("leaseSeconds", sql.Int, leaseSeconds)
+      .query(`
+        UPDATE company_daily_attendance_report_deliveries
+        SET lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND id = @id
+          AND status = N'PROCESSING'
+          AND lease_owner = @leaseOwner
+      `);
+    return (result.rowsAffected[0] ?? 0) > 0;
+  },
+
+  async markSent(input: {
+    companyId: string;
+    deliveryId: string;
+    leaseOwner: string;
+    providerMessageId: string | null;
+  }): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("id", sql.UniqueIdentifier, input.deliveryId)
+      .input("leaseOwner", sql.NVarChar(100), input.leaseOwner)
+      .input("providerMessageId", sql.NVarChar(200), input.providerMessageId)
       .query(`
         UPDATE company_daily_attendance_report_deliveries
         SET status = N'SENT',
@@ -158,42 +147,63 @@ export const dailyAttendanceReportDeliveryRepository = {
             last_error_message = NULL,
             next_attempt_at = NULL,
             updated_at = SYSUTCDATETIME()
-        WHERE company_id = @companyId AND id = @id
+        WHERE company_id = @companyId
+          AND id = @id
+          AND status = N'PROCESSING'
+          AND lease_owner = @leaseOwner
       `);
+    return (result.rowsAffected[0] ?? 0) > 0;
   },
 
-  async markFailed(
-    companyId: string,
-    deliveryId: string,
-    error: { code: string; message: string },
-    nextAttemptAt: Date | null,
-    terminal: boolean,
-  ): Promise<void> {
-    await getPool()
+  /**
+   * Retryable failure → FAILED + next_attempt_at.
+   * Terminal failure → FAILED_TERMINAL (never reclaimed).
+   */
+  async markFailed(input: {
+    companyId: string;
+    deliveryId: string;
+    leaseOwner: string;
+    error: { code: string; message: string };
+    nextAttemptAt: Date | null;
+    terminal: boolean;
+  }): Promise<boolean> {
+    const result = await getPool()
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("id", sql.UniqueIdentifier, deliveryId)
-      .input("errorCode", sql.NVarChar(80), error.code)
-      .input("errorMessage", sql.NVarChar(1000), error.message)
-      .input("nextAttemptAt", sql.DateTime2, nextAttemptAt)
-      .input("terminal", sql.Bit, terminal ? 1 : 0)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("id", sql.UniqueIdentifier, input.deliveryId)
+      .input("leaseOwner", sql.NVarChar(100), input.leaseOwner)
+      .input("errorCode", sql.NVarChar(80), input.error.code)
+      .input("errorMessage", sql.NVarChar(1000), input.error.message)
+      .input("nextAttemptAt", sql.DateTime2, input.terminal ? null : input.nextAttemptAt)
+      .input("status", sql.NVarChar(30), input.terminal ? "FAILED_TERMINAL" : "FAILED")
       .query(`
         UPDATE company_daily_attendance_report_deliveries
-        SET status = N'FAILED',
+        SET status = @status,
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
             next_attempt_at = @nextAttemptAt,
             lease_owner = NULL,
             lease_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
-        WHERE company_id = @companyId AND id = @id
+        WHERE company_id = @companyId
+          AND id = @id
+          AND status = N'PROCESSING'
+          AND lease_owner = @leaseOwner
       `);
+    return (result.rowsAffected[0] ?? 0) > 0;
   },
 
   async summarizeForRun(
     companyId: string,
     reportRunId: string,
-  ): Promise<{ sent: number; failed: number; pending: number; total: number }> {
+  ): Promise<{
+    sent: number;
+    failedRetryable: number;
+    failedTerminal: number;
+    pending: number;
+    total: number;
+    minRetryAt: Date | null;
+  }> {
     const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -201,18 +211,54 @@ export const dailyAttendanceReportDeliveryRepository = {
       .query(`
         SELECT
           SUM(CASE WHEN status = N'SENT' THEN 1 ELSE 0 END) AS sent_count,
-          SUM(CASE WHEN status = N'FAILED' THEN 1 ELSE 0 END) AS failed_count,
+          SUM(CASE WHEN status = N'FAILED' THEN 1 ELSE 0 END) AS failed_retryable_count,
+          SUM(CASE WHEN status = N'FAILED_TERMINAL' THEN 1 ELSE 0 END) AS failed_terminal_count,
           SUM(CASE WHEN status IN (N'PENDING', N'PROCESSING') THEN 1 ELSE 0 END) AS pending_count,
-          COUNT(1) AS total_count
+          COUNT(1) AS total_count,
+          MIN(CASE
+            WHEN status = N'FAILED' AND next_attempt_at IS NOT NULL THEN next_attempt_at
+            WHEN status = N'PENDING' THEN SYSUTCDATETIME()
+            ELSE NULL
+          END) AS min_retry_at
         FROM company_daily_attendance_report_deliveries
         WHERE company_id = @companyId AND report_run_id = @reportRunId
       `);
     const row = result.recordset[0] as Record<string, unknown>;
+    const minRetryRaw = row.min_retry_at as Date | string | null | undefined;
     return {
       sent: Number(row.sent_count ?? 0),
-      failed: Number(row.failed_count ?? 0),
+      failedRetryable: Number(row.failed_retryable_count ?? 0),
+      failedTerminal: Number(row.failed_terminal_count ?? 0),
       pending: Number(row.pending_count ?? 0),
       total: Number(row.total_count ?? 0),
+      minRetryAt: minRetryRaw
+        ? minRetryRaw instanceof Date
+          ? minRetryRaw
+          : new Date(minRetryRaw)
+        : null,
     };
+  },
+
+  async recoverExpiredDeliveryLeases(companyId: string, reportRunId: string): Promise<number> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("reportRunId", sql.UniqueIdentifier, reportRunId)
+      .query(`
+        UPDATE company_daily_attendance_report_deliveries
+        SET status = N'FAILED',
+            next_attempt_at = SYSUTCDATETIME(),
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            last_error_code = N'LEASE_EXPIRED',
+            last_error_message = N'Delivery lease expired',
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND report_run_id = @reportRunId
+          AND status = N'PROCESSING'
+          AND lease_expires_at IS NOT NULL
+          AND lease_expires_at < SYSUTCDATETIME()
+      `);
+    return result.rowsAffected[0] ?? 0;
   },
 };

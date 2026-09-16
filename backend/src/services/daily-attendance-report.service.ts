@@ -3,9 +3,10 @@ import sql from "mssql";
 import { env } from "../config/env";
 import {
   DAILY_ATTENDANCE_REPORT_CATCHUP_MAX_DAYS,
+  DAILY_ATTENDANCE_REPORT_TEMPLATE_VERSION,
 } from "../constants/daily-attendance-report";
 import { getPool } from "../database/connection";
-import { companyReportEmailRecipientRepository } from "../repositories/company-report-email-recipient.repository";
+import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { dailyAttendanceReportDeliveryRepository } from "../repositories/daily-attendance-report-delivery.repository";
 import { dailyAttendanceReportRunRepository } from "../repositories/daily-attendance-report-run.repository";
@@ -19,11 +20,25 @@ import {
   normalizeReportTimeHHmm,
   resolveReportDateLocal,
 } from "../utils/daily-attendance-report-time";
+import { validateManualReportDate } from "../utils/daily-attendance-report-manual-date";
 import { logDailyAttendanceReportEvent } from "../utils/daily-attendance-report-observability";
-import type { DailyAttendanceReportPayload } from "../types/daily-attendance-report";
+import { assertDailyReportAudienceSchemaReady } from "../utils/daily-attendance-report-schema-guard";
+import type { DailyAttendanceReportRun } from "../types/daily-attendance-report";
+
+/**
+ * SMTP delivery is at-least-once: if the provider accepts a message but persistence of
+ * SENT fails (fencing lost / crash), a later retry may send again. There is no provider
+ * idempotency key for this transport. Do not claim exactly-once.
+ */
 
 const retryDelayMs = (attempt: number): number =>
   env.DAILY_ATTENDANCE_REPORT_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1);
+
+const leaseSeconds = (): number => {
+  const base = Math.ceil(env.DAILY_ATTENDANCE_REPORT_LEASE_MS / 1000);
+  const smtpFloor = Math.ceil(env.DAILY_ATTENDANCE_REPORT_SMTP_TIMEOUT_MS / 1000) + 30;
+  return Math.max(base, smtpFloor);
+};
 
 type EnabledCompanyRow = {
   company_id: string;
@@ -68,40 +83,66 @@ const loadCompanyContext = async (companyId: string) => {
   };
 };
 
-const processDeliveriesForRun = async (input: {
-  companyId: string;
-  runId: string;
-  payload: DailyAttendanceReportPayload;
+type DeliveryBatchOutcome = "SENT" | "PARTIAL" | "FAILED" | "WAITING_BACKOFF";
+
+const processDeliveriesFromSnapshot = async (input: {
+  run: DailyAttendanceReportRun;
   leaseOwner: string;
-}): Promise<"SENT" | "PARTIAL" | "FAILED" | "PENDING"> => {
-  const emailContent = buildDailyAttendanceReportEmail(input.payload);
+}): Promise<DeliveryBatchOutcome> => {
+  const email = input.run.emailSnapshot;
+  if (!email) {
+    return "FAILED";
+  }
+
   const maxAttempts = env.DAILY_ATTENDANCE_REPORT_MAX_ATTEMPTS;
-  const leaseSeconds = Math.ceil(env.DAILY_ATTENDANCE_REPORT_LEASE_MS / 1000);
+  const leaseSec = leaseSeconds();
+
+  await dailyAttendanceReportDeliveryRepository.recoverExpiredDeliveryLeases(
+    input.run.companyId,
+    input.run.id,
+  );
 
   for (;;) {
     const delivery = await dailyAttendanceReportDeliveryRepository.claimNextForRun(
-      input.companyId,
-      input.runId,
+      input.run.companyId,
+      input.run.id,
       input.leaseOwner,
-      leaseSeconds,
+      leaseSec,
       maxAttempts,
     );
     if (!delivery) {
       break;
     }
+
     logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_DELIVERY_CLAIMED", {
-      companyId: input.companyId,
-      runId: input.runId,
+      companyId: input.run.companyId,
+      runId: input.run.id,
       deliveryId: delivery.id,
       attempt: delivery.attemptCount,
     });
 
+    const renewed = await dailyAttendanceReportDeliveryRepository.renewLease(
+      input.run.companyId,
+      delivery.id,
+      input.leaseOwner,
+      leaseSec,
+    );
+    if (!renewed) {
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+        companyId: input.run.companyId,
+        runId: input.run.id,
+        deliveryId: delivery.id,
+        phase: "pre_send_renew",
+      });
+      continue;
+    }
+
     try {
       const result = await sendEmail({
         to: delivery.emailSnapshot,
-        subject: emailContent.subject,
-        text: emailContent.text,
-        html: emailContent.html,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
       });
 
       if (!result.sent) {
@@ -113,24 +154,41 @@ const processDeliveriesForRun = async (input: {
         const nextAttemptAt = terminal
           ? null
           : new Date(Date.now() + retryDelayMs(delivery.attemptCount));
-        await dailyAttendanceReportDeliveryRepository.markFailed(
-          input.companyId,
-          delivery.id,
-          { code, message: code },
+        const marked = await dailyAttendanceReportDeliveryRepository.markFailed({
+          companyId: input.run.companyId,
+          deliveryId: delivery.id,
+          leaseOwner: input.leaseOwner,
+          error: { code, message: code },
           nextAttemptAt,
           terminal,
-        );
+        });
+        if (!marked) {
+          logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+            companyId: input.run.companyId,
+            runId: input.run.id,
+            deliveryId: delivery.id,
+            phase: "mark_failed",
+          });
+          continue;
+        }
         logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_EMAIL_FAILED", {
-          companyId: input.companyId,
-          runId: input.runId,
+          companyId: input.run.companyId,
+          runId: input.run.id,
           deliveryId: delivery.id,
           attempt: delivery.attemptCount,
           errorCode: code,
         });
-        if (!terminal && nextAttemptAt) {
+        if (terminal) {
+          logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_DELIVERY_TERMINAL", {
+            companyId: input.run.companyId,
+            runId: input.run.id,
+            deliveryId: delivery.id,
+            errorCode: code,
+          });
+        } else if (nextAttemptAt) {
           logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RETRY_SCHEDULED", {
-            companyId: input.companyId,
-            runId: input.runId,
+            companyId: input.run.companyId,
+            runId: input.run.id,
             deliveryId: delivery.id,
             nextAttemptAt: nextAttemptAt.toISOString(),
           });
@@ -138,14 +196,25 @@ const processDeliveriesForRun = async (input: {
         continue;
       }
 
-      await dailyAttendanceReportDeliveryRepository.markSent(
-        input.companyId,
-        delivery.id,
-        result.messageId,
-      );
+      const markedSent = await dailyAttendanceReportDeliveryRepository.markSent({
+        companyId: input.run.companyId,
+        deliveryId: delivery.id,
+        leaseOwner: input.leaseOwner,
+        providerMessageId: result.messageId,
+      });
+      if (!markedSent) {
+        // Ambiguous: provider may have accepted; fencing lost. At-least-once.
+        logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+          companyId: input.run.companyId,
+          runId: input.run.id,
+          deliveryId: delivery.id,
+          phase: "mark_sent_after_provider_accept",
+        });
+        continue;
+      }
       logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_EMAIL_SENT", {
-        companyId: input.companyId,
-        runId: input.runId,
+        companyId: input.run.companyId,
+        runId: input.run.id,
         deliveryId: delivery.id,
         attempt: delivery.attemptCount,
       });
@@ -155,200 +224,328 @@ const processDeliveriesForRun = async (input: {
       const nextAttemptAt = terminal
         ? null
         : new Date(Date.now() + retryDelayMs(delivery.attemptCount));
-      await dailyAttendanceReportDeliveryRepository.markFailed(
-        input.companyId,
-        delivery.id,
-        { code: "EMAIL_SEND_FAILED", message: message.slice(0, 1000) },
+      const marked = await dailyAttendanceReportDeliveryRepository.markFailed({
+        companyId: input.run.companyId,
+        deliveryId: delivery.id,
+        leaseOwner: input.leaseOwner,
+        error: { code: "EMAIL_SEND_FAILED", message: message.slice(0, 1000) },
         nextAttemptAt,
         terminal,
-      );
+      });
+      if (!marked) {
+        logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+          companyId: input.run.companyId,
+          runId: input.run.id,
+          deliveryId: delivery.id,
+          phase: "mark_failed_exception",
+        });
+        continue;
+      }
       logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_EMAIL_FAILED", {
-        companyId: input.companyId,
-        runId: input.runId,
+        companyId: input.run.companyId,
+        runId: input.run.id,
         deliveryId: delivery.id,
         attempt: delivery.attemptCount,
         errorCode: "EMAIL_SEND_FAILED",
       });
+      if (terminal) {
+        logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_DELIVERY_TERMINAL", {
+          companyId: input.run.companyId,
+          runId: input.run.id,
+          deliveryId: delivery.id,
+          errorCode: "EMAIL_SEND_FAILED",
+        });
+      } else if (nextAttemptAt) {
+        logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RETRY_SCHEDULED", {
+          companyId: input.run.companyId,
+          runId: input.run.id,
+          deliveryId: delivery.id,
+          nextAttemptAt: nextAttemptAt.toISOString(),
+        });
+      }
     }
   }
 
   const summary = await dailyAttendanceReportDeliveryRepository.summarizeForRun(
-    input.companyId,
-    input.runId,
+    input.run.companyId,
+    input.run.id,
   );
   if (summary.total === 0) {
     return "FAILED";
   }
-  if (summary.pending > 0) {
-    return "PENDING";
+  if (summary.pending > 0 || summary.failedRetryable > 0) {
+    if (summary.sent === 0 && summary.failedRetryable === 0 && summary.pending === 0) {
+      return "FAILED";
+    }
+    // Still work remaining (pending now or retryable later)
+    const eligibleNow =
+      summary.pending > 0 ||
+      (summary.minRetryAt != null && summary.minRetryAt.getTime() <= Date.now());
+    if (!eligibleNow && summary.failedRetryable > 0) {
+      return "WAITING_BACKOFF";
+    }
+    if (summary.sent > 0) {
+      return "PARTIAL";
+    }
+    return summary.failedTerminal > 0 && summary.failedRetryable === 0 && summary.pending === 0
+      ? "FAILED"
+      : "PARTIAL";
   }
   if (summary.sent === summary.total) {
     return "SENT";
   }
-  if (summary.sent > 0 && summary.failed > 0) {
+  if (summary.sent > 0) {
     return "PARTIAL";
   }
   return "FAILED";
 };
 
-const processCompanyReportDate = async (input: {
-  companyId: string;
+const finalizeFromOutcome = async (input: {
+  run: DailyAttendanceReportRun;
+  leaseOwner: string;
+  outcome: DeliveryBatchOutcome;
+}): Promise<void> => {
+  const summary = await dailyAttendanceReportDeliveryRepository.summarizeForRun(
+    input.run.companyId,
+    input.run.id,
+  );
+  const nextAttemptAt = summary.minRetryAt;
+
+  if (input.outcome === "SENT") {
+    const ok = await dailyAttendanceReportRunRepository.finalizeStatus({
+      runId: input.run.id,
+      companyId: input.run.companyId,
+      leaseOwner: input.leaseOwner,
+      status: "SENT",
+    });
+    if (!ok) {
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+        companyId: input.run.companyId,
+        runId: input.run.id,
+        phase: "finalize_sent",
+      });
+      return;
+    }
+    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_SENT", {
+      companyId: input.run.companyId,
+      reportDate: input.run.reportDate,
+      runId: input.run.id,
+    });
+    return;
+  }
+
+  if (input.outcome === "WAITING_BACKOFF" || input.outcome === "PARTIAL") {
+    const ok = await dailyAttendanceReportRunRepository.finalizeStatus({
+      runId: input.run.id,
+      companyId: input.run.companyId,
+      leaseOwner: input.leaseOwner,
+      status: "PARTIAL",
+      error: { code: "PARTIAL_DELIVERY", message: "Quedan entregas pendientes o fallidas" },
+      nextAttemptAt,
+    });
+    if (!ok) {
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+        companyId: input.run.companyId,
+        runId: input.run.id,
+        phase: "finalize_partial",
+      });
+      return;
+    }
+    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_PARTIAL", {
+      companyId: input.run.companyId,
+      reportDate: input.run.reportDate,
+      runId: input.run.id,
+      nextAttemptAt: nextAttemptAt?.toISOString() ?? null,
+      failedRetryable: summary.failedRetryable,
+      failedTerminal: summary.failedTerminal,
+      sent: summary.sent,
+    });
+    return;
+  }
+
+  const ok = await dailyAttendanceReportRunRepository.finalizeStatus({
+    runId: input.run.id,
+    companyId: input.run.companyId,
+    leaseOwner: input.leaseOwner,
+    status: "FAILED",
+    error: { code: "ALL_DELIVERIES_FAILED", message: "No se completó ninguna entrega" },
+    nextAttemptAt: null,
+  });
+  if (!ok) {
+    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+      companyId: input.run.companyId,
+      runId: input.run.id,
+      phase: "finalize_failed",
+    });
+    return;
+  }
+  logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_FAILED", {
+    companyId: input.run.companyId,
+    reportDate: input.run.reportDate,
+    runId: input.run.id,
+  });
+};
+
+const generateSnapshotIfNeeded = async (input: {
+  run: DailyAttendanceReportRun;
   companyName: string;
-  reportDate: string;
-  timezoneId: string;
-  reportTimeLocal: string;
   earlyLeaveToleranceMinutes: number;
   leaseOwner: string;
-  forceFailedRetriesOnly?: boolean;
-}): Promise<void> => {
-  const ensured = await dailyAttendanceReportRunRepository.ensurePendingRun({
-    companyId: input.companyId,
-    reportDate: input.reportDate,
-    timezoneId: input.timezoneId,
-    reportTimeLocal: input.reportTimeLocal,
-  });
-  if (ensured.created) {
-    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_CREATED", {
-      companyId: input.companyId,
-      reportDate: input.reportDate,
-      runId: ensured.run.id,
-    });
-  } else {
-    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_DUPLICATE_AVOIDED", {
-      companyId: input.companyId,
-      reportDate: input.reportDate,
-      runId: ensured.run.id,
-      status: ensured.run.status,
-    });
+}): Promise<"SKIPPED_NO_RECIPIENTS" | "SKIPPED_NO_ACTIVITY" | "READY" | "FENCE_LOST"> => {
+  if (input.run.generatedAt && input.run.emailSnapshot) {
+    return "READY";
   }
 
-  if (
-    ensured.run.status === "SENT" ||
-    ensured.run.status === "SKIPPED_NO_ACTIVITY" ||
-    ensured.run.status === "SKIPPED_NO_RECIPIENTS"
-  ) {
-    return;
-  }
-
-  const recipients = await companyReportEmailRecipientRepository.listEnabled(input.companyId);
+  const recipients =
+    await companyAlertRecipientRepository.listEnabledWithUserEmailForDailyReport(
+      input.run.companyId,
+    );
   if (recipients.length === 0) {
-    await dailyAttendanceReportRunRepository.markSkipped(
-      ensured.run.id,
-      input.companyId,
+    const ok = await dailyAttendanceReportRunRepository.markSkipped(
+      input.run.id,
+      input.run.companyId,
+      input.leaseOwner,
       "SKIPPED_NO_RECIPIENTS",
     );
+    if (!ok) {
+      return "FENCE_LOST";
+    }
     logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_NO_RECIPIENTS", {
-      companyId: input.companyId,
-      reportDate: input.reportDate,
-      runId: ensured.run.id,
+      companyId: input.run.companyId,
+      reportDate: input.run.reportDate,
+      runId: input.run.id,
+      reason: "no_enabled_alert_recipients_with_user_email",
     });
-    return;
+    return "SKIPPED_NO_RECIPIENTS";
   }
 
+  const evaluatedAt = new Date();
   const payload = await dailyAttendanceReportAggregator.buildReport({
-    companyId: input.companyId,
-    reportDate: input.reportDate,
-    timezoneId: input.timezoneId,
+    companyId: input.run.companyId,
+    reportDate: input.run.reportDate,
+    timezoneId: input.run.timezoneId,
     earlyLeaveToleranceMinutes: input.earlyLeaveToleranceMinutes,
+    evaluatedAt,
   });
   payload.companyName = payload.companyName || input.companyName;
 
   if (!payload.hasActivity) {
-    await dailyAttendanceReportRunRepository.markSkipped(
-      ensured.run.id,
-      input.companyId,
+    const ok = await dailyAttendanceReportRunRepository.markSkipped(
+      input.run.id,
+      input.run.companyId,
+      input.leaseOwner,
       "SKIPPED_NO_ACTIVITY",
     );
+    if (!ok) {
+      return "FENCE_LOST";
+    }
     logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_NO_ACTIVITY", {
-      companyId: input.companyId,
-      reportDate: input.reportDate,
-      runId: ensured.run.id,
+      companyId: input.run.companyId,
+      reportDate: input.run.reportDate,
+      runId: input.run.id,
     });
-    return;
+    return "SKIPPED_NO_ACTIVITY";
   }
 
-  await dailyAttendanceReportRunRepository.updateTotals(
-    ensured.run.id,
-    input.companyId,
-    payload.totals,
-    recipients.length,
-  );
-  logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_GENERATED", {
-    companyId: input.companyId,
-    reportDate: input.reportDate,
-    runId: ensured.run.id,
-    operationsCount: payload.totals.operationsCount,
-    scheduledEmployeesCount: payload.totals.scheduledEmployeesCount,
+  const email = buildDailyAttendanceReportEmail(payload);
+  const persisted = await dailyAttendanceReportRunRepository.persistSnapshotAndAudience({
+    runId: input.run.id,
+    companyId: input.run.companyId,
+    leaseOwner: input.leaseOwner,
+    totals: payload.totals,
     recipientCount: recipients.length,
-  });
-
-  await dailyAttendanceReportDeliveryRepository.ensureDeliveries(
-    input.companyId,
-    ensured.run.id,
-    recipients.map((r) => ({
+    totalIncidentCount: payload.totalIncidentCount,
+    templateVersion: DAILY_ATTENDANCE_REPORT_TEMPLATE_VERSION,
+    email,
+    evaluatedAt,
+    recipients: recipients.map((r) => ({
       id: r.id,
       email: r.email,
       displayName: r.displayName,
     })),
+  });
+  if (!persisted) {
+    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_LEASE_FENCE_REJECTED", {
+      companyId: input.run.companyId,
+      runId: input.run.id,
+      phase: "persist_snapshot",
+    });
+    return "FENCE_LOST";
+  }
+
+  logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_SNAPSHOT_GENERATED", {
+    companyId: input.run.companyId,
+    reportDate: input.run.reportDate,
+    runId: input.run.id,
+    operationsCount: payload.totals.operationsCount,
+    scheduledEmployeesCount: payload.totals.scheduledEmployeesCount,
+    recipientCount: recipients.length,
+    totalIncidentCount: payload.totalIncidentCount,
+    incidentsTruncated:
+      payload.totalIncidentCount > payload.incidents.length,
+    templateVersion: DAILY_ATTENDANCE_REPORT_TEMPLATE_VERSION,
+    evaluatedAt: evaluatedAt.toISOString(),
+  });
+  logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_GENERATED", {
+    companyId: input.run.companyId,
+    reportDate: input.run.reportDate,
+    runId: input.run.id,
+    operationsCount: payload.totals.operationsCount,
+    scheduledEmployeesCount: payload.totals.scheduledEmployeesCount,
+    recipientCount: recipients.length,
+  });
+  return "READY";
+};
+
+const processClaimedRun = async (input: {
+  run: DailyAttendanceReportRun;
+  leaseOwner: string;
+}): Promise<void> => {
+  const ctx = await loadCompanyContext(input.run.companyId);
+  if (!ctx.settings.dailyAttendanceReportEnabled) {
+    await dailyAttendanceReportRunRepository.finalizeStatus({
+      runId: input.run.id,
+      companyId: input.run.companyId,
+      leaseOwner: input.leaseOwner,
+      status: "FAILED",
+      error: { code: "REPORT_DISABLED", message: "Reporte deshabilitado" },
+    });
+    return;
+  }
+
+  await dailyAttendanceReportRunRepository.renewLease(
+    input.run.companyId,
+    input.run.id,
+    input.leaseOwner,
+    leaseSeconds(),
   );
 
-  const outcome = await processDeliveriesForRun({
-    companyId: input.companyId,
-    runId: ensured.run.id,
-    payload,
+  const gen = await generateSnapshotIfNeeded({
+    run: input.run,
+    companyName: ctx.companyName,
+    earlyLeaveToleranceMinutes: ctx.settings.earlyLeaveToleranceMinutes,
     leaseOwner: input.leaseOwner,
   });
-
-  if (outcome === "SENT") {
-    await dailyAttendanceReportRunRepository.finalizeStatus(
-      ensured.run.id,
-      input.companyId,
-      "SENT",
-    );
-    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_SENT", {
-      companyId: input.companyId,
-      reportDate: input.reportDate,
-      runId: ensured.run.id,
-    });
-    return;
-  }
-  if (outcome === "PARTIAL") {
-    await dailyAttendanceReportRunRepository.finalizeStatus(
-      ensured.run.id,
-      input.companyId,
-      "PARTIAL",
-      { code: "PARTIAL_DELIVERY", message: "Algunas entregas fallaron" },
-      new Date(Date.now() + retryDelayMs(ensured.run.attemptCount + 1)),
-    );
-    logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_PARTIAL", {
-      companyId: input.companyId,
-      reportDate: input.reportDate,
-      runId: ensured.run.id,
-    });
-    return;
-  }
-  if (outcome === "PENDING") {
-    await dailyAttendanceReportRunRepository.finalizeStatus(
-      ensured.run.id,
-      input.companyId,
-      "PARTIAL",
-      { code: "DELIVERIES_PENDING", message: "Quedan entregas pendientes de reintento" },
-      new Date(Date.now() + retryDelayMs(ensured.run.attemptCount + 1)),
-    );
+  if (gen !== "READY") {
     return;
   }
 
-  await dailyAttendanceReportRunRepository.finalizeStatus(
-    ensured.run.id,
-    input.companyId,
-    "FAILED",
-    { code: "ALL_DELIVERIES_FAILED", message: "No se completó ninguna entrega" },
-    new Date(Date.now() + retryDelayMs(ensured.run.attemptCount + 1)),
+  const refreshed = await dailyAttendanceReportRunRepository.findById(
+    input.run.companyId,
+    input.run.id,
   );
-  logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_FAILED", {
-    companyId: input.companyId,
-    reportDate: input.reportDate,
-    runId: ensured.run.id,
+  if (!refreshed?.emailSnapshot) {
+    return;
+  }
+
+  const outcome = await processDeliveriesFromSnapshot({
+    run: refreshed,
+    leaseOwner: input.leaseOwner,
+  });
+  await finalizeFromOutcome({
+    run: refreshed,
+    leaseOwner: input.leaseOwner,
+    outcome,
   });
 };
 
@@ -356,7 +553,12 @@ export const dailyAttendanceReportService = {
   async enqueueDueCompanies(nowUtc: Date = new Date()): Promise<{ enqueued: number }> {
     const companies = await listEnabledCompanies();
     let enqueued = 0;
+    const { adminAlertCutoverService } = await import("./admin-alert-cutover.service");
     for (const company of companies) {
+      await adminAlertCutoverService.tryAutoCutoverToDailyEmail({
+        companyId: String(company.company_id),
+        actorUserId: "system:daily-report-worker",
+      });
       const timezoneId = resolveOperationTimezone(company.operation_timezone);
       const reportTimeLocal = normalizeReportTimeHHmm(
         company.daily_attendance_report_time
@@ -371,7 +573,6 @@ export const dailyAttendanceReportService = {
         timezoneId,
         DAILY_ATTENDANCE_REPORT_CATCHUP_MAX_DAYS,
       );
-      // Prefer yesterday first, then older catch-up.
       const ordered = [
         resolveReportDateLocal(nowUtc, timezoneId).reportDate,
         ...dates.filter(
@@ -405,7 +606,16 @@ export const dailyAttendanceReportService = {
     recovered: number;
     processed: number;
   }> {
-    const leaseOwner = `daily-report:${randomUUID()}`;
+    const schema = await assertDailyReportAudienceSchemaReady();
+    if (!schema.ok) {
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_SCHEMA_BLOCKED", {
+        reason: schema.reason,
+        fkName: schema.fkName,
+        referencedTable: schema.referencedTable,
+      });
+      return { recovered: 0, processed: 0 };
+    }
+    const owner = `daily-report:${randomUUID()}`;
     const recovered = await dailyAttendanceReportRunRepository.recoverExpiredLeases(
       env.DAILY_ATTENDANCE_REPORT_BATCH_SIZE,
     );
@@ -418,11 +628,10 @@ export const dailyAttendanceReportService = {
     await this.enqueueDueCompanies(nowUtc);
 
     let processed = 0;
-    const leaseSeconds = Math.ceil(env.DAILY_ATTENDANCE_REPORT_LEASE_MS / 1000);
     for (let i = 0; i < env.DAILY_ATTENDANCE_REPORT_BATCH_SIZE; i += 1) {
       const run = await dailyAttendanceReportRunRepository.claimNextRun(
-        leaseOwner,
-        leaseSeconds,
+        owner,
+        leaseSeconds(),
         env.DAILY_ATTENDANCE_REPORT_MAX_ATTEMPTS,
       );
       if (!run) {
@@ -436,35 +645,18 @@ export const dailyAttendanceReportService = {
       });
       const started = Date.now();
       try {
-        const ctx = await loadCompanyContext(run.companyId);
-        if (!ctx.settings.dailyAttendanceReportEnabled) {
-          await dailyAttendanceReportRunRepository.finalizeStatus(
-            run.id,
-            run.companyId,
-            "FAILED",
-            { code: "REPORT_DISABLED", message: "Reporte deshabilitado" },
-          );
-          continue;
-        }
-        await processCompanyReportDate({
-          companyId: run.companyId,
-          companyName: ctx.companyName,
-          reportDate: run.reportDate,
-          timezoneId: run.timezoneId,
-          reportTimeLocal: run.reportTimeLocal,
-          earlyLeaveToleranceMinutes: ctx.settings.earlyLeaveToleranceMinutes,
-          leaseOwner,
-        });
+        await processClaimedRun({ run, leaseOwner: owner });
         processed += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : "RUN_FAILED";
-        await dailyAttendanceReportRunRepository.finalizeStatus(
-          run.id,
-          run.companyId,
-          "FAILED",
-          { code: "RUN_FAILED", message: message.slice(0, 1000) },
-          new Date(Date.now() + retryDelayMs(run.attemptCount)),
-        );
+        await dailyAttendanceReportRunRepository.finalizeStatus({
+          runId: run.id,
+          companyId: run.companyId,
+          leaseOwner: owner,
+          status: "FAILED",
+          error: { code: "RUN_FAILED", message: message.slice(0, 1000) },
+          nextAttemptAt: new Date(Date.now() + retryDelayMs(run.attemptCount)),
+        });
         logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_FAILED", {
           companyId: run.companyId,
           reportDate: run.reportDate,
@@ -481,33 +673,173 @@ export const dailyAttendanceReportService = {
     companyId: string;
     reportDate: string;
     actorUserId: string;
-  }): Promise<{ runId: string }> {
+    reason?: string;
+  }): Promise<{
+    runId: string;
+    status: string;
+    action: "processed" | "already_sent" | "reopened" | "regenerated" | "retry_failed_only";
+  }> {
+    const schema = await assertDailyReportAudienceSchemaReady();
+    if (!schema.ok) {
+      throw Object.assign(new Error("SCHEMA_INCOMPATIBLE"), {
+        code: "SCHEMA_INCOMPATIBLE",
+        message:
+          "El esquema de destinatarios del reporte no está migrado. Aplicá la migración 136 antes de generar reportes.",
+      });
+    }
     const ctx = await loadCompanyContext(input.companyId);
     const timezoneId = resolveOperationTimezone(ctx.settings.operationTimezone);
     const reportTimeLocal = normalizeReportTimeHHmm(ctx.settings.dailyAttendanceReportTime);
+
+    const dateCheck = validateManualReportDate({
+      reportDateRaw: input.reportDate,
+      timezoneId,
+    });
+    if (!dateCheck.ok) {
+      throw Object.assign(new Error(dateCheck.code), {
+        code: dateCheck.code,
+        message: dateCheck.message,
+      });
+    }
+
     logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_MANUAL_TRIGGERED", {
       companyId: input.companyId,
-      reportDate: input.reportDate,
+      reportDate: dateCheck.reportDate,
       actorUserId: input.actorUserId,
+      reason: input.reason ?? null,
     });
+
     const leaseOwner = `manual:${input.actorUserId}:${randomUUID()}`;
-    await processCompanyReportDate({
+    const { run, created } = await dailyAttendanceReportRunRepository.ensurePendingRun({
       companyId: input.companyId,
-      companyName: ctx.companyName,
-      reportDate: input.reportDate,
+      reportDate: dateCheck.reportDate,
       timezoneId,
       reportTimeLocal,
-      earlyLeaveToleranceMinutes: ctx.settings.earlyLeaveToleranceMinutes,
-      leaseOwner,
-      forceFailedRetriesOnly: true,
     });
-    const run = await dailyAttendanceReportRunRepository.findByCompanyAndDate(
-      input.companyId,
-      input.reportDate,
-    );
-    if (!run) {
-      throw Object.assign(new Error("REPORT_RUN_NOT_FOUND"), { code: "REPORT_RUN_NOT_FOUND" });
+    let currentRun = run;
+    if (created) {
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_RUN_CREATED", {
+        companyId: input.companyId,
+        reportDate: dateCheck.reportDate,
+        runId: currentRun.id,
+      });
     }
-    return { runId: run.id };
+
+    let action:
+      | "processed"
+      | "already_sent"
+      | "reopened"
+      | "regenerated"
+      | "retry_failed_only" = "processed";
+
+    if (currentRun.status === "SENT") {
+      return { runId: currentRun.id, status: currentRun.status, action: "already_sent" };
+    }
+
+    if (currentRun.status === "SKIPPED_NO_RECIPIENTS") {
+      const recipients =
+        await companyAlertRecipientRepository.listEnabledWithUserEmailForDailyReport(
+          input.companyId,
+        );
+      if (recipients.length === 0) {
+        return { runId: currentRun.id, status: currentRun.status, action: "processed" };
+      }
+      await dailyAttendanceReportRunRepository.reopenForManual({
+        companyId: input.companyId,
+        runId: currentRun.id,
+        clearSnapshot: true,
+      });
+      await dailyAttendanceReportRunRepository.deleteDeliveriesForRegeneration(
+        input.companyId,
+        currentRun.id,
+      );
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_MANUAL_REOPENED", {
+        companyId: input.companyId,
+        runId: currentRun.id,
+        fromStatus: "SKIPPED_NO_RECIPIENTS",
+        actorUserId: input.actorUserId,
+      });
+      action = "reopened";
+      currentRun = (await dailyAttendanceReportRunRepository.findById(
+        input.companyId,
+        currentRun.id,
+      ))!;
+    } else if (currentRun.status === "SKIPPED_NO_ACTIVITY") {
+      await dailyAttendanceReportRunRepository.reopenForManual({
+        companyId: input.companyId,
+        runId: currentRun.id,
+        clearSnapshot: true,
+      });
+      await dailyAttendanceReportRunRepository.deleteDeliveriesForRegeneration(
+        input.companyId,
+        currentRun.id,
+      );
+      logDailyAttendanceReportEvent("DAILY_ATTENDANCE_REPORT_MANUAL_REGENERATED", {
+        companyId: input.companyId,
+        runId: currentRun.id,
+        fromStatus: "SKIPPED_NO_ACTIVITY",
+        actorUserId: input.actorUserId,
+      });
+      action = "regenerated";
+      currentRun = (await dailyAttendanceReportRunRepository.findById(
+        input.companyId,
+        currentRun.id,
+      ))!;
+    } else if (
+      (currentRun.status === "PARTIAL" || currentRun.status === "FAILED") &&
+      currentRun.generatedAt &&
+      currentRun.emailSnapshot
+    ) {
+      action = "retry_failed_only";
+    }
+
+    const claimed = await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, currentRun.id)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("leaseOwner", sql.NVarChar(100), leaseOwner)
+      .input("leaseSeconds", sql.Int, leaseSeconds())
+      .query(`
+        UPDATE company_daily_attendance_report_runs
+        SET status = N'PROCESSING',
+            attempt_count = attempt_count + 1,
+            lease_owner = @leaseOwner,
+            lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
+            started_at = COALESCE(started_at, SYSUTCDATETIME()),
+            finished_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status IN (N'PENDING', N'PARTIAL', N'FAILED')
+          AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
+      `);
+    const claimedRow = claimed.recordset[0] as Record<string, unknown> | undefined;
+    if (!claimedRow) {
+      const latest = await dailyAttendanceReportRunRepository.findById(
+        input.companyId,
+        currentRun.id,
+      );
+      return {
+        runId: currentRun.id,
+        status: latest?.status ?? currentRun.status,
+        action,
+      };
+    }
+
+    const claimedRun = (await dailyAttendanceReportRunRepository.findById(
+      input.companyId,
+      currentRun.id,
+    ))!;
+    await processClaimedRun({ run: claimedRun, leaseOwner });
+    const finalRun = await dailyAttendanceReportRunRepository.findById(
+      input.companyId,
+      currentRun.id,
+    );
+    return {
+      runId: currentRun.id,
+      status: finalRun?.status ?? "UNKNOWN",
+      action,
+    };
   },
 };

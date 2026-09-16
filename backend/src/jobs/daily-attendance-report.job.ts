@@ -1,9 +1,29 @@
 import { env } from "../config/env";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 import { dailyAttendanceReportService } from "../services/daily-attendance-report.service";
+import { assertDailyReportAudienceSchemaReady } from "../utils/daily-attendance-report-schema-guard";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
+let schemaReady: boolean | null = null;
+
+const ensureSchemaReady = async (): Promise<boolean> => {
+  if (schemaReady === true) {
+    return true;
+  }
+  const status = await assertDailyReportAudienceSchemaReady();
+  if (!status.ok) {
+    console.error("[daily-attendance-report] schema incompatible; worker tick skipped", {
+      reason: status.reason,
+      fkName: status.fkName,
+      referencedTable: status.referencedTable,
+    });
+    schemaReady = false;
+    return false;
+  }
+  schemaReady = true;
+  return true;
+};
 
 const runJobSafely = async (): Promise<void> => {
   if (isRunning) {
@@ -15,6 +35,9 @@ const runJobSafely = async (): Promise<void> => {
   }
   isRunning = true;
   try {
+    if (!(await ensureSchemaReady())) {
+      return;
+    }
     await runInstrumentedJobTick({
       module: "daily-attendance-report",
       jobName: "daily-attendance-report",

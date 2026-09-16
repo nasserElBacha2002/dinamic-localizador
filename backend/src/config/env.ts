@@ -143,6 +143,12 @@ const envSchema = z
     DAILY_ATTENDANCE_REPORT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     DAILY_ATTENDANCE_REPORT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
     DAILY_ATTENDANCE_REPORT_BATCH_SIZE: z.coerce.number().int().positive().max(50).default(10),
+    /** Soft upper bound for SMTP send; lease duration must stay above this. */
+    DAILY_ATTENDANCE_REPORT_SMTP_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60_000),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),

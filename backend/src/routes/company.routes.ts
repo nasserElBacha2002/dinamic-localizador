@@ -35,6 +35,10 @@ import {
   dailyAttendanceReportController,
   triggerDailyAttendanceReportSchema,
 } from "../controllers/daily-attendance-report.controller";
+import {
+  adminAlertCutoverController,
+  setAdminAlertDeliveryModeSchema,
+} from "../controllers/admin-alert-cutover.controller";
 
 export const companyRouter = Router();
 
@@ -70,6 +74,15 @@ companyRouter.patch(
   resolveCompanyContext,
   requirePermission("company:settings:update"),
   asyncHandler(companyController.updateSettings),
+);
+
+companyRouter.put(
+  "/:companyId/settings/admin-alert-delivery-mode",
+  validate(companyIdParamSchema, "params"),
+  validate(setAdminAlertDeliveryModeSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(adminAlertCutoverController.setDeliveryMode),
 );
 
 companyRouter.get(

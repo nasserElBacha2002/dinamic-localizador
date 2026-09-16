@@ -19,6 +19,7 @@ export interface CompanySettings {
   absenceAttachmentsEnabled?: boolean;
   absenceOperationalIntegrationEnabled?: boolean;
   adminAlertsEnabled?: boolean;
+  adminAlertDeliveryMode?: "WHATSAPP_LEGACY" | "DAILY_EMAIL";
   adminAttendanceConfirmationMissingEnabled?: boolean;
   adminMissingCheckinEnabled?: boolean;
   adminMissingCheckoutEnabled?: boolean;

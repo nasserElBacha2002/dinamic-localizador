@@ -18,6 +18,7 @@ import {
   minutesBetween,
 } from "../utils/admin-alert/dynamic-attendance-due-at";
 import { logAdminAlertEvent } from "../utils/admin-alert/observability";
+import { decideAdminNotificationChannel } from "../utils/admin-notification-channel-policy";
 import {
   classifyTwilioOutboundError,
   isAmbiguousTwilioSendFailure,
@@ -172,9 +173,33 @@ const processClaimedNotification = async (
     return "skipped";
   }
 
+  const settings = await companySettingsRepository.findByCompanyId(notification.companyId);
+
+  const channel = decideAdminNotificationChannel({
+    mode: settings?.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+    alertType: notification.alertType,
+  });
+  if (channel !== "WHATSAPP_URGENT") {
+    await adminAlertNotificationRepository.markTerminalSkip({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      status: "SKIPPED_DISABLED",
+      errorCode: "CUTOVER_CHANNEL_POLICY",
+      errorMessage: `Suppressed by channel policy (${channel}) under mode ${settings?.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY"}`,
+    });
+    logAdminAlertEvent("ADMIN_ALERT_CHANNEL_SUPPRESSED", {
+      companyId: notification.companyId,
+      alertType: notification.alertType,
+      outboxId: notification.id,
+      mode: settings?.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+      channel,
+      origin: "delivery",
+    });
+    return "skipped";
+  }
+
   if (isDynamicAttendanceAlertType(notification.alertType)) {
     const evaluatedAt = now;
-    const settings = await companySettingsRepository.findByCompanyId(notification.companyId);
     if (!settings?.adminAlertsEnabled) {
       await adminAlertNotificationRepository.markTerminalSkip({
         companyId: notification.companyId,

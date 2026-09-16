@@ -23,13 +23,11 @@ import {
   buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
-import { CompanyDailyAttendanceReportDialog } from "./components/CompanyDailyAttendanceReportDialog";
 import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
 import { CompanyWhatsAppQuotaSettingsDialog } from "./components/CompanyWhatsAppQuotaSettingsDialog";
 import {
   useCompanyAlertRecipients,
 } from "../../hooks/useCompanyAlertRecipients";
-import { useCompanyReportEmailRecipients } from "../../hooks/useCompanyReportEmailRecipients";
 import { useWhatsAppQuotaSettings } from "../../hooks/useWhatsAppQuotaSettings";
 import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
@@ -61,8 +59,7 @@ type DialogKey =
   | "employeeCategories"
   | "locationZones"
   | "whatsappAlerts"
-  | "whatsappQuotas"
-  | "dailyAttendanceReport";
+  | "whatsappQuotas";
 
 const parseTab = (value: string | null): SettingsTab =>
   value === "absences" ? "absences" : "company";
@@ -89,9 +86,6 @@ export function CompanySettingsPage() {
 
   const settingsQuery = useCompanySettings(companyTabEnabled || absencesTabEnabled);
   const alertRecipientsQuery = useCompanyAlertRecipients(companyTabEnabled && canRead);
-  const reportEmailRecipientsQuery = useCompanyReportEmailRecipients(
-    companyTabEnabled && canRead,
-  );
   const whatsappQuotaQuery = useWhatsAppQuotaSettings(companyTabEnabled && canRead);
   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
   const shiftTemplatesQuery = useShiftTemplates({}, companyTabEnabled);
@@ -204,12 +198,26 @@ export function CompanySettingsPage() {
             />
 
             <SettingsSummaryCard
-              title="Alertas WhatsApp"
-              description="Destinatarios explícitos y activación de alertas operativas y de seguridad para administradores."
+              title="Alertas y reporte diario"
+              description="Destinatarios compartidos: WhatsApp administrativo y reporte diario de asistencia por email (D-1)."
               summaryItems={[
                 {
-                  label: "Compañía",
-                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitadas" : "Deshabilitadas",
+                  label: "Modo admin",
+                  value: settingsQuery.data?.adminAlertDeliveryMode ?? "WHATSAPP_LEGACY",
+                },
+                {
+                  label: "WhatsApp admin",
+                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitado" : "Deshabilitado",
+                },
+                {
+                  label: "Reporte email",
+                  value: settingsQuery.data?.dailyAttendanceReportEnabled
+                    ? `Habilitado · ${settingsQuery.data?.dailyAttendanceReportTime?.slice(0, 5) ?? "08:00"}`
+                    : "Deshabilitado",
+                },
+                {
+                  label: "Zona horaria",
+                  value: settingsQuery.data?.operationTimezone ?? "—",
                 },
                 {
                   label: "Destinatarios",
@@ -228,51 +236,9 @@ export function CompanySettingsPage() {
                 void settingsQuery.refetch();
                 void alertRecipientsQuery.refetch();
               }}
-              actionLabel="Gestionar alertas"
+              actionLabel="Gestionar alertas y reporte"
               canEdit={canUpdate && !settingsQuery.isError && !alertRecipientsQuery.isError}
               onAction={() => setOpenDialog("whatsappAlerts")}
-            />
-
-            <SettingsSummaryCard
-              title="Reporte diario de asistencia por email"
-              description="Resumen del día anterior (D-1) por email. Independiente de las alertas WhatsApp urgentes."
-              summaryItems={[
-                {
-                  label: "Estado",
-                  value: settingsQuery.data?.dailyAttendanceReportEnabled
-                    ? "Habilitado"
-                    : "Deshabilitado",
-                },
-                {
-                  label: "Horario local",
-                  value: settingsQuery.data?.dailyAttendanceReportTime?.slice(0, 5) ?? "08:00",
-                },
-                {
-                  label: "Zona horaria",
-                  value: settingsQuery.data?.operationTimezone ?? "—",
-                },
-                {
-                  label: "Destinatarios",
-                  value: `${reportEmailRecipientsQuery.data?.filter((r) => r.isEnabled).length ?? 0} activos`,
-                },
-              ]}
-              loading={settingsQuery.isLoading || reportEmailRecipientsQuery.isLoading}
-              error={
-                settingsQuery.isError
-                  ? getApiErrorMessage(settingsQuery.error)
-                  : reportEmailRecipientsQuery.isError
-                    ? getApiErrorMessage(reportEmailRecipientsQuery.error)
-                    : null
-              }
-              onRetry={() => {
-                void settingsQuery.refetch();
-                void reportEmailRecipientsQuery.refetch();
-              }}
-              actionLabel="Gestionar reporte diario"
-              canEdit={
-                canUpdate && !settingsQuery.isError && !reportEmailRecipientsQuery.isError
-              }
-              onAction={() => setOpenDialog("dailyAttendanceReport")}
             />
 
             <SettingsSummaryCard
@@ -605,25 +571,12 @@ export function CompanySettingsPage() {
 
       {openDialog === "whatsappAlerts" && settingsQuery.data ? (
         <CompanyWhatsAppAlertsDialog
+          key={`admin-alerts-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
           opened
           onClose={() => setOpenDialog(null)}
           settings={settingsQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
-        />
-      ) : null}
-
-      {openDialog === "dailyAttendanceReport" && settingsQuery.data ? (
-        <CompanyDailyAttendanceReportDialog
-          key={`daily-report-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
-          opened
-          onClose={() => setOpenDialog(null)}
-          settings={settingsQuery.data}
-          canUpdate={canUpdate}
-          onSaved={(message) => {
-            handleSaved(message);
-            void reportEmailRecipientsQuery.refetch();
-          }}
         />
       ) : null}
 

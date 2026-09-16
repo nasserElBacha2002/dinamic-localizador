@@ -2,6 +2,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { DailyAttendanceReportRunStatus } from "../constants/daily-attendance-report";
 import type {
+  DailyAttendanceReportEmailSnapshot,
   DailyAttendanceReportRun,
   DailyAttendanceReportTotals,
 } from "../types/daily-attendance-report";
@@ -55,6 +56,17 @@ const mapRun = (row: Record<string, unknown>): DailyAttendanceReportRun => ({
     missingCheckoutCount: Number(row.missing_checkout_count ?? 0),
     incompleteCount: Number(row.incomplete_count ?? 0),
   },
+  totalIncidentCount: Number(row.total_incident_count ?? 0),
+  templateVersion: row.template_version ? String(row.template_version) : null,
+  emailSnapshot:
+    row.email_subject_snapshot != null
+      ? {
+          subject: String(row.email_subject_snapshot),
+          text: String(row.email_text_snapshot ?? ""),
+          html: String(row.email_html_snapshot ?? ""),
+        }
+      : null,
+  evaluatedAt: toIso(row.evaluated_at as Date | string | null),
   attemptCount: Number(row.attempt_count ?? 0),
   nextAttemptAt: toIso(row.next_attempt_at as Date | string | null),
   leaseOwner: row.lease_owner ? String(row.lease_owner) : null,
@@ -69,6 +81,8 @@ const mapRun = (row: Record<string, unknown>): DailyAttendanceReportRun => ({
 });
 
 export const dailyAttendanceReportRunRepository = {
+  emptyTotals,
+
   async findByCompanyAndDate(
     companyId: string,
     reportDate: string,
@@ -81,6 +95,20 @@ export const dailyAttendanceReportRunRepository = {
         SELECT TOP 1 *
         FROM company_daily_attendance_report_runs
         WHERE company_id = @companyId AND report_date = @reportDate
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRun(row) : null;
+  },
+
+  async findById(companyId: string, runId: string): Promise<DailyAttendanceReportRun | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, runId)
+      .query(`
+        SELECT TOP 1 *
+        FROM company_daily_attendance_report_runs
+        WHERE company_id = @companyId AND id = @id
       `);
     const row = result.recordset[0] as Record<string, unknown> | undefined;
     return row ? mapRun(row) : null;
@@ -125,6 +153,10 @@ export const dailyAttendanceReportRunRepository = {
     }
   },
 
+  /**
+   * Claims a run that either still needs generation OR has an eligible delivery now.
+   * All retryable statuses respect next_attempt_at. Does not claim PARTIAL early.
+   */
   async claimNextRun(
     leaseOwner: string,
     leaseSeconds: number,
@@ -137,24 +169,51 @@ export const dailyAttendanceReportRunRepository = {
       .input("maxAttempts", sql.Int, maxAttempts)
       .query(`
         ;WITH next_row AS (
-          SELECT TOP (1) id
-          FROM company_daily_attendance_report_runs WITH (UPDLOCK, READPAST, ROWLOCK)
-          WHERE attempt_count < @maxAttempts
-            AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
+          SELECT TOP (1) r.id
+          FROM company_daily_attendance_report_runs r WITH (UPDLOCK, READPAST, ROWLOCK)
+          WHERE r.attempt_count < @maxAttempts
+            AND (r.lease_expires_at IS NULL OR r.lease_expires_at < SYSUTCDATETIME())
+            AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= SYSUTCDATETIME())
             AND (
-              status = N'PENDING'
-              OR status = N'PARTIAL'
-              OR (
-                status = N'FAILED'
-                AND (next_attempt_at IS NULL OR next_attempt_at <= SYSUTCDATETIME())
+              (
+                r.generated_at IS NULL
+                AND r.status IN (N'PENDING', N'PROCESSING')
               )
               OR (
-                status = N'PROCESSING'
-                AND lease_expires_at IS NOT NULL
-                AND lease_expires_at < SYSUTCDATETIME()
+                r.generated_at IS NOT NULL
+                AND r.status IN (N'PENDING', N'PARTIAL', N'FAILED', N'PROCESSING')
+                AND EXISTS (
+                  SELECT 1
+                  FROM company_daily_attendance_report_deliveries d
+                  WHERE d.report_run_id = r.id
+                    AND d.company_id = r.company_id
+                    AND d.attempt_count < @maxAttempts
+                    AND (d.lease_expires_at IS NULL OR d.lease_expires_at < SYSUTCDATETIME())
+                    AND (
+                      d.status = N'PENDING'
+                      OR (
+                        d.status = N'FAILED'
+                        AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= SYSUTCDATETIME())
+                      )
+                      OR (
+                        d.status = N'PROCESSING'
+                        AND d.lease_expires_at IS NOT NULL
+                        AND d.lease_expires_at < SYSUTCDATETIME()
+                      )
+                    )
+                )
               )
             )
-          ORDER BY created_at ASC
+            AND NOT EXISTS (
+              SELECT 1
+              FROM company_daily_attendance_report_deliveries active_d
+              WHERE active_d.report_run_id = r.id
+                AND active_d.company_id = r.company_id
+                AND active_d.status = N'PROCESSING'
+                AND active_d.lease_expires_at IS NOT NULL
+                AND active_d.lease_expires_at > SYSUTCDATETIME()
+            )
+          ORDER BY r.created_at ASC
         )
         UPDATE r
         SET status = N'PROCESSING',
@@ -162,6 +221,7 @@ export const dailyAttendanceReportRunRepository = {
             lease_owner = @leaseOwner,
             lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
             started_at = COALESCE(started_at, SYSUTCDATETIME()),
+            finished_at = NULL,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         FROM company_daily_attendance_report_runs r
@@ -171,23 +231,60 @@ export const dailyAttendanceReportRunRepository = {
     return row ? mapRun(row) : null;
   },
 
+  async renewLease(
+    companyId: string,
+    runId: string,
+    leaseOwner: string,
+    leaseSeconds: number,
+  ): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, runId)
+      .input("leaseOwner", sql.NVarChar(100), leaseOwner)
+      .input("leaseSeconds", sql.Int, leaseSeconds)
+      .query(`
+        UPDATE company_daily_attendance_report_runs
+        SET lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status = N'PROCESSING'
+          AND lease_owner = @leaseOwner
+      `);
+    return (result.rowsAffected[0] ?? 0) > 0;
+  },
+
+  /**
+   * Recovers abandoned PROCESSING runs only when no delivery still holds a live lease.
+   */
   async recoverExpiredLeases(limit: number): Promise<number> {
     const result = await getPool()
       .request()
       .input("limit", sql.Int, limit)
       .query(`
         ;WITH expired AS (
-          SELECT TOP (@limit) id
-          FROM company_daily_attendance_report_runs WITH (UPDLOCK, READPAST, ROWLOCK)
-          WHERE status = N'PROCESSING'
-            AND lease_expires_at IS NOT NULL
-            AND lease_expires_at < SYSUTCDATETIME()
-          ORDER BY lease_expires_at ASC
+          SELECT TOP (@limit) r.id
+          FROM company_daily_attendance_report_runs r WITH (UPDLOCK, READPAST, ROWLOCK)
+          WHERE r.status = N'PROCESSING'
+            AND r.lease_expires_at IS NOT NULL
+            AND r.lease_expires_at < SYSUTCDATETIME()
+            AND NOT EXISTS (
+              SELECT 1
+              FROM company_daily_attendance_report_deliveries d
+              WHERE d.report_run_id = r.id
+                AND d.company_id = r.company_id
+                AND d.status = N'PROCESSING'
+                AND d.lease_expires_at IS NOT NULL
+                AND d.lease_expires_at > SYSUTCDATETIME()
+            )
+          ORDER BY r.lease_expires_at ASC
         )
         UPDATE r
-        SET status = N'PENDING',
+        SET status = CASE WHEN r.generated_at IS NULL THEN N'PENDING' ELSE N'PARTIAL' END,
             lease_owner = NULL,
             lease_expires_at = NULL,
+            next_attempt_at = SYSUTCDATETIME(),
             updated_at = SYSUTCDATETIME()
         FROM company_daily_attendance_report_runs r
         INNER JOIN expired e ON e.id = r.id
@@ -198,12 +295,14 @@ export const dailyAttendanceReportRunRepository = {
   async markSkipped(
     runId: string,
     companyId: string,
+    leaseOwner: string,
     status: "SKIPPED_NO_RECIPIENTS" | "SKIPPED_NO_ACTIVITY",
-  ): Promise<void> {
-    await getPool()
+  ): Promise<boolean> {
+    const result = await getPool()
       .request()
       .input("id", sql.UniqueIdentifier, runId)
       .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("leaseOwner", sql.NVarChar(100), leaseOwner)
       .input("status", sql.NVarChar(40), status)
       .query(`
         UPDATE company_daily_attendance_report_runs
@@ -211,73 +310,140 @@ export const dailyAttendanceReportRunRepository = {
             lease_owner = NULL,
             lease_expires_at = NULL,
             finished_at = SYSUTCDATETIME(),
-            generated_at = COALESCE(generated_at, SYSUTCDATETIME()),
             updated_at = SYSUTCDATETIME()
-        WHERE id = @id AND company_id = @companyId
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status = N'PROCESSING'
+          AND lease_owner = @leaseOwner
       `);
+    return (result.rowsAffected[0] ?? 0) > 0;
   },
 
-  async updateTotals(
-    runId: string,
-    companyId: string,
-    totals: DailyAttendanceReportTotals,
-    recipientCount: number,
-  ): Promise<void> {
-    await getPool()
-      .request()
-      .input("id", sql.UniqueIdentifier, runId)
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("recipientCount", sql.Int, recipientCount)
-      .input("operationsCount", sql.Int, totals.operationsCount)
-      .input("scheduledEmployeesCount", sql.Int, totals.scheduledEmployeesCount)
-      .input("presentCount", sql.Int, totals.presentCount)
-      .input("checkinCount", sql.Int, totals.checkinCount)
-      .input("checkoutCount", sql.Int, totals.checkoutCount)
-      .input("lateCount", sql.Int, totals.lateCount)
-      .input("earlyLeaveCount", sql.Int, totals.earlyLeaveCount)
-      .input("unavailableCount", sql.Int, totals.unavailableCount)
-      .input("justifiedCount", sql.Int, totals.justifiedCount)
-      .input("pendingConfirmationCount", sql.Int, totals.pendingConfirmationCount)
-      .input("missingCheckinCount", sql.Int, totals.missingCheckinCount)
-      .input("missingCheckoutCount", sql.Int, totals.missingCheckoutCount)
-      .input("incompleteCount", sql.Int, totals.incompleteCount)
-      .query(`
-        UPDATE company_daily_attendance_report_runs
-        SET recipient_count = @recipientCount,
-            operations_count = @operationsCount,
-            scheduled_employees_count = @scheduledEmployeesCount,
-            present_count = @presentCount,
-            checkin_count = @checkinCount,
-            checkout_count = @checkoutCount,
-            late_count = @lateCount,
-            early_leave_count = @earlyLeaveCount,
-            unavailable_count = @unavailableCount,
-            justified_count = @justifiedCount,
-            pending_confirmation_count = @pendingConfirmationCount,
-            missing_checkin_count = @missingCheckinCount,
-            missing_checkout_count = @missingCheckoutCount,
-            incomplete_count = @incompleteCount,
-            generated_at = SYSUTCDATETIME(),
-            updated_at = SYSUTCDATETIME()
-        WHERE id = @id AND company_id = @companyId
-      `);
+  async persistSnapshotAndAudience(
+    input: {
+      runId: string;
+      companyId: string;
+      leaseOwner: string;
+      totals: DailyAttendanceReportTotals;
+      recipientCount: number;
+      totalIncidentCount: number;
+      templateVersion: string;
+      email: DailyAttendanceReportEmailSnapshot;
+      evaluatedAt: Date;
+      recipients: Array<{ id: string; email: string; displayName: string | null }>;
+    },
+  ): Promise<boolean> {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const updateResult = await new sql.Request(transaction)
+        .input("id", sql.UniqueIdentifier, input.runId)
+        .input("companyId", sql.UniqueIdentifier, input.companyId)
+        .input("leaseOwner", sql.NVarChar(100), input.leaseOwner)
+        .input("recipientCount", sql.Int, input.recipientCount)
+        .input("operationsCount", sql.Int, input.totals.operationsCount)
+        .input("scheduledEmployeesCount", sql.Int, input.totals.scheduledEmployeesCount)
+        .input("presentCount", sql.Int, input.totals.presentCount)
+        .input("checkinCount", sql.Int, input.totals.checkinCount)
+        .input("checkoutCount", sql.Int, input.totals.checkoutCount)
+        .input("lateCount", sql.Int, input.totals.lateCount)
+        .input("earlyLeaveCount", sql.Int, input.totals.earlyLeaveCount)
+        .input("unavailableCount", sql.Int, input.totals.unavailableCount)
+        .input("justifiedCount", sql.Int, input.totals.justifiedCount)
+        .input("pendingConfirmationCount", sql.Int, input.totals.pendingConfirmationCount)
+        .input("missingCheckinCount", sql.Int, input.totals.missingCheckinCount)
+        .input("missingCheckoutCount", sql.Int, input.totals.missingCheckoutCount)
+        .input("incompleteCount", sql.Int, input.totals.incompleteCount)
+        .input("totalIncidentCount", sql.Int, input.totalIncidentCount)
+        .input("templateVersion", sql.NVarChar(40), input.templateVersion)
+        .input("subject", sql.NVarChar(500), input.email.subject)
+        .input("textBody", sql.NVarChar(sql.MAX), input.email.text)
+        .input("htmlBody", sql.NVarChar(sql.MAX), input.email.html)
+        .input("evaluatedAt", sql.DateTime2, input.evaluatedAt)
+        .query(`
+          UPDATE company_daily_attendance_report_runs
+          SET recipient_count = @recipientCount,
+              operations_count = @operationsCount,
+              scheduled_employees_count = @scheduledEmployeesCount,
+              present_count = @presentCount,
+              checkin_count = @checkinCount,
+              checkout_count = @checkoutCount,
+              late_count = @lateCount,
+              early_leave_count = @earlyLeaveCount,
+              unavailable_count = @unavailableCount,
+              justified_count = @justifiedCount,
+              pending_confirmation_count = @pendingConfirmationCount,
+              missing_checkin_count = @missingCheckinCount,
+              missing_checkout_count = @missingCheckoutCount,
+              incomplete_count = @incompleteCount,
+              total_incident_count = @totalIncidentCount,
+              template_version = @templateVersion,
+              email_subject_snapshot = @subject,
+              email_text_snapshot = @textBody,
+              email_html_snapshot = @htmlBody,
+              evaluated_at = @evaluatedAt,
+              generated_at = SYSUTCDATETIME(),
+              updated_at = SYSUTCDATETIME()
+          WHERE id = @id
+            AND company_id = @companyId
+            AND status = N'PROCESSING'
+            AND lease_owner = @leaseOwner
+            AND generated_at IS NULL
+        `);
+      if ((updateResult.rowsAffected[0] ?? 0) === 0) {
+        await transaction.rollback();
+        return false;
+      }
+
+      for (const recipient of input.recipients) {
+        await new sql.Request(transaction)
+          .input("companyId", sql.UniqueIdentifier, input.companyId)
+          .input("reportRunId", sql.UniqueIdentifier, input.runId)
+          .input("recipientId", sql.UniqueIdentifier, recipient.id)
+          .input("email", sql.NVarChar(320), recipient.email)
+          .input("displayName", sql.NVarChar(200), recipient.displayName)
+          .query(`
+            INSERT INTO company_daily_attendance_report_deliveries (
+              report_run_id, company_id, recipient_id, email_snapshot, display_name_snapshot,
+              status, recipient_origin
+            )
+            VALUES (
+              @reportRunId, @companyId, @recipientId, @email, @displayName,
+              N'PENDING', N'ALERT_RECIPIENT'
+            )
+          `);
+      }
+
+      await transaction.commit();
+      return true;
+    } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // ignore rollback errors
+      }
+      throw error;
+    }
   },
 
-  async finalizeStatus(
-    runId: string,
-    companyId: string,
-    status: DailyAttendanceReportRunStatus,
-    error?: { code: string; message: string } | null,
-    nextAttemptAt?: Date | null,
-  ): Promise<void> {
-    await getPool()
+  async finalizeStatus(input: {
+    runId: string;
+    companyId: string;
+    leaseOwner: string;
+    status: DailyAttendanceReportRunStatus;
+    error?: { code: string; message: string } | null;
+    nextAttemptAt?: Date | null;
+  }): Promise<boolean> {
+    const result = await getPool()
       .request()
-      .input("id", sql.UniqueIdentifier, runId)
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("status", sql.NVarChar(40), status)
-      .input("errorCode", sql.NVarChar(80), error?.code ?? null)
-      .input("errorMessage", sql.NVarChar(1000), error?.message ?? null)
-      .input("nextAttemptAt", sql.DateTime2, nextAttemptAt ?? null)
+      .input("id", sql.UniqueIdentifier, input.runId)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("leaseOwner", sql.NVarChar(100), input.leaseOwner)
+      .input("status", sql.NVarChar(40), input.status)
+      .input("errorCode", sql.NVarChar(80), input.error?.code ?? null)
+      .input("errorMessage", sql.NVarChar(1000), input.error?.message ?? null)
+      .input("nextAttemptAt", sql.DateTime2, input.nextAttemptAt ?? null)
       .query(`
         UPDATE company_daily_attendance_report_runs
         SET status = @status,
@@ -292,9 +458,57 @@ export const dailyAttendanceReportRunRepository = {
               ELSE finished_at
             END,
             updated_at = SYSUTCDATETIME()
-        WHERE id = @id AND company_id = @companyId
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status = N'PROCESSING'
+          AND lease_owner = @leaseOwner
       `);
+    return (result.rowsAffected[0] ?? 0) > 0;
   },
 
-  emptyTotals,
+  async reopenForManual(input: {
+    companyId: string;
+    runId: string;
+    clearSnapshot: boolean;
+  }): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("id", sql.UniqueIdentifier, input.runId)
+      .input("clearSnapshot", sql.Bit, input.clearSnapshot ? 1 : 0)
+      .query(`
+        UPDATE company_daily_attendance_report_runs
+        SET status = N'PENDING',
+            finished_at = NULL,
+            next_attempt_at = NULL,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            last_error_code = NULL,
+            last_error_message = NULL,
+            generated_at = CASE WHEN @clearSnapshot = 1 THEN NULL ELSE generated_at END,
+            evaluated_at = CASE WHEN @clearSnapshot = 1 THEN NULL ELSE evaluated_at END,
+            email_subject_snapshot = CASE WHEN @clearSnapshot = 1 THEN NULL ELSE email_subject_snapshot END,
+            email_text_snapshot = CASE WHEN @clearSnapshot = 1 THEN NULL ELSE email_text_snapshot END,
+            email_html_snapshot = CASE WHEN @clearSnapshot = 1 THEN NULL ELSE email_html_snapshot END,
+            template_version = CASE WHEN @clearSnapshot = 1 THEN NULL ELSE template_version END,
+            recipient_count = CASE WHEN @clearSnapshot = 1 THEN 0 ELSE recipient_count END,
+            total_incident_count = CASE WHEN @clearSnapshot = 1 THEN 0 ELSE total_incident_count END,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status IN (N'SKIPPED_NO_RECIPIENTS', N'SKIPPED_NO_ACTIVITY', N'PARTIAL', N'FAILED', N'PENDING')
+      `);
+    return (result.rowsAffected[0] ?? 0) > 0;
+  },
+
+  async deleteDeliveriesForRegeneration(companyId: string, runId: string): Promise<void> {
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("reportRunId", sql.UniqueIdentifier, runId)
+      .query(`
+        DELETE FROM company_daily_attendance_report_deliveries
+        WHERE company_id = @companyId AND report_run_id = @reportRunId
+      `);
+  },
 };

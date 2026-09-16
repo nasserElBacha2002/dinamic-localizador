@@ -7,7 +7,7 @@ import type {
   DailyAttendanceReportTotals,
 } from "../types/daily-attendance-report";
 import { classifyDailyAttendanceReportRow } from "../utils/daily-attendance-report-classify";
-import { resolveReportCutoffUtc } from "../utils/daily-attendance-report-time";
+import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../utils/statistics-canonical-attendance";
 import { toDateOnlyString } from "../utils/row-mappers";
 
 const MAX_INCIDENTS = 40;
@@ -27,6 +27,7 @@ type Row = {
   received_at: Date | string | null;
   checkout_at: Date | string | null;
   punctuality_status: string | null;
+  validation_status: string | null;
   company_name: string;
 };
 
@@ -38,14 +39,17 @@ const toDate = (value: Date | string | null | undefined): Date | null => {
 /**
  * Aggregates attendance for a company civil report_date (operation_workdays.work_date).
  *
- * Classification uses cutoffAt = start of next local day (UTC instant):
- * - missing check-in: EXPECTED, start+lateTolerance <= cutoff, no valid arrival
- * - missing checkout: has arrival, end reached at/before cutoff, no checkout
- * - incomplete: expected window not yet closed at cutoff
- * - early leave: checkout before expected_end - earlyLeaveToleranceMinutes
+ * Classification uses evaluatedAt (generation instant), not local midnight:
+ * - missing check-in: EXPECTED, start+lateTolerance <= evaluatedAt, no operational arrival
+ * - missing checkout: has arrival, expectedEnd+earlyLeaveTolerance <= evaluatedAt, no checkout
+ * - incomplete: checkout window still open at evaluatedAt
  *
- * Denominator for scheduled employees: expectation not CANCELLED.
- * Cancelled operation_workdays excluded.
+ * Canonical sources:
+ * - JUSTIFIED: employee_workdays.expectation_status (absence reconciliation / UI / WhatsApp)
+ * - UNAVAILABLE / PENDING confirmation: operation_assignments.confirmation_status
+ * - Attendance: CANONICAL_PRODUCTION_ATTENDANCE_APPLY (VALID preferred over PENDING_REVIEW)
+ *
+ * Denominator: expectation not CANCELLED. Cancelled operation_workdays excluded.
  */
 export const dailyAttendanceReportAggregator = {
   async buildReport(input: {
@@ -53,8 +57,9 @@ export const dailyAttendanceReportAggregator = {
     reportDate: string;
     timezoneId: string;
     earlyLeaveToleranceMinutes: number;
+    evaluatedAt: Date;
   }): Promise<DailyAttendanceReportPayload> {
-    const cutoffAt = resolveReportCutoffUtc(input.reportDate, input.timezoneId);
+    const evaluatedAt = input.evaluatedAt;
     const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
@@ -75,7 +80,8 @@ export const dailyAttendanceReportAggregator = {
           oa.confirmation_status,
           ar.received_at,
           ar.checkout_at,
-          ar.punctuality_status
+          ar.punctuality_status,
+          ar.validation_status
         FROM operation_workdays ow
         INNER JOIN companies c ON c.id = ow.company_id
         INNER JOIN scheduled_operations i
@@ -88,21 +94,7 @@ export const dailyAttendanceReportAggregator = {
           ON e.id = ew.employee_id AND e.company_id = ow.company_id
         LEFT JOIN operation_assignments oa
           ON oa.id = ew.operation_assignment_id AND oa.company_id = ew.company_id
-        OUTER APPLY (
-          SELECT TOP 1
-            arx.received_at,
-            arx.checkout_at,
-            arx.punctuality_status
-          FROM attendance_records arx
-          WHERE arx.company_id = ew.company_id
-            AND arx.employee_workday_id = ew.id
-            AND arx.is_simulation = 0
-            AND arx.validation_status IN (N'VALID', N'PENDING_REVIEW')
-          ORDER BY
-            CASE WHEN arx.received_at IS NULL THEN 1 ELSE 0 END,
-            arx.received_at ASC,
-            arx.created_at ASC
-        ) ar
+        ${CANONICAL_PRODUCTION_ATTENDANCE_APPLY}
         WHERE ow.company_id = @companyId
           AND ow.work_date = @reportDate
           AND ow.status = N'ACTIVE'
@@ -118,7 +110,7 @@ export const dailyAttendanceReportAggregator = {
         companyName,
         reportDate: input.reportDate,
         timezoneId: input.timezoneId,
-        cutoffAtIso: cutoffAt.toISOString(),
+        evaluatedAtIso: evaluatedAt.toISOString(),
         totals: {
           operationsCount: 0,
           scheduledEmployeesCount: 0,
@@ -136,12 +128,14 @@ export const dailyAttendanceReportAggregator = {
         },
         operations: [],
         incidents: [],
+        totalIncidentCount: 0,
         hasActivity: false,
       };
     }
 
     const byOw = new Map<string, DailyAttendanceReportOperationBreakdown>();
     const incidents: DailyAttendanceReportIncident[] = [];
+    let totalIncidentCount = 0;
     const totals: DailyAttendanceReportTotals = {
       operationsCount: 0,
       scheduledEmployeesCount: 0,
@@ -184,21 +178,18 @@ export const dailyAttendanceReportAggregator = {
       op.scheduledEmployees += 1;
       totals.scheduledEmployeesCount += 1;
 
-      const expectedStart = toDate(row.expected_start_at)!;
-      const expectedEnd = toDate(row.expected_end_at);
-      const receivedAt = toDate(row.received_at);
-      const checkoutAt = toDate(row.checkout_at);
       const classified = classifyDailyAttendanceReportRow({
         expectationStatus: String(row.expectation_status),
         confirmationStatus: row.confirmation_status,
         punctualityStatus: row.punctuality_status,
-        expectedStartAt: expectedStart,
-        expectedEndAt: expectedEnd,
-        receivedAt,
-        checkoutAt,
+        validationStatus: row.validation_status,
+        expectedStartAt: toDate(row.expected_start_at)!,
+        expectedEndAt: toDate(row.expected_end_at),
+        receivedAt: toDate(row.received_at),
+        checkoutAt: toDate(row.checkout_at),
         lateToleranceMinutes: Number(row.late_tolerance_minutes ?? 0),
         earlyLeaveToleranceMinutes: input.earlyLeaveToleranceMinutes,
-        cutoffAt,
+        evaluatedAt,
       });
 
       if (classified.justified) {
@@ -217,6 +208,7 @@ export const dailyAttendanceReportAggregator = {
           operationId: String(row.operation_id),
           detail: "Informó que no asistirá",
         });
+        totalIncidentCount += 1;
       }
       if (classified.pendingConfirmation) {
         op.pendingConfirmation += 1;
@@ -237,6 +229,7 @@ export const dailyAttendanceReportAggregator = {
             operationId: String(row.operation_id),
             detail: "Llegada tarde",
           });
+          totalIncidentCount += 1;
         }
         if (classified.hasCheckout) {
           totals.checkoutCount += 1;
@@ -250,6 +243,7 @@ export const dailyAttendanceReportAggregator = {
               operationId: String(row.operation_id),
               detail: "Salida anticipada",
             });
+            totalIncidentCount += 1;
           }
         } else if (classified.missingCheckout) {
           op.missingCheckout += 1;
@@ -261,6 +255,7 @@ export const dailyAttendanceReportAggregator = {
             operationId: String(row.operation_id),
             detail: "Sin registro de salida",
           });
+          totalIncidentCount += 1;
         } else if (classified.incomplete) {
           op.incomplete += 1;
           totals.incompleteCount += 1;
@@ -269,8 +264,9 @@ export const dailyAttendanceReportAggregator = {
             employeeName: String(row.employee_name),
             serviceName: String(row.service_name),
             operationId: String(row.operation_id),
-            detail: "Jornada aún abierta al corte",
+            detail: "Jornada aún abierta al momento de evaluación",
           });
+          totalIncidentCount += 1;
         }
       } else if (classified.missingCheckin) {
         op.missingCheckin += 1;
@@ -282,6 +278,7 @@ export const dailyAttendanceReportAggregator = {
           operationId: String(row.operation_id),
           detail: "Sin registro de llegada",
         });
+        totalIncidentCount += 1;
       } else if (classified.incomplete) {
         op.incomplete += 1;
         totals.incompleteCount += 1;
@@ -296,10 +293,11 @@ export const dailyAttendanceReportAggregator = {
       companyName,
       reportDate: input.reportDate,
       timezoneId: input.timezoneId,
-      cutoffAtIso: cutoffAt.toISOString(),
+      evaluatedAtIso: evaluatedAt.toISOString(),
       totals,
       operations,
       incidents: incidents.slice(0, MAX_INCIDENTS),
+      totalIncidentCount,
       hasActivity: true,
     };
   },

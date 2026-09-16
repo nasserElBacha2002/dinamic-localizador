@@ -1,3 +1,6 @@
+import {
+  DAILY_ATTENDANCE_REPORT_MAX_INCIDENTS_IN_EMAIL,
+} from "../constants/daily-attendance-report";
 import type { DailyAttendanceReportPayload } from "../types/daily-attendance-report";
 import { escapeHtml } from "../utils/daily-attendance-report-email";
 
@@ -12,11 +15,17 @@ export const buildDailyAttendanceReportEmail = (
 ): DailyAttendanceReportEmailContent => {
   const subject = `Reporte de asistencia ${payload.reportDate} — ${payload.companyName}`;
   const t = payload.totals;
+  const truncated =
+    payload.totalIncidentCount > DAILY_ATTENDANCE_REPORT_MAX_INCIDENTS_IN_EMAIL;
+  const truncationNote = truncated
+    ? `Mostrando ${payload.incidents.length} de ${payload.totalIncidentCount} incidencias.`
+    : null;
+
   const textLines = [
     `Reporte diario de asistencia`,
     `Empresa: ${payload.companyName}`,
     `Fecha reportada: ${payload.reportDate} (${payload.timezoneId})`,
-    `Corte: ${payload.cutoffAtIso}`,
+    `Evaluado en: ${payload.evaluatedAtIso}`,
     "",
     "Resumen",
     `- Jornadas/operaciones: ${t.operationsCount}`,
@@ -31,9 +40,11 @@ export const buildDailyAttendanceReportEmail = (
     `- Confirmación pendiente: ${t.pendingConfirmationCount}`,
     `- Sin llegada: ${t.missingCheckinCount}`,
     `- Sin salida: ${t.missingCheckoutCount}`,
-    `- Incompletos al corte: ${t.incompleteCount}`,
+    `- Incompletos al evaluar: ${t.incompleteCount}`,
+    `- Incidencias totales: ${payload.totalIncidentCount}`,
     "",
     "Incidencias",
+    ...(truncationNote ? [truncationNote] : []),
     ...(payload.incidents.length === 0
       ? ["(sin incidencias listadas)"]
       : payload.incidents.map(
@@ -83,6 +94,7 @@ th{background:#f3f4f6}
 <div class="meta">
 <div><strong>${escapeHtml(payload.companyName)}</strong></div>
 <div>Fecha reportada: ${escapeHtml(payload.reportDate)} · TZ: ${escapeHtml(payload.timezoneId)}</div>
+<div>Evaluado: ${escapeHtml(payload.evaluatedAtIso)}</div>
 </div>
 <h2>Resumen</h2>
 <div class="grid">
@@ -99,7 +111,8 @@ th{background:#f3f4f6}
 <div class="stat"><span>Confirm. pendiente</span><b>${t.pendingConfirmationCount}</b></div>
 <div class="stat"><span>Incompletos</span><b>${t.incompleteCount}</b></div>
 </div>
-<h2>Incidencias</h2>
+<h2>Incidencias (${payload.totalIncidentCount})</h2>
+${truncationNote ? `<p>${escapeHtml(truncationNote)}</p>` : ""}
 ${
   payload.incidents.length === 0
     ? "<p>Sin incidencias listadas.</p>"

@@ -16,6 +16,7 @@ export const DAILY_ATTENDANCE_REPORT_DELIVERY_STATUSES = [
   "PROCESSING",
   "SENT",
   "FAILED",
+  "FAILED_TERMINAL",
 ] as const;
 
 export type DailyAttendanceReportDeliveryStatus =
@@ -26,3 +27,9 @@ export const DAILY_ATTENDANCE_REPORT_DEFAULT_TIME = "08:00";
 
 /** Catch-up window: do not enqueue report dates older than this many local days. */
 export const DAILY_ATTENDANCE_REPORT_CATCHUP_MAX_DAYS = 3;
+
+/** Bump when email HTML/text layout changes (stored on run snapshot). */
+export const DAILY_ATTENDANCE_REPORT_TEMPLATE_VERSION = "v1";
+
+/** Max incidents embedded in the email body (totals still reflect full count). */
+export const DAILY_ATTENDANCE_REPORT_MAX_INCIDENTS_IN_EMAIL = 40;

@@ -50,22 +50,48 @@ describe("phase-1 daily attendance report regression guards", () => {
     assert.match(job, /DAILY_ATTENDANCE_REPORT_WORKER_ENABLED/);
   });
 
-  it("marks console/disabled email transport as not SENT", () => {
+  it("marks console/disabled email transport as FAILED_TERMINAL not SENT", () => {
     const service = readFileSync(
       join(process.cwd(), "src/services/daily-attendance-report.service.ts"),
       "utf8",
     );
     assert.match(service, /result\.transport === "console"/);
     assert.match(service, /result\.transport === "disabled"/);
-    assert.match(service, /if \(!result\.sent\)/);
-  });
-
-  it("uses separate email recipients table from WhatsApp phones", () => {
-    const migration = readFileSync(
-      join(process.cwd(), "../database/migrations/134_daily_attendance_report.sql"),
+    assert.match(service, /terminal/);
+    const deliveryRepo = readFileSync(
+      join(process.cwd(), "src/repositories/daily-attendance-report-delivery.repository.ts"),
       "utf8",
     );
-    assert.match(migration, /company_report_email_recipients/);
-    assert.doesNotMatch(migration, /ALTER TABLE dbo\.company_alert_recipients/);
+    assert.match(deliveryRepo, /FAILED_TERMINAL/);
+    assert.match(deliveryRepo, /lease_owner = @leaseOwner/);
+  });
+
+  it("persists immutable email snapshot and does not rebuild on retry path", () => {
+    const service = readFileSync(
+      join(process.cwd(), "src/services/daily-attendance-report.service.ts"),
+      "utf8",
+    );
+    assert.match(service, /persistSnapshotAndAudience/);
+    assert.match(service, /processDeliveriesFromSnapshot/);
+    assert.match(service, /emailSnapshot/);
+    assert.match(service, /at-least-once/);
+  });
+
+  it("uses company_alert_recipients for daily report audience via preservative migration 136", () => {
+    const migration136 = readFileSync(
+      join(process.cwd(), "../database/migrations/136_daily_report_uses_alert_recipients.sql"),
+      "utf8",
+    );
+    assert.doesNotMatch(migration136, /DELETE\s+FROM\s+dbo\.company_daily_attendance_report_deliveries/i);
+    assert.match(migration136, /company_alert_recipients/);
+    assert.match(migration136, /SNAPSHOT_ONLY/);
+    assert.match(migration136, /email_snapshot/);
+
+    const repo = readFileSync(
+      join(process.cwd(), "src/repositories/company-alert-recipient.repository.ts"),
+      "utf8",
+    );
+    assert.match(repo, /listEnabledWithUserEmailForDailyReport/);
+    assert.match(repo, /receive_operational_alerts\s*=\s*1/);
   });
 });

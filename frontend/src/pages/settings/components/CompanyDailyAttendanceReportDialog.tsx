@@ -1,5 +1,9 @@
+/**
+ * @deprecated Prefer CompanyWhatsAppAlertsDialog — daily report settings and
+ * audience share the same alert recipients. Kept for reference until Phase 2
+ * cutover removes the report-email-recipients API path.
+ */
 import {
-  ActionIcon,
   Alert,
   Button,
   Group,
@@ -10,7 +14,6 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconCheck, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { FormGrid, ResponsiveModal } from "../../../design-system";
 import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
@@ -319,55 +322,52 @@ export function CompanyDailyAttendanceReportDialog({
                       </Table.Td>
                       <Table.Td>
                         {canUpdate ? (
-                          <Group gap={4} wrap="nowrap">
-                            {isEditing ? (
-                              <>
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="green"
-                                  onClick={() => void handleSaveEdit(recipient.id)}
-                                  disabled={busy}
-                                  aria-label="Guardar destinatario"
-                                >
-                                  <IconCheck size={16} />
-                                </ActionIcon>
-                                <ActionIcon
-                                  variant="subtle"
-                                  onClick={cancelEditing}
-                                  disabled={busy}
-                                  aria-label="Cancelar edición"
-                                >
-                                  <IconX size={16} />
-                                </ActionIcon>
-                              </>
-                            ) : (
-                              <>
-                                <ActionIcon
-                                  variant="subtle"
-                                  onClick={() =>
-                                    startEditing(
-                                      recipient.id,
-                                      recipient.email,
-                                      recipient.displayName,
-                                    )
-                                  }
-                                  disabled={busy}
-                                  aria-label="Editar destinatario"
-                                >
-                                  <IconPencil size={16} />
-                                </ActionIcon>
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="red"
-                                  onClick={() => void handleDelete(recipient.id)}
-                                  disabled={busy}
-                                  aria-label="Eliminar destinatario"
-                                >
-                                  <IconTrash size={16} />
-                                </ActionIcon>
-                              </>
-                            )}
-                          </Group>
+                          isEditing ? (
+                            <Group gap="xs">
+                              <Button
+                                variant="light"
+                                size="compact-sm"
+                                onClick={() => void handleSaveEdit(recipient.id)}
+                                disabled={busy || !editEmail.trim()}
+                              >
+                                Guardar
+                              </Button>
+                              <Button
+                                variant="subtle"
+                                size="compact-sm"
+                                onClick={cancelEditing}
+                                disabled={busy}
+                              >
+                                Cancelar
+                              </Button>
+                            </Group>
+                          ) : (
+                            <Group gap="xs">
+                              <Button
+                                variant="subtle"
+                                size="compact-sm"
+                                onClick={() =>
+                                  startEditing(
+                                    recipient.id,
+                                    recipient.email,
+                                    recipient.displayName,
+                                  )
+                                }
+                                disabled={busy}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                variant="subtle"
+                                color="red"
+                                size="compact-sm"
+                                onClick={() => void handleDelete(recipient.id)}
+                                disabled={busy}
+                              >
+                                Eliminar
+                              </Button>
+                            </Group>
+                          )
                         ) : null}
                       </Table.Td>
                     </Table.Tr>

@@ -4,8 +4,10 @@
   Phase 1: daily attendance email report for company admins.
   - company_settings: daily_attendance_report_enabled (default 0), daily_attendance_report_time
   - company_report_email_recipients (separate from WhatsApp phone recipients)
-  - company_daily_attendance_report_runs (UQ company_id + report_date)
+  - company_daily_attendance_report_runs (UQ company_id + report_date) with immutable email snapshot
   - company_daily_attendance_report_deliveries (UQ report_run_id + recipient_id)
+  - Composite FKs (run/recipient, company_id) for multi-tenant isolation
+  - FAILED_TERMINAL delivery status for non-retryable failures (console/disabled/max attempts)
 
   Does NOT change admin WhatsApp alert flags or employee reminder tables.
 
@@ -75,6 +77,17 @@ GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
+    WHERE name = N'UQ_crer_id_company'
+      AND object_id = OBJECT_ID(N'dbo.company_report_email_recipients')
+)
+BEGIN
+    CREATE UNIQUE INDEX UQ_crer_id_company
+        ON dbo.company_report_email_recipients (id, company_id);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
     WHERE name = N'IX_crer_company_enabled'
       AND object_id = OBJECT_ID(N'dbo.company_report_email_recipients')
 )
@@ -124,6 +137,13 @@ BEGIN
             CONSTRAINT DF_cdarr_missing_checkout DEFAULT 0,
         incomplete_count INT NOT NULL
             CONSTRAINT DF_cdarr_incomplete_count DEFAULT 0,
+        total_incident_count INT NOT NULL
+            CONSTRAINT DF_cdarr_total_incident_count DEFAULT 0,
+        template_version NVARCHAR(40) NULL,
+        email_subject_snapshot NVARCHAR(500) NULL,
+        email_text_snapshot NVARCHAR(MAX) NULL,
+        email_html_snapshot NVARCHAR(MAX) NULL,
+        evaluated_at DATETIME2 NULL,
         attempt_count INT NOT NULL
             CONSTRAINT DF_cdarr_attempt_count DEFAULT 0,
         next_attempt_at DATETIME2 NULL,
@@ -153,13 +173,24 @@ GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
+    WHERE name = N'UQ_cdarr_id_company'
+      AND object_id = OBJECT_ID(N'dbo.company_daily_attendance_report_runs')
+)
+BEGIN
+    CREATE UNIQUE INDEX UQ_cdarr_id_company
+        ON dbo.company_daily_attendance_report_runs (id, company_id);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
     WHERE name = N'IX_cdarr_claim'
       AND object_id = OBJECT_ID(N'dbo.company_daily_attendance_report_runs')
 )
 BEGIN
     CREATE INDEX IX_cdarr_claim
         ON dbo.company_daily_attendance_report_runs (status, next_attempt_at, lease_expires_at)
-        INCLUDE (company_id, report_date, attempt_count);
+        INCLUDE (company_id, report_date, attempt_count, generated_at);
 END;
 GO
 
@@ -190,16 +221,14 @@ BEGIN
             CONSTRAINT DF_cdard_created_at DEFAULT SYSUTCDATETIME(),
         updated_at DATETIME2 NOT NULL
             CONSTRAINT DF_cdard_updated_at DEFAULT SYSUTCDATETIME(),
-        CONSTRAINT FK_cdard_run
-            FOREIGN KEY (report_run_id)
-            REFERENCES dbo.company_daily_attendance_report_runs (id),
-        CONSTRAINT FK_cdard_company
-            FOREIGN KEY (company_id) REFERENCES dbo.companies (id),
-        CONSTRAINT FK_cdard_recipient
-            FOREIGN KEY (recipient_id)
-            REFERENCES dbo.company_report_email_recipients (id),
+        CONSTRAINT FK_cdard_run_company
+            FOREIGN KEY (report_run_id, company_id)
+            REFERENCES dbo.company_daily_attendance_report_runs (id, company_id),
+        CONSTRAINT FK_cdard_recipient_company
+            FOREIGN KEY (recipient_id, company_id)
+            REFERENCES dbo.company_report_email_recipients (id, company_id),
         CONSTRAINT CK_cdard_status CHECK (
-            status IN (N'PENDING', N'PROCESSING', N'SENT', N'FAILED')
+            status IN (N'PENDING', N'PROCESSING', N'SENT', N'FAILED', N'FAILED_TERMINAL')
         ),
         CONSTRAINT UQ_cdard_run_recipient UNIQUE (report_run_id, recipient_id)
     );

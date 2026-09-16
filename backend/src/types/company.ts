@@ -107,6 +107,8 @@ export interface CompanySettings {
   adminAlertsEnabled: boolean;
   /** UTC frontier: reconciler only considers domain events at/after this instant. */
   adminAlertsEnabledAt: string | null;
+  /** Phase 2 cutover mode. Default WHATSAPP_LEGACY. Independent of daily report enabled. */
+  adminAlertDeliveryMode: "WHATSAPP_LEGACY" | "DAILY_EMAIL";
   adminAttendanceConfirmationMissingEnabled: boolean;
   adminMissingCheckinEnabled: boolean;
   adminMissingCheckoutEnabled: boolean;

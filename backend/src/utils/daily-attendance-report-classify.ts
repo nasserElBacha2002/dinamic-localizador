@@ -1,14 +1,11 @@
-export type DailyAttendanceReportClassifyKind =
-  | "JUSTIFIED"
-  | "UNAVAILABLE"
-  | "PENDING_CONFIRMATION"
-  | "PRESENT"
-  | "LATE"
-  | "EARLY_LEAVE"
-  | "MISSING_CHECKIN"
-  | "MISSING_CHECKOUT"
-  | "INCOMPLETE";
-
+/**
+ * Pure classification for one employee_workday row at evaluation time.
+ * Cancelled expectations must be filtered before calling this.
+ *
+ * Classification clock is `evaluatedAt` (persisted generation instant), NOT local midnight.
+ * Checkout window closes at expectedEndAt + earlyLeaveToleranceMinutes.
+ * Belonging to the report is always by operation_workdays.work_date (caller filter).
+ */
 export type DailyAttendanceReportRowClassification = {
   justified: boolean;
   unavailable: boolean;
@@ -22,21 +19,19 @@ export type DailyAttendanceReportRowClassification = {
   hasCheckout: boolean;
 };
 
-/**
- * Pure classification for one employee_workday row at report cutoff.
- * Cancelled expectations must be filtered before calling this.
- */
 export const classifyDailyAttendanceReportRow = (input: {
   expectationStatus: string;
   confirmationStatus: string | null;
   punctualityStatus: string | null;
+  validationStatus: string | null;
   expectedStartAt: Date;
   expectedEndAt: Date | null;
   receivedAt: Date | null;
   checkoutAt: Date | null;
   lateToleranceMinutes: number;
   earlyLeaveToleranceMinutes: number;
-  cutoffAt: Date;
+  /** Real generation / evaluation instant (UTC). */
+  evaluatedAt: Date;
 }): DailyAttendanceReportRowClassification => {
   const result: DailyAttendanceReportRowClassification = {
     justified: false,
@@ -65,12 +60,15 @@ export const classifyDailyAttendanceReportRow = (input: {
   const lateToleranceMs = input.lateToleranceMinutes * 60_000;
   const earlyLeaveMs = input.earlyLeaveToleranceMinutes * 60_000;
   const checkinDueAt = new Date(input.expectedStartAt.getTime() + lateToleranceMs);
-  const windowClosed =
+  const checkoutDueAt =
     input.expectedEndAt == null
-      ? checkinDueAt.getTime() <= input.cutoffAt.getTime()
-      : input.expectedEndAt.getTime() <= input.cutoffAt.getTime();
+      ? null
+      : new Date(input.expectedEndAt.getTime() + earlyLeaveMs);
+  const operationallyPresent =
+    Boolean(input.receivedAt) &&
+    (input.validationStatus === "VALID" || input.validationStatus === "PENDING_REVIEW");
 
-  if (input.receivedAt) {
+  if (operationallyPresent && input.receivedAt) {
     result.present = true;
     if (String(input.punctualityStatus ?? "") === "LATE") {
       result.late = true;
@@ -83,14 +81,18 @@ export const classifyDailyAttendanceReportRow = (input: {
       ) {
         result.earlyLeave = true;
       }
-    } else if (windowClosed && input.expectedEndAt) {
+    } else if (checkoutDueAt && checkoutDueAt.getTime() <= input.evaluatedAt.getTime()) {
+      // Night shift (or any shift) ended before evaluation without checkout.
       result.missingCheckout = true;
-    } else if (input.expectedEndAt && input.expectedEndAt.getTime() > input.cutoffAt.getTime()) {
+    } else if (checkoutDueAt && checkoutDueAt.getTime() > input.evaluatedAt.getTime()) {
+      result.incomplete = true;
+    } else if (!checkoutDueAt) {
+      // No expected end: treat as incomplete until check-in due window also passed? keep incomplete.
       result.incomplete = true;
     }
   } else if (input.confirmationStatus === "UNAVAILABLE") {
     // counted as unavailable; not missing check-in
-  } else if (checkinDueAt.getTime() <= input.cutoffAt.getTime()) {
+  } else if (checkinDueAt.getTime() <= input.evaluatedAt.getTime()) {
     result.missingCheckin = true;
   } else {
     result.incomplete = true;

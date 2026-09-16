@@ -80,13 +80,21 @@ export interface DailyAttendanceReportPayload {
   companyName: string;
   reportDate: string;
   timezoneId: string;
-  cutoffAtIso: string;
+  /** Evaluation instant used for incomplete vs missing (ISO UTC). */
+  evaluatedAtIso: string;
   totals: DailyAttendanceReportTotals;
   operations: DailyAttendanceReportOperationBreakdown[];
   /** Cap applied in builder; aggregator may return more. */
   incidents: DailyAttendanceReportIncident[];
+  totalIncidentCount: number;
   hasActivity: boolean;
 }
+
+export type DailyAttendanceReportEmailSnapshot = {
+  subject: string;
+  text: string;
+  html: string;
+};
 
 export interface DailyAttendanceReportRun {
   id: string;
@@ -97,6 +105,10 @@ export interface DailyAttendanceReportRun {
   status: DailyAttendanceReportRunStatus;
   recipientCount: number;
   totals: DailyAttendanceReportTotals;
+  totalIncidentCount: number;
+  templateVersion: string | null;
+  emailSnapshot: DailyAttendanceReportEmailSnapshot | null;
+  evaluatedAt: string | null;
   attemptCount: number;
   nextAttemptAt: string | null;
   leaseOwner: string | null;
@@ -109,6 +121,7 @@ export interface DailyAttendanceReportRun {
   createdAt: string;
   updatedAt: string;
 }
+
 
 export interface DailyAttendanceReportDelivery {
   id: string;

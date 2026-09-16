@@ -69,6 +69,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   adminAlertsEnabledAt: row.admin_alerts_enabled_at
     ? toIsoString(row.admin_alerts_enabled_at as Date | string)
     : null,
+  adminAlertDeliveryMode: (() => {
+    const mode = String(row.admin_alert_delivery_mode ?? "WHATSAPP_LEGACY");
+    return mode === "DAILY_EMAIL" ? "DAILY_EMAIL" : "WHATSAPP_LEGACY";
+  })(),
   adminAttendanceConfirmationMissingEnabled:
     row.admin_attendance_confirmation_missing_enabled == null
       ? true
@@ -274,6 +278,7 @@ export const companySettingsRepository = {
         | "absenceAttachmentsEnabled"
         | "absenceOperationalIntegrationEnabled"
         | "adminAlertsEnabled"
+        | "adminAlertDeliveryMode"
         | "adminAttendanceConfirmationMissingEnabled"
         | "adminMissingCheckinEnabled"
         | "adminMissingCheckoutEnabled"
@@ -426,6 +431,14 @@ export const companySettingsRepository = {
           THEN SYSUTCDATETIME()
         ELSE admin_alerts_enabled_at
       END`);
+    }
+    if (input.adminAlertDeliveryMode !== undefined) {
+      request.input(
+        "adminAlertDeliveryMode",
+        sql.NVarChar(32),
+        input.adminAlertDeliveryMode,
+      );
+      fields.push("admin_alert_delivery_mode = @adminAlertDeliveryMode");
     }
     if (input.adminAttendanceConfirmationMissingEnabled !== undefined) {
       request.input(

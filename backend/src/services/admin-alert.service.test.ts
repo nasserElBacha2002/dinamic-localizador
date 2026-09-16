@@ -327,4 +327,57 @@ describe("adminAlertService", () => {
     assert.equal(vars["1"], "Solicitud de vacaciones");
     assert.equal(vars["4"], "Pendiente de revisión");
   });
+
+  it("does not enqueue informational alerts under DAILY_EMAIL mode", async () => {
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+    const { companyAlertRecipientRepository } = await import(
+      "../repositories/company-alert-recipient.repository"
+    );
+    const { adminAlertNotificationRepository } = await import(
+      "../repositories/admin-alert-notification.repository"
+    );
+    const { adminAlertService } = await import("./admin-alert.service");
+
+    mock.method(companyRepository, "findById", async () => ({
+      id: "company-1",
+      name: "Co",
+      status: "ACTIVE",
+    }));
+    mock.method(companySettingsRepository, "findByCompanyId", async () => ({
+      companyId: "company-1",
+      adminAlertsEnabled: true,
+      adminAlertDeliveryMode: "DAILY_EMAIL",
+    }));
+    mock.method(companyAlertRecipientRepository, "findEnabledRecipients", async () => [
+      {
+        id: "r1",
+        companyId: "company-1",
+        userId: null,
+        phoneNumber: "+5491112345678",
+        displayName: "Ops",
+        isEnabled: true,
+        receiveOperationalAlerts: true,
+        receiveRequestAlerts: false,
+        receiveSecurityAlerts: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    let enqueued = false;
+    mock.method(adminAlertNotificationRepository, "enqueue", async () => {
+      enqueued = true;
+      return { notification: { id: "n1" }, created: true };
+    });
+
+    const result = await adminAlertService.emit({
+      companyId: "company-1",
+      type: "ATTENDANCE_CONFIRMATION_MISSING",
+      deduplicationKey: "confirm:1",
+      payload: { employeeName: "Test" },
+    });
+
+    assert.equal(result.enqueued, 0);
+    assert.equal(enqueued, false);
+  });
 });

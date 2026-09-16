@@ -29,3 +29,24 @@ export async function updateCompanySettings(
   const { data } = await scopedApiClient.patch<{ data: CompanySettings }>("settings", input);
   return normalizeCompanySettings(data.data);
 }
+
+export async function setAdminAlertDeliveryMode(
+  mode: "WHATSAPP_LEGACY" | "DAILY_EMAIL",
+): Promise<{
+  companyId: string;
+  before: string;
+  after: string;
+  suppressedCount: number;
+  configVersion: string;
+}> {
+  const { data } = await scopedApiClient.put<{
+    data: {
+      companyId: string;
+      before: string;
+      after: string;
+      suppressedCount: number;
+      configVersion: string;
+    };
+  }>("settings/admin-alert-delivery-mode", { mode });
+  return data.data;
+}

@@ -94,6 +94,11 @@ export const companyAlertRecipientController = {
         phoneNumber: resolved.phoneNumber,
         displayName: resolved.displayName,
       });
+      const { adminAlertCutoverService } = await import("../services/admin-alert-cutover.service");
+      await adminAlertCutoverService.tryAutoCutoverToDailyEmail({
+        companyId,
+        actorUserId: req.auth?.userId ?? "system:alert-recipient",
+      });
       res.status(201).json({ data: created });
     } catch (error) {
       if (error instanceof Error && error.message === "COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE") {

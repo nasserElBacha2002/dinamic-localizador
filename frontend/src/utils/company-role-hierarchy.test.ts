@@ -3,18 +3,20 @@ import { describe, it } from "node:test";
 import {
   canAssignCompanyRole,
   canAssignRoleOnInvitation,
-  getCompanyUserEditBlockReason,
-  getEditBlockMessage,
+  canEditPersonalProfile,
+  getCompanyUserDeactivationBlockReason,
+  getDeactivationBlockMessage,
   isStrictlySuperiorRole,
   listAssignableCompanyRoles,
   listInvitableCompanyRoles,
-  USER_SELF_EDIT_BLOCKED_MESSAGE,
+  resolveCompanyUserCapabilities,
+  USER_SELF_DEACTIVATION_BLOCKED_MESSAGE,
 } from "./company-role-hierarchy";
 
 describe("company-role-hierarchy (frontend)", () => {
-  it("blocks self and peer/superior edits", () => {
+  it("blocks self and peer/superior privileged actions only", () => {
     assert.equal(
-      getCompanyUserEditBlockReason({
+      getCompanyUserDeactivationBlockReason({
         actorUserId: "u1",
         actorRole: "OWNER",
         actorIsPlatformAdmin: true,
@@ -23,13 +25,16 @@ describe("company-role-hierarchy (frontend)", () => {
       }),
       "self",
     );
-    assert.equal(USER_SELF_EDIT_BLOCKED_MESSAGE.includes("otro usuario autorizado"), true);
     assert.equal(
-      getEditBlockMessage("self"),
-      USER_SELF_EDIT_BLOCKED_MESSAGE,
+      USER_SELF_DEACTIVATION_BLOCKED_MESSAGE.includes("inactivar tu propio usuario"),
+      true,
     );
     assert.equal(
-      getCompanyUserEditBlockReason({
+      getDeactivationBlockMessage("self"),
+      USER_SELF_DEACTIVATION_BLOCKED_MESSAGE,
+    );
+    assert.equal(
+      getCompanyUserDeactivationBlockReason({
         actorUserId: "u1",
         actorRole: "OWNER",
         actorIsPlatformAdmin: false,
@@ -39,7 +44,7 @@ describe("company-role-hierarchy (frontend)", () => {
       "hierarchy",
     );
     assert.equal(
-      getCompanyUserEditBlockReason({
+      getCompanyUserDeactivationBlockReason({
         actorUserId: "u1",
         actorRole: "OWNER",
         actorIsPlatformAdmin: false,
@@ -48,6 +53,53 @@ describe("company-role-hierarchy (frontend)", () => {
       }),
       null,
     );
+  });
+
+  it("resolves split capabilities for self vs inferior vs peer", () => {
+    assert.equal(
+      canEditPersonalProfile({
+        actorUserId: "u1",
+        actorIsPlatformAdmin: false,
+        targetUserId: "u1",
+      }),
+      true,
+    );
+    assert.equal(
+      canEditPersonalProfile({
+        actorUserId: "u1",
+        actorIsPlatformAdmin: false,
+        targetUserId: "u2",
+      }),
+      false,
+    );
+
+    const selfCaps = resolveCompanyUserCapabilities({
+      actorUserId: "u1",
+      actorRole: "OWNER",
+      actorIsPlatformAdmin: false,
+      targetUserId: "u1",
+      targetRole: "OWNER",
+      targetStatus: "ACTIVE",
+    });
+    assert.deepEqual(selfCaps, {
+      canEditProfile: true,
+      canChangeRole: false,
+      canChangeDefaultCompany: false,
+      canDeactivate: false,
+      canReactivate: false,
+    });
+
+    const inferiorCaps = resolveCompanyUserCapabilities({
+      actorUserId: "u1",
+      actorRole: "ADMIN",
+      actorIsPlatformAdmin: false,
+      targetUserId: "u2",
+      targetRole: "HR",
+      targetStatus: "ACTIVE",
+    });
+    assert.equal(inferiorCaps.canEditProfile, false);
+    assert.equal(inferiorCaps.canChangeRole, true);
+    assert.equal(inferiorCaps.canDeactivate, true);
   });
 
   it("filters assignable vs invitable roles", () => {

@@ -20,11 +20,11 @@ export const COMPANY_ROLE_RANK: Record<CompanyRole, number> = {
   READ_ONLY: 10,
 };
 
-export const USER_SELF_EDIT_BLOCKED_MESSAGE =
-  "No podés editar tu propio usuario. La modificación debe ser realizada por otro usuario autorizado.";
+export const USER_SELF_DEACTIVATION_BLOCKED_MESSAGE =
+  "No podés inactivar tu propio usuario. La modificación debe ser realizada por otro usuario autorizado.";
 
-export const USER_EDIT_HIERARCHY_BLOCKED_MESSAGE =
-  "No podés editar este usuario. La modificación debe ser realizada por un usuario con un rango superior.";
+export const USER_DEACTIVATION_HIERARCHY_BLOCKED_MESSAGE =
+  "Solo podés inactivar usuarios con un rol estrictamente inferior al tuyo.";
 
 export const getCompanyRoleRank = (role: CompanyRole): number => COMPANY_ROLE_RANK[role];
 
@@ -66,15 +66,19 @@ export const canAssignRoleOnInvitation = (
   return getCompanyRoleRank(actorRole) > getCompanyRoleRank(roleToAssign);
 };
 
-export type CompanyUserEditBlockReason = "self" | "hierarchy";
+export type CompanyUserPrivilegedActionBlockReason = "self" | "hierarchy";
 
-export const getCompanyUserEditBlockReason = (input: {
+/**
+ * UI gate for privileged membership actions (role / isDefault / deactivate / reactivate).
+ * Backend remains authoritative. Personal profile uses canEditPersonalProfile.
+ */
+export const getCompanyUserPrivilegedActionBlockReason = (input: {
   actorUserId: string | undefined;
   actorRole: CompanyRole | undefined;
   actorIsPlatformAdmin: boolean;
   targetUserId: string;
   targetRole: CompanyRole;
-}): CompanyUserEditBlockReason | null => {
+}): CompanyUserPrivilegedActionBlockReason | null => {
   if (input.actorUserId && input.actorUserId === input.targetUserId) {
     return "self";
   }
@@ -87,10 +91,52 @@ export const getCompanyUserEditBlockReason = (input: {
   return null;
 };
 
-export const getEditBlockMessage = (
-  reason: CompanyUserEditBlockReason,
+/** Alias kept for inactivation messaging helpers. */
+export const getCompanyUserDeactivationBlockReason = getCompanyUserPrivilegedActionBlockReason;
+
+export const getDeactivationBlockMessage = (
+  reason: CompanyUserPrivilegedActionBlockReason,
 ): string =>
-  reason === "self" ? USER_SELF_EDIT_BLOCKED_MESSAGE : USER_EDIT_HIERARCHY_BLOCKED_MESSAGE;
+  reason === "self"
+    ? USER_SELF_DEACTIVATION_BLOCKED_MESSAGE
+    : USER_DEACTIVATION_HIERARCHY_BLOCKED_MESSAGE;
+
+/** Global profile fields: only self or platform admin (matches backend). */
+export const canEditPersonalProfile = (input: {
+  actorUserId: string | undefined;
+  actorIsPlatformAdmin: boolean;
+  targetUserId: string;
+}): boolean => {
+  if (input.actorIsPlatformAdmin) {
+    return true;
+  }
+  return Boolean(input.actorUserId && input.actorUserId === input.targetUserId);
+};
+
+export const resolveCompanyUserCapabilities = (input: {
+  actorUserId: string | undefined;
+  actorRole: CompanyRole | undefined;
+  actorIsPlatformAdmin: boolean;
+  targetUserId: string;
+  targetRole: CompanyRole;
+  targetStatus: "ACTIVE" | "INACTIVE";
+}): {
+  canEditProfile: boolean;
+  canChangeRole: boolean;
+  canChangeDefaultCompany: boolean;
+  canDeactivate: boolean;
+  canReactivate: boolean;
+} => {
+  const privilegedBlocked = getCompanyUserPrivilegedActionBlockReason(input);
+  const privileged = privilegedBlocked === null;
+  return {
+    canEditProfile: canEditPersonalProfile(input),
+    canChangeRole: privileged,
+    canChangeDefaultCompany: privileged,
+    canDeactivate: privileged && input.targetStatus === "ACTIVE",
+    canReactivate: privileged && input.targetStatus === "INACTIVE",
+  };
+};
 
 export const listAssignableCompanyRoles = (
   actorRole: CompanyRole | undefined,

@@ -1,8 +1,7 @@
-import { Button, Group, Paper, Select, Stack, Text, Title, Tooltip } from "@mantine/core";
+import { Button, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
 import {
-  ActionMenu,
   ConfirmDialog,
   DataTable,
   ErrorState,
@@ -13,7 +12,6 @@ import {
   PaginationControls,
   SearchInput,
   StatusBadge,
-  type ActionMenuItem,
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../design-system";
@@ -31,16 +29,15 @@ import {
   useUpdateCompanyUser,
 } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
-import type { CompanyUser } from "../../types/company-user";
+import type { CompanyUser, UpdateCompanyUserInput } from "../../types/company-user";
 import type {
   CreateCompanyInvitationInput,
   UserInvitationSummary,
 } from "../../types/user-invitation";
 import {
-  getCompanyUserEditBlockReason,
-  getEditBlockMessage,
   listAssignableCompanyRoles,
   listInvitableCompanyRoles,
+  resolveCompanyUserCapabilities,
 } from "../../utils/company-role-hierarchy";
 import { formatDate } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -85,31 +82,31 @@ export function CompanyUsersPage() {
 
   const dialogRoles = dialogMode === "create" ? invitableRoles : assignableRoles;
 
-  const canEditUser = useCallback(
+  const capabilitiesFor = useCallback(
     (target: CompanyUser) =>
-      getCompanyUserEditBlockReason({
+      resolveCompanyUserCapabilities({
         actorUserId: authUser?.id,
         actorRole,
         actorIsPlatformAdmin,
         targetUserId: target.userId,
         targetRole: target.companyRole,
-      }) === null,
+        targetStatus: target.membershipStatus,
+      }),
     [actorIsPlatformAdmin, actorRole, authUser?.id],
   );
 
-  const editBlockMessageFor = useCallback(
-    (target: CompanyUser) => {
-      const reason = getCompanyUserEditBlockReason({
-        actorUserId: authUser?.id,
-        actorRole,
-        actorIsPlatformAdmin,
-        targetUserId: target.userId,
-        targetRole: target.companyRole,
-      });
-      return reason ? getEditBlockMessage(reason) : null;
-    },
-    [actorIsPlatformAdmin, actorRole, authUser?.id],
-  );
+  const selectedCapabilities = useMemo(() => {
+    if (!selectedUser) {
+      return {
+        canEditProfile: true,
+        canChangeRole: true,
+        canChangeDefaultCompany: true,
+        canDeactivate: false,
+        canReactivate: false,
+      };
+    }
+    return capabilitiesFor(selectedUser);
+  }, [capabilitiesFor, selectedUser]);
 
   const filters = useMemo(
     () => ({
@@ -158,13 +155,6 @@ export function CompanyUsersPage() {
   };
 
   const openEditDialog = (user: CompanyUser) => {
-    if (!canEditUser(user)) {
-      notifications.show({
-        color: "yellow",
-        message: editBlockMessageFor(user) ?? "No podés editar este usuario.",
-      });
-      return;
-    }
     setDialogMode("edit");
     setSelectedUser(user);
     setDialogError(null);
@@ -172,14 +162,7 @@ export function CompanyUsersPage() {
   };
 
   const handleDialogSubmit = async (
-    input:
-      | CreateCompanyInvitationInput
-      | {
-          role: CompanyUser["companyRole"];
-          status: CompanyUser["membershipStatus"];
-          isDefault: boolean;
-          phoneNumber: string | null;
-        },
+    input: CreateCompanyInvitationInput | UpdateCompanyUserInput,
   ) => {
     setDialogError(null);
 
@@ -204,7 +187,7 @@ export function CompanyUsersPage() {
 
       await updateMutation.mutateAsync({
         userId: selectedUser.userId,
-        input,
+        input: input as UpdateCompanyUserInput,
       });
       setDialogOpen(false);
       notifications.show({ color: "green", message: "Usuario actualizado." });
@@ -213,18 +196,35 @@ export function CompanyUsersPage() {
     }
   };
 
-  const handleDeactivate = async () => {
+  const handleConfirmDeactivate = async () => {
     if (!deactivateTarget) {
       return;
     }
-
     try {
       await deactivateMutation.mutateAsync(deactivateTarget.userId);
       setDeactivateTarget(null);
+      setDialogOpen(false);
       notifications.show({ color: "green", message: "Acceso desactivado." });
     } catch (error) {
       setDialogError(getApiErrorMessage(error));
       setDeactivateTarget(null);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!selectedUser) {
+      return;
+    }
+    setDialogError(null);
+    try {
+      await updateMutation.mutateAsync({
+        userId: selectedUser.userId,
+        input: { status: "ACTIVE" },
+      });
+      setDialogOpen(false);
+      notifications.show({ color: "green", message: "Acceso reactivado." });
+    } catch (error) {
+      setDialogError(getApiErrorMessage(error));
     }
   };
 
@@ -259,33 +259,28 @@ export function CompanyUsersPage() {
       { key: "email", header: "Email", getValue: (row) => row.email },
       {
         key: "phoneNumber",
-        header: "Teléfono",
+        header: "WhatsApp",
         getValue: (row) => row.phoneNumber ?? "—",
       },
       {
-        key: "role",
+        key: "companyRole",
         header: "Rol",
-        getValue: (row) => companyRoleLabels[row.companyRole],
+        getValue: (row) => companyRoleLabels[row.companyRole] ?? row.companyRole,
       },
       {
-        key: "status",
+        key: "membershipStatus",
         header: "Estado",
         render: (row) => (
           <StatusBadge
-            label={membershipStatusLabels[row.membershipStatus]}
+            label={membershipStatusLabels[row.membershipStatus] ?? row.membershipStatus}
             tone={row.membershipStatus === "ACTIVE" ? "success" : "neutral"}
           />
         ),
       },
       {
-        key: "isDefault",
-        header: "Predeterminada",
-        getValue: (row) => (row.isDefault ? "Sí" : "No"),
-      },
-      {
-        key: "updatedAt",
-        header: "Actualizado",
-        getValue: (row) => formatDate(row.updatedAt),
+        key: "lastLoginAt",
+        header: "Último acceso",
+        getValue: (row) => (row.lastLoginAt ? formatDate(row.lastLoginAt) : "—"),
       },
     ],
     [],
@@ -297,7 +292,7 @@ export function CompanyUsersPage() {
       subtitle: (row) => row.email,
       status: (row) => (
         <StatusBadge
-          label={membershipStatusLabels[row.membershipStatus]}
+          label={membershipStatusLabels[row.membershipStatus] ?? row.membershipStatus}
           tone={row.membershipStatus === "ACTIVE" ? "success" : "neutral"}
         />
       ),
@@ -305,20 +300,14 @@ export function CompanyUsersPage() {
         {
           key: "role",
           label: "Rol",
-          getValue: (row) => companyRoleLabels[row.companyRole],
+          getValue: (row) => companyRoleLabels[row.companyRole] ?? row.companyRole,
           visibility: "always",
         },
         {
-          key: "isDefault",
-          label: "Predeterminada",
-          getValue: (row) => (row.isDefault ? "Sí" : "No"),
+          key: "phoneNumber",
+          label: "WhatsApp",
+          getValue: (row) => row.phoneNumber ?? "—",
           visibility: "always",
-        },
-        {
-          key: "updatedAt",
-          label: "Actualizado",
-          getValue: (row) => formatDate(row.updatedAt),
-          visibility: "expanded",
         },
       ],
     }),
@@ -326,43 +315,54 @@ export function CompanyUsersPage() {
   );
 
   if (permissionsQuery.isPending) {
-    return <LoadingState message="Verificando permisos..." />;
+    return <LoadingState message="Cargando permisos..." />;
+  }
+
+  if (permissionsQuery.isError) {
+    return (
+      <ErrorState
+        title="No se pudieron cargar los permisos"
+        message={getApiErrorMessage(permissionsQuery.error)}
+        action={
+          <Button variant="light" onClick={() => void permissionsQuery.refetch()}>
+            Reintentar
+          </Button>
+        }
+      />
+    );
   }
 
   if (!canManageUsers) {
-    return <ErrorState message="No tenés permisos para gestionar usuarios de esta empresa." />;
+    return (
+      <ErrorState
+        title="Sin permiso"
+        message="No tenés permiso para administrar usuarios de esta empresa."
+      />
+    );
   }
 
   return (
     <>
       <PageHeader
-        title="Usuarios de empresa"
-        description="Gestioná los usuarios que tienen acceso al panel para esta empresa."
-        action={<Button onClick={openCreateDialog}>Invitar usuario</Button>}
+        title="Usuarios"
+        description="Administrá el acceso al panel de esta empresa."
+        action={
+          <Button onClick={openCreateDialog} disabled={invitableRoles.length === 0}>
+            Invitar usuario
+          </Button>
+        }
       />
 
-      {pendingInvitationsQuery.data && pendingInvitationsQuery.data.data.length > 0 ? (
-        <Paper withBorder p="md" mb="lg" radius="md">
+      {(pendingInvitationsQuery.data?.data.length ?? 0) > 0 ? (
+        <Paper withBorder p="md" mb="md">
           <Stack gap="sm">
-            <Title order={4}>Invitaciones pendientes</Title>
-            <Text size="sm" c="dimmed">
-              Invitaciones enviadas que aún no fueron aceptadas.
-            </Text>
-            {pendingInvitationsQuery.data.data.map((invitation) => (
-              <Group key={invitation.id} justify="space-between" align="flex-start" wrap="wrap">
-                <Stack gap={2}>
-                  <Text size="sm" fw={500}>
-                    {invitation.email}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {companyRoleLabels[invitation.role]} · vence {formatDate(invitation.expiresAt)}
-                    {invitation.deliveryStatus === "FAILED"
-                      ? " · correo pendiente de entrega"
-                      : invitation.deliveryStatus === "SENT"
-                        ? " · correo enviado"
-                        : ""}
-                  </Text>
-                </Stack>
+            <Title order={5}>Invitaciones pendientes</Title>
+            {pendingInvitationsQuery.data?.data.map((invitation) => (
+              <Group key={invitation.id} justify="space-between" wrap="wrap">
+                <Text size="sm">
+                  {invitation.inviteeName ?? invitation.email} —{" "}
+                  {companyRoleLabels[invitation.role] ?? invitation.role}
+                </Text>
                 <Group gap="xs">
                   <Button
                     size="compact-sm"
@@ -394,7 +394,7 @@ export function CompanyUsersPage() {
             value={table.searchInput}
             onChange={handleSearchChange}
             onSearch={handleSearch}
-            placeholder="Nombre o email"
+            placeholder="Buscar por nombre o email"
             label="Buscar"
           />
         }
@@ -413,7 +413,10 @@ export function CompanyUsersPage() {
             }}
             data={[
               { value: "all", label: "Todos" },
-              ...Object.entries(companyRoleLabels).map(([value, label]) => ({ value, label })),
+              ...Object.entries(companyRoleLabels).map(([value, label]) => ({
+                value,
+                label,
+              })),
             ]}
           />
         </FilterBar.Item>
@@ -447,55 +450,11 @@ export function CompanyUsersPage() {
         aria-label="Usuarios de empresa"
         mobileView="cards"
         mobileCard={mobileCard}
-        rowActions={(user) => {
-          const allowed = canEditUser(user);
-          const blockedMessage = editBlockMessageFor(user) ?? "No podés editar este usuario.";
-          const items: ActionMenuItem[] = [];
-          if (user.membershipStatus === "ACTIVE") {
-            items.push({
-              key: "deactivate",
-              label: "Desactivar",
-              destructive: true,
-              disabled: !allowed,
-              onClick: () => {
-                if (!allowed) {
-                  notifications.show({
-                    color: "yellow",
-                    message: blockedMessage,
-                  });
-                  return;
-                }
-                setDeactivateTarget(user);
-              },
-            });
-          }
-          const editButton = (
-            <Button
-              size="compact-sm"
-              variant="light"
-              disabled={!allowed}
-              onClick={() => openEditDialog(user)}
-            >
-              Editar
-            </Button>
-          );
-          return (
-            <ActionMenu
-              mode="menu"
-              primary={
-                allowed ? (
-                  editButton
-                ) : (
-                  <Tooltip label={blockedMessage} multiline maw={280}>
-                    <span>{editButton}</span>
-                  </Tooltip>
-                )
-              }
-              items={items}
-              menuLabel={`Más acciones de ${user.name}`}
-            />
-          );
-        }}
+        rowActions={(user) => (
+          <Button size="compact-sm" variant="light" onClick={() => openEditDialog(user)}>
+            Editar
+          </Button>
+        )}
         pagination={
           usersQuery.data && usersQuery.data.data.length > 0 ? (
             <PaginationControls
@@ -513,11 +472,26 @@ export function CompanyUsersPage() {
         open={dialogOpen}
         mode={dialogMode}
         initialUser={selectedUser}
-        loading={createMutation.isPending || updateMutation.isPending}
+        loading={
+          createMutation.isPending ||
+          updateMutation.isPending ||
+          deactivateMutation.isPending
+        }
         errorMessage={dialogError}
         assignableRoles={dialogRoles}
+        capabilities={selectedCapabilities}
         onClose={() => setDialogOpen(false)}
         onSubmit={handleDialogSubmit}
+        onRequestDeactivate={
+          selectedUser
+            ? () => {
+                setDeactivateTarget(selectedUser);
+              }
+            : undefined
+        }
+        onRequestReactivate={
+          selectedCapabilities.canReactivate ? () => void handleReactivate() : undefined
+        }
       />
 
       <ConfirmDialog
@@ -531,7 +505,7 @@ export function CompanyUsersPage() {
         confirmLabel="Desactivar"
         destructive
         loading={deactivateMutation.isPending}
-        onConfirm={handleDeactivate}
+        onConfirm={() => void handleConfirmDeactivate()}
         onCancel={() => setDeactivateTarget(null)}
       />
     </>

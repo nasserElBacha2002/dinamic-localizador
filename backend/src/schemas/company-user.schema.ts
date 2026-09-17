@@ -25,6 +25,8 @@ export const createCompanyUserSchema = z
 
 export const updateCompanyUserSchema = z
   .object({
+    name: z.string().trim().min(1, "El nombre es obligatorio").max(150).optional(),
+    email: z.string().trim().email("Email inválido").max(255).optional(),
     role: z.enum(COMPANY_ROLES, { message: "Rol de empresa inválido" }).optional(),
     status: z.enum(COMPANY_MEMBERSHIP_STATUSES).optional(),
     isDefault: z.boolean().optional(),

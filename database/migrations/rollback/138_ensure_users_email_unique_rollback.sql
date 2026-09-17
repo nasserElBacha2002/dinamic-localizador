@@ -1,0 +1,2 @@
+-- Rollback 138: do not drop UQ_users_email (pre-existing identity constraint from 004).
+-- No-op intentionally.

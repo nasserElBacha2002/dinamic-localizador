@@ -53,6 +53,8 @@ export interface CreateCompanyUserInput {
 }
 
 export interface UpdateCompanyUserInput {
+  name?: string;
+  email?: string;
   role?: CompanyRole;
   status?: CompanyMembershipStatus;
   isDefault?: boolean;

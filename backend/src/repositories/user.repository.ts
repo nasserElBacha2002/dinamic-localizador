@@ -315,6 +315,34 @@ export const userRepository = {
         WHERE id = @id
       `);
   },
+
+  async updateProfileFields(
+    id: string,
+    input: { name?: string; email?: string },
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    const sets: string[] = [];
+    const request = requestFrom(transaction).input("id", sql.UniqueIdentifier, id);
+
+    if (input.name !== undefined) {
+      sets.push("name = @name");
+      request.input("name", sql.NVarChar(150), input.name);
+    }
+    if (input.email !== undefined) {
+      sets.push("email = @email");
+      request.input("email", sql.NVarChar(255), input.email);
+    }
+    if (sets.length === 0) {
+      return;
+    }
+
+    sets.push("updated_at = SYSUTCDATETIME()");
+    await request.query(`
+      UPDATE users
+      SET ${sets.join(",\n          ")}
+      WHERE id = @id
+    `);
+  },
 };
 
 export const toPublicUser = (user: User): PublicUser => ({

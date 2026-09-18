@@ -188,6 +188,8 @@ export type CompanyPermission =
   | "operations:manage"
   | "attendance:read"
   | "attendance:review"
+  | "attendance:manual_create"
+  | "attendance:manual_edit"
   | "attendance:export"
   | "absences:read"
   | "absences:review"

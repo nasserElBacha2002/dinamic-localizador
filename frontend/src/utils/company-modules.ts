@@ -89,6 +89,8 @@ export const MODULE_ROUTE_ACCESS = {
     requiredAnyPermission: [
       "attendance:read",
       "attendance:review",
+      "attendance:manual_create",
+      "attendance:manual_edit",
       "attendance:export",
     ] as const satisfies readonly CompanyPermission[],
   },

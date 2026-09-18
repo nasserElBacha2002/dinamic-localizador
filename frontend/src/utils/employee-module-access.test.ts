@@ -22,7 +22,13 @@ describe("MODULE_ROUTE_ACCESS shared matrix", () => {
   it("matches FeatureRouteGuard / sidebar permission sets", () => {
     assert.deepEqual(
       [...MODULE_ROUTE_ACCESS.attendance.requiredAnyPermission],
-      ["attendance:read", "attendance:review", "attendance:export"],
+      [
+        "attendance:read",
+        "attendance:review",
+        "attendance:manual_create",
+        "attendance:manual_edit",
+        "attendance:export",
+      ],
     );
     assert.deepEqual(
       [...MODULE_ROUTE_ACCESS.absences.requiredAnyPermission],

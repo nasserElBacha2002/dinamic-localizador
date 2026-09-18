@@ -22,10 +22,17 @@ export type CheckoutStatus =
 
 export type OperationalStatus = "NO_CHECK_IN" | "VALID" | "PENDING_REVIEW" | "REJECTED";
 
+export type AttendanceRegistrationSource = "WHATSAPP" | "MANUAL" | "IMPORT" | "SYSTEM";
+
+export type ManualAttendanceKind = "CHECK_IN" | "CHECK_OUT";
+
+export type ManualAttendanceUiStatus = "ON_TIME" | "LATE" | "ON_SCHEDULE" | "EARLY_LEAVE";
+
 export interface AttendanceRecord {
   id: string;
   operationId: string;
   employeeId: string;
+  employeeWorkdayId?: string | null;
   receivedLatitude: number | null;
   receivedLongitude: number | null;
   distanceMeters: number | null;
@@ -48,8 +55,64 @@ export interface AttendanceRecord {
   earlyDepartureMinutes: number | null;
   extraWorkedMinutes: number | null;
   checkoutMessageSid: string | null;
+  arrivalSource: AttendanceRegistrationSource | null;
+  checkoutSource: AttendanceRegistrationSource | null;
+  arrivalRegisteredBy: string | null;
+  arrivalRegisteredAt: string | null;
+  checkoutRegisteredBy: string | null;
+  checkoutRegisteredAt: string | null;
   isSimulation: boolean;
   simulationSessionId: string | null;
+  createdAt: string;
+}
+
+export interface ManualAttendancePreview {
+  kind: ManualAttendanceKind;
+  occurredAt: string;
+  uiStatus: ManualAttendanceUiStatus;
+  uiStatusLabel: string;
+  punctualityStatus?: PunctualityStatus;
+  validationStatus?: ValidationStatus;
+  checkoutStatus?: CheckoutStatus;
+}
+
+export interface ManualAttendanceCreateInput {
+  kind: ManualAttendanceKind;
+  operationId: string;
+  employeeId: string;
+  employeeWorkdayId: string;
+  occurredAt: string;
+  reason: string;
+  comment?: string | null;
+}
+
+export interface ManualAttendanceEditInput {
+  kind: ManualAttendanceKind;
+  occurredAt: string;
+  expectedOccurredAt: string;
+  reason: string;
+  comment?: string | null;
+}
+
+export interface ManualAttendancePreviewInput {
+  kind: ManualAttendanceKind;
+  operationId: string;
+  employeeId?: string;
+  employeeWorkdayId?: string;
+  attendanceId?: string;
+  occurredAt: string;
+}
+
+export interface AttendanceAuditLog {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  previousData: Record<string, unknown> | null;
+  newData: Record<string, unknown> | null;
+  reason: string | null;
+  userId: string | null;
+  userName: string | null;
   createdAt: string;
 }
 
@@ -76,6 +139,8 @@ export interface AttendanceRecordWithRelations extends AttendanceRecord {
     active: boolean;
     allowedRadiusMeters?: number;
   };
+  arrivalRegisteredByUser?: { id: string; name: string } | null;
+  checkoutRegisteredByUser?: { id: string; name: string } | null;
 }
 
 export interface AttendanceReview {
@@ -114,10 +179,10 @@ export interface AttendanceTechnicalDetails {
     operationId: string | null;
   } | null;
   coordinates: {
-    latitude: number;
-    longitude: number;
+    latitude: number | null;
+    longitude: number | null;
   };
-  distanceMeters: number;
+  distanceMeters: number | null;
   validationReason: string | null;
 }
 

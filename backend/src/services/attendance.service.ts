@@ -154,6 +154,26 @@ export const attendanceService = {
     };
   },
 
+  async listAuditLogs(companyId: string, attendanceId: string, page: number, limit: number) {
+    const record = await attendanceRepository.findById(companyId, attendanceId);
+    if (!record) {
+      throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Registro de asistencia no encontrado");
+    }
+
+    const result = await auditService.listByEntity(
+      companyId,
+      "attendance",
+      attendanceId,
+      page,
+      limit,
+    );
+
+    return {
+      data: result.items,
+      meta: buildPaginationMeta(page, limit, result.total),
+    };
+  },
+
   async getTechnicalDetails(
     companyId: string,
     record: {

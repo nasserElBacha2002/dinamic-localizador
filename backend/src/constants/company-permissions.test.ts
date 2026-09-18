@@ -71,4 +71,15 @@ describe("company permissions", () => {
       assert.ok(!roleHasPermission("OPERATOR", permission));
     }
   });
+
+  it("grants manual attendance create/edit to OWNER/ADMIN/SUPERVISOR only", () => {
+    for (const permission of ["attendance:manual_create", "attendance:manual_edit"] as const) {
+      assert.ok(roleHasPermission("OWNER", permission));
+      assert.ok(roleHasPermission("ADMIN", permission));
+      assert.ok(roleHasPermission("SUPERVISOR", permission));
+      assert.ok(!roleHasPermission("OPERATOR", permission));
+      assert.ok(!roleHasPermission("READ_ONLY", permission));
+      assert.ok(!roleHasPermission("HR", permission));
+    }
+  });
 });

@@ -1,11 +1,16 @@
 import type { PaginatedResponse, SingleResponse } from "../types/api";
 import type {
+  AttendanceAuditLog,
   AttendanceDetail,
   AttendanceFilters,
   AttendanceRecord,
   AttendanceRecordWithRelations,
   AttendanceReview,
   CreateAttendanceInput,
+  ManualAttendanceCreateInput,
+  ManualAttendanceEditInput,
+  ManualAttendancePreview,
+  ManualAttendancePreviewInput,
   ReviewAttendanceInput,
 } from "../types/attendance";
 import { buildParams } from "./client";
@@ -73,4 +78,55 @@ export async function exportAttendanceCsv(filters: AttendanceFilters = {}): Prom
     responseType: "blob",
   });
   return response.data;
+}
+
+export async function previewManualAttendance(
+  input: ManualAttendancePreviewInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<ManualAttendancePreview> {
+  const { data } = await scopedApiClient.post<SingleResponse<ManualAttendancePreview>>(
+    "attendance/manual/preview",
+    input,
+    options,
+  );
+  return data.data;
+}
+
+export async function createManualAttendance(
+  input: ManualAttendanceCreateInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<AttendanceRecordWithRelations> {
+  const { data } = await scopedApiClient.post<SingleResponse<AttendanceRecordWithRelations>>(
+    "attendance/manual",
+    input,
+    options,
+  );
+  return data.data;
+}
+
+export async function editManualAttendance(
+  attendanceId: string,
+  input: ManualAttendanceEditInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<AttendanceRecordWithRelations> {
+  const { data } = await scopedApiClient.patch<SingleResponse<AttendanceRecordWithRelations>>(
+    `attendance/${attendanceId}/manual`,
+    input,
+    options,
+  );
+  return data.data;
+}
+
+export async function getAttendanceAuditLogs(
+  id: string,
+  page = 1,
+  limit = 10,
+): Promise<PaginatedResponse<AttendanceAuditLog>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceAuditLog>>(
+    `attendance/${id}/audit-logs`,
+    {
+      params: { page, limit },
+    },
+  );
+  return data;
 }

@@ -4,6 +4,10 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { EntityLink } from "../../components/entity-link";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
+import {
+  ManualAttendanceDialog,
+  type ManualAttendanceDialogTarget,
+} from "../../components/attendance/ManualAttendanceDialog";
 import { ReviewAttendanceDialog } from "../../components/attendance/ReviewAttendanceDialog";
 import {
   ActionMenu,
@@ -23,10 +27,13 @@ import {
 import {
   useAttendanceRecord,
   useAttendanceReviews,
+  useCreateManualAttendance,
+  useEditManualAttendance,
   useReviewAttendanceRecord,
 } from "../../hooks/useAttendance";
+import { useCompanySettings } from "../../hooks/useCompanySettings";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
-// Reviews sub-table on detail page: local pagination only; parent list state lives in /attendance URL.
 import type { AttendanceReview } from "../../types/attendance";
 import { formatDateTime } from "../../utils/dates";
 import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
@@ -38,6 +45,12 @@ import {
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
+import {
+  manualArrivalStatusLabel,
+  manualCheckoutStatusLabel,
+  registrationSourceLabel,
+  resolveManualAttendanceActions,
+} from "../../utils/manual-attendance-actions";
 
 export function AttendanceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,9 +59,14 @@ export function AttendanceDetailPage() {
   const attendanceQuery = useAttendanceRecord(id);
   const reviewsQuery = useAttendanceReviews(id, pagination.page, pagination.pageSize);
   const reviewMutation = useReviewAttendanceRecord(id ?? "");
+  const createManualMutation = useCreateManualAttendance();
+  const editManualMutation = useEditManualAttendance();
+  const permissionsQuery = useCompanyPermissions();
+  const companySettingsQuery = useCompanySettings(true);
 
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewDecision, setReviewDecision] = useState<"APPROVE" | "REJECT">("APPROVE");
+  const [manualTarget, setManualTarget] = useState<ManualAttendanceDialogTarget | null>(null);
 
   const reviewColumns = useMemo<DataTableColumn<AttendanceReview>[]>(
     () => [
@@ -114,23 +132,63 @@ export function AttendanceDetailPage() {
     !record.reviewedAt &&
     (record.validationStatus === "PENDING_REVIEW" || record.validationStatus === "REJECTED");
 
+  const manualActions = resolveManualAttendanceActions(record, {
+    permissions: permissionsQuery.data?.permissions,
+    allowManualAttendanceCorrections:
+      companySettingsQuery.data?.allowManualAttendanceCorrections ?? false,
+  });
+
   const reviews = reviewsQuery.data?.data ?? [];
   const reviewsMeta = reviewsQuery.data?.meta;
 
-  const reviewMenuItems: ActionMenuItem[] = canReview
-    ? [
-        {
-          key: "reject",
-          label: "Rechazar asistencia",
-          destructive: true,
-          onClick: () => {
-            setReviewDecision("REJECT");
-            setReviewDialogOpen(true);
-          },
-        },
-        { key: "back", label: "Volver", onClick: goBackToList },
-      ]
-    : [];
+  const reviewMenuItems: ActionMenuItem[] = [
+    ...manualActions.map((action) => ({
+      key: action.key,
+      label: action.label,
+      onClick: () =>
+        setManualTarget({
+          kind: action.kind,
+          mode: action.mode,
+          operationId: record.operationId,
+          employeeId: record.employeeId,
+          attendanceId: record.id,
+          employeeName: record.employee.name,
+          initialOccurredAt:
+            action.kind === "CHECK_IN" ? record.receivedAt : record.checkoutAt,
+        }),
+    })),
+    ...(canReview
+      ? [
+          {
+            key: "reject",
+            label: "Rechazar asistencia",
+            destructive: true,
+            onClick: () => {
+              setReviewDecision("REJECT");
+              setReviewDialogOpen(true);
+            },
+          } satisfies ActionMenuItem,
+        ]
+      : []),
+    { key: "back", label: "Volver", onClick: goBackToList },
+  ];
+
+  const formatCoordPair = (
+    latitude: number | null | undefined,
+    longitude: number | null | undefined,
+  ) => {
+    if (latitude == null || longitude == null) {
+      return "—";
+    }
+    return `${latitude}, ${longitude}`;
+  };
+
+  const formatMeters = (value: number | null | undefined) => {
+    if (value == null) {
+      return "—";
+    }
+    return `${value.toFixed(1)} m`;
+  };
 
   return (
     <Stack gap="md">
@@ -149,13 +207,39 @@ export function AttendanceDetailPage() {
                 >
                   Aprobar asistencia
                 </Button>
+              ) : manualActions[0] ? (
+                <Button
+                  onClick={() => {
+                    const action = manualActions[0]!;
+                    setManualTarget({
+                      kind: action.kind,
+                      mode: action.mode,
+                      operationId: record.operationId,
+                      employeeId: record.employeeId,
+                      attendanceId: record.id,
+                      employeeName: record.employee.name,
+                      initialOccurredAt:
+                        action.kind === "CHECK_IN" ? record.receivedAt : record.checkoutAt,
+                    });
+                  }}
+                >
+                  {manualActions[0]!.label}
+                </Button>
               ) : (
                 <Button variant="default" onClick={goBackToList}>
                   Volver
                 </Button>
               )
             }
-            items={reviewMenuItems}
+            items={reviewMenuItems.filter((item) => {
+              if (item.key === "back" && !canReview && manualActions.length === 0) {
+                return false;
+              }
+              if (manualActions[0] && item.key === manualActions[0].key && !canReview) {
+                return false;
+              }
+              return true;
+            })}
             menuLabel="Más acciones de la asistencia"
           />
         }
@@ -194,26 +278,84 @@ export function AttendanceDetailPage() {
                 />
               ),
             },
-            { label: "Llegada", value: formatAttendanceArrivalLabel(record.receivedAt, formatDateTime) },
-            { label: "Salida", value: formatDateTime(record.checkoutAt) },
+            {
+              label: "Llegada",
+              value: formatAttendanceArrivalLabel(record.receivedAt, formatDateTime),
+            },
+            {
+              label: "Estado llegada",
+              value: record.receivedAt ? (
+                <Group gap="xs" wrap="wrap">
+                  <StatusBadge
+                    label={manualArrivalStatusLabel(record.punctualityStatus)}
+                    tone="neutral"
+                  />
+                  {record.arrivalSource === "MANUAL" ? (
+                    <StatusBadge label="Manual" tone="info" />
+                  ) : null}
+                </Group>
+              ) : (
+                "—"
+              ),
+            },
+            {
+              label: "Origen llegada",
+              value: registrationSourceLabel(record.arrivalSource),
+            },
+            {
+              label: "Registrado por (llegada)",
+              value: record.arrivalRegisteredByUser?.name
+                ?? (record.arrivalRegisteredBy ? record.arrivalRegisteredBy : "—"),
+            },
+            {
+              label: "Registrado el (llegada)",
+              value: formatDateTime(record.arrivalRegisteredAt),
+            },
+            {
+              label: "Salida",
+              value: formatDateTime(record.checkoutAt),
+            },
+            {
+              label: "Estado salida",
+              value: record.checkoutStatus ? (
+                <Group gap="xs" wrap="wrap">
+                  <StatusBadge
+                    label={manualCheckoutStatusLabel(record.checkoutStatus)}
+                    tone="neutral"
+                  />
+                  {record.checkoutSource === "MANUAL" ? (
+                    <StatusBadge label="Manual" tone="info" />
+                  ) : null}
+                </Group>
+              ) : (
+                "—"
+              ),
+            },
+            {
+              label: "Origen salida",
+              value: registrationSourceLabel(record.checkoutSource),
+            },
+            {
+              label: "Registrado por (salida)",
+              value: record.checkoutRegisteredByUser?.name
+                ?? (record.checkoutRegisteredBy ? record.checkoutRegisteredBy : "—"),
+            },
+            {
+              label: "Registrado el (salida)",
+              value: formatDateTime(record.checkoutRegisteredAt),
+            },
             {
               label: "Coordenadas llegada",
-              value: `${record.receivedLatitude}, ${record.receivedLongitude}`,
+              value: formatCoordPair(record.receivedLatitude, record.receivedLongitude),
             },
-            { label: "Distancia llegada", value: `${record.distanceMeters.toFixed(1)} m` },
+            { label: "Distancia llegada", value: formatMeters(record.distanceMeters) },
             {
               label: "Coordenadas salida",
-              value:
-                record.checkoutLatitude != null && record.checkoutLongitude != null
-                  ? `${record.checkoutLatitude}, ${record.checkoutLongitude}`
-                  : "—",
+              value: formatCoordPair(record.checkoutLatitude, record.checkoutLongitude),
             },
             {
               label: "Distancia salida",
-              value:
-                record.checkoutDistanceMeters != null
-                  ? `${record.checkoutDistanceMeters.toFixed(1)} m`
-                  : "—",
+              value: formatMeters(record.checkoutDistanceMeters),
             },
             {
               label: "Radio permitido",
@@ -223,7 +365,7 @@ export function AttendanceDetailPage() {
                   : "—",
             },
             {
-              label: "Estado llegada",
+              label: "Validación detallada",
               value: (
                 <Group gap="xs" wrap="wrap">
                   <StatusBadge label={validationStatusLabels[record.validationStatus]} tone="neutral" />
@@ -232,16 +374,14 @@ export function AttendanceDetailPage() {
                     label={punctualityStatusLabels[record.punctualityStatus]}
                     tone="neutral"
                   />
+                  {record.checkoutStatus ? (
+                    <StatusBadge
+                      label={checkoutStatusLabels[record.checkoutStatus]}
+                      tone="neutral"
+                    />
+                  ) : null}
                   {record.isSimulation ? <StatusBadge label="Simulación" tone="info" /> : null}
                 </Group>
-              ),
-            },
-            {
-              label: "Estado salida",
-              value: record.checkoutStatus ? (
-                <StatusBadge label={checkoutStatusLabels[record.checkoutStatus]} tone="neutral" />
-              ) : (
-                "—"
               ),
             },
             { label: "Motivo original", value: record.validationReason ?? "—" },
@@ -315,11 +455,14 @@ export function AttendanceDetailPage() {
                   : "—"}
               </Text>
               <Text size="sm">
-                Coordenadas: {record.technical.coordinates.latitude},{" "}
-                {record.technical.coordinates.longitude}
+                Coordenadas:{" "}
+                {formatCoordPair(
+                  record.technical.coordinates.latitude,
+                  record.technical.coordinates.longitude,
+                )}
               </Text>
               <Text size="sm">
-                Distancia calculada: {record.technical.distanceMeters.toFixed(1)} m
+                Distancia calculada: {formatMeters(record.technical.distanceMeters)}
               </Text>
               <Text size="sm">Razón de validación: {record.technical.validationReason ?? "—"}</Text>
             </Stack>
@@ -345,6 +488,48 @@ export function AttendanceDetailPage() {
               color: "red",
               message: getApiErrorMessage(error),
             });
+          }
+        }}
+      />
+
+      <ManualAttendanceDialog
+        open={Boolean(manualTarget)}
+        target={manualTarget}
+        loading={createManualMutation.isPending || editManualMutation.isPending}
+        onClose={() => setManualTarget(null)}
+        onConfirm={async (input) => {
+          try {
+            if (input.mode === "edit") {
+              await editManualMutation.mutateAsync({
+                attendanceId: input.attendanceId ?? record.id,
+                input: {
+                  kind: input.kind,
+                  occurredAt: input.occurredAt,
+                  reason: input.reason,
+                  comment: input.comment,
+                },
+              });
+            } else {
+              await createManualMutation.mutateAsync({
+                kind: input.kind,
+                operationId: input.operationId,
+                employeeId: input.employeeId,
+                occurredAt: input.occurredAt,
+                reason: input.reason,
+                comment: input.comment,
+              });
+            }
+            setManualTarget(null);
+            notifications.show({
+              color: "green",
+              message: "Asistencia manual guardada correctamente.",
+            });
+          } catch (error) {
+            notifications.show({
+              color: "red",
+              message: getApiErrorMessage(error),
+            });
+            throw error;
           }
         }}
       />

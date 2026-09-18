@@ -2,8 +2,18 @@ import { Button, Collapse, Select, SimpleGrid, Stack, Text, TextInput } from "@m
 import { useDebouncedValue } from "@mantine/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
+import {
+  ManualAttendanceDialog,
+  type ManualAttendanceDialogTarget,
+} from "../attendance/ManualAttendanceDialog";
 import { ResponsiveModal, SectionCard } from "../../design-system";
-import { useReviewAttendance } from "../../hooks/useAttendance";
+import {
+  useCreateManualAttendance,
+  useEditManualAttendance,
+  useReviewAttendance,
+} from "../../hooks/useAttendance";
+import { useCompanySettings } from "../../hooks/useCompanySettings";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import {
   useAssignOperationEmployee,
   useAssignOperationEmployeesBatch,
@@ -46,6 +56,9 @@ import {
   resolveAssignmentBatchStatus,
 } from "./operation-assignment-display";
 import { canReviewOperationalAttendance } from "./operation-workforce-attendance";
+import type { ManualAttendanceAction } from "../../utils/manual-attendance-actions";
+import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
+import { notifications } from "@mantine/notifications";
 
 interface OperationTeamSectionProps {
   operationId: string;
@@ -103,11 +116,16 @@ export function OperationTeamSection({
   const cancelMutation = useCancelOperationAssignment(operationId);
   const endMutation = useEndOperationAssignment(operationId);
   const reviewMutation = useReviewAttendance();
+  const createManualMutation = useCreateManualAttendance();
+  const editManualMutation = useEditManualAttendance();
+  const permissionsQuery = useCompanyPermissions();
+  const companySettingsQuery = useCompanySettings(true);
 
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [coverageTarget, setCoverageTarget] = useState<CoverageAssignmentTarget | null>(null);
   const [endTarget, setEndTarget] = useState<OperationEmployeeAssignment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [manualTarget, setManualTarget] = useState<ManualAttendanceDialogTarget | null>(null);
 
   const { onPageChange } = pagination;
   useEffect(() => {
@@ -390,6 +408,69 @@ export function OperationTeamSection({
     }
   };
 
+  const openManualAction = (
+    row: OperationAttendanceSummaryEmployee,
+    action: ManualAttendanceAction,
+  ) => {
+    setManualTarget({
+      kind: action.kind,
+      mode: action.mode,
+      operationId,
+      employeeId: row.employee.id,
+      attendanceId: row.attendance?.id ?? null,
+      employeeName: getRelatedName(row.employee),
+      initialOccurredAt:
+        action.kind === "CHECK_IN"
+          ? (row.attendance?.receivedAt ?? null)
+          : (row.attendance?.checkoutAt ?? null),
+    });
+  };
+
+  const handleManualConfirm = async (input: {
+    kind: ManualAttendanceAction["kind"];
+    mode: "create" | "edit";
+    operationId: string;
+    employeeId: string;
+    attendanceId?: string;
+    occurredAt: string;
+    reason: string;
+    comment: string | null;
+  }) => {
+    try {
+      if (input.mode === "edit") {
+        if (!input.attendanceId) {
+          throw new Error("Falta el identificador de asistencia.");
+        }
+        await editManualMutation.mutateAsync({
+          attendanceId: input.attendanceId,
+          input: {
+            kind: input.kind,
+            occurredAt: input.occurredAt,
+            reason: input.reason,
+            comment: input.comment,
+          },
+        });
+      } else {
+        await createManualMutation.mutateAsync({
+          kind: input.kind,
+          operationId: input.operationId,
+          employeeId: input.employeeId,
+          occurredAt: input.occurredAt,
+          reason: input.reason,
+          comment: input.comment,
+        });
+      }
+      setManualTarget(null);
+      onFeedback("Asistencia manual guardada correctamente.", "success");
+    } catch (error) {
+      notifications.show({
+        color: "red",
+        message: getApiErrorMessage(error),
+      });
+      throw error;
+    }
+  };
+
   return (
     <SectionCard
       title="Equipo y asistencia"
@@ -498,6 +579,12 @@ export function OperationTeamSection({
         }
         canAssign={canAssign}
         canReviewAttendance={canReviewOperationalAttendance}
+        manualAttendance={{
+          permissions: permissionsQuery.data?.permissions,
+          allowManualAttendanceCorrections:
+            companySettingsQuery.data?.allowManualAttendanceCorrections ?? false,
+          onAction: openManualAction,
+        }}
         assignmentById={assignmentById}
         operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
         onReviewApprove={(attendanceId) =>
@@ -623,6 +710,14 @@ export function OperationTeamSection({
         loading={reviewMutation.isPending}
         onClose={() => setReviewTarget(null)}
         onConfirm={handleReview}
+      />
+
+      <ManualAttendanceDialog
+        open={Boolean(manualTarget)}
+        target={manualTarget}
+        loading={createManualMutation.isPending || editManualMutation.isPending}
+        onClose={() => setManualTarget(null)}
+        onConfirm={handleManualConfirm}
       />
     </SectionCard>
   );

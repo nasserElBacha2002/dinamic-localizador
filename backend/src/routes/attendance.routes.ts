@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { attendanceController } from "../controllers/attendance.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireAnyPermission, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import { reviewAttendanceSchema, attendanceReviewsQuerySchema } from "../schemas/attendance-review.schema";
 import {
@@ -9,6 +9,10 @@ import {
   createAttendanceSchema,
   listAttendanceQuerySchema,
 } from "../schemas/attendance.schema";
+import {
+  manualAttendanceMutationSchema,
+  manualAttendancePreviewSchema,
+} from "../schemas/manual-attendance.schema";
 
 export const attendanceRouter = Router();
 
@@ -17,6 +21,25 @@ attendanceRouter.post(
   requirePermission("attendance:review"),
   validate(createAttendanceSchema),
   asyncHandler(attendanceController.create),
+);
+attendanceRouter.post(
+  "/manual/preview",
+  requireAnyPermission("attendance:manual_create", "attendance:manual_edit"),
+  validate(manualAttendancePreviewSchema),
+  asyncHandler(attendanceController.previewManual),
+);
+attendanceRouter.post(
+  "/manual",
+  requirePermission("attendance:manual_create"),
+  validate(manualAttendanceMutationSchema),
+  asyncHandler(attendanceController.createManual),
+);
+attendanceRouter.patch(
+  "/:id/manual",
+  requirePermission("attendance:manual_edit"),
+  validate(attendanceIdParamSchema, "params"),
+  validate(manualAttendanceMutationSchema),
+  asyncHandler(attendanceController.editManual),
 );
 attendanceRouter.get(
   "/",

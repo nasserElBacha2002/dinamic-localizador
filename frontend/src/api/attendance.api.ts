@@ -6,6 +6,9 @@ import type {
   AttendanceRecordWithRelations,
   AttendanceReview,
   CreateAttendanceInput,
+  ManualAttendanceMutationInput,
+  ManualAttendancePreview,
+  ManualAttendancePreviewInput,
   ReviewAttendanceInput,
 } from "../types/attendance";
 import { buildParams } from "./client";
@@ -73,4 +76,41 @@ export async function exportAttendanceCsv(filters: AttendanceFilters = {}): Prom
     responseType: "blob",
   });
   return response.data;
+}
+
+export async function previewManualAttendance(
+  input: ManualAttendancePreviewInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<ManualAttendancePreview> {
+  const { data } = await scopedApiClient.post<SingleResponse<ManualAttendancePreview>>(
+    "attendance/manual/preview",
+    input,
+    options,
+  );
+  return data.data;
+}
+
+export async function createManualAttendance(
+  input: ManualAttendanceMutationInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<AttendanceRecordWithRelations> {
+  const { data } = await scopedApiClient.post<SingleResponse<AttendanceRecordWithRelations>>(
+    "attendance/manual",
+    input,
+    options,
+  );
+  return data.data;
+}
+
+export async function editManualAttendance(
+  attendanceId: string,
+  input: ManualAttendanceMutationInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<AttendanceRecordWithRelations> {
+  const { data } = await scopedApiClient.patch<SingleResponse<AttendanceRecordWithRelations>>(
+    `attendance/${attendanceId}/manual`,
+    input,
+    options,
+  );
+  return data.data;
 }

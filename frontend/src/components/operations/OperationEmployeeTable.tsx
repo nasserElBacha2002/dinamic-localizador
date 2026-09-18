@@ -30,6 +30,10 @@ import {
 } from "../../utils/operation-workforce-display";
 import { navigateWithListContext } from "../../utils/list-navigation";
 import {
+  resolveManualAttendanceActions,
+  type ManualAttendanceAction,
+} from "../../utils/manual-attendance-actions";
+import {
   assignmentActionLabel,
   resolveAssignmentAction,
 } from "./operation-assignment-display";
@@ -60,6 +64,12 @@ export interface OperationEmployeeTableProps {
   error?: string;
   canAssign: boolean;
   canReviewAttendance: (row: OperationAttendanceSummaryEmployee) => boolean;
+  /** When set, enables manual register/edit actions based on permissions + company flag. */
+  manualAttendance?: {
+    permissions: readonly string[] | undefined;
+    allowManualAttendanceCorrections: boolean;
+    onAction: (row: OperationAttendanceSummaryEmployee, action: ManualAttendanceAction) => void;
+  };
   assignmentById?: Map<string, OperationEmployeeAssignment>;
   operationWorkDate?: string;
   onReviewApprove: (attendanceId: string) => void;
@@ -87,6 +97,7 @@ export function OperationEmployeeTable({
   error,
   canAssign,
   canReviewAttendance,
+  manualAttendance,
   assignmentById,
   operationWorkDate = "",
   onReviewApprove,
@@ -299,10 +310,13 @@ export function OperationEmployeeTable({
             ? null
             : resolvedAction;
         const canReview = canReviewAttendance(row);
-
-        if (!canReview && !assignmentAction && !hasAttendanceDetail && !(row.absenceBadges?.length)) {
-          // Still allow opening collaborator / absence deep-links when badges exist.
-        }
+        const manualActions = manualAttendance
+          ? resolveManualAttendanceActions(row.attendance, {
+              permissions: manualAttendance.permissions,
+              allowManualAttendanceCorrections:
+                manualAttendance.allowManualAttendanceCorrections,
+            })
+          : [];
 
         const items = [];
         if (hasAttendanceDetail) {
@@ -358,6 +372,13 @@ export function OperationEmployeeTable({
               location,
             ),
         });
+        for (const action of manualActions) {
+          items.push({
+            key: action.key,
+            label: action.label,
+            onClick: () => manualAttendance?.onAction(row, action),
+          });
+        }
         if (canReview) {
           items.push(
             {

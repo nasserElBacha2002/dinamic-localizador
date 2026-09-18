@@ -1,4 +1,5 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
+import type { AttendanceRegistrationSource } from "../constants/attendance-registration-source";
 import type { EmployeeType } from "../constants/employee-types";
 import type { AssignmentOrigin } from "../constants/work-team-assignment";
 import type { OperationKind } from "../constants/operation-kind";
@@ -156,6 +157,14 @@ export interface AttendanceRecord {
   earlyDepartureMinutes: number | null;
   extraWorkedMinutes: number | null;
   checkoutMessageSid: string | null;
+  /** Origin of arrival registration; null when arrival was never recorded. */
+  arrivalSource: AttendanceRegistrationSource | null;
+  /** Origin of checkout registration; null when checkout was never recorded. */
+  checkoutSource: AttendanceRegistrationSource | null;
+  arrivalRegisteredBy: string | null;
+  arrivalRegisteredAt: string | null;
+  checkoutRegisteredBy: string | null;
+  checkoutRegisteredAt: string | null;
   isSimulation: boolean;
   simulationSessionId: string | null;
   createdAt: string;
@@ -165,4 +174,6 @@ export interface AttendanceRecordWithRelations extends AttendanceRecord {
   employee: Pick<Employee, "id" | "name" | "phoneNumber">;
   operation: Pick<Operation, "id" | "status" | "scheduledStart" | "scheduledEnd">;
   service: Pick<Service, "id" | "name" | "address"> & { allowedRadiusMeters?: number };
+  arrivalRegisteredByUser?: { id: string; name: string } | null;
+  checkoutRegisteredByUser?: { id: string; name: string } | null;
 }

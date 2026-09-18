@@ -28,7 +28,7 @@ import type { OperationEmployeeAssignment, OperationKind } from "../../types/ope
 import type { ScheduleMode } from "../../types/operation-shift";
 import type { OperationWorkdaySummary } from "../../types/operation-workday";
 import { terminology } from "../../domain/terminology";
-import { getApiErrorMessage, parseApiError } from "../../utils/errors";
+import { getApiErrorCode, getApiErrorMessage, parseApiError } from "../../utils/errors";
 import { getRelatedName } from "../../utils/display-safe";
 import {
   buildAssignEmployeePayload,
@@ -412,17 +412,20 @@ export function OperationTeamSection({
     row: OperationAttendanceSummaryEmployee,
     action: ManualAttendanceAction,
   ) => {
+    const initialOccurredAt =
+      action.kind === "CHECK_IN"
+        ? (row.attendance?.receivedAt ?? null)
+        : (row.attendance?.checkoutAt ?? null);
     setManualTarget({
       kind: action.kind,
       mode: action.mode,
       operationId,
       employeeId: row.employee.id,
+      employeeWorkdayId: row.employeeWorkdayId ?? row.attendance?.employeeWorkdayId ?? null,
       attendanceId: row.attendance?.id ?? null,
       employeeName: getRelatedName(row.employee),
-      initialOccurredAt:
-        action.kind === "CHECK_IN"
-          ? (row.attendance?.receivedAt ?? null)
-          : (row.attendance?.checkoutAt ?? null),
+      initialOccurredAt,
+      expectedOccurredAt: action.mode === "edit" ? initialOccurredAt : null,
     });
   };
 
@@ -431,30 +434,37 @@ export function OperationTeamSection({
     mode: "create" | "edit";
     operationId: string;
     employeeId: string;
+    employeeWorkdayId?: string;
     attendanceId?: string;
     occurredAt: string;
+    expectedOccurredAt?: string;
     reason: string;
     comment: string | null;
   }) => {
     try {
       if (input.mode === "edit") {
-        if (!input.attendanceId) {
-          throw new Error("Falta el identificador de asistencia.");
+        if (!input.attendanceId || !input.expectedOccurredAt) {
+          throw new Error("Faltan datos de concurrencia para editar la asistencia.");
         }
         await editManualMutation.mutateAsync({
           attendanceId: input.attendanceId,
           input: {
             kind: input.kind,
             occurredAt: input.occurredAt,
+            expectedOccurredAt: input.expectedOccurredAt,
             reason: input.reason,
             comment: input.comment,
           },
         });
       } else {
+        if (!input.employeeWorkdayId) {
+          throw new Error("Falta la jornada del colaborador para registrar la asistencia.");
+        }
         await createManualMutation.mutateAsync({
           kind: input.kind,
           operationId: input.operationId,
           employeeId: input.employeeId,
+          employeeWorkdayId: input.employeeWorkdayId,
           occurredAt: input.occurredAt,
           reason: input.reason,
           comment: input.comment,
@@ -463,6 +473,15 @@ export function OperationTeamSection({
       setManualTarget(null);
       onFeedback("Asistencia manual guardada correctamente.", "success");
     } catch (error) {
+      const code = getApiErrorCode(parseApiError(error));
+      if (
+        code === "ATTENDANCE_CONCURRENT_MODIFICATION" ||
+        code === "ARRIVAL_ALREADY_EXISTS" ||
+        code === "CHECKOUT_ALREADY_EXISTS"
+      ) {
+        setManualTarget(null);
+        void summaryQuery.refetch();
+      }
       notifications.show({
         color: "red",
         message: getApiErrorMessage(error),

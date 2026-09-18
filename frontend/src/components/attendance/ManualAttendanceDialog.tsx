@@ -18,9 +18,12 @@ export interface ManualAttendanceDialogTarget {
   mode: "create" | "edit";
   operationId: string;
   employeeId: string;
+  employeeWorkdayId?: string | null;
   attendanceId?: string | null;
   employeeName?: string;
   initialOccurredAt?: string | null;
+  /** Required for edit optimistic concurrency. */
+  expectedOccurredAt?: string | null;
 }
 
 interface ManualAttendanceDialogProps {
@@ -33,8 +36,10 @@ interface ManualAttendanceDialogProps {
     mode: "create" | "edit";
     operationId: string;
     employeeId: string;
+    employeeWorkdayId?: string;
     attendanceId?: string;
     occurredAt: string;
+    expectedOccurredAt?: string;
     reason: string;
     comment: string | null;
   }) => Promise<void>;
@@ -102,6 +107,7 @@ function ManualAttendanceDialogBody({
           kind: target.kind,
           operationId: target.operationId,
           employeeId: target.employeeId,
+          employeeWorkdayId: target.employeeWorkdayId ?? undefined,
           attendanceId: target.attendanceId ?? undefined,
           occurredAt,
         });
@@ -158,8 +164,10 @@ function ManualAttendanceDialogBody({
       mode: target.mode,
       operationId: target.operationId,
       employeeId: target.employeeId,
+      employeeWorkdayId: target.employeeWorkdayId ?? undefined,
       attendanceId: target.attendanceId ?? undefined,
       occurredAt,
+      expectedOccurredAt: target.expectedOccurredAt ?? undefined,
       reason: reason.trim(),
       comment: comment.trim() ? comment.trim() : null,
     });

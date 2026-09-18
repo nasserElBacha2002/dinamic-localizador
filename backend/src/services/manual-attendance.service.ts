@@ -6,24 +6,24 @@ import { attendanceRepository } from "../repositories/attendance.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
-import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import { userRepository } from "../repositories/user.repository";
 import type {
-  ManualAttendanceMutationInput,
+  ManualAttendanceCreateInput,
+  ManualAttendanceEditInput,
   ManualAttendancePreviewInput,
 } from "../schemas/manual-attendance.schema";
 import type { AttendanceRecordWithRelations, PunctualityStatus } from "../types/domain";
-import type { OperationWorkday } from "../types/workday";
+import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
 import type { CheckoutStatus } from "../constants/checkout-status";
 import { evaluatePunctuality } from "../utils/attendance-validation";
 import { evaluateCheckoutTime } from "../utils/checkout-validation";
 import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
+import { assertOccurredAtCompatibleWithWorkday } from "../utils/manual-attendance-temporal";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import { auditService } from "./audit.service";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
-import { workdayMaterializationService } from "./workday-materialization.service";
 
 export type ManualAttendanceUiStatus =
   | "ON_TIME"
@@ -74,11 +74,21 @@ const assertManualCorrectionsEnabled = async (companyId: string): Promise<void> 
   }
 };
 
-const resolveEmployeeWorkdayContext = async (
+/**
+ * Resolve an explicit employee workday identity — never silently substitutes another
+ * workday for the same operationId.
+ */
+const resolveExplicitEmployeeWorkday = async (
   companyId: string,
   operationId: string,
   employeeId: string,
-) => {
+  employeeWorkdayId: string,
+): Promise<{
+  operation: NonNullable<Awaited<ReturnType<typeof operationRepository.findById>>>;
+  employee: NonNullable<Awaited<ReturnType<typeof employeeRepository.findById>>>;
+  employeeWorkday: EmployeeWorkday;
+  operationWorkday: OperationWorkday;
+}> => {
   const operation = await operationRepository.findById(companyId, operationId);
   if (!operation) {
     throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada.");
@@ -89,42 +99,18 @@ const resolveEmployeeWorkdayContext = async (
     throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Colaborador no encontrado.");
   }
 
-  const operationWorkday = await workdayMaterializationService.ensureOperationWorkday(
-    companyId,
-    operationId,
-  );
-
-  const isAssigned = await operationEmployeeRepository.exists(
-    companyId,
-    operationId,
-    employeeId,
-    operationWorkday.workDate,
-  );
-  if (!isAssigned) {
-    throw new AppError(
-      409,
-      "EMPLOYEE_NOT_ASSIGNED_TO_OPERATION",
-      "El colaborador no está asignado a la operación.",
-    );
-  }
-
-  const employeeWorkday = await workdayMaterializationService.ensureEmployeeWorkday(
-    companyId,
-    operationId,
-    employeeId,
-  );
-
-  return { operation, employee, operationWorkday, employeeWorkday };
-};
-
-const resolveScheduleForEmployeeWorkday = async (
-  companyId: string,
-  employeeWorkdayId: string,
-): Promise<OperationWorkday> => {
   const employeeWorkday = await employeeWorkdayRepository.findById(companyId, employeeWorkdayId);
   if (!employeeWorkday) {
     throw new AppError(404, "EMPLOYEE_WORKDAY_NOT_FOUND", "Jornada del colaborador no encontrada.");
   }
+  if (employeeWorkday.employeeId !== employeeId) {
+    throw new AppError(
+      409,
+      "EMPLOYEE_WORKDAY_MISMATCH",
+      "La jornada no pertenece al colaborador indicado.",
+    );
+  }
+
   const operationWorkday = await operationWorkdayRepository.findById(
     companyId,
     employeeWorkday.operationWorkdayId,
@@ -132,10 +118,19 @@ const resolveScheduleForEmployeeWorkday = async (
   if (!operationWorkday) {
     throw new AppError(404, "OPERATION_WORKDAY_NOT_FOUND", "Jornada de la operación no encontrada.");
   }
-  return operationWorkday;
+  if (operationWorkday.operationId !== operationId) {
+    throw new AppError(
+      409,
+      "WORKDAY_OPERATION_MISMATCH",
+      "La jornada no pertenece a la operación indicada.",
+    );
+  }
+
+  return { operation, employee, employeeWorkday, operationWorkday };
 };
 
-const computeCheckIn = async (companyId: string, schedule: OperationWorkday, occurredAt: Date) => {
+const computeCheckIn = (schedule: OperationWorkday, occurredAt: Date) => {
+  assertOccurredAtCompatibleWithWorkday(schedule, occurredAt);
   const evaluation = evaluatePunctuality(
     occurredAt,
     new Date(schedule.expectedStartAt),
@@ -158,7 +153,12 @@ const computeCheckIn = async (companyId: string, schedule: OperationWorkday, occ
   };
 };
 
-const computeCheckOut = async (companyId: string, schedule: OperationWorkday, occurredAt: Date) => {
+const computeCheckOut = async (
+  companyId: string,
+  schedule: OperationWorkday,
+  occurredAt: Date,
+) => {
+  assertOccurredAtCompatibleWithWorkday(schedule, occurredAt);
   const runtime = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
   const evaluation = evaluateCheckoutTime(
     occurredAt,
@@ -177,6 +177,13 @@ const computeCheckOut = async (companyId: string, schedule: OperationWorkday, oc
   };
 };
 
+const concurrentModificationError = () =>
+  new AppError(
+    409,
+    "ATTENDANCE_CONCURRENT_MODIFICATION",
+    "La asistencia fue modificada por otra solicitud. Actualizá los datos e intentá de nuevo.",
+  );
+
 export const manualAttendanceService = {
   uiStatusLabel,
 
@@ -184,30 +191,65 @@ export const manualAttendanceService = {
     await assertManualCorrectionsEnabled(companyId);
     const occurredAt = new Date(input.occurredAt);
 
+    if (input.attendanceId) {
+      const existing = await attendanceRepository.findById(companyId, input.attendanceId);
+      if (!existing) {
+        throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Asistencia no encontrada.");
+      }
+      if (!existing.employeeWorkdayId) {
+        throw new AppError(
+          409,
+          "ATTENDANCE_WORKDAY_MISSING",
+          "La asistencia no tiene jornada asociada.",
+        );
+      }
+      const schedule = (
+        await resolveExplicitEmployeeWorkday(
+          companyId,
+          existing.operationId,
+          existing.employeeId,
+          existing.employeeWorkdayId,
+        )
+      ).operationWorkday;
+
+      if (input.kind === "CHECK_IN") {
+        const computed = computeCheckIn(schedule, occurredAt);
+        return {
+          kind: input.kind,
+          occurredAt: occurredAt.toISOString(),
+          uiStatus: computed.uiStatus,
+          uiStatusLabel: uiStatusLabel(computed.uiStatus),
+          punctualityStatus: computed.punctualityStatus,
+          validationStatus: computed.validationStatus,
+        };
+      }
+      const computed = await computeCheckOut(companyId, schedule, occurredAt);
+      return {
+        kind: input.kind,
+        occurredAt: occurredAt.toISOString(),
+        uiStatus: computed.uiStatus,
+        uiStatusLabel: uiStatusLabel(computed.uiStatus),
+        checkoutStatus: computed.checkoutStatus,
+      };
+    }
+
+    if (!input.employeeId || !input.employeeWorkdayId) {
+      throw new AppError(
+        400,
+        "INVALID_INPUT",
+        "Para previsualizar un alta se requieren employeeId y employeeWorkdayId.",
+      );
+    }
+
+    const ctx = await resolveExplicitEmployeeWorkday(
+      companyId,
+      input.operationId,
+      input.employeeId,
+      input.employeeWorkdayId,
+    );
+
     if (input.kind === "CHECK_IN") {
-      if (!input.employeeId && !input.attendanceId) {
-        throw new AppError(400, "INVALID_INPUT", "Debe indicar employeeId o attendanceId.");
-      }
-      let employeeId = input.employeeId;
-      let operationId = input.operationId;
-      let employeeWorkdayId: string | undefined;
-
-      if (input.attendanceId) {
-        const existing = await attendanceRepository.findById(companyId, input.attendanceId);
-        if (!existing) {
-          throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Asistencia no encontrada.");
-        }
-        employeeId = existing.employeeId;
-        operationId = existing.operationId;
-        employeeWorkdayId = existing.employeeWorkdayId ?? undefined;
-      }
-
-      const ctx = await resolveEmployeeWorkdayContext(companyId, operationId, employeeId!);
-      const schedule =
-        employeeWorkdayId != null
-          ? await resolveScheduleForEmployeeWorkday(companyId, employeeWorkdayId)
-          : ctx.operationWorkday;
-      const computed = await computeCheckIn(companyId, schedule, occurredAt);
+      const computed = computeCheckIn(ctx.operationWorkday, occurredAt);
       return {
         kind: input.kind,
         occurredAt: occurredAt.toISOString(),
@@ -218,31 +260,7 @@ export const manualAttendanceService = {
       };
     }
 
-    const attendanceId = input.attendanceId;
-    let employeeId = input.employeeId;
-    let operationId = input.operationId;
-    let employeeWorkdayId: string | undefined;
-
-    if (attendanceId) {
-      const existing = await attendanceRepository.findById(companyId, attendanceId);
-      if (!existing) {
-        throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Asistencia no encontrada.");
-      }
-      employeeId = existing.employeeId;
-      operationId = existing.operationId;
-      employeeWorkdayId = existing.employeeWorkdayId ?? undefined;
-    }
-
-    if (!employeeId) {
-      throw new AppError(400, "INVALID_INPUT", "Debe indicar employeeId o attendanceId.");
-    }
-
-    const ctx = await resolveEmployeeWorkdayContext(companyId, operationId, employeeId);
-    const schedule =
-      employeeWorkdayId != null
-        ? await resolveScheduleForEmployeeWorkday(companyId, employeeWorkdayId)
-        : ctx.operationWorkday;
-    const computed = await computeCheckOut(companyId, schedule, occurredAt);
+    const computed = await computeCheckOut(companyId, ctx.operationWorkday, occurredAt);
     return {
       kind: input.kind,
       occurredAt: occurredAt.toISOString(),
@@ -255,26 +273,19 @@ export const manualAttendanceService = {
   async create(
     companyId: string,
     actorUserId: string,
-    input: ManualAttendanceMutationInput,
+    input: ManualAttendanceCreateInput,
   ): Promise<AttendanceRecordWithRelations> {
     await assertManualCorrectionsEnabled(companyId);
-    if (!input.operationId || !input.employeeId) {
-      throw new AppError(
-        400,
-        "INVALID_INPUT",
-        "Para registrar se requieren operationId y employeeId.",
-      );
-    }
-
     const actor = await userRepository.findById(actorUserId);
     if (!actor) {
       throw new AppError(403, "FORBIDDEN", "Usuario no autorizado.");
     }
 
-    const ctx = await resolveEmployeeWorkdayContext(
+    const ctx = await resolveExplicitEmployeeWorkday(
       companyId,
       input.operationId,
       input.employeeId,
+      input.employeeWorkdayId,
     );
     const occurredAt = new Date(input.occurredAt);
     const existing = await attendanceRepository.findActiveByEmployeeWorkday(
@@ -291,14 +302,14 @@ export const manualAttendanceService = {
         );
       }
 
-      const computed = await computeCheckIn(companyId, ctx.operationWorkday, occurredAt);
+      const computed = computeCheckIn(ctx.operationWorkday, occurredAt);
       const pool = getPool();
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
         let attendanceId: string;
         if (existing) {
-          const updated = await attendanceRepository.applyManualArrivalInTransaction(
+          const updated = await attendanceRepository.registerMissingManualArrivalInTransaction(
             companyId,
             transaction,
             {
@@ -308,11 +319,14 @@ export const manualAttendanceService = {
               validationStatus: computed.validationStatus,
               validationReason: computed.validationReason,
               actorUserId,
-              reason: input.reason,
             },
           );
           if (!updated) {
-            throw new AppError(409, "ATTENDANCE_CONFLICT", "No se pudo registrar la llegada.");
+            throw new AppError(
+              409,
+              "ARRIVAL_ALREADY_EXISTS",
+              "Ya existe una llegada. Usá la acción de editar llegada.",
+            );
           }
           attendanceId = updated.id;
         } else {
@@ -356,17 +370,22 @@ export const manualAttendanceService = {
               comment: input.comment ?? null,
               employeeId: input.employeeId,
               operationId: input.operationId,
+              employeeWorkdayId: ctx.employeeWorkday.id,
               registeredAt: new Date().toISOString(),
             },
           },
           transaction,
         );
 
-        await transaction.commit();
-        const row = await attendanceRepository.findById(companyId, attendanceId);
+        const row = await attendanceRepository.findByIdInTransaction(
+          companyId,
+          attendanceId,
+          transaction,
+        );
         if (!row) {
           throw new AppError(500, "ATTENDANCE_LOAD_FAILED", "No se pudo cargar la asistencia.");
         }
+        await transaction.commit();
         return row;
       } catch (error) {
         if (isActiveAttendanceDuplicateKeyError(error)) {
@@ -388,7 +407,6 @@ export const manualAttendanceService = {
       }
     }
 
-    // CHECK_OUT create
     if (existing?.checkoutAt) {
       throw new AppError(
         409,
@@ -465,17 +483,22 @@ export const manualAttendanceService = {
             comment: input.comment ?? null,
             employeeId: input.employeeId,
             operationId: input.operationId,
+            employeeWorkdayId: ctx.employeeWorkday.id,
             registeredAt: new Date().toISOString(),
           },
         },
         transaction,
       );
 
-      await transaction.commit();
-      const row = await attendanceRepository.findById(companyId, attendanceId);
+      const row = await attendanceRepository.findByIdInTransaction(
+        companyId,
+        attendanceId,
+        transaction,
+      );
       if (!row) {
         throw new AppError(500, "ATTENDANCE_LOAD_FAILED", "No se pudo cargar la asistencia.");
       }
+      await transaction.commit();
       return row;
     } catch (error) {
       if (isActiveAttendanceDuplicateKeyError(error)) {
@@ -501,7 +524,7 @@ export const manualAttendanceService = {
     companyId: string,
     actorUserId: string,
     attendanceId: string,
-    input: ManualAttendanceMutationInput,
+    input: ManualAttendanceEditInput,
   ): Promise<AttendanceRecordWithRelations> {
     await assertManualCorrectionsEnabled(companyId);
     const actor = await userRepository.findById(actorUserId);
@@ -521,11 +544,15 @@ export const manualAttendanceService = {
       );
     }
 
+    const schedule = (
+      await resolveExplicitEmployeeWorkday(
+        companyId,
+        existing.operationId,
+        existing.employeeId,
+        existing.employeeWorkdayId,
+      )
+    ).operationWorkday;
     const occurredAt = new Date(input.occurredAt);
-    const schedule = await resolveScheduleForEmployeeWorkday(
-      companyId,
-      existing.employeeWorkdayId,
-    );
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -539,22 +566,25 @@ export const manualAttendanceService = {
             "No hay llegada para editar. Usá registrar llegada.",
           );
         }
-        const computed = await computeCheckIn(companyId, schedule, occurredAt);
-        const updated = await attendanceRepository.applyManualArrivalInTransaction(
+        if (existing.receivedAt !== input.expectedOccurredAt) {
+          throw concurrentModificationError();
+        }
+        const computed = computeCheckIn(schedule, occurredAt);
+        const updated = await attendanceRepository.editManualArrivalInTransaction(
           companyId,
           transaction,
           {
             attendanceId,
             receivedAt: occurredAt.toISOString(),
+            expectedReceivedAt: input.expectedOccurredAt,
             punctualityStatus: computed.punctualityStatus,
             validationStatus: computed.validationStatus,
             validationReason: computed.validationReason,
             actorUserId,
-            reason: input.reason,
           },
         );
         if (!updated) {
-          throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Asistencia no encontrada.");
+          throw concurrentModificationError();
         }
 
         await auditService.log(
@@ -590,6 +620,9 @@ export const manualAttendanceService = {
             "No hay salida para editar. Usá registrar salida.",
           );
         }
+        if (existing.checkoutAt !== input.expectedOccurredAt) {
+          throw concurrentModificationError();
+        }
         const computed = await computeCheckOut(companyId, schedule, occurredAt);
         const updated = await attendanceRepository.updateManualCheckoutInTransaction(
           companyId,
@@ -597,6 +630,7 @@ export const manualAttendanceService = {
           {
             attendanceId,
             checkoutAt: occurredAt.toISOString(),
+            expectedCheckoutAt: input.expectedOccurredAt,
             checkoutStatus: computed.checkoutStatus,
             checkoutReviewReason: computed.checkoutReviewReason,
             earlyDepartureMinutes: computed.earlyDepartureMinutes,
@@ -605,7 +639,7 @@ export const manualAttendanceService = {
           },
         );
         if (!updated) {
-          throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Asistencia no encontrada.");
+          throw concurrentModificationError();
         }
 
         await auditService.log(
@@ -633,11 +667,15 @@ export const manualAttendanceService = {
         );
       }
 
-      await transaction.commit();
-      const row = await attendanceRepository.findById(companyId, attendanceId);
+      const row = await attendanceRepository.findByIdInTransaction(
+        companyId,
+        attendanceId,
+        transaction,
+      );
       if (!row) {
         throw new AppError(500, "ATTENDANCE_LOAD_FAILED", "No se pudo cargar la asistencia.");
       }
+      await transaction.commit();
       return row;
     } catch (error) {
       return rollbackTransactionSafely(

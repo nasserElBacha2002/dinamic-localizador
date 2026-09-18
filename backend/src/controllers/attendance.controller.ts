@@ -42,6 +42,18 @@ export const attendanceController = {
     res.status(200).json(result);
   },
 
+  async listAuditLogs(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const query = req.validatedQuery as { page: number; limit: number };
+    const result = await attendanceService.listAuditLogs(
+      companyId,
+      String(req.params.id),
+      query.page,
+      query.limit,
+    );
+    res.status(200).json(result);
+  },
+
   async review(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const record = await attendanceService.review(

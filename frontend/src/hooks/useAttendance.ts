@@ -4,6 +4,7 @@ import {
   createManualAttendance,
   editManualAttendance,
   exportAttendanceCsv,
+  getAttendanceAuditLogs,
   getAttendanceById,
   getAttendanceRecords,
   getAttendanceReviews,
@@ -12,7 +13,8 @@ import {
 import type {
   CreateAttendanceInput,
   AttendanceFilters,
-  ManualAttendanceMutationInput,
+  ManualAttendanceCreateInput,
+  ManualAttendanceEditInput,
   ReviewAttendanceInput,
 } from "../types/attendance";
 import { attendanceKeys } from "../queryKeys/attendance";
@@ -210,7 +212,7 @@ export function useCreateManualAttendance() {
       input,
     }: {
       companyId: string;
-      input: ManualAttendanceMutationInput;
+      input: ManualAttendanceCreateInput;
     }) => createManualAttendance(input, { scopeCompanyId: companyId }),
     onSuccess: async (data, variables) => {
       await invalidateManualAttendanceQueries(queryClient, variables.companyId, data.id);
@@ -220,13 +222,13 @@ export function useCreateManualAttendance() {
   return {
     ...mutation,
     mutate: (
-      input: ManualAttendanceMutationInput,
+      input: ManualAttendanceCreateInput,
       options?: Parameters<typeof mutation.mutate>[1],
     ) => {
       mutation.mutate({ companyId: requireCompanyId(activeCompanyId), input }, options);
     },
     mutateAsync: (
-      input: ManualAttendanceMutationInput,
+      input: ManualAttendanceCreateInput,
       options?: Parameters<typeof mutation.mutateAsync>[1],
     ) =>
       mutation.mutateAsync({ companyId: requireCompanyId(activeCompanyId), input }, options),
@@ -245,7 +247,7 @@ export function useEditManualAttendance() {
     }: {
       companyId: string;
       attendanceId: string;
-      input: ManualAttendanceMutationInput;
+      input: ManualAttendanceEditInput;
     }) => editManualAttendance(attendanceId, input, { scopeCompanyId: companyId }),
     onSuccess: async (_data, variables) => {
       await invalidateManualAttendanceQueries(
@@ -259,7 +261,7 @@ export function useEditManualAttendance() {
   return {
     ...mutation,
     mutate: (
-      variables: { attendanceId: string; input: ManualAttendanceMutationInput },
+      variables: { attendanceId: string; input: ManualAttendanceEditInput },
       options?: Parameters<typeof mutation.mutate>[1],
     ) => {
       mutation.mutate(
@@ -268,7 +270,7 @@ export function useEditManualAttendance() {
       );
     },
     mutateAsync: (
-      variables: { attendanceId: string; input: ManualAttendanceMutationInput },
+      variables: { attendanceId: string; input: ManualAttendanceEditInput },
       options?: Parameters<typeof mutation.mutateAsync>[1],
     ) =>
       mutation.mutateAsync(
@@ -276,4 +278,14 @@ export function useEditManualAttendance() {
         options,
       ),
   };
+}
+
+export function useAttendanceAuditLogs(attendanceId?: string, page = 1, limit = 10) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(attendanceId));
+
+  return useQuery({
+    queryKey: [...attendanceKeys.detail(companyId, attendanceId), "audit-logs", page, limit],
+    queryFn: () => getAttendanceAuditLogs(attendanceId!, page, limit),
+    enabled,
+  });
 }

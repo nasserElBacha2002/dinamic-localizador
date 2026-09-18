@@ -171,14 +171,16 @@ export const attendanceRepository = {
           company_id, operation_id, employee_id, employee_workday_id,
           received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
-          source_message_sid, validation_reason, received_at
+          source_message_sid, validation_reason, received_at,
+          arrival_source
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @operationId, @employeeId, @employeeWorkdayId,
           @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
-          @sourceMessageSid, @validationReason, @receivedAt
+          @sourceMessageSid, @validationReason, @receivedAt,
+          CASE WHEN @sourceMessageSid IS NOT NULL THEN N'WHATSAPP' ELSE NULL END
         )
       `);
 
@@ -187,8 +189,23 @@ export const attendanceRepository = {
 
   async findById(companyId: string, id: string): Promise<AttendanceRecordWithRelations | null> {
     const pool = getPool();
-    const result = await pool
-      .request()
+    return this.findByIdWithRequest(companyId, id, pool.request());
+  },
+
+  async findByIdInTransaction(
+    companyId: string,
+    id: string,
+    transaction: sql.Transaction,
+  ): Promise<AttendanceRecordWithRelations | null> {
+    return this.findByIdWithRequest(companyId, id, new sql.Request(transaction));
+  },
+
+  async findByIdWithRequest(
+    companyId: string,
+    id: string,
+    request: sql.Request,
+  ): Promise<AttendanceRecordWithRelations | null> {
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .query(`
@@ -423,7 +440,8 @@ export const attendanceRepository = {
           received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at,
-          is_simulation, simulation_session_id
+          is_simulation, simulation_session_id,
+          arrival_source
         )
         OUTPUT INSERTED.*
         VALUES (
@@ -431,7 +449,8 @@ export const attendanceRepository = {
           @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt,
-          @isSimulation, @simulationSessionId
+          @isSimulation, @simulationSessionId,
+          N'WHATSAPP'
         )
       `);
 
@@ -490,7 +509,8 @@ export const attendanceRepository = {
           checkout_at, checkout_latitude, checkout_longitude, checkout_distance_meters,
           checkout_status, checkout_review_reason,
           early_departure_minutes, extra_worked_minutes, checkout_message_sid,
-          is_simulation, simulation_session_id
+          is_simulation, simulation_session_id,
+          checkout_source
         )
         OUTPUT INSERTED.*
         VALUES (
@@ -501,7 +521,8 @@ export const attendanceRepository = {
           @checkoutAt, @checkoutLatitude, @checkoutLongitude, @checkoutDistanceMeters,
           @checkoutStatus, @checkoutReviewReason,
           @earlyDepartureMinutes, @extraWorkedMinutes, @checkoutMessageSid,
-          @isSimulation, @simulationSessionId
+          @isSimulation, @simulationSessionId,
+          N'WHATSAPP'
         )
       `);
 
@@ -786,7 +807,8 @@ export const attendanceRepository = {
             checkout_review_reason = @checkoutReviewReason,
             early_departure_minutes = @earlyDepartureMinutes,
             extra_worked_minutes = @extraWorkedMinutes,
-            checkout_message_sid = @checkoutMessageSid
+            checkout_message_sid = @checkoutMessageSid,
+            checkout_source = N'WHATSAPP'
         OUTPUT INSERTED.*
         WHERE id = @attendanceId
           AND company_id = @companyId
@@ -875,7 +897,11 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async applyManualArrivalInTransaction(
+  /**
+   * Atomic first-time arrival on an existing exit-only (or empty-arrival) row.
+   * WHERE received_at IS NULL prevents concurrent double create.
+   */
+  async registerMissingManualArrivalInTransaction(
     companyId: string,
     transaction: sql.Transaction,
     input: {
@@ -885,7 +911,6 @@ export const attendanceRepository = {
       validationStatus: AttendanceRecord["validationStatus"];
       validationReason: string;
       actorUserId: string;
-      reason: string;
     },
   ): Promise<AttendanceRecord | null> {
     const request = new sql.Request(transaction);
@@ -914,6 +939,62 @@ export const attendanceRepository = {
         WHERE id = @attendanceId
           AND company_id = @companyId
           AND is_simulation = 0
+          AND received_at IS NULL
+          AND validation_status IN ('VALID', 'PENDING_REVIEW', 'REJECTED')
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Edit existing arrival with optimistic concurrency on the previously observed received_at.
+   */
+  async editManualArrivalInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      attendanceId: string;
+      receivedAt: string;
+      expectedReceivedAt: string;
+      punctualityStatus: AttendanceRecord["punctualityStatus"];
+      validationStatus: AttendanceRecord["validationStatus"];
+      validationReason: string;
+      actorUserId: string;
+    },
+  ): Promise<AttendanceRecord | null> {
+    const request = new sql.Request(transaction);
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("attendanceId", sql.UniqueIdentifier, input.attendanceId)
+      .input("receivedAt", sql.DateTime2, new Date(input.receivedAt))
+      .input("expectedReceivedAt", sql.DateTime2, new Date(input.expectedReceivedAt))
+      .input("punctualityStatus", sql.NVarChar(30), input.punctualityStatus)
+      .input("validationStatus", sql.NVarChar(30), input.validationStatus)
+      .input("validationReason", sql.NVarChar(500), input.validationReason)
+      .input("actorUserId", sql.UniqueIdentifier, input.actorUserId)
+      .query(`
+        UPDATE attendance_records
+        SET received_at = @receivedAt,
+            received_latitude = NULL,
+            received_longitude = NULL,
+            distance_meters = NULL,
+            location_status = N'NOT_RECORDED',
+            punctuality_status = @punctualityStatus,
+            validation_status = @validationStatus,
+            validation_reason = @validationReason,
+            arrival_source = N'MANUAL',
+            arrival_registered_by = @actorUserId,
+            arrival_registered_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @attendanceId
+          AND company_id = @companyId
+          AND is_simulation = 0
+          AND received_at IS NOT NULL
+          AND received_at = @expectedReceivedAt
           AND validation_status IN ('VALID', 'PENDING_REVIEW', 'REJECTED')
       `);
 
@@ -1038,6 +1119,7 @@ export const attendanceRepository = {
     input: {
       attendanceId: string;
       checkoutAt: string;
+      expectedCheckoutAt: string;
       checkoutStatus: CheckoutStatus;
       checkoutReviewReason: string;
       earlyDepartureMinutes: number;
@@ -1050,6 +1132,7 @@ export const attendanceRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, input.attendanceId)
       .input("checkoutAt", sql.DateTime2, new Date(input.checkoutAt))
+      .input("expectedCheckoutAt", sql.DateTime2, new Date(input.expectedCheckoutAt))
       .input("checkoutStatus", sql.NVarChar(40), input.checkoutStatus)
       .input("checkoutReviewReason", sql.NVarChar(500), input.checkoutReviewReason)
       .input("earlyDepartureMinutes", sql.Int, input.earlyDepartureMinutes)
@@ -1072,6 +1155,7 @@ export const attendanceRepository = {
         WHERE id = @attendanceId
           AND company_id = @companyId
           AND checkout_at IS NOT NULL
+          AND checkout_at = @expectedCheckoutAt
           AND is_simulation = 0
       `);
 

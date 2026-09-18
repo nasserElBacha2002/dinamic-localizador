@@ -10,7 +10,8 @@ import {
   listAttendanceQuerySchema,
 } from "../schemas/attendance.schema";
 import {
-  manualAttendanceMutationSchema,
+  manualAttendanceCreateSchema,
+  manualAttendanceEditSchema,
   manualAttendancePreviewSchema,
 } from "../schemas/manual-attendance.schema";
 
@@ -31,14 +32,14 @@ attendanceRouter.post(
 attendanceRouter.post(
   "/manual",
   requirePermission("attendance:manual_create"),
-  validate(manualAttendanceMutationSchema),
+  validate(manualAttendanceCreateSchema),
   asyncHandler(attendanceController.createManual),
 );
 attendanceRouter.patch(
   "/:id/manual",
   requirePermission("attendance:manual_edit"),
   validate(attendanceIdParamSchema, "params"),
-  validate(manualAttendanceMutationSchema),
+  validate(manualAttendanceEditSchema),
   asyncHandler(attendanceController.editManual),
 );
 attendanceRouter.get(
@@ -66,6 +67,13 @@ attendanceRouter.get(
   validate(attendanceIdParamSchema, "params"),
   validate(attendanceReviewsQuerySchema, "query"),
   asyncHandler(attendanceController.listReviews),
+);
+attendanceRouter.get(
+  "/:id/audit-logs",
+  requirePermission("attendance:read"),
+  validate(attendanceIdParamSchema, "params"),
+  validate(attendanceReviewsQuerySchema, "query"),
+  asyncHandler(attendanceController.listAuditLogs),
 );
 attendanceRouter.get(
   "/:id",

@@ -49,17 +49,19 @@ BEGIN
 END;
 GO
 
--- Backfill: treat historical WhatsApp SIDs as WHATSAPP; leave null when side not recorded.
+-- Backfill only when WhatsApp SID evidence exists; otherwise leave NULL (unknown provenance).
 UPDATE dbo.attendance_records
 SET arrival_source = N'WHATSAPP'
 WHERE received_at IS NOT NULL
-  AND arrival_source IS NULL;
+  AND arrival_source IS NULL
+  AND source_message_sid IS NOT NULL;
 GO
 
 UPDATE dbo.attendance_records
 SET checkout_source = N'WHATSAPP'
 WHERE checkout_at IS NOT NULL
-  AND checkout_source IS NULL;
+  AND checkout_source IS NULL
+  AND checkout_message_sid IS NOT NULL;
 GO
 
 IF EXISTS (
@@ -77,7 +79,7 @@ ALTER TABLE dbo.attendance_records
     ADD CONSTRAINT CK_attendance_records_arrival_or_checkout
     CHECK (
         (
-            -- WhatsApp / geo arrival
+            -- Geo arrival (WhatsApp / admin geo)
             received_at IS NOT NULL
             AND received_latitude IS NOT NULL
             AND received_longitude IS NOT NULL

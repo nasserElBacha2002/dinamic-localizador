@@ -25,6 +25,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
+  useAttendanceAuditLogs,
   useAttendanceRecord,
   useAttendanceReviews,
   useCreateManualAttendance,
@@ -34,11 +35,11 @@ import {
 import { useCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import type { AttendanceReview } from "../../types/attendance";
+import type { AttendanceAuditLog, AttendanceReview } from "../../types/attendance";
 import { formatDateTime } from "../../utils/dates";
 import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
 import { terminology } from "../../domain/terminology";
-import { getApiErrorMessage } from "../../utils/errors";
+import { getApiErrorCode, getApiErrorMessage, parseApiError } from "../../utils/errors";
 import {
   checkoutStatusLabels,
   locationStatusLabels,
@@ -50,14 +51,62 @@ import {
   manualCheckoutStatusLabel,
   registrationSourceLabel,
   resolveManualAttendanceActions,
+  type ManualAttendanceAction,
 } from "../../utils/manual-attendance-actions";
+
+function manualAuditActionLabel(action: string): string {
+  switch (action) {
+    case "MANUAL_CHECK_IN":
+      return "Registro de llegada";
+    case "MANUAL_CHECK_OUT":
+      return "Registro de salida";
+    case "MANUAL_CHECK_IN_EDIT":
+      return "Edición de llegada";
+    case "MANUAL_CHECK_OUT_EDIT":
+      return "Edición de salida";
+    default:
+      return action;
+  }
+}
+
+function formatAuditData(value: Record<string, unknown> | null): string {
+  if (!value) {
+    return "—";
+  }
+  const comment = typeof value.comment === "string" ? value.comment : null;
+  const parts: string[] = [];
+  if (value.receivedAt != null) {
+    parts.push(`Llegada: ${formatDateTime(String(value.receivedAt))}`);
+  }
+  if (value.checkoutAt != null) {
+    parts.push(`Salida: ${formatDateTime(String(value.checkoutAt))}`);
+  }
+  if (value.punctualityStatus != null) {
+    parts.push(`Puntualidad: ${String(value.punctualityStatus)}`);
+  }
+  if (value.checkoutStatus != null) {
+    parts.push(`Salida: ${String(value.checkoutStatus)}`);
+  }
+  if (value.arrivalSource != null) {
+    parts.push(`Origen llegada: ${registrationSourceLabel(value.arrivalSource as never)}`);
+  }
+  if (value.checkoutSource != null) {
+    parts.push(`Origen salida: ${registrationSourceLabel(value.checkoutSource as never)}`);
+  }
+  if (comment) {
+    parts.push(`Comentario: ${comment}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : JSON.stringify(value);
+}
 
 export function AttendanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { goBackToList } = useListBackNavigation("/attendance");
   const pagination = usePaginationState(10);
+  const auditPagination = usePaginationState(10);
   const attendanceQuery = useAttendanceRecord(id);
   const reviewsQuery = useAttendanceReviews(id, pagination.page, pagination.pageSize);
+  const auditLogsQuery = useAttendanceAuditLogs(id, auditPagination.page, auditPagination.pageSize);
   const reviewMutation = useReviewAttendanceRecord(id ?? "");
   const createManualMutation = useCreateManualAttendance();
   const editManualMutation = useEditManualAttendance();
@@ -67,6 +116,22 @@ export function AttendanceDetailPage() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewDecision, setReviewDecision] = useState<"APPROVE" | "REJECT">("APPROVE");
   const [manualTarget, setManualTarget] = useState<ManualAttendanceDialogTarget | null>(null);
+
+  const openManualTarget = (record: NonNullable<typeof attendanceQuery.data>, action: ManualAttendanceAction) => {
+    const initialOccurredAt =
+      action.kind === "CHECK_IN" ? record.receivedAt : record.checkoutAt;
+    setManualTarget({
+      kind: action.kind,
+      mode: action.mode,
+      operationId: record.operationId,
+      employeeId: record.employeeId,
+      employeeWorkdayId: record.employeeWorkdayId ?? null,
+      attendanceId: record.id,
+      employeeName: record.employee.name,
+      initialOccurredAt,
+      expectedOccurredAt: action.mode === "edit" ? initialOccurredAt : null,
+    });
+  };
 
   const reviewColumns = useMemo<DataTableColumn<AttendanceReview>[]>(
     () => [
@@ -82,6 +147,34 @@ export function AttendanceDetailPage() {
       },
       { key: "createdAt", header: "Fecha", getValue: (row) => formatDateTime(row.createdAt) },
       { key: "reason", header: "Motivo", getValue: (row) => row.reason },
+    ],
+    [],
+  );
+
+  const auditColumns = useMemo<DataTableColumn<AttendanceAuditLog>[]>(
+    () => [
+      {
+        key: "action",
+        header: "Acción",
+        getValue: (row) => manualAuditActionLabel(row.action),
+      },
+      {
+        key: "user",
+        header: "Usuario",
+        getValue: (row) => row.userName ?? row.userId ?? "—",
+      },
+      { key: "createdAt", header: "Fecha", getValue: (row) => formatDateTime(row.createdAt) },
+      { key: "reason", header: "Motivo", getValue: (row) => row.reason ?? "—" },
+      {
+        key: "previous",
+        header: "Valor anterior",
+        getValue: (row) => formatAuditData(row.previousData),
+      },
+      {
+        key: "next",
+        header: "Valor nuevo",
+        getValue: (row) => formatAuditData(row.newData),
+      },
     ],
     [],
   );
@@ -106,6 +199,45 @@ export function AttendanceDetailPage() {
           key: "reason",
           label: "Motivo",
           getValue: (row) => row.reason,
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
+  const auditMobileCard = useMemo<DataTableMobileCardConfig<AttendanceAuditLog>>(
+    () => ({
+      title: (row) => manualAuditActionLabel(row.action),
+      fields: [
+        {
+          key: "user",
+          label: "Usuario",
+          getValue: (row) => row.userName ?? row.userId ?? "—",
+          visibility: "always",
+        },
+        {
+          key: "createdAt",
+          label: "Fecha",
+          getValue: (row) => formatDateTime(row.createdAt),
+          visibility: "always",
+        },
+        {
+          key: "reason",
+          label: "Motivo",
+          getValue: (row) => row.reason ?? "—",
+          visibility: "expanded",
+        },
+        {
+          key: "previous",
+          label: "Anterior",
+          getValue: (row) => formatAuditData(row.previousData),
+          visibility: "expanded",
+        },
+        {
+          key: "next",
+          label: "Nuevo",
+          getValue: (row) => formatAuditData(row.newData),
           visibility: "expanded",
         },
       ],
@@ -140,22 +272,14 @@ export function AttendanceDetailPage() {
 
   const reviews = reviewsQuery.data?.data ?? [];
   const reviewsMeta = reviewsQuery.data?.meta;
+  const auditLogs = auditLogsQuery.data?.data ?? [];
+  const auditMeta = auditLogsQuery.data?.meta;
 
   const reviewMenuItems: ActionMenuItem[] = [
     ...manualActions.map((action) => ({
       key: action.key,
       label: action.label,
-      onClick: () =>
-        setManualTarget({
-          kind: action.kind,
-          mode: action.mode,
-          operationId: record.operationId,
-          employeeId: record.employeeId,
-          attendanceId: record.id,
-          employeeName: record.employee.name,
-          initialOccurredAt:
-            action.kind === "CHECK_IN" ? record.receivedAt : record.checkoutAt,
-        }),
+      onClick: () => openManualTarget(record, action),
     })),
     ...(canReview
       ? [
@@ -210,17 +334,7 @@ export function AttendanceDetailPage() {
               ) : manualActions[0] ? (
                 <Button
                   onClick={() => {
-                    const action = manualActions[0]!;
-                    setManualTarget({
-                      kind: action.kind,
-                      mode: action.mode,
-                      operationId: record.operationId,
-                      employeeId: record.employeeId,
-                      attendanceId: record.id,
-                      employeeName: record.employee.name,
-                      initialOccurredAt:
-                        action.kind === "CHECK_IN" ? record.receivedAt : record.checkoutAt,
-                    });
+                    openManualTarget(record, manualActions[0]!);
                   }}
                 >
                   {manualActions[0]!.label}
@@ -428,6 +542,39 @@ export function AttendanceDetailPage() {
         ) : null}
       </SectionCard>
 
+      <SectionCard title="Historial de cambios">
+        <DataTable
+          rows={auditLogs}
+          columns={auditColumns}
+          getRowKey={(row) => row.id}
+          loading={auditLogsQuery.isLoading}
+          error={
+            auditLogsQuery.isError
+              ? getApiErrorMessage(auditLogsQuery.error, "No se pudo cargar el historial de cambios.")
+              : undefined
+          }
+          emptyTitle="Sin cambios"
+          emptyDescription="Todavía no hay correcciones manuales registradas para esta asistencia."
+          mobileView="summary"
+          mobileCard={auditMobileCard}
+          aria-label="Historial de cambios de asistencia"
+        />
+        {auditMeta ? (
+          <PaginationControls
+            meta={mapApiPaginationMeta({
+              page: auditMeta.page,
+              limit: auditMeta.limit,
+              total: auditMeta.total,
+              totalPages: auditMeta.totalPages,
+            })}
+            onPageChange={auditPagination.onPageChange}
+            pageSize={auditPagination.pageSize}
+            onPageSizeChange={auditPagination.onPageSizeChange}
+            showPageSizeSelector
+          />
+        ) : null}
+      </SectionCard>
+
       <Accordion variant="contained">
         <Accordion.Item value="technical">
           <Accordion.Control>Detalles técnicos</Accordion.Control>
@@ -500,20 +647,30 @@ export function AttendanceDetailPage() {
         onConfirm={async (input) => {
           try {
             if (input.mode === "edit") {
+              if (!input.expectedOccurredAt) {
+                throw new Error("Faltan datos de concurrencia para editar la asistencia.");
+              }
               await editManualMutation.mutateAsync({
                 attendanceId: input.attendanceId ?? record.id,
                 input: {
                   kind: input.kind,
                   occurredAt: input.occurredAt,
+                  expectedOccurredAt: input.expectedOccurredAt,
                   reason: input.reason,
                   comment: input.comment,
                 },
               });
             } else {
+              const employeeWorkdayId =
+                input.employeeWorkdayId ?? record.employeeWorkdayId ?? undefined;
+              if (!employeeWorkdayId) {
+                throw new Error("Falta la jornada del colaborador para registrar la asistencia.");
+              }
               await createManualMutation.mutateAsync({
                 kind: input.kind,
                 operationId: input.operationId,
                 employeeId: input.employeeId,
+                employeeWorkdayId,
                 occurredAt: input.occurredAt,
                 reason: input.reason,
                 comment: input.comment,
@@ -525,6 +682,15 @@ export function AttendanceDetailPage() {
               message: "Asistencia manual guardada correctamente.",
             });
           } catch (error) {
+            const code = getApiErrorCode(parseApiError(error));
+            if (
+              code === "ATTENDANCE_CONCURRENT_MODIFICATION" ||
+              code === "ARRIVAL_ALREADY_EXISTS" ||
+              code === "CHECKOUT_ALREADY_EXISTS"
+            ) {
+              await attendanceQuery.refetch();
+              setManualTarget(null);
+            }
             notifications.show({
               color: "red",
               message: getApiErrorMessage(error),

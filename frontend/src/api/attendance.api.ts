@@ -1,12 +1,14 @@
 import type { PaginatedResponse, SingleResponse } from "../types/api";
 import type {
+  AttendanceAuditLog,
   AttendanceDetail,
   AttendanceFilters,
   AttendanceRecord,
   AttendanceRecordWithRelations,
   AttendanceReview,
   CreateAttendanceInput,
-  ManualAttendanceMutationInput,
+  ManualAttendanceCreateInput,
+  ManualAttendanceEditInput,
   ManualAttendancePreview,
   ManualAttendancePreviewInput,
   ReviewAttendanceInput,
@@ -91,7 +93,7 @@ export async function previewManualAttendance(
 }
 
 export async function createManualAttendance(
-  input: ManualAttendanceMutationInput,
+  input: ManualAttendanceCreateInput,
   options?: { scopeCompanyId?: string; signal?: AbortSignal },
 ): Promise<AttendanceRecordWithRelations> {
   const { data } = await scopedApiClient.post<SingleResponse<AttendanceRecordWithRelations>>(
@@ -104,7 +106,7 @@ export async function createManualAttendance(
 
 export async function editManualAttendance(
   attendanceId: string,
-  input: ManualAttendanceMutationInput,
+  input: ManualAttendanceEditInput,
   options?: { scopeCompanyId?: string; signal?: AbortSignal },
 ): Promise<AttendanceRecordWithRelations> {
   const { data } = await scopedApiClient.patch<SingleResponse<AttendanceRecordWithRelations>>(
@@ -113,4 +115,18 @@ export async function editManualAttendance(
     options,
   );
   return data.data;
+}
+
+export async function getAttendanceAuditLogs(
+  id: string,
+  page = 1,
+  limit = 10,
+): Promise<PaginatedResponse<AttendanceAuditLog>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceAuditLog>>(
+    `attendance/${id}/audit-logs`,
+    {
+      params: { page, limit },
+    },
+  );
+  return data;
 }

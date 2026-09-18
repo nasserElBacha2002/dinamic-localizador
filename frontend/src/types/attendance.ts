@@ -32,6 +32,7 @@ export interface AttendanceRecord {
   id: string;
   operationId: string;
   employeeId: string;
+  employeeWorkdayId?: string | null;
   receivedLatitude: number | null;
   receivedLongitude: number | null;
   distanceMeters: number | null;
@@ -75,12 +76,20 @@ export interface ManualAttendancePreview {
   checkoutStatus?: CheckoutStatus;
 }
 
-export interface ManualAttendanceMutationInput {
+export interface ManualAttendanceCreateInput {
   kind: ManualAttendanceKind;
-  operationId?: string;
-  employeeId?: string;
-  attendanceId?: string;
+  operationId: string;
+  employeeId: string;
+  employeeWorkdayId: string;
   occurredAt: string;
+  reason: string;
+  comment?: string | null;
+}
+
+export interface ManualAttendanceEditInput {
+  kind: ManualAttendanceKind;
+  occurredAt: string;
+  expectedOccurredAt: string;
   reason: string;
   comment?: string | null;
 }
@@ -89,8 +98,22 @@ export interface ManualAttendancePreviewInput {
   kind: ManualAttendanceKind;
   operationId: string;
   employeeId?: string;
+  employeeWorkdayId?: string;
   attendanceId?: string;
   occurredAt: string;
+}
+
+export interface AttendanceAuditLog {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  previousData: Record<string, unknown> | null;
+  newData: Record<string, unknown> | null;
+  reason: string | null;
+  userId: string | null;
+  userName: string | null;
+  createdAt: string;
 }
 
 export interface AttendanceEmployeeSummary {

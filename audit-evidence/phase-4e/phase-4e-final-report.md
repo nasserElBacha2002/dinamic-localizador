@@ -4,6 +4,13 @@
 
 `PHASE_4E_COMPLETE_WITH_ACCEPTED_RESIDUAL_RISKS`
 
+## Closure corrections (post-review)
+
+- **LOC-P1-002** remapped to server-authoritative attendance (not MessageSid replay).
+- MessageSid idempotency tracked separately as `TWILIO-WEBHOOK-IDEMPOTENCY`.
+- **LOC-P1-015** wording: original finding REMEDIATED; session architecture + CQ-004 RESIDUAL.
+- Phase 4 freeze: see `audit-evidence/phase-4-final-closure.md`.
+
 ## Completed
 
 - Extended centralized log redaction (headers/body/phone) + tests

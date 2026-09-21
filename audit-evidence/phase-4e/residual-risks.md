@@ -1,5 +1,13 @@
 # Phase 4E — Residual risks
 
+## Session / auth wording (LOC-P1-015 reconciliation)
+
+| Item | Status |
+|------|--------|
+| Original LOC-P1-015 (no logout / stolen JWT until expiry) | **REMEDIATED** via `token_version` + server logout + live DB identity |
+| Broader refresh-token / session-table architecture | **RESIDUAL** — do not reopen LOC-P1-015 |
+| CQ-004 JWT in `localStorage` | **RESIDUAL** |
+
 ## P1
 
 | ID | Risk | Status |

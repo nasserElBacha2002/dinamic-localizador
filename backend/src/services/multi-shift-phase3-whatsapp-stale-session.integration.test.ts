@@ -191,6 +191,7 @@ const setupCommonWebhookMocks = async () => {
   const { attendanceNotificationRepository } = await import(
     "../repositories/attendance-notification.repository"
   );
+  const { whatsappUsageQuotaService } = await import("./whatsapp-usage-quota.service");
 
   mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () =>
     runtimeSettings(companyA),
@@ -203,6 +204,26 @@ const setupCommonWebhookMocks = async () => {
   mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
   mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
   mock.method(botSessionService, "createMenuSelectionSession", async () => ({} as never));
+  // Mock-driven path has no SQL pool (or pool already torn down by sibling ITs).
+  mock.method(whatsappUsageQuotaService, "admitNonCriticalTurn", async () => ({
+    decision: "ADMITTED" as const,
+    reasonCode: "MODE_OFF",
+    mode: "OFF" as const,
+    policy: {
+      mode: "OFF" as const,
+      dailyTurns: 20,
+      weeklyTurns: 60,
+      burstTurns: 5,
+      burstWindowSeconds: 60,
+      dailyOutbounds: 40,
+      weeklyOutbounds: 120,
+      companyDailyOutbounds: 500,
+      limitNoticeEnabled: false,
+      timezoneId: TIMEZONE,
+    },
+  }));
+  mock.method(whatsappUsageQuotaService, "recordExemptCritical", async () => undefined);
+  mock.method(whatsappUsageQuotaService, "recordAmbiguousHeld", async () => undefined);
   mock.method(employeeRepository, "findById", async () => ({
     id: employeeA,
     name: "Worker",

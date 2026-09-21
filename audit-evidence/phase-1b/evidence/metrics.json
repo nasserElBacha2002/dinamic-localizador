@@ -1,0 +1,36 @@
+{
+  "http_handlers": 241,
+  "authz_status": {
+    "VERIFIED": 122,
+    "PARTIAL": 118,
+    "DEFECT": 1
+  },
+  "tenant_status": {
+    "VERIFIED": 124,
+    "PARTIAL": 116,
+    "DEFECT": 1
+  },
+  "security_findings": {
+    "HIGH": 3,
+    "MEDIUM": 4,
+    "LOW": 5,
+    "INFO": 3
+  },
+  "security_total": 15,
+  "quality_findings_active": 10,
+  "quality_by_sev": {
+    "HIGH": 1,
+    "MEDIUM": 5,
+    "LOW": 3,
+    "INFO": 1
+  },
+  "high_complexity_functions_files": 6,
+  "god_modules_listed": 8,
+  "god_class_scanner_medium": 4,
+  "solid_grasp_scanner": 18,
+  "duplication_clusters": 4,
+  "reliability_findings": 3,
+  "scanner_fp_discarded": 10,
+  "unresolved": 7,
+  "production_blockers": 5
+}

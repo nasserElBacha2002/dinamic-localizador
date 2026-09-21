@@ -1,0 +1,178 @@
+[
+  {
+    "id": "cx-file-b7b36c40c9",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "medium",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file (1295 LOC)",
+    "file": "backend/src/repositories/attendance-notification.repository.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-7d14245a5f",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "medium",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file (1299 LOC)",
+    "file": "backend/src/repositories/employee-workday.repository.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-efa6b3437e",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (949 LOC)",
+    "file": "backend/src/services/absence-request.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-a05acbe9aa",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (1189 LOC)",
+    "file": "backend/src/services/attendance-reminder.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-d83347ab00",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "medium",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file (1313 LOC)",
+    "file": "backend/src/services/bot/checkout-attendance.flow.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-bd6d7d6a4e",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (942 LOC)",
+    "file": "backend/src/services/bot-session.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-68f9d942e4",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (845 LOC)",
+    "file": "backend/src/services/daily-attendance-report.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-b1bcdb9eb4",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (1196 LOC)",
+    "file": "backend/src/services/operation-assignment.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-tokens-fdc8a7e9e3",
+    "category": "complexity",
+    "subcategory": "control-flow-token-density",
+    "severity": "medium",
+    "confidence": "medium",
+    "status": "requires-review",
+    "title": "High control-flow token count (106)",
+    "file": "backend/src/services/operation-assignment.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-8f93f8e0d7",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (1088 LOC)",
+    "file": "backend/src/services/operation.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-534f05f9fb",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (950 LOC)",
+    "file": "backend/src/services/payroll-receipt.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-fe9553479b",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (1161 LOC)",
+    "file": "backend/src/services/recurring-workday-materialization.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-tokens-cd90a0b8be",
+    "category": "complexity",
+    "subcategory": "control-flow-token-density",
+    "severity": "medium",
+    "confidence": "medium",
+    "status": "requires-review",
+    "title": "High control-flow token count (99)",
+    "file": "backend/src/services/recurring-workday-materialization.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-a1953e0f8a",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (1034 LOC)",
+    "file": "backend/src/services/user-invitation.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-file-4ce4d6ad2b",
+    "category": "complexity",
+    "subcategory": "file-size",
+    "severity": "low",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Large file watch (816 LOC)",
+    "file": "backend/src/services/whatsapp-bot.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cx-tokens-8c435db883",
+    "category": "complexity",
+    "subcategory": "control-flow-token-density",
+    "severity": "medium",
+    "confidence": "medium",
+    "status": "requires-review",
+    "title": "High control-flow token count (84)",
+    "file": "backend/src/services/whatsapp-bot.service.ts",
+    "blocking": false
+  }
+]

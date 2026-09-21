@@ -1,0 +1,35 @@
+[
+  {
+    "id": "env-read-undocumented",
+    "category": "dead-code",
+    "subcategory": "env",
+    "severity": "medium",
+    "confidence": "medium",
+    "status": "detected",
+    "title": "ENV read but undocumented",
+    "file": null,
+    "blocking": false
+  },
+  {
+    "id": "env-documented-unused",
+    "category": "dead-code",
+    "subcategory": "env",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "ENV documented but nonexistent in scanned sources",
+    "file": null,
+    "blocking": false
+  },
+  {
+    "id": "npm-scripts-inventory",
+    "category": "dead-code",
+    "subcategory": "npm-scripts",
+    "severity": "info",
+    "confidence": "high",
+    "status": "detected",
+    "title": "Root npm scripts inventory",
+    "file": null,
+    "blocking": false
+  }
+]

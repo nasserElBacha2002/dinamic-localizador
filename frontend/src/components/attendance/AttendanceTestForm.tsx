@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Alert, Stack } from "@mantine/core";
-import { useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Alert, Stack, Text } from "@mantine/core";
+import { useForm, Controller } from "react-hook-form";
 import { attendanceTestFormSchema, type AttendanceTestFormValues } from "../../schemas/attendance.schema";
 import {
   FormActions,
@@ -10,15 +9,8 @@ import {
   FormSection,
   RHFDateTimeInput,
   RHFNumberInput,
-  RHFSelect,
-  RHFTextarea,
   RHFTextInput,
 } from "../../design-system";
-import {
-  locationStatusLabels,
-  punctualityStatusLabels,
-  validationStatusLabels,
-} from "../../utils/labels";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import { OperationSearchAutocomplete } from "../operations/OperationSearchAutocomplete";
 
@@ -44,26 +36,13 @@ export function AttendanceTestForm({
     defaultValues,
   });
 
-  const validationOptions = useMemo(
-    () => Object.entries(validationStatusLabels).map(([value, label]) => ({ value, label })),
-    [],
-  );
-  const locationOptions = useMemo(
-    () => Object.entries(locationStatusLabels).map(([value, label]) => ({ value, label })),
-    [],
-  );
-  const punctualityOptions = useMemo(
-    () => Object.entries(punctualityStatusLabels).map(([value, label]) => ({ value, label })),
-    [],
-  );
-
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormSection>
         <Stack gap="md">
-          <Alert color="yellow" title="Herramienta temporal">
-            Esta función es temporal y se utiliza únicamente para validar el modelo antes de integrar
-            WhatsApp y Twilio.
+          <Alert color="yellow" title="Herramienta de prueba">
+            Solo se envían coordenadas y hora. La distancia y los estados de validación los calcula el
+            servidor.
           </Alert>
 
           <FormErrorAlert message={errorMessage} />
@@ -117,46 +96,13 @@ export function AttendanceTestForm({
               min={-180}
               max={180}
             />
-            <RHFNumberInput
-              control={control}
-              name="distanceMeters"
-              label="Distancia (metros)"
-              required
-              allowDecimal
-              decimalScale={2}
-              min={0}
-            />
-            <RHFSelect
-              control={control}
-              name="validationStatus"
-              label="Validación"
-              data={validationOptions}
-              required
-            />
-            <RHFSelect
-              control={control}
-              name="locationStatus"
-              label="Ubicación"
-              data={locationOptions}
-              required
-            />
-            <RHFSelect
-              control={control}
-              name="punctualityStatus"
-              label="Puntualidad"
-              data={punctualityOptions}
-              required
-            />
           </FormGrid>
 
           <RHFDateTimeInput control={control} name="receivedAt" label="Fecha y hora recibida" required />
           <RHFTextInput control={control} name="sourceMessageSid" label="MessageSid (opcional)" />
-          <RHFTextarea
-            control={control}
-            name="validationReason"
-            label="Motivo de validación (opcional)"
-            minRows={2}
-          />
+          <Text size="sm" c="dimmed">
+            Distancia, geocerca y puntualidad: calculadas en el backend (no editables).
+          </Text>
 
           <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
         </Stack>

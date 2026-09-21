@@ -50,6 +50,10 @@ import {
   stopSystemLogRetentionJob,
 } from "./jobs/system-log-retention.job";
 import {
+  startRateLimitCleanupJob,
+  stopRateLimitCleanupJob,
+} from "./jobs/rate-limit-cleanup.job";
+import {
   initSystemLogPersistSink,
   shutdownSystemLogPersistSink,
 } from "./utils/system-logs/persist-sink";
@@ -74,6 +78,7 @@ const stopAllSchedulers = (): void => {
   stopDailyAttendanceReportJob();
   stopWhatsappMessageCostSyncJob();
   stopSystemLogRetentionJob();
+  stopRateLimitCleanupJob();
 };
 
 const closeHttpServer = async (): Promise<void> => {
@@ -142,9 +147,24 @@ const startServer = async (): Promise<void> => {
   startDailyAttendanceReportJob();
   startWhatsappMessageCostSyncJob();
   startSystemLogRetentionJob();
+  startRateLimitCleanupJob();
 
   httpServer = app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`API listening on 0.0.0.0:${env.PORT}`);
+  });
+
+  httpServer.on("error", (error: NodeJS.ErrnoException) => {
+    systemLogger.error({
+      module: "http",
+      event: "http.request.failed",
+      message:
+        error.code === "EADDRINUSE"
+          ? `API listen failed: port ${env.PORT} already in use (another process is bound). Jobs may keep running without accepting HTTP.`
+          : `API listen failed: ${error.message}`,
+      error,
+      metadata: { port: env.PORT, code: error.code ?? null },
+    });
+    void gracefulShutdown(1);
   });
 };
 

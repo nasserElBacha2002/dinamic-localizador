@@ -8,7 +8,10 @@ import type { CheckoutEligibleOperation } from "../types/twilio.types";
 import { mapAttendanceRow, mapAttendanceWithRelationsRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
-import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
+import type {
+  AttendanceCreatePersistInput,
+  ListAttendanceQuery,
+} from "../schemas/attendance.schema";
 
 const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): SqlFilter[] => {
   const filters: SqlFilter[] = [
@@ -148,7 +151,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
 export const attendanceRepository = {
   async create(
     companyId: string,
-    input: CreateAttendanceInput & { employeeWorkdayId: string },
+    input: AttendanceCreatePersistInput,
   ): Promise<AttendanceRecord> {
     const pool = getPool();
     const result = await pool
@@ -411,11 +414,7 @@ export const attendanceRepository = {
   async createInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    input: CreateAttendanceInput & {
-      employeeWorkdayId: string;
-      isSimulation?: boolean;
-      simulationSessionId?: string | null;
-    },
+    input: AttendanceCreatePersistInput,
   ): Promise<AttendanceRecord> {
     const request = new sql.Request(transaction);
     const result = await request

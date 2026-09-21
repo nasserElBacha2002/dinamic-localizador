@@ -32,11 +32,19 @@ const AUTH_CHALLENGE_401_CODES = new Set([
   "INVALID_TWO_FACTOR_CHALLENGE",
 ]);
 
-export function shouldClearSessionOn401(status: number | undefined, code: string | undefined): boolean {
+export function shouldClearSessionOn401(
+  status: number | undefined,
+  code: string | undefined,
+  requestUrl?: string,
+): boolean {
   if (status !== 401) {
     return false;
   }
   if (code && AUTH_CHALLENGE_401_CODES.has(code)) {
+    return false;
+  }
+  // Logout may return 401 if the token was already revoked; do not recurse.
+  if (requestUrl && /(^|\/)auth\/logout\/?$/.test(requestUrl)) {
     return false;
   }
   return true;
@@ -64,7 +72,13 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     if (axios.isAxiosError(error)) {
-      if (shouldClearSessionOn401(error.response?.status, error.response?.data?.error?.code)) {
+      if (
+        shouldClearSessionOn401(
+          error.response?.status,
+          error.response?.data?.error?.code,
+          error.config?.url,
+        )
+      ) {
         unauthorizedHandler?.();
       }
 

@@ -1,0 +1,200 @@
+[
+  {
+    "id": "grasp-ctrl-f5e1985641",
+    "category": "grasp",
+    "subcategory": "controller",
+    "severity": "medium",
+    "confidence": "medium",
+    "status": "requires-review",
+    "title": "Controller doing too much (GRASP)",
+    "file": "backend/src/controllers/twilio-webhook.controller.ts",
+    "blocking": false
+  },
+  {
+    "id": "dip-b8349468c8",
+    "category": "solid",
+    "subcategory": "dip",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Concrete infrastructure constructed in application layer",
+    "file": "backend/src/services/attachment-storage/gcs-attachment-storage.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-1e3066002c",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/attendance-reminder.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-676c8816d9",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/bot/direct-attendance-location.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cohesion-87f11f7396",
+    "category": "grasp",
+    "subcategory": "high-cohesion",
+    "severity": "medium",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Low cohesion candidate",
+    "file": "backend/src/services/bot-session.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "srp-880cdc5a55",
+    "category": "solid",
+    "subcategory": "srp",
+    "severity": "medium",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "SUSPECTED SRP violation",
+    "file": "backend/src/services/company.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-571d2f8ec8",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/contextual-session-retry.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-fbfc495ca1",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/manual-attendance.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-6b1b3b62e2",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/operation-assignment-core.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-fdc8a7e9e3",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/operation-assignment.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "srp-f3d23039eb",
+    "category": "solid",
+    "subcategory": "srp",
+    "severity": "medium",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "SUSPECTED SRP violation",
+    "file": "backend/src/services/operation.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "srp-7343611004",
+    "category": "solid",
+    "subcategory": "srp",
+    "severity": "medium",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "SUSPECTED SRP violation",
+    "file": "backend/src/services/two-factor.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "cohesion-be4443de2f",
+    "category": "grasp",
+    "subcategory": "high-cohesion",
+    "severity": "medium",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Low cohesion candidate",
+    "file": "backend/src/services/whatsapp-flow-trace.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-5138e2ba35",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/whatsapp-router/attendance-confirmation-response.handler.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-845ec20834",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/services/whatsapp-router/payroll-receipt.handler.ts",
+    "blocking": false
+  },
+  {
+    "id": "srp-03728dc63f",
+    "category": "solid",
+    "subcategory": "srp",
+    "severity": "medium",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "SUSPECTED SRP violation",
+    "file": "backend/src/services/work-team.service.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-85c9747c8f",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/utils/admin-notification-channel-policy.ts",
+    "blocking": false
+  },
+  {
+    "id": "ocp-c760e54b9a",
+    "category": "solid",
+    "subcategory": "ocp",
+    "severity": "low",
+    "confidence": "low",
+    "status": "suspected",
+    "title": "Repeated type/provider branching (OCP risk)",
+    "file": "backend/src/utils/service-fix/plan.ts",
+    "blocking": false
+  }
+]

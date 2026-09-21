@@ -38,6 +38,7 @@ export const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   SYSTEM_LOGS_UI_ENABLED: "true",
   SYSTEM_LOGS_PERSIST_LEVELS: "error,warn,info",
   SYSTEM_LOGS_INFO_EVENT_ALLOWLIST: "system-log-retention.completed,allowed.info.event",
+  RATE_LIMIT_BACKEND: "memory",
 };
 
 /** Keys that must override a partial local `.env` so fail-fast gates stay valid in unit tests. */
@@ -59,6 +60,7 @@ export const FORCE_UNIT_TEST_ENV_KEYS = new Set([
   "ADMIN_ALERT_WORKER_ENABLED",
   "DAILY_ATTENDANCE_REPORT_WORKER_ENABLED",
   "OPERATION_LIFECYCLE_JOB_ENABLED",
+  "RATE_LIMIT_BACKEND",
 ]);
 
 export const setupUnitTestEnv = (): void => {

@@ -5,7 +5,10 @@ import { botSessionRepository } from "../repositories/bot-session.repository";
 import type { AttendanceRecord } from "../types/domain";
 import type { CheckoutStatus } from "../constants/checkout-status";
 import { runCheckoutWithoutLocationBeforeCommitHookForTests } from "../utils/checkout-transaction-hooks";
-import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
+import {
+  isActiveAttendanceDuplicateKeyError,
+  isAttendanceCheckoutMessageSidDuplicateKeyError,
+} from "../utils/attendance-duplicate-errors";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
 import { getSimulationSessionId } from "../utils/bot-runtime-context";
 
@@ -73,7 +76,7 @@ export class CheckoutCommandError extends Error {
 }
 
 const isCheckoutMessageSidUniqueViolation = (error: unknown): boolean =>
-  error instanceof Error && error.message.includes("UQ_attendance_records_checkout_message_sid");
+  isAttendanceCheckoutMessageSidDuplicateKeyError(error);
 
 const rollbackIfActive = async (
   transaction: sql.Transaction,

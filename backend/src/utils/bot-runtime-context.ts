@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
+import type {
+  LocationStatus,
+  PunctualityStatus,
+  ValidationStatus,
+} from "../types/domain";
 
 export type BotSimulationMode = "dry-run" | "persistent";
 
@@ -19,9 +24,9 @@ export type VirtualAttendanceRecord = {
   employeeId: string;
   employeeWorkdayId: string | null;
   receivedAt: string;
-  validationStatus: string;
-  locationStatus: string;
-  punctualityStatus: string;
+  validationStatus: ValidationStatus;
+  locationStatus: LocationStatus;
+  punctualityStatus: PunctualityStatus;
   distanceMeters: number;
   checkoutAt: string | null;
   checkoutStatus: string | null;

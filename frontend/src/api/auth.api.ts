@@ -1,4 +1,6 @@
 import { apiClient } from "./client";
+import { getStoredToken } from "./token-storage";
+import axios from "axios";
 
 export {
   clearStoredToken,
@@ -58,6 +60,46 @@ export async function loginWithTwoFactor(input: {
 export async function getCurrentUser(): Promise<PublicUser> {
   const response = await apiClient.get<{ data: PublicUser }>("auth/me");
   return response.data.data;
+}
+
+/**
+ * Attempts server-side JWT revocation, then always allows local logout.
+ * Distinguishes confirmed revocation from best-effort local clear.
+ */
+export type LogoutResult =
+  | { localLogoutAllowed: true; serverRevoked: true }
+  | {
+      localLogoutAllowed: true;
+      serverRevoked: false;
+      reason: "network" | "server_error" | "no_token";
+    };
+
+export async function logout(): Promise<LogoutResult> {
+  const token = getStoredToken();
+  if (!token) {
+    return { localLogoutAllowed: true, serverRevoked: false, reason: "no_token" };
+  }
+
+  try {
+    await apiClient.post("auth/logout", undefined, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return { localLogoutAllowed: true, serverRevoked: true };
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const code = error.response?.data?.error?.code as string | undefined;
+      // Token already unusable server-side — treat as confirmed non-usable session.
+      if (status === 401 && (code === "INVALID_TOKEN" || code === "UNAUTHORIZED")) {
+        return { localLogoutAllowed: true, serverRevoked: true };
+      }
+      if (!error.response) {
+        return { localLogoutAllowed: true, serverRevoked: false, reason: "network" };
+      }
+      return { localLogoutAllowed: true, serverRevoked: false, reason: "server_error" };
+    }
+    return { localLogoutAllowed: true, serverRevoked: false, reason: "network" };
+  }
 }
 
 export async function requestPasswordReset(email: string): Promise<{ message: string }> {

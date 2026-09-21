@@ -21,13 +21,8 @@ export function AttendanceCreatePage() {
         employeeId: values.employeeId,
         receivedLatitude: values.receivedLatitude,
         receivedLongitude: values.receivedLongitude,
-        distanceMeters: values.distanceMeters,
-        validationStatus: values.validationStatus,
-        locationStatus: values.locationStatus,
-        punctualityStatus: values.punctualityStatus,
         receivedAt: datetimeLocalToIso(values.receivedAt),
         sourceMessageSid: values.sourceMessageSid?.trim() ? values.sourceMessageSid.trim() : null,
-        validationReason: values.validationReason?.trim() ? values.validationReason.trim() : null,
       });
       navigate(`/attendance/${record.id}`);
     } catch (error) {
@@ -39,7 +34,7 @@ export function AttendanceCreatePage() {
     <>
       <PageHeader
         title="Crear registro de prueba"
-        description="Herramienta temporal para validar el modelo de asistencia."
+        description="Herramienta temporal para validar el modelo de asistencia. Los estados los calcula el servidor."
       />
       <AttendanceTestForm
         defaultValues={{
@@ -47,13 +42,8 @@ export function AttendanceCreatePage() {
           employeeId: "",
           receivedLatitude: 0,
           receivedLongitude: 0,
-          distanceMeters: 0,
-          validationStatus: "VALID",
-          locationStatus: "INSIDE_GEOFENCE",
-          punctualityStatus: "ON_TIME",
           receivedAt: "",
           sourceMessageSid: "",
-          validationReason: "",
         }}
         submitLabel="Crear registro de prueba"
         cancelTo="/attendance"

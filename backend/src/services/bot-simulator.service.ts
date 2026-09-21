@@ -25,7 +25,6 @@ import { whatsappCompanyContextService } from "./whatsapp-company-context.servic
 import { botSessionService } from "./bot-session.service";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import { geolocationService } from "./geolocation.service";
-import { evaluateGeofence } from "../utils/attendance-validation";
 
 const SIMULATION_GREETING =
   "Sesión de simulación iniciada. Escribí un mensaje o usá las acciones rápidas para probar el bot.";
@@ -417,22 +416,18 @@ export const botSimulatorService = {
       if (session.serviceId) {
         const service = await serviceRepository.findById(companyId, session.serviceId);
         if (service) {
-          const geo = geolocationService.evaluateDistance(
+          const geo = await geolocationService.evaluateDistance(
+            companyId,
             input.latitude,
             input.longitude,
             service.latitude,
             service.longitude,
             service.allowedRadiusMeters,
           );
-          const geoEvaluation = evaluateGeofence(
-            geo.distanceMeters,
-            service.allowedRadiusMeters,
-            env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
-          );
           context.technicalDetails.calculatedDistance = Math.round(geo.distanceMeters * 100) / 100;
-          context.technicalDetails.allowedRadius = service.allowedRadiusMeters;
-          context.technicalDetails.reviewMargin = env.BOT_GEOFENCE_REVIEW_MARGIN_METERS;
-          context.technicalDetails.expectedResult = geoEvaluation.geoValidationStatus;
+          context.technicalDetails.allowedRadius = geo.policy.radiusMeters;
+          context.technicalDetails.reviewMargin = geo.policy.marginMeters;
+          context.technicalDetails.expectedResult = geo.geoValidationStatus;
         }
       }
 

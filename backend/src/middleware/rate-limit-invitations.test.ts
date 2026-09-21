@@ -40,26 +40,37 @@ function mockRes() {
   };
 }
 
+async function runLimiter(
+  limiter: ReturnType<typeof rateLimitInvitations>,
+  req: Request,
+  res: ReturnType<typeof mockRes>,
+): Promise<"next" | "halted"> {
+  return await new Promise((resolve) => {
+    let settled = false;
+    limiter(req, res as unknown as Response, () => {
+      settled = true;
+      resolve("next");
+    });
+    setTimeout(() => {
+      if (!settled) {
+        resolve("halted");
+      }
+    }, 50);
+  });
+}
+
 describe("rateLimitInvitations", () => {
-  it("uses req.ip and ignores spoofed x-forwarded-for", () => {
+  it("uses req.ip and ignores spoofed x-forwarded-for", async () => {
     resetInvitationRateLimitBucketsForTests();
     const limiter = rateLimitInvitations({ scope: "test-spoof", windowMs: 60_000, max: 1 });
 
-    let nextCount = 0;
-    const next = () => {
-      nextCount += 1;
-    };
-
-    limiter(mockReq("1.1.1.1"), mockRes() as unknown as Response, next);
-    assert.equal(nextCount, 1);
+    assert.equal(await runLimiter(limiter, mockReq("1.1.1.1"), mockRes()), "next");
 
     const limited = mockRes();
-    limiter(mockReq("1.1.1.1"), limited as unknown as Response, next);
+    assert.equal(await runLimiter(limiter, mockReq("1.1.1.1"), limited), "halted");
     assert.equal(limited.statusCode, 429);
     assert.ok(limited.headers["retry-after"]);
 
-    // Different Express IP must not share the spoofed header bucket.
-    limiter(mockReq("2.2.2.2"), mockRes() as unknown as Response, next);
-    assert.equal(nextCount, 2);
+    assert.equal(await runLimiter(limiter, mockReq("2.2.2.2"), mockRes()), "next");
   });
 });

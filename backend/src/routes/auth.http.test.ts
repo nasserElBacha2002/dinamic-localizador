@@ -26,6 +26,7 @@ describe("auth HTTP login and password reset", () => {
   let close: (() => Promise<void>) | null = null;
 
   before(async () => {
+    resetRateLimitBucketsForTests();
     const app = express();
     app.use(express.json());
     app.use("/api/auth", authRouter);
@@ -353,5 +354,49 @@ describe("auth HTTP login and password reset", () => {
       password: "password12",
       code: "123456",
     });
+  });
+
+  it("logout bumps token_version and rejects the previous JWT", async () => {
+    const user: User = {
+      id: "33333333-3333-4333-8333-333333333333",
+      name: "Logout",
+      email: "logout@example.com",
+      passwordHash: await hashPassword("password12"),
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 4,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    let currentVersion = 4;
+    mock.method(userRepository, "findById", async () => ({
+      ...user,
+      tokenVersion: currentVersion,
+    }));
+    mock.method(userRepository, "bumpTokenVersion", async () => {
+      currentVersion += 1;
+      return currentVersion;
+    });
+
+    const token = signTestToken({
+      userId: user.id,
+      email: user.email,
+      role: "ADMIN",
+      tokenVersion: 4,
+    });
+
+    const logout = await apiRequest(baseUrl, "/api/auth/logout", {
+      method: "POST",
+      token,
+    });
+    assert.equal(logout.status, 200);
+    assert.equal(currentVersion, 5);
+
+    const me = await apiRequest(baseUrl, "/api/auth/me", { token });
+    assert.equal(me.status, 401);
   });
 });

@@ -216,13 +216,8 @@ export interface CreateAttendanceInput {
   employeeId: string;
   receivedLatitude: number;
   receivedLongitude: number;
-  distanceMeters: number;
-  validationStatus: ValidationStatus;
-  locationStatus: LocationStatus;
-  punctualityStatus: PunctualityStatus;
   receivedAt: string;
   sourceMessageSid?: string | null;
-  validationReason?: string | null;
 }
 
 export interface ReviewAttendanceInput {

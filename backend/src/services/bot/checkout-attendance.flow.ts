@@ -60,6 +60,11 @@ import {
   setTechnicalDetail,
 } from "../../utils/bot-runtime-context";
 import { respond } from "./bot-outbound-response";
+import {
+  resolveCheckoutWhatsAppResultCode,
+  roundCheckoutDistanceMeters,
+} from "./checkout-result-code";
+import { attendanceRecordFromVirtualCheckIn } from "./checkout-simulation-attendance";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
 
@@ -199,42 +204,7 @@ export async function processCheckoutWithoutLocation(input: {
     if (isSimulationDryRun()) {
       const virtual = findVirtualCheckInForCheckout(input.employeeWorkdayId);
       if (virtual) {
-        attendance = {
-          id: virtual.id,
-          operationId: virtual.operationId,
-          employeeId: virtual.employeeId,
-          employeeWorkdayId: virtual.employeeWorkdayId,
-          receivedLatitude: 0,
-          receivedLongitude: 0,
-          distanceMeters: virtual.distanceMeters,
-          validationStatus: virtual.validationStatus as AttendanceRecord["validationStatus"],
-          locationStatus: virtual.locationStatus as AttendanceRecord["locationStatus"],
-          punctualityStatus: virtual.punctualityStatus as AttendanceRecord["punctualityStatus"],
-          sourceMessageSid: null,
-          validationReason: null,
-          reviewedBy: null,
-          reviewedAt: null,
-          reviewReason: null,
-          receivedAt: virtual.receivedAt,
-          checkoutAt: virtual.checkoutAt,
-          checkoutLatitude: null,
-          checkoutLongitude: null,
-          checkoutDistanceMeters: null,
-          checkoutStatus: null,
-          checkoutReviewReason: null,
-          earlyDepartureMinutes: null,
-          extraWorkedMinutes: null,
-          checkoutMessageSid: null,
-          arrivalSource: null,
-          checkoutSource: null,
-          arrivalRegisteredBy: null,
-          arrivalRegisteredAt: null,
-          checkoutRegisteredBy: null,
-          checkoutRegisteredAt: null,
-          isSimulation: true,
-          simulationSessionId,
-          createdAt: virtual.receivedAt,
-        };
+        attendance = attendanceRecordFromVirtualCheckIn(virtual, { simulationSessionId });
       }
     }
 
@@ -424,7 +394,7 @@ async function processLocationCheckoutWithoutArrival(input: {
   setTechnicalDetail("employeeWorkdayId", input.employeeWorkdayId);
   setTechnicalDetail("operationId", input.operationId);
   setTechnicalDetail("checkoutWithoutArrival", true);
-  setTechnicalDetail("checkoutDistanceMeters", Math.round(checkoutDistance * 100) / 100);
+  setTechnicalDetail("checkoutDistanceMeters", roundCheckoutDistanceMeters(checkoutDistance));
   setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
   setTechnicalDetail("checkoutValidation", validation);
   setTechnicalDetail("locationEventAt", input.eventAt.toISOString());
@@ -467,7 +437,7 @@ async function processLocationCheckoutWithoutArrival(input: {
       fields: {
         checkoutLatitude: input.latitude,
         checkoutLongitude: input.longitude,
-        checkoutDistanceMeters: Math.round(checkoutDistance * 100) / 100,
+        checkoutDistanceMeters: roundCheckoutDistanceMeters(checkoutDistance),
         checkoutStatus: validation.checkoutStatus,
         checkoutReviewReason: validation.checkoutReviewReason,
         earlyDepartureMinutes: validation.earlyDepartureMinutes,
@@ -521,10 +491,10 @@ async function processLocationCheckoutWithoutArrival(input: {
     checkoutStatus: validation.checkoutStatus,
     checkoutWithoutArrival: true,
     attendanceId: created.id,
-    resultCode:
-      validation.checkoutStatus === "CHECKOUT_REJECTED"
-        ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
-        : WHATSAPP_RESULT_CODES.CHECKOUT_WITHOUT_ARRIVAL,
+    resultCode: resolveCheckoutWhatsAppResultCode({
+      checkoutStatus: validation.checkoutStatus,
+      checkoutWithoutArrival: true,
+    }),
   });
 
   return respond(companyId, {
@@ -532,10 +502,10 @@ async function processLocationCheckoutWithoutArrival(input: {
     employeeId: input.employeeId,
     phoneFrom: input.phoneTo,
     phoneTo: input.phoneFrom,
-    resultCode:
-      validation.checkoutStatus === "CHECKOUT_REJECTED"
-        ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
-        : WHATSAPP_RESULT_CODES.CHECKOUT_WITHOUT_ARRIVAL,
+    resultCode: resolveCheckoutWhatsAppResultCode({
+      checkoutStatus: validation.checkoutStatus,
+      checkoutWithoutArrival: true,
+    }),
     flowType: "CHECKOUT",
   });
 }
@@ -615,42 +585,11 @@ export async function processLocationCheckout(input: {
     if (isSimulationDryRun()) {
       const virtual = findVirtualCheckInForCheckout(input.employeeWorkdayId);
       if (virtual) {
-        attendance = {
-          id: virtual.id,
-          operationId: virtual.operationId,
-          employeeId: virtual.employeeId,
-          employeeWorkdayId: virtual.employeeWorkdayId,
+        attendance = attendanceRecordFromVirtualCheckIn(virtual, {
+          simulationSessionId,
           receivedLatitude: input.latitude,
           receivedLongitude: input.longitude,
-          distanceMeters: virtual.distanceMeters,
-          validationStatus: virtual.validationStatus as AttendanceRecord["validationStatus"],
-          locationStatus: virtual.locationStatus as AttendanceRecord["locationStatus"],
-          punctualityStatus: virtual.punctualityStatus as AttendanceRecord["punctualityStatus"],
-          sourceMessageSid: null,
-          validationReason: null,
-          reviewedBy: null,
-          reviewedAt: null,
-          reviewReason: null,
-          receivedAt: virtual.receivedAt,
-          checkoutAt: virtual.checkoutAt,
-          checkoutLatitude: null,
-          checkoutLongitude: null,
-          checkoutDistanceMeters: null,
-          checkoutStatus: null,
-          checkoutReviewReason: null,
-          earlyDepartureMinutes: null,
-          extraWorkedMinutes: null,
-          checkoutMessageSid: null,
-          arrivalSource: null,
-          checkoutSource: null,
-          arrivalRegisteredBy: null,
-          arrivalRegisteredAt: null,
-          checkoutRegisteredBy: null,
-          checkoutRegisteredAt: null,
-          isSimulation: true,
-          simulationSessionId,
-          createdAt: virtual.receivedAt,
-        };
+        });
       }
     }
 
@@ -697,7 +636,7 @@ export async function processLocationCheckout(input: {
 
     setTechnicalDetail("employeeWorkdayId", input.employeeWorkdayId);
     setTechnicalDetail("attendanceRecordId", input.attendanceRecordId);
-    setTechnicalDetail("checkoutDistanceMeters", Math.round(checkoutDistance * 100) / 100);
+    setTechnicalDetail("checkoutDistanceMeters", roundCheckoutDistanceMeters(checkoutDistance));
     setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
     setTechnicalDetail("reviewMarginMeters", runtimeSettings.geofenceReviewMarginMeters);
     setTechnicalDetail("checkoutValidation", validation);
@@ -724,7 +663,7 @@ export async function processLocationCheckout(input: {
         virtualAttendanceId: attendance.id,
         employeeWorkdayId: input.employeeWorkdayId,
         checkoutStatus: validation.checkoutStatus,
-        distanceMeters: Math.round(checkoutDistance * 100) / 100,
+        distanceMeters: roundCheckoutDistanceMeters(checkoutDistance),
         checkoutAt: eventAt.toISOString(),
       });
 
@@ -757,7 +696,7 @@ export async function processLocationCheckout(input: {
         fields: {
           checkoutLatitude: input.latitude,
           checkoutLongitude: input.longitude,
-          checkoutDistanceMeters: Math.round(checkoutDistance * 100) / 100,
+          checkoutDistanceMeters: roundCheckoutDistanceMeters(checkoutDistance),
           checkoutStatus: validation.checkoutStatus,
           checkoutReviewReason: validation.checkoutReviewReason,
           earlyDepartureMinutes: validation.earlyDepartureMinutes,
@@ -799,7 +738,7 @@ export async function processLocationCheckout(input: {
         attendanceId: updated.id,
         employeeWorkdayId: input.employeeWorkdayId,
         checkoutStatus: validation.checkoutStatus,
-        distanceMeters: Math.round(checkoutDistance * 100) / 100,
+        distanceMeters: roundCheckoutDistanceMeters(checkoutDistance),
         checkoutAt: eventAt.toISOString(),
       });
     }
@@ -821,10 +760,10 @@ export async function processLocationCheckout(input: {
       operationId: input.operationId,
       messageSid: input.messageSid,
       checkoutStatus: validation.checkoutStatus,
-      resultCode:
-        validation.checkoutStatus === "CHECKOUT_REJECTED"
-          ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
-          : WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+      resultCode: resolveCheckoutWhatsAppResultCode({
+        checkoutStatus: validation.checkoutStatus,
+        checkoutWithoutArrival: false,
+      }),
     });
 
     return respond(companyId, {
@@ -832,10 +771,10 @@ export async function processLocationCheckout(input: {
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
-      resultCode:
-        validation.checkoutStatus === "CHECKOUT_REJECTED"
-          ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
-          : WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+      resultCode: resolveCheckoutWhatsAppResultCode({
+        checkoutStatus: validation.checkoutStatus,
+        checkoutWithoutArrival: false,
+      }),
       flowType: "CHECKOUT",
     });
 }

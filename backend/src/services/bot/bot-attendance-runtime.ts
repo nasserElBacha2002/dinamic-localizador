@@ -1,9 +1,6 @@
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
-import {
-  combineAttendanceValidation,
-  evaluatePunctuality,
-  type AttendanceValidationResult,
-} from "../../utils/attendance-validation";
+import type { AttendanceValidationResult } from "../../utils/attendance-validation";
+import { evaluateAttendanceCheckIn } from "../../utils/evaluate-attendance-check-in";
 import {
   combineCheckoutValidation,
   evaluateCheckoutTime,
@@ -11,6 +8,10 @@ import {
 } from "../../utils/checkout-validation";
 import { evaluateAttendanceGeofence } from "./bot-geofence.validator";
 
+/**
+ * WhatsApp/Bot adapter around the shared check-in primitive.
+ * `receivedAt` here is the bot/Twilio event clock (trusted flow), not a REST client body field.
+ */
 export function buildCheckInValidation(input: {
   employeeLatitude: number;
   employeeLongitude: number;
@@ -32,28 +33,24 @@ export function buildCheckInValidation(input: {
       ? input.serviceAllowedRadiusMeters
       : input.runtimeSettings.defaultRadiusMeters;
 
-  const geo = evaluateAttendanceGeofence({
-    employeeLatitude: input.employeeLatitude,
-    employeeLongitude: input.employeeLongitude,
-    serviceLatitude: input.serviceLatitude,
-    serviceLongitude: input.serviceLongitude,
-    allowedRadiusMeters: effectiveRadiusMeters,
-    reviewMarginMeters: input.runtimeSettings.geofenceReviewMarginMeters,
-    defaultRadiusMeters: input.runtimeSettings.defaultRadiusMeters,
+  return evaluateAttendanceCheckIn({
+    coordinates: {
+      latitude: input.employeeLatitude,
+      longitude: input.employeeLongitude,
+    },
+    serviceCoordinates: {
+      latitude: input.serviceLatitude,
+      longitude: input.serviceLongitude,
+    },
+    geofencePolicy: {
+      radiusMeters: effectiveRadiusMeters,
+      marginMeters: input.runtimeSettings.geofenceReviewMarginMeters,
+    },
+    authoritativeAt: input.receivedAt,
+    scheduledStart: input.scheduledStart,
+    earlyToleranceMinutes: input.earlyToleranceMinutes,
+    lateToleranceMinutes: input.lateToleranceMinutes,
   });
-
-  const time = evaluatePunctuality(
-    input.receivedAt,
-    input.scheduledStart,
-    input.earlyToleranceMinutes,
-    input.lateToleranceMinutes,
-  );
-
-  return {
-    validation: combineAttendanceValidation(geo, time),
-    distanceMeters: geo.distanceMeters,
-    effectiveRadiusMeters,
-  };
 }
 
 export function buildCheckoutValidation(input: {

@@ -1,0 +1,9 @@
+file,location,cast_type,boundary,classification,action,status
+whatsapp-bot.service.ts,setLastTwilioPayload/hash/rawPayload,as unknown as Record,Twilio webhook,UNSAFE_BOUNDARY,twilioWebhookPayloadTo*Record,DONE
+whatsapp-router.service.ts,extractLocationMessageMetadata,as unknown as Record,Twilio location meta,UNSAFE_BOUNDARY,twilioWebhookPayloadToUnknownRecord,DONE
+checkout-simulation-attendance.ts,status fields,as AttendanceRecord status,simulation,ALREADY_REMEDIATED,4C typed VirtualAttendanceRecord,ALREADY_REMEDIATED
+operation/absence audit dumps,as unknown as Record,audit JSON,JUSTIFIED_ADAPTER,retain,JUSTIFIED
+sql-server-errors.ts,error shape narrow,adapter,JUSTIFIED_ADAPTER,retain,JUSTIFIED
+repositories row mappers,as Record row,DB,JUSTIFIED_ADAPTER,retain,JUSTIFIED
+middleware/controller tests,as Request,TEST_ONLY,retain,JUSTIFIED
+rate-limit-store.ts,recordsets,LEGACY_TYPE_DEBT,retain,DEFERRED

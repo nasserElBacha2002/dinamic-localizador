@@ -1,0 +1,8 @@
+characterization helpers+flow: 12 pass / 0 fail
+backend lint: PASS
+backend typecheck/build: PASS
+backend npm test: exit 0 / fail 0 / latest TAP 1950 pass @ 353 unit files
+frontend lint: PASS (0 errors, pre-existing warnings)
+frontend build: PASS
+frontend npm test: exit 0 / fail 0 / latest TAP 821 pass (no frontend code changes; TAP noisy under --test-force-exit)
+4C it() added: +12; removed: 0; unit files 351(4B)->353

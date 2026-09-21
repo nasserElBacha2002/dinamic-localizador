@@ -1,0 +1,2 @@
+# Placeholder — 4a3/status.txt emptied in ZIP
+See 4a3/implementation.md and audit-evidence/phase-4a/EVIDENCE-RECOVERY.md

@@ -41,6 +41,29 @@ const inboundContext = {
   resolutionSource: "employee_phone_unique_match" as const,
 };
 
+const mockQuotaAdmittedOff = async () => {
+  const { whatsappUsageQuotaService } = await import("./whatsapp-usage-quota.service");
+  mock.method(whatsappUsageQuotaService, "admitNonCriticalTurn", async () => ({
+    decision: "ADMITTED" as const,
+    reasonCode: "MODE_OFF",
+    mode: "OFF" as const,
+    policy: {
+      mode: "OFF" as const,
+      dailyTurns: 20,
+      weeklyTurns: 60,
+      burstTurns: 5,
+      burstWindowSeconds: 60,
+      dailyOutbounds: 40,
+      weeklyOutbounds: 120,
+      companyDailyOutbounds: 500,
+      limitNoticeEnabled: false,
+      timezoneId: "America/Argentina/Buenos_Aires",
+    },
+  }));
+  mock.method(whatsappUsageQuotaService, "recordExemptCritical", async () => undefined);
+  mock.method(whatsappUsageQuotaService, "recordAmbiguousHeld", async () => undefined);
+};
+
 describe("whatsapp bot module gating", () => {
   afterEach(() => {
     mock.restoreAll();
@@ -48,6 +71,7 @@ describe("whatsapp bot module gating", () => {
 
   it("blocks check-in when attendance module is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { companyModuleService } = await import("./company-module.service");
     const { botSessionService } = await import("./bot-session.service");
@@ -94,6 +118,7 @@ describe("whatsapp bot module gating", () => {
 
   it("blocks check-out when attendance module is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
 
@@ -126,6 +151,7 @@ describe("whatsapp bot module gating", () => {
 
   it("blocks absence requests when absences module is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
 
@@ -158,6 +184,7 @@ describe("whatsapp bot module gating", () => {
 
   it("allows greeting when modules are enabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
 
@@ -190,6 +217,7 @@ describe("whatsapp bot module gating", () => {
 
   it("resolves employee only within the inbound company context", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { env } = await import("../config/env");
     Object.assign(env, { TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000" });
 
@@ -316,6 +344,7 @@ describe("whatsapp bot session module gating", () => {
 
   it("blocks location check-in when attendance is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
     const { attendanceRepository } = await import("../repositories/attendance.repository");
@@ -356,6 +385,7 @@ describe("whatsapp bot session module gating", () => {
 
   it("blocks location check-in when operations is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
     const { attendanceRepository } = await import("../repositories/attendance.repository");
@@ -396,6 +426,7 @@ describe("whatsapp bot session module gating", () => {
 
   it("blocks location checkout when attendance is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
 
@@ -434,6 +465,7 @@ describe("whatsapp bot session module gating", () => {
 
   it("blocks checkout operation selection location prompt when attendance is disabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
 
@@ -474,6 +506,7 @@ describe("whatsapp bot session module gating", () => {
   ] as const) {
     it(`blocks active ${state} session when absences is disabled`, async () => {
       setupUnitTestEnv();
+      await mockQuotaAdmittedOff();
       const { whatsappBotService } = await import("./whatsapp-bot.service");
       const { botSessionService } = await import("./bot-session.service");
       const { absenceBotService } = await import("./absence-bot.service");
@@ -514,6 +547,7 @@ describe("whatsapp bot session module gating", () => {
 
   it("continues absence session when absences is enabled", async () => {
     setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
     const { absenceBotService } = await import("./absence-bot.service");

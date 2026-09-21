@@ -1,0 +1,7 @@
+finding_id,title,status,evidence,residual
+LOC-P1-004,Process-local job concurrency guards,REMEDIATED,audit-evidence/phase-4b/4b1/,Secondary isRunning may remain on already-leased jobs
+CQ-005,Config load errors treated as missing config,REMEDIATED,audit-evidence/phase-4b/4b2/,
+CQ-006,Exceptions masked as empty results,REMEDIATED,audit-evidence/phase-4b/4b3/,Intentional soft-failures documented
+CQ-004,JWT in localStorage,RESIDUAL,audit-evidence/phase-4b/4b4/,HttpOnly cookie+CSRF deferred
+LOC-P1-015,Logout/revocation (original finding),ORIGINAL_FINDING_REMEDIATED,audit-evidence/phase-4b/4b4/,token_version + server logout + live DB identity; broader refresh/session table = separate RESIDUAL (not LOC-P1-015 reopen)
+SESSION-ARCHITECTURE,Refresh token / session table,RESIDUAL,audit-evidence/phase-4b/4b4/,Broader than LOC-P1-015; CQ-004 localStorage also RESIDUAL

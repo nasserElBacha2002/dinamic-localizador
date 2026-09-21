@@ -1,0 +1,11 @@
+finding_id,area,remediation,status,notes
+CQ-DUPKEY-HELPER,sql-server-errors,matchesDuplicateKeyConstraint exact equality,DONE,No extracted.includes; quoted fallback only
+CQ-DUPKEY-PREFIX,sql-server-errors,overlapping-name negatives,DONE,UQ_test vs UQ_test_archived
+CQ-DUPKEY-LEGACY,attendance-duplicate-errors,explicit LEGACY_ACTIVE_ATTENDANCE_INDEXES,DONE,inventory + bare workday_active from migrations
+CQ-DUPKEY-SQL-LIVE,sql-server-errors.duplicate-key.integration.test,UQ_companies_name live mssql,DONE,PASS locally with RUN_DB_INTEGRATION_TESTS
+CQ-DUPKEY-ATTENDANCE,attendance/check-in/checkout,structured helpers,DONE,Preserved
+CQ-DUPKEY-ABSENCE,absence-request,UQ_absence sourceMessageSid only,DONE,Not reopened
+CQ-TWILIO-PAYLOAD,whatsapp-bot+router,twilioWebhookPayloadTo*Record,DONE,Not reopened
+CQ-SILENT-CATCH,whatsapp-bot correlateWork,warn log,DONE,Not reopened
+CQ-COMPLEX-CHECKOUT,checkout-attendance.flow,further split,DEFERRED,4C residual
+CQ-COMPLEX-REMINDER,attendance-reminder,further split,DEFERRED,4C residual

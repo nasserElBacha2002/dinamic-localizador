@@ -1,0 +1,15 @@
+# Placeholder — original recursive/git dump not recovered
+
+This file was emptied in the audit ZIP package (0 bytes).
+
+Narrative evidence for Phase 4A is restored in:
+- 4a1/ … 4a4/ implementation.md, security-invariant.md, retest.md, tests.md, gate-status.txt
+- finding-remediation-map.csv
+- phase-4a-final-report.md
+- residual-risks.md / regression-summary.md
+- implementation-corrections-summary.md / implementation-corrections-tests.txt
+- EVIDENCE-RECOVERY.md
+
+Do not treat this placeholder as a full workspace diff.
+Source for restoration: agent transcript session (2026-09-21 Phase 4A implementation).
+Code invariants remain in the repository (attendance schema/service, rate-limit SQL, geofence resolver, invitation POST preview).

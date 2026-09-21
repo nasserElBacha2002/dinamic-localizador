@@ -4,30 +4,35 @@
 
 `PHASE_4C_COMPLETE_WITH_RESIDUAL_DEBT`
 
-Incremental, behavior-preserving extractions on highest-value god seams (checkout flow + reminder outcomes). Larger modules reviewed and intentionally deferred to protect 4A/4B invariants.
+### Completed work (DONE)
 
-## What changed
+- checkout duplicate simulation hydration
+- checkout duplicate result-code mapping
+- reminder outcome classification
+- reminder kind-count aggregation
+- VirtualAttendanceRecord status typing (casts removed)
+- flow-level characterization Cases A–D
+- findings/docs/baseline/git evidence reconciled
 
-- Pure helpers for checkout observability codes, simulation attendance hydration, reminder outcome classification.
-- Characterization unit tests locking those behaviors.
-- Compact evidence under `audit-evidence/phase-4c/` (no recursive giant diffs).
+### Partially remediated god modules
 
-## What did not change
+- `checkout-attendance.flow` — PARTIALLY_REMEDIATED (~1252 LOC remains)
+- `attendance-reminder.service` — PARTIALLY_REMEDIATED (~1177 LOC remains)
 
-- Public APIs, DB schema, geofence/check-in policies, job locks, invitation token semantics, auth lifecycle.
-- No new frameworks, microservices, or state-machine libraries.
+### Deferred modules
 
-## Gate checklist
+- recurring-workday-materialization, operation, operation-assignment, absence-request, user-invitation, payroll-receipt
+
+## Gates
 
 | Gate | Result |
 |------|--------|
-| Priority god modules reviewed | PASS |
-| Critical responsibilities separated where justified | PASS |
-| No duplicate policy introduced | PASS |
-| No circular dependency introduced | PASS |
-| Critical transitions centralized or justified | PASS (already in checkout-validation) |
-| Behavior preserved | PASS (unit suite green) |
+| God findings not falsely DONE | PASS (PARTIALLY_REMEDIATED) |
+| Flow-level characterization | PASS (4) |
+| Helper characterization | PASS (8) |
+| No duplicate policy / circular deps | PASS |
+| 4A/4B invariants untouched | PASS |
+| Behavior preserved | PASS (0 fail) |
+| Baseline arithmetic documented | PASS (static +12 it / +2 files) |
 
-## Next
-
-Do **not** start Phase 4D. Do **not** commit/push without explicit instruction.
+DO NOT START PHASE 4D. DO NOT COMMIT OR PUSH unless requested.

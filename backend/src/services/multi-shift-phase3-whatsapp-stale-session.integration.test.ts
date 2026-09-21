@@ -363,7 +363,7 @@ describe("phase3 whatsapp stale-session / multi-shift (mock dry-run)", () => {
         employeeWorkdayId: employeeWorkdayAfternoon,
         receivedAt: "2026-07-05T17:10:00.000Z",
         validationStatus: "VALID",
-        locationStatus: "INSIDE",
+        locationStatus: "INSIDE_GEOFENCE",
         punctualityStatus: "ON_TIME",
         distanceMeters: 12,
       });
@@ -371,7 +371,7 @@ describe("phase3 whatsapp stale-session / multi-shift (mock dry-run)", () => {
       assert.equal(hasVirtualActiveRecord(employeeWorkdayAfternoon), true);
       completeVirtualCheckOut(attendanceMorning, {
         checkoutAt: "2026-07-05T16:00:00.000Z",
-        checkoutStatus: "COMPLETED",
+        checkoutStatus: "CHECKOUT_VALID",
       });
       assert.equal(hasVirtualActiveRecord(employeeWorkdayMorning), false);
       assert.equal(hasVirtualActiveRecord(employeeWorkdayAfternoon), true);

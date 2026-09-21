@@ -1,21 +1,23 @@
 # Phase 4C — Characterization tests
 
-## Added
+## Pure helpers
 
-`backend/src/services/bot/checkout-architecture.characterization.test.ts`
+`backend/src/services/bot/checkout-architecture.characterization.test.ts` — **8** tests
 
-Covers:
-
-- `resolveCheckoutWhatsAppResultCode` (rejected / completed / without-arrival)
+- `resolveCheckoutWhatsAppResultCode`
 - `roundCheckoutDistanceMeters`
-- `attendanceRecordFromVirtualCheckIn` (coords + simulation flags)
-- `classifyReminderSendOutcome` + `mergeReminderKindCounts`
+- `attendanceRecordFromVirtualCheckIn`
+- `classifyReminderSendOutcome` / `mergeReminderKindCounts`
 
-## Existing protection retained
+## Flow-level (orchestrator wiring)
 
-- `checkout-validation.test.ts`
-- Checkout / reminder / geofence / invitation / auth suites from 4A/4B (full unit run)
+`backend/src/services/bot/checkout-attendance.flow.characterization.test.ts` — **4** tests
 
-## Rule
+| Case | Asserts |
+|------|---------|
+| A | durable `registerCheckoutWithLocation` + `CHECKOUT_COMPLETED` |
+| B | `CHECKOUT_REJECTED` → `LOCATION_OUTSIDE_ALLOWED_RADIUS` |
+| C | exit-without-arrival → `CHECKOUT_WITHOUT_ARRIVAL` |
+| D | dry-run uses virtual hydration; no durable command; statuses/distance preserved |
 
-Refactor must not change mapped result codes or simulation field defaults — tests lock current behavior.
+Helpers `resolveCheckoutWhatsAppResultCode` / `attendanceRecordFromVirtualCheckIn` are **not** mocked.

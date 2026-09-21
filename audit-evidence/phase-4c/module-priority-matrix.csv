@@ -1,9 +1,9 @@
-module,priority,loc_before,god_confirmed,action,rationale
-checkout-attendance.flow,P1,~1313,yes,refactor_extract,Orchestration mixed with simulation hydration + resultCode mapping; policies already external
-attendance-reminder.service,P1,~1189,yes,refactor_extract,Outcome classification + kind-count merge are pure and duplicated in counters
-operation-assignment.service,P1,~1196,partial,defer,Already uses operation-assignment-core; further split needs characterization of coverage-batch
-recurring-workday-materialization.service,P1,~1181,yes,defer,4B lock path; behavior-preserving split postponed
-operation.service,P2,~1088,partial,defer,No circular dep with assignment; large but cohesive facade risk lower than checkout
-absence-request.service,P2,~976,yes,defer,4B error semantics freshly fixed; avoid reopen
-user-invitation.service,P2,~1034,yes,defer,4A token/preview invariants; high regression cost
-payroll-receipt.service,P3,~950,partial,defer,Notifications already extracted; residual is file/query cohesion
+module,priority,loc_before,god_confirmed,action,status,rationale
+checkout-attendance.flow,P1,~1313,yes,refactor_extract,PARTIALLY_REMEDIATED,Hydration + resultCode extracted; orchestrator remains
+attendance-reminder.service,P1,~1189,yes,refactor_extract,PARTIALLY_REMEDIATED,Outcome/kind-count extracted; send pipeline remains
+operation-assignment.service,P1,~1196,partial,defer,DEFERRED,Already uses operation-assignment-core; further split needs characterization
+recurring-workday-materialization.service,P1,~1181,yes,defer,DEFERRED,4B lock path; behavior-preserving split postponed
+operation.service,P2,~1088,partial,defer,DEFERRED,No circular dep with assignment; large but cohesive facade risk lower than checkout
+absence-request.service,P2,~976,yes,defer,DEFERRED,4B error semantics freshly fixed; avoid reopen
+user-invitation.service,P2,~1034,yes,defer,DEFERRED,4A token/preview invariants; high regression cost
+payroll-receipt.service,P3,~950,partial,defer,DEFERRED,Notifications already extracted; residual is file/query cohesion

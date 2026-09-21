@@ -4,19 +4,15 @@ Compact architecture remediation evidence. Full Git diffs live under gitignored 
 
 ## Files
 
-- architecture-before.md
-- architecture-after.md
+- architecture-before.md / architecture-after.md
 - module-priority-matrix.csv
-- dependency-map.md
-- refactor-decisions.md
+- dependency-map.md / refactor-decisions.md
 - characterization-tests.md
 - finding-remediation-map.csv
-- regression-summary.md
-- residual-risks.md
+- regression-summary.md / residual-risks.md
 - phase-4c-final-report.md
-- phase-4c-architecture-status.txt
-- phase-4c-architecture-diffstat.txt
-- phase-4c-architecture-name-status.txt
-- phase-4c-architecture-tests.txt
+- implementation-corrections-summary.md
+- phase-4c-architecture-{status,diffstat,name-status,tests}.txt
+- implementation-corrections-{status,diffstat,name-status,tests}.txt
 
-Full diff: `review/phase-4c-architecture-diff.txt` (and `review/latest-diff.txt`).
+Full diffs (local only): `review/implementation-corrections-diff.txt`, `review/latest-diff.txt`.

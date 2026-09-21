@@ -68,6 +68,10 @@ import {
   setLastTwilioPayload,
   setTechnicalDetail,
 } from "../utils/bot-runtime-context";
+import {
+  twilioWebhookPayloadToStringRecord,
+  twilioWebhookPayloadToUnknownRecord,
+} from "../utils/twilio-webhook-payload";
 
 const isLocationMessage = (payload: TwilioWebhookInput): boolean =>
   Boolean(payload.Latitude && payload.Longitude);
@@ -158,10 +162,10 @@ export const whatsappBotService = {
     let activeTrace: Awaited<ReturnType<typeof whatsappFlowTraceService.startExecution>> = null;
 
     try {
-      setLastTwilioPayload(payload as unknown as Record<string, string>);
+      setLastTwilioPayload(twilioWebhookPayloadToStringRecord(payload));
 
       if (!simulationContext) {
-        const payloadRecord = payload as unknown as Record<string, unknown>;
+        const payloadRecord = twilioWebhookPayloadToUnknownRecord(payload);
         const payloadHash = hashWebhookPayload(payloadRecord);
         const claim = await whatsappWebhookEventRepository.claimInboundMessage({
           companyId,
@@ -236,7 +240,7 @@ export const whatsappBotService = {
           latitude: payload.Latitude ? Number(payload.Latitude) : null,
           longitude: payload.Longitude ? Number(payload.Longitude) : null,
           status: "RECEIVED",
-          rawPayload: payload as unknown as Record<string, string>,
+          rawPayload: twilioWebhookPayloadToStringRecord(payload),
         });
         inboundMessageId = inboundMessage?.id ?? null;
       } else {
@@ -509,7 +513,12 @@ export const whatsappBotService = {
       if (!raced.timedOut) {
         correlatedSystemInteraction = raced.value;
       } else {
-        void correlateWork.catch(() => undefined);
+        void correlateWork.catch((error) => {
+          console.warn("[whatsapp-bot] shadow correlateWork failed after timeout", {
+            messageSid: input.payload.MessageSid,
+            errorMessage: error instanceof Error ? error.message : "unknown",
+          });
+        });
       }
     }
 
@@ -789,7 +798,12 @@ export const whatsappBotService = {
       if (!raced.timedOut) {
         correlatedSystemInteraction = raced.value;
       } else {
-        void correlateWork.catch(() => undefined);
+        void correlateWork.catch((error) => {
+          console.warn("[whatsapp-bot] shadow correlateWork failed after timeout", {
+            messageSid: input.payload.MessageSid,
+            errorMessage: error instanceof Error ? error.message : "unknown",
+          });
+        });
       }
     }
 

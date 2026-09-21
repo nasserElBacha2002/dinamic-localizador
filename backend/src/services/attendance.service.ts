@@ -21,8 +21,8 @@ import { evaluateAttendanceCheckIn } from "../utils/evaluate-attendance-check-in
 import { attendanceAuthoritativeClock } from "../utils/attendance-authoritative-clock";
 import { buildCsv } from "../utils/csv";
 import { buildPaginationMeta } from "../utils/pagination";
-import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../utils/sql-server-errors";
+import { isActiveAttendanceDuplicateKeyError, isAttendanceSourceMessageSidDuplicateKeyError } from "../utils/attendance-duplicate-errors";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import { systemLogger } from "../utils/system-logs/logger";
 
@@ -173,7 +173,7 @@ export const attendanceService = {
         validationReason: evaluated.validation.validationReason,
       });
     } catch (error) {
-      if (error instanceof Error && error.message.includes("UQ_attendance_records_source_message_sid")) {
+      if (isAttendanceSourceMessageSidDuplicateKeyError(error)) {
         throw new AppError(
           409,
           "SOURCE_MESSAGE_SID_ALREADY_EXISTS",

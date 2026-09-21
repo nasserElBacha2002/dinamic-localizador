@@ -27,6 +27,7 @@ import {
   parseAbsenceDateInput,
 } from "../utils/absence-date";
 import { buildPaginationMeta } from "../utils/pagination";
+import { matchesDuplicateKeyConstraint } from "../utils/sql-server-errors";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
 import { absenceBalanceImpactService } from "./absence-balance-impact.service";
@@ -152,9 +153,7 @@ const normalizeHalfDayPeriods = (
 };
 
 const isDuplicateSourceMessageSidError = (error: unknown): boolean =>
-  error instanceof Error &&
-  (error.message.includes("UQ_absence_requests_source_message_sid") ||
-    error.message.includes("duplicate key"));
+  matchesDuplicateKeyConstraint(error, "UQ_absence_requests_source_message_sid");
 
 const createRequest = async (
   companyId: string,

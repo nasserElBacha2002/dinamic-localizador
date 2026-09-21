@@ -6,6 +6,7 @@ import type {
   WhatsAppMessageType,
 } from "../types/twilio.types";
 import { mapWhatsAppMessageRow } from "../utils/row-mappers";
+import { matchesDuplicateKeyConstraint } from "../utils/sql-server-errors";
 
 const sanitizePayload = (payload: Record<string, string>): string => {
   const safe = { ...payload };
@@ -86,8 +87,7 @@ export const whatsappMessageRepository = {
     } catch (error) {
       if (
         input.messageSid &&
-        error instanceof Error &&
-        error.message.includes("UQ_whatsapp_messages_message_sid")
+        matchesDuplicateKeyConstraint(error, "UQ_whatsapp_messages_message_sid")
       ) {
         const existing = await this.findByMessageSid(input.companyId, input.messageSid);
         if (existing) {

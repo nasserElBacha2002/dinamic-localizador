@@ -1,0 +1,7 @@
+location,classification,action,status
+whatsapp-bot.service correlateWork.catch(()=>undefined),error_masking_best_effort,log warn with messageSid (no secrets),REMEDIATED
+whatsapp-flow-trace / job-tick catch→null,expected_soft_obs_4B,retain documented,JUSTIFIED
+attendance-reminder PARTIALLY_RECORDED,best_effort_obs,retain 4C residual,JUSTIFIED
+absence getById,ALREADY_REMEDIATED_4B,no reopen,ALREADY_REMEDIATED
+health.controller catch→false,expected readiness,retain,JUSTIFIED
+check-in/checkout duplicate handling,boundary_translation,structured helpers,REMEDIATED

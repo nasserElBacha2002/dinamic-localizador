@@ -25,6 +25,7 @@ audit-evidence/**/diff.txt
 audit-evidence/**/*-complete-diff.txt
 audit-evidence/**/implementation-corrections-diff.txt
 audit-evidence/**/*-architecture-diff.txt
+audit-evidence/**/*-quality-diff.txt
 
 # Local env backups / secrets
 *.env.save

@@ -25,7 +25,13 @@ async function resolveAuthenticatedPayload(token: string): Promise<AuthTokenPayl
   if (!user || !isSessionValid(user, payload.tokenVersion)) {
     throw new AppError(401, "INVALID_TOKEN", "Token inválido o expirado.");
   }
-  return payload;
+  // Prefer live DB identity over JWT claims so role downgrades take effect immediately.
+  return {
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    tokenVersion: payload.tokenVersion,
+  };
 }
 
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {

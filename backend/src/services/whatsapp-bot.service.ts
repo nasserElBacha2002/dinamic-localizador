@@ -625,7 +625,7 @@ export const whatsappBotService = {
 
     if (admission.decision === "REJECTED" || admission.decision === "QUOTA_FAILURE") {
       // Session untouched — cancelSessionBeforeDispatch only runs inside router after admit.
-      const policy = await whatsappUsageQuotaService.loadPolicy(input.companyId);
+      const policy = admission.policy;
       const day = resolveDayPeriod(now, policy.timezoneId);
       const notice = await whatsappUsageQuotaService.tryClaimLimitNotice({
         companyId: input.companyId,

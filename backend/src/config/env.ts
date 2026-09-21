@@ -51,7 +51,7 @@ const envSchema = z
     TWO_FACTOR_CHALLENGE_SECRET: z.string().min(16).optional(),
     TWO_FACTOR_CHALLENGE_TTL_MINUTES: z.coerce.number().int().positive().default(5),
     TWO_FACTOR_SETUP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
-    /** In-memory, per process. Also applied to 2FA confirm / disable / recovery regenerate. */
+    /** Shared SQL buckets by default (RATE_LIMIT_BACKEND=sql). memory = process-local/tests. Also applied to 2FA confirm / disable / recovery regenerate. */
     TWO_FACTOR_LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
     TWO_FACTOR_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(8),
     INVITATION_TTL_HOURS: z.coerce.number().int().positive().default(72),
@@ -60,6 +60,16 @@ const envSchema = z
     AUTH_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
     PASSWORD_RESET_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
     PASSWORD_RESET_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    /** sql = shared across replicas; memory = process-local (tests / single-instance only). */
+    RATE_LIMIT_BACKEND: z.enum(["sql", "memory"]).optional(),
+    /**
+     * Explicit override to allow RATE_LIMIT_BACKEND=memory in production (single-instance only).
+     * Without this, production + memory fails config validation (prevents silent LOC-P1-001 relapse).
+     */
+    RATE_LIMIT_ALLOW_MEMORY_IN_PRODUCTION: z.stringbool().default(false),
+    RATE_LIMIT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
+    RATE_LIMIT_CLEANUP_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(300_000),
+    RATE_LIMIT_CLEANUP_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(500),
     /** Floor for forgot-password duration (timing mitigation, not constant-time). */
     PASSWORD_RESET_MIN_DURATION_MS: z.coerce.number().int().nonnegative().default(300),
     PASSWORD_RESET_DURATION_JITTER_MS: z.coerce.number().int().nonnegative().default(150),
@@ -516,6 +526,20 @@ const envSchema = z
         code: "custom",
         message: "TWO_FACTOR_CHALLENGE_SECRET must not equal JWT_SECRET",
         path: ["TWO_FACTOR_CHALLENGE_SECRET"],
+      });
+    }
+
+    const rateLimitBackend = data.RATE_LIMIT_BACKEND ?? "sql";
+    if (
+      data.NODE_ENV === "production" &&
+      rateLimitBackend === "memory" &&
+      !data.RATE_LIMIT_ALLOW_MEMORY_IN_PRODUCTION
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "RATE_LIMIT_BACKEND=memory is blocked in production (multi-replica unsafe). Set RATE_LIMIT_ALLOW_MEMORY_IN_PRODUCTION=true only for documented single-instance deployments.",
+        path: ["RATE_LIMIT_BACKEND"],
       });
     }
   });

@@ -507,37 +507,64 @@ export const absenceRequestService = {
 
     const timezone = await resolveCompanyTimezone(companyId);
     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
-    const [events, affectedOperations, balanceImpact] = await Promise.all([
-      absenceRequestRepository.listEvents(companyId, id),
-      absenceOperationImpactService
-        .findAffectedOperations(
+
+    let affectedOperations;
+    try {
+      affectedOperations = await absenceOperationImpactService.findAffectedOperations(
+        companyId,
+        {
+          employeeId: request.employeeId,
+          startDate: request.startDate,
+          endDate: request.endDate,
+        },
+        timezone,
+      );
+    } catch (error) {
+      console.error("[absence-request] affected operations detail failed", {
+        companyId,
+        requestId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new AppError(
+        503,
+        "ABSENCE_AFFECTED_OPERATIONS_UNAVAILABLE",
+        "No se pudo calcular el impacto operativo de la ausencia. Reintentá más tarde.",
+        {
           companyId,
+          requestId: id,
+          cause: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+
+    let balanceImpact = null;
+    if (absenceType) {
+      try {
+        balanceImpact = await absenceBalanceService.getSummaryForRequest(
+          companyId,
+          request,
+          absenceType,
+        );
+      } catch (error) {
+        console.error("[absence-request] balance impact failed", {
+          companyId,
+          requestId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new AppError(
+          503,
+          "ABSENCE_BALANCE_IMPACT_UNAVAILABLE",
+          "No se pudo calcular el impacto de saldo de la ausencia. Reintentá más tarde.",
           {
-            employeeId: request.employeeId,
-            startDate: request.startDate,
-            endDate: request.endDate,
-          },
-          timezone,
-        )
-        .catch((error) => {
-          console.error("[absence-request] affected operations detail failed", {
             companyId,
             requestId: id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return [];
-        }),
-      absenceType
-        ? absenceBalanceService.getSummaryForRequest(companyId, request, absenceType).catch((error) => {
-            console.error("[absence-request] balance impact failed", {
-              companyId,
-              requestId: id,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            return null;
-          })
-        : Promise.resolve(null),
-    ]);
+            cause: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
+    }
+
+    const events = await absenceRequestRepository.listEvents(companyId, id);
 
     return {
       ...request,

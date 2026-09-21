@@ -19,4 +19,8 @@ describe("shouldClearSessionOn401", () => {
     assert.equal(shouldClearSessionOn401(403, "INVALID_TWO_FACTOR_CODE"), false);
     assert.equal(shouldClearSessionOn401(200, "INVALID_TOKEN"), false);
   });
+
+  it("does not clear session for auth/logout 401", () => {
+    assert.equal(shouldClearSessionOn401(401, "INVALID_TOKEN", "auth/logout"), false);
+  });
 });

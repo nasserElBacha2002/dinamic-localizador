@@ -20,6 +20,12 @@ frontend/.env
 AGENTS.md
 **/AGENTS.md
 
+# Phase audit: never version recursive/full workspace diffs (keep markdown inventories)
+audit-evidence/**/diff.txt
+audit-evidence/**/*-complete-diff.txt
+audit-evidence/**/implementation-corrections-diff.txt
+audit-evidence/**/*-architecture-diff.txt
+
 # Local env backups / secrets
 *.env.save
 backend/.env.save

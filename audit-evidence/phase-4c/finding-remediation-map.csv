@@ -1,0 +1,11 @@
+finding_id,area,remediation,status,notes
+ARCH-GOD-CHECKOUT,checkout-attendance.flow,Extract simulation hydration + resultCode pure helpers,DONE,Behavior-preserving; characterization tests
+ARCH-GOD-REMINDER,attendance-reminder.service,Extract outcome classification + kind-count merge,DONE,Partial-failure buckets unchanged
+ARCH-COUPLING-OPS,operation/assignment,Review deps; no circular import,REVIEWED_DEFERRED,operation-assignment-core already exists
+ARCH-STATE-CHECKOUT,checkout statuses,Keep single policy in checkout-validation,CONFIRMED,No alternate transition path added
+ARCH-SE-CHECKOUT,side effects,Document evaluate→persist→notify,CONFIRMED,Outbound best-effort after durable commit
+ARCH-ANY-SIM,simulation casts,Centralize adapter casts in one helper,PARTIAL,Casts remain at Virtual→Attendance boundary (justified adapter)
+ARCH-DEFER-ABSENCE,absence-request,No structural split in 4C,DEFERRED,Protect 4B error semantics
+ARCH-DEFER-INVITE,user-invitation,No structural split in 4C,DEFERRED,Protect 4A token/preview
+ARCH-DEFER-PAYROLL,payroll-receipt,No structural split in 4C,DEFERRED,Notifications already separated
+ARCH-DEFER-RECURRING,recurring-workday,No structural split in 4C,DEFERRED,Protect 4B locks

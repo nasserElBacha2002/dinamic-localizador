@@ -104,6 +104,25 @@ export const userRepository = {
     return nextVersion;
   },
 
+  /** Invalidate all outstanding JWTs for this user (logout / security stamp). */
+  async bumpTokenVersion(id: string, transaction?: sql.Transaction): Promise<number> {
+    const result = await requestFrom(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        UPDATE users
+        SET token_version = token_version + 1,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.token_version
+        WHERE id = @id
+      `);
+
+    const nextVersion = Number(result.recordset[0]?.token_version);
+    if (!Number.isInteger(nextVersion)) {
+      throw new Error("Failed to bump user token_version");
+    }
+    return nextVersion;
+  },
+
   async savePendingTwoFactorSecret(
     id: string,
     encryptedSecret: string,

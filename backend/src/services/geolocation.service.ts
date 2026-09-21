@@ -1,17 +1,23 @@
 import { calculateDistanceMeters } from "../utils/haversine";
 import { evaluateGeofence } from "../utils/attendance-validation";
-import { env } from "../config/env";
+import { geofencePolicyResolver } from "./geofence-policy.resolver";
 
 export const geolocationService = {
   calculateDistanceMeters,
 
-  evaluateDistance(
+  async evaluateDistance(
+    companyId: string,
     receivedLatitude: number,
     receivedLongitude: number,
     serviceLatitude: number,
     serviceLongitude: number,
-    allowedRadiusMeters: number,
+    serviceAllowedRadiusMeters: number,
   ) {
+    const policy = await geofencePolicyResolver.resolveForService(
+      companyId,
+      serviceAllowedRadiusMeters,
+    );
+
     const distanceMeters = calculateDistanceMeters(
       receivedLatitude,
       receivedLongitude,
@@ -19,12 +25,10 @@ export const geolocationService = {
       serviceLongitude,
     );
 
-    const radius =
-      allowedRadiusMeters > 0 ? allowedRadiusMeters : env.BOT_DEFAULT_RADIUS_METERS;
-
     return {
       distanceMeters,
-      ...evaluateGeofence(distanceMeters, radius, env.BOT_GEOFENCE_REVIEW_MARGIN_METERS),
+      ...evaluateGeofence(distanceMeters, policy.radiusMeters, policy.marginMeters),
+      policy,
     };
   },
 };

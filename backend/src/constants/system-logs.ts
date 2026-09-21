@@ -12,9 +12,11 @@ export const SYSTEM_LOG_MODULES = [
   "absence",
   "message-cost-sync",
   "system-log-retention",
+  "rate-limit-cleanup",
   "operation-assignment-notification",
   "company-deletion",
   "recurring-workday",
+  "attendance",
 ] as const;
 export type SystemLogModule = (typeof SYSTEM_LOG_MODULES)[number] | (string & {});
 
@@ -41,6 +43,10 @@ export const SYSTEM_LOG_EVENTS = [
   "system-log-retention.completed",
   "system-log-retention.failed",
   "system-log-retention.skipped",
+  "rate-limit-cleanup.completed",
+  "rate-limit-cleanup.failed",
+  "rate-limit-cleanup.skipped",
+  "attendance.validation.authoritative",
   "operation-assignment-notification.run.failed",
   "company-deletion.run.failed",
   "recurring-workday.run.failed",

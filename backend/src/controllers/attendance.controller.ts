@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import type { CreateAttendanceInput } from "../schemas/attendance.schema";
 import { attendanceService } from "../services/attendance.service";
 import { manualAttendanceService } from "../services/manual-attendance.service";
 import { requireRequestCompanyId } from "../utils/request-company";
@@ -6,7 +7,8 @@ import { requireRequestCompanyId } from "../utils/request-company";
 export const attendanceController = {
   async create(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const record = await attendanceService.create(companyId, req.body);
+    const body = (req.body ?? {}) as CreateAttendanceInput;
+    const record = await attendanceService.create(companyId, body);
     res.status(201).json({ data: record });
   },
 

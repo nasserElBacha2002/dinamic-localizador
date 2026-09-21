@@ -14,12 +14,17 @@ import { whatsappMessageRepository } from "../repositories/whatsapp-message.repo
 import type { ReviewAttendanceInput } from "../schemas/attendance-review.schema";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
 import { auditService } from "./audit.service";
+import { geofencePolicyResolver } from "./geofence-policy.resolver";
 import { workdayMaterializationService } from "./workday-materialization.service";
+import { serviceRepository } from "../repositories/service.repository";
+import { evaluateAttendanceCheckIn } from "../utils/evaluate-attendance-check-in";
+import { attendanceAuthoritativeClock } from "../utils/attendance-authoritative-clock";
 import { buildCsv } from "../utils/csv";
 import { buildPaginationMeta } from "../utils/pagination";
 import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../utils/sql-server-errors";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
+import { systemLogger } from "../utils/system-logs/logger";
 
 const formatLocalDateTime = (value: string | Date | null | undefined): string => {
   if (!value) {
@@ -48,6 +53,18 @@ export const attendanceService = {
     const employee = await employeeRepository.findById(companyId, input.employeeId);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+    }
+
+    const service = await serviceRepository.findById(companyId, operation.serviceId);
+    if (!service) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio / ubicación de la operación no encontrado");
+    }
+    if (!Number.isFinite(service.latitude) || !Number.isFinite(service.longitude)) {
+      throw new AppError(
+        409,
+        "SERVICE_COORDINATES_INVALID",
+        "La ubicación de la operación no tiene coordenadas válidas",
+      );
     }
 
     const operationWorkday = await workdayMaterializationService.ensureOperationWorkday(
@@ -87,10 +104,73 @@ export const attendanceService = {
       );
     }
 
+    const geofencePolicy = await geofencePolicyResolver.resolveForService(
+      companyId,
+      service.allowedRadiusMeters,
+    );
+
+    // Authoritative clock for punctuality — never client-controlled (LOC-P1-002).
+    const authoritativeAt = attendanceAuthoritativeClock.now();
+    const clientReportedReceivedAt = input.receivedAt;
+    const clientReportedDate = new Date(clientReportedReceivedAt);
+    if (Number.isNaN(clientReportedDate.getTime())) {
+      throw new AppError(400, "INVALID_RECEIVED_AT", "Fecha de recepción inválida");
+    }
+
+    const evaluated = evaluateAttendanceCheckIn({
+      coordinates: {
+        latitude: input.receivedLatitude,
+        longitude: input.receivedLongitude,
+      },
+      serviceCoordinates: {
+        latitude: service.latitude,
+        longitude: service.longitude,
+      },
+      geofencePolicy: {
+        radiusMeters: geofencePolicy.radiusMeters,
+        marginMeters: geofencePolicy.marginMeters,
+      },
+      authoritativeAt,
+      scheduledStart: new Date(operationWorkday.expectedStartAt),
+      earlyToleranceMinutes: operationWorkday.earlyToleranceMinutes,
+      lateToleranceMinutes: operationWorkday.lateToleranceMinutes,
+    });
+
+    systemLogger.info({
+      module: "attendance",
+      event: "attendance.validation.authoritative",
+      message: "Server-side attendance validation decision",
+      metadata: {
+        companyId,
+        operationId: input.operationId,
+        employeeId: input.employeeId,
+        distanceMeters: Math.round(evaluated.distanceMeters),
+        validationStatus: evaluated.validation.validationStatus,
+        locationStatus: evaluated.validation.locationStatus,
+        punctualityStatus: evaluated.validation.punctualityStatus,
+        geofenceRadiusSource: geofencePolicy.radiusSource,
+        geofenceMarginSource: geofencePolicy.marginSource,
+        authoritativeAt: authoritativeAt.toISOString(),
+        // Non-trusted client claim; not used for classification or persistence clock.
+        clientReportedReceivedAt,
+      },
+    });
+
     try {
       return await attendanceRepository.create(companyId, {
-        ...input,
+        operationId: input.operationId,
+        employeeId: input.employeeId,
+        receivedLatitude: input.receivedLatitude,
+        receivedLongitude: input.receivedLongitude,
+        // Persist server clock as the authoritative check-in timestamp.
+        receivedAt: authoritativeAt.toISOString(),
+        sourceMessageSid: input.sourceMessageSid ?? null,
         employeeWorkdayId: employeeWorkday.id,
+        distanceMeters: evaluated.distanceMeters,
+        validationStatus: evaluated.validation.validationStatus,
+        locationStatus: evaluated.validation.locationStatus,
+        punctualityStatus: evaluated.validation.punctualityStatus,
+        validationReason: evaluated.validation.validationReason,
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes("UQ_attendance_records_source_message_sid")) {

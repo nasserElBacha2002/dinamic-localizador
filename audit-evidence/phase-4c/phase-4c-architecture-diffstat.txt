@@ -1,0 +1,23 @@
+ .gitignore                                         |   6 +
+ audit-evidence/phase-4c/README.md                  |  22 ++++
+ audit-evidence/phase-4c/architecture-after.md      |  22 ++++
+ audit-evidence/phase-4c/architecture-before.md     |  27 +++++
+ audit-evidence/phase-4c/characterization-tests.md  |  21 ++++
+ audit-evidence/phase-4c/dependency-map.md          |  34 ++++++
+ .../phase-4c/finding-remediation-map.csv           |  11 ++
+ audit-evidence/phase-4c/module-priority-matrix.csv |   9 ++
+ .../phase-4c/phase-4c-architecture-diffstat.txt    |   0
+ .../phase-4c/phase-4c-architecture-name-status.txt |  18 +++
+ .../phase-4c/phase-4c-architecture-status.txt      |  22 ++++
+ .../phase-4c/phase-4c-architecture-tests.txt       |   5 +
+ audit-evidence/phase-4c/phase-4c-final-report.md   |  33 ++++++
+ audit-evidence/phase-4c/refactor-decisions.md      |  39 +++++++
+ audit-evidence/phase-4c/regression-summary.md      |  25 +++++
+ audit-evidence/phase-4c/residual-risks.md          |  21 ++++
+ .../src/services/attendance-reminder-outcomes.ts   |  51 +++++++++
+ .../src/services/attendance-reminder.service.ts    |  38 +++----
+ .../checkout-architecture.characterization.test.ts | 122 ++++++++++++++++++++
+ .../src/services/bot/checkout-attendance.flow.ts   | 123 ++++++---------------
+ backend/src/services/bot/checkout-result-code.ts   |  24 ++++
+ .../services/bot/checkout-simulation-attendance.ts |  50 +++++++++
+ 22 files changed, 606 insertions(+), 117 deletions(-)

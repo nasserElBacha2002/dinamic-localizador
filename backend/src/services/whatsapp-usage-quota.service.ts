@@ -4,6 +4,7 @@ import {
   WHATSAPP_QUOTA_REASON_CODES,
   type WhatsAppQuotaMode,
 } from "../constants/whatsapp-usage-quota";
+import { AppError } from "../errors/app-error";
 import { whatsappUsageQuotaRepository } from "../repositories/whatsapp-usage-quota.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import type {
@@ -126,23 +127,74 @@ const formatRecoverMessage = (
   return `Alcanzaste el límite diario de consultas por WhatsApp. Se restablece el ${when}. ${attendanceHint}`;
 };
 
+export type QuotaPolicyLoadResult =
+  | { kind: "configured"; value: WhatsAppQuotaPolicy; settingsSource: "company" }
+  | { kind: "defaulted"; value: WhatsAppQuotaPolicy; settingsSource: "default"; reason: "not_configured" }
+  | { kind: "error"; error: Error; code: "WHATSAPP_QUOTA_POLICY_LOAD_FAILED" };
+
 /**
  * Phase 2 usage quotas. Critical attendance paths never call admit/reserve under ENFORCE gates.
  * Fail-closed for EMPLOYEE_LIMITED when quota store is unavailable (ENFORCE only).
  * Effective OFF: zero I/O against whatsapp_quota_* tables.
+ *
+ * Missing company settings row → documented default (mode OFF).
+ * Repository / DB failure → explicit error (never silent default).
  */
 export const whatsappUsageQuotaService = {
-  async loadPolicy(companyId: string): Promise<WhatsAppQuotaPolicy> {
+  async resolvePolicy(companyId: string): Promise<QuotaPolicyLoadResult> {
+    let settings: QuotaSettingsFields | null;
     try {
-      const settings = await companySettingsRepository.findByCompanyId(companyId);
-      return buildPolicyFromSettings(
-        settings as QuotaSettingsFields | null,
-        env.BOT_OPERATION_TIMEZONE,
-      );
-    } catch {
-      // Pre-migration / settings missing columns → treat as safe defaults (mode OFF company).
-      return defaultPolicy(env.BOT_OPERATION_TIMEZONE);
+      settings = (await companySettingsRepository.findByCompanyId(
+        companyId,
+      )) as QuotaSettingsFields | null;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      systemLogger.error({
+        module: "whatsapp-quota",
+        event: "whatsapp-quota.policy.load_failed",
+        message: "WhatsApp quota policy load failed",
+        metadata: {
+          companyId,
+          code: "WHATSAPP_QUOTA_POLICY_LOAD_FAILED",
+          cause: err.message,
+        },
+      });
+      return { kind: "error", error: err, code: "WHATSAPP_QUOTA_POLICY_LOAD_FAILED" };
     }
+
+    if (!settings) {
+      systemLogger.info({
+        module: "whatsapp-quota",
+        event: "whatsapp-quota.policy.defaulted",
+        message: "WhatsApp quota policy defaulted (company settings not configured)",
+        metadata: { companyId, settingsSource: "default", reason: "not_configured" },
+      });
+      return {
+        kind: "defaulted",
+        value: defaultPolicy(env.BOT_OPERATION_TIMEZONE),
+        settingsSource: "default",
+        reason: "not_configured",
+      };
+    }
+
+    return {
+      kind: "configured",
+      value: buildPolicyFromSettings(settings, env.BOT_OPERATION_TIMEZONE),
+      settingsSource: "company",
+    };
+  },
+
+  async loadPolicy(companyId: string): Promise<WhatsAppQuotaPolicy> {
+    const resolved = await this.resolvePolicy(companyId);
+    if (resolved.kind === "error") {
+      throw new AppError(
+        503,
+        "WHATSAPP_QUOTA_POLICY_UNAVAILABLE",
+        "No se pudo cargar la política de cupos de WhatsApp. Reintentá más tarde.",
+        { companyId, cause: resolved.error.message },
+      );
+    }
+    return resolved.value;
   },
 
   effectiveMode(policy: WhatsAppQuotaPolicy): WhatsAppQuotaMode {
@@ -331,7 +383,21 @@ export const whatsappUsageQuotaService = {
     policy?: WhatsAppQuotaPolicy;
   }): Promise<QuotaTurnAdmissionResult & { policy: WhatsAppQuotaPolicy }> {
     const now = input.now ?? new Date();
-    const policy = input.policy ?? (await this.loadPolicy(input.companyId));
+    let policy = input.policy;
+    if (!policy) {
+      const resolved = await this.resolvePolicy(input.companyId);
+      if (resolved.kind === "error") {
+        // Fail closed for non-critical turns — never treat load failure as mode OFF.
+        const fallback = defaultPolicy(env.BOT_OPERATION_TIMEZONE);
+        return {
+          decision: "QUOTA_FAILURE",
+          reasonCode: WHATSAPP_QUOTA_REASON_CODES.POLICY_LOAD_FAILED,
+          mode: "ENFORCE",
+          policy: fallback,
+        };
+      }
+      policy = resolved.value;
+    }
     const mode = this.effectiveMode(policy);
 
     if (mode === "OFF") {
@@ -524,7 +590,14 @@ export const whatsappUsageQuotaService = {
     policy?: WhatsAppQuotaPolicy;
   }): Promise<QuotaOutboundReserveResult> {
     const now = input.now ?? new Date();
-    const policy = input.policy ?? (await this.loadPolicy(input.companyId));
+    let policy = input.policy;
+    if (!policy) {
+      const resolved = await this.resolvePolicy(input.companyId);
+      if (resolved.kind === "error") {
+        return { ok: false, reasonCode: WHATSAPP_QUOTA_REASON_CODES.POLICY_LOAD_FAILED };
+      }
+      policy = resolved.value;
+    }
     const mode = this.effectiveMode(policy);
 
     if (mode === "OFF") {
@@ -667,7 +740,15 @@ export const whatsappUsageQuotaService = {
     periodKey: string;
     policy?: WhatsAppQuotaPolicy;
   }): Promise<{ claimed: boolean; episodeKey: string; message: string | null }> {
-    const policy = input.policy ?? (await this.loadPolicy(input.companyId));
+    let policy = input.policy;
+    if (!policy) {
+      const resolved = await this.resolvePolicy(input.companyId);
+      if (resolved.kind === "error") {
+        const episodeKey = `${input.reasonCode}:${input.periodKey}`;
+        return { claimed: false, episodeKey, message: null };
+      }
+      policy = resolved.value;
+    }
     const mode = this.effectiveMode(policy);
     const episodeKey = `${input.reasonCode}:${input.periodKey}`;
     if (mode === "OFF" || !policy.limitNoticeEnabled) {

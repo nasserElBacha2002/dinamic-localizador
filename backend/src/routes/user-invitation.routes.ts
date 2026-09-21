@@ -63,12 +63,15 @@ publicInvitationRouter.post(
  * DEPRECATED — Legacy GET preview (token in query string).
  *
  * Residual risk: email deep-links still put the raw token in the browser URL
- * (`/invitations/accept?token=…`). Prefer POST /preview for API calls so the
- * token is not repeated in subsequent access-log URLs. Access logger redacts
- * `token` via `:safe-url`, but browser history / Referer exposure remains.
+ * (`/invitations/accept?token=…`). The SPA then calls preferred POST /preview
+ * (see frontend `invitations.api.ts`); GET remains for older API probes only.
+ * Prefer POST /preview for API calls so the token is not repeated in subsequent
+ * access-log URLs. Access logger redacts `token` via `:safe-url`, but browser
+ * history / Referer exposure remains for deep-links.
  *
- * Removal plan: after all clients use POST-only preview, delete this route in a
- * dedicated deprecation phase. Do not remove while older clients may probe GET.
+ * Removal plan: after telemetry shows zero GET /preview traffic and no external
+ * API consumers remain, delete this route in a dedicated deprecation phase.
+ * Do not remove while older clients may probe GET.
  */
 publicInvitationRouter.get(
   "/preview",

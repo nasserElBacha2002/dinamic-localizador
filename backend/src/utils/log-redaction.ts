@@ -1,3 +1,5 @@
+import { maskPhoneNumberForLog } from "./phone";
+
 const SENSITIVE_QUERY_KEYS = new Set([
   "token",
   "invitationtoken",
@@ -13,6 +15,8 @@ const SENSITIVE_QUERY_KEYS = new Set([
   "auth",
   "apikey",
   "api_key",
+  "verification_code",
+  "verificationcode",
 ]);
 
 const SENSITIVE_HEADER_KEYS = new Set([
@@ -23,7 +27,34 @@ const SENSITIVE_HEADER_KEYS = new Set([
   "x-auth-token",
 ]);
 
+/** Body / metadata keys that must never appear raw in application logs. */
+const SENSITIVE_BODY_KEYS = new Set([
+  "password",
+  "passwordhash",
+  "token",
+  "accesstoken",
+  "access_token",
+  "refreshtoken",
+  "refresh_token",
+  "invitationtoken",
+  "invitation_token",
+  "authorization",
+  "cookie",
+  "secret",
+  "clientsecret",
+  "apikey",
+  "api_key",
+  "authtoken",
+  "auth_token",
+  "verificationcode",
+  "verification_code",
+  "totp",
+  "otp",
+]);
+
 const REDACTED = "[REDACTED]";
+
+const normalizeKey = (key: string): string => key.toLowerCase().replace(/[_-]/g, "");
 
 export function sanitizeUrlForLogs(rawUrl: string): string {
   try {
@@ -47,7 +78,7 @@ export function sanitizeUrlForLogs(rawUrl: string): string {
     return `${url.pathname}${search ? `?${search}` : ""}${url.hash}`;
   } catch {
     return rawUrl.replace(
-      /([?&](?:token|password|secret|code|access_token|refresh_token|authorization)=)([^&]*)/gi,
+      /([?&](?:token|password|secret|code|access_token|refresh_token|authorization|verification_code)=)([^&]*)/gi,
       `$1${REDACTED}`,
     );
   }
@@ -72,6 +103,63 @@ export function sanitizeHeadersForLogs(
     out[key] = sanitizeHeaderValueForLogs(key, joined);
   }
   return out;
+}
+
+export function isSensitiveLogKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  if (SENSITIVE_QUERY_KEYS.has(lower) || SENSITIVE_BODY_KEYS.has(lower)) {
+    return true;
+  }
+  return SENSITIVE_BODY_KEYS.has(normalizeKey(key));
+}
+
+/**
+ * Deep-sanitize objects before logging (headers/body dumps, debug metadata).
+ * Preserves operationally useful identifiers; redacts secret material.
+ */
+export function sanitizeObjectForLogs(
+  value: unknown,
+  options: { maxDepth?: number } = {},
+): unknown {
+  const maxDepth = options.maxDepth ?? 4;
+
+  const walk = (node: unknown, depth: number): unknown => {
+    if (node == null || typeof node === "number" || typeof node === "boolean") {
+      return node;
+    }
+    if (typeof node === "string") {
+      return node;
+    }
+    if (depth >= maxDepth) {
+      return "[truncated]";
+    }
+    if (Array.isArray(node)) {
+      return node.map((item) => walk(item, depth + 1));
+    }
+    if (typeof node === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+        if (isSensitiveLogKey(key)) {
+          out[key] = REDACTED;
+          continue;
+        }
+        if (/phone/i.test(key) && typeof child === "string") {
+          out[key] = maskPhoneNumberForLog(child);
+          continue;
+        }
+        out[key] = walk(child, depth + 1);
+      }
+      return out;
+    }
+    return String(node);
+  };
+
+  return walk(value, 0);
+}
+
+/** Phone masking for ad-hoc security/ops logs (reuses phone util). */
+export function maskPhoneForLogs(phoneNumber: string): string {
+  return maskPhoneNumberForLog(phoneNumber);
 }
 
 /** True when raw secret material still appears in a log line (for tests). */

@@ -67,15 +67,26 @@ describeDatabaseIntegration("SQL rate-limit store (multi-replica)", () => {
   });
 
   it("window rollover resets count after expiry", async () => {
+    const { getPool } = await import("../database/connection");
     const key = `itest:rollover:${Date.now()}:${Math.random().toString(16).slice(2)}`;
     const store = createSqlRateLimitStore();
-    const shortWindowMs = 50;
+    const windowMs = 60_000;
     const max = 2;
 
-    assert.equal((await store.hit(key, shortWindowMs, max)).count, 1);
-    assert.equal((await store.hit(key, shortWindowMs, max)).count, 2);
-    await new Promise((r) => setTimeout(r, 80));
-    const after = await store.hit(key, shortWindowMs, max);
+    assert.equal((await store.hit(key, windowMs, max)).count, 1);
+    assert.equal((await store.hit(key, windowMs, max)).count, 2);
+
+    // Force expiry in SQL (avoids host↔container clock skew from short sleep windows).
+    await getPool()
+      .request()
+      .input("bucketKey", key)
+      .query(`
+        UPDATE dbo.rate_limit_buckets
+        SET expires_at_utc = DATEADD(second, -1, SYSUTCDATETIME())
+        WHERE bucket_key = @bucketKey
+      `);
+
+    const after = await store.hit(key, windowMs, max);
     assert.equal(after.count, 1);
     assert.equal(after.allowed, true);
   });
@@ -85,15 +96,23 @@ describeDatabaseIntegration("SQL rate-limit store (multi-replica)", () => {
     const store = createSqlRateLimitStore();
     const expiredKey = `itest:cleanup-exp:${Date.now()}`;
     const activeKey = `itest:cleanup-act:${Date.now()}`;
+    const pool = getPool();
 
-    await store.hit(expiredKey, 30, 10);
+    await store.hit(expiredKey, 60_000, 10);
     await store.hit(activeKey, 60_000, 10);
-    await new Promise((r) => setTimeout(r, 50));
+
+    await pool
+      .request()
+      .input("expiredKey", expiredKey)
+      .query(`
+        UPDATE dbo.rate_limit_buckets
+        SET expires_at_utc = DATEADD(second, -1, SYSUTCDATETIME())
+        WHERE bucket_key = @expiredKey
+      `);
 
     const deleted = await store.deleteExpiredBatch!(100);
     assert.ok(deleted >= 1);
 
-    const pool = getPool();
     const remaining = await pool
       .request()
       .input("expiredKey", expiredKey)

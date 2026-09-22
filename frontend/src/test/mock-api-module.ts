@@ -110,6 +110,8 @@ export const PLATFORM_COMPANIES_API_EXPORTS = [
 export const EMPLOYEES_API_EXPORTS = [
   "getEmployees",
   "getEmployeeById",
+  "getEmployeeClients",
+  "replaceEmployeeClients",
   "getEmployeeDeactivationImpact",
   "getEmployeeOperationalAvailability",
   "getEmployeeOperations",

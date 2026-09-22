@@ -1,5 +1,0 @@
-finding_id,subphase,root_cause,files_changed,tests,implementation_status,retest_status,residual_risk
-LOC-P1-002 / CF-2D-002 / SAST-2C-007/008,4A.1,Client-controlled attendance validation state,attendance.schema/service/repository + FE create form,attendance-authoritative-validation.test.ts,COMPLETE,PASS,Admin review/manual override still privileged by design
-LOC-P1-003 / LOC-P1-012 / CF-2D-003,4A.2,Token in URL access logs,access-logger + log-redaction + POST preview + FE api,log-redaction.test.ts,COMPLETE,PASS,Email deep-link still carries token in URL (REQUIRED_BY_DESIGN)
-LOC-P1-001 / CF-2D-001,4A.3,Process-local rate limit Map,rate-limit.ts + rate-limit-store + migration 140,rate-limit.test.ts,COMPLETE,PASS,Multi-instance SQL not dual-process proven in CI (UNIT_VERIFIED); migration must be applied
-CQ-001 / CQ-002 / CQ-003 / CF-2D-010,4A.4,Divergent geofence margin/radius sources,geofence-policy.resolver + bot-runtime + geolocation + simulator,geofence-policy.resolver.test.ts + bot-runtime-settings.service.test.ts,COMPLETE,PASS,Company settings load outage now fail-closed (availability tradeoff)

@@ -1,0 +1,45 @@
+---
+alwaysApply: true
+---
+This repository is Dinamic Attendance, a production attendance and workforce-management system with WhatsApp workflows, operations, work groups, schedules, absences, notifications, administrative actions, reporting, and SQL Server persistence.
+
+Apply the global engineering rules plus the following project-specific constraints.
+
+Domain integrity:
+- Preserve company, user, employee, operation, work-group, attendance, absence, schedule, and notification boundaries.
+- Do not assume that one employee has only one eligible shift, operation, or work period per day.
+- Changes involving shifts, slots, schedules, or work dates must consider multiple valid work periods on the same date.
+- Preserve compatibility with operations that use a single schedule as well as operations that use multiple shifts.
+- Do not collapse distinct attendance journeys into one record unless the domain explicitly requires it.
+
+Attendance rules:
+- Treat server time as authoritative where the existing system does so.
+- Preserve configured tolerances, grace periods, early/late rules, and company-specific settings.
+- Do not duplicate attendance-rule calculations across WhatsApp, admin UI, operations, reports, or background jobs when an existing shared rule can be reused.
+- Manual attendance and WhatsApp attendance must preserve their distinct source/audit semantics.
+- Manual administrative actions must not fabricate coordinates or WhatsApp evidence.
+- Preserve valid cases such as missing arrival, missing departure, approved absence, late arrival, early departure, and manually validated attendance.
+
+Authorization:
+- Enforce permissions on the backend even when UI controls are hidden.
+- Users must not gain privileges through self-edit flows.
+- Preserve protections against users disabling themselves or modifying equal/higher privileged users where applicable.
+- Administrative attendance actions must remain restricted to authorized internal roles.
+
+WhatsApp and notifications:
+- Treat WhatsApp messages as externally observable side effects.
+- Avoid duplicate sends and preserve idempotency.
+- Be careful with retries, scheduled jobs, leases, notification thresholds, and delivery state.
+- Do not increase WhatsApp volume unless explicitly required.
+- Preserve the distinction between urgent WhatsApp alerts and scheduled email/reporting workflows.
+
+Persistence and concurrency:
+- Follow existing SQL Server transaction and migration conventions.
+- Attendance creation/replacement/update flows must be safe under concurrent processing.
+- Background jobs must preserve existing lease/idempotency semantics.
+- Migrations must remain compatible with existing attendance history.
+
+Testing:
+- Prioritize boundary-time cases, multiple shifts, timezone/server-time behavior, permissions, duplicate processing, retries, manual attendance, absences, and concurrent updates.
+- Do not claim WhatsApp or email delivery succeeded unless the corresponding integration or execution evidence confirms it.
+

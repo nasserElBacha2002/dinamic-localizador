@@ -26,6 +26,17 @@ const expressType = {
   updatedAt: new Date().toISOString(),
 };
 
+const carrefourClient = {
+  id: "client-1",
+  companyId: "company-1",
+  name: "Carrefour",
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  createdBy: null,
+  updatedBy: null,
+};
+
 const warehouseType = {
   id: "type-2",
   companyId: "company-1",
@@ -61,6 +72,63 @@ describe("companyLocationTypesService", () => {
 
     assert.equal(activeOnly.length, 1);
     assert.equal(all.length, 2);
+  });
+
+  it("lists client formats with the requested tenant, client, search and active filters", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { companyLocationTypesRepository } = await import(
+      "../repositories/company-location-types.repository"
+    );
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+
+    let received: unknown[] = [];
+    mock.method(clientRepository, "findById", async () => carrefourClient);
+    mock.method(companyLocationTypesRepository, "listPageByClientId", async (...args) => {
+      received = args;
+      return { items: [expressType], total: 1 };
+    });
+
+    const result = await companyLocationTypesService.listLocationTypesForClient(
+      "company-1",
+      "client-1",
+      { page: 2, limit: 10, search: "express", active: true },
+    );
+
+    assert.deepEqual(received, [
+      "company-1",
+      "client-1",
+      { page: 2, limit: 10, search: "express", active: true },
+    ]);
+    assert.equal(result.data.length, 1);
+    assert.equal(result.meta.page, 2);
+    assert.equal(result.meta.total, 1);
+  });
+
+  it("does not list formats when the client does not belong to the requested tenant", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { companyLocationTypesRepository } = await import(
+      "../repositories/company-location-types.repository"
+    );
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+
+    let listed = false;
+    mock.method(clientRepository, "findById", async () => null);
+    mock.method(companyLocationTypesRepository, "listPageByClientId", async () => {
+      listed = true;
+      return { items: [], total: 0 };
+    });
+
+    await assert.rejects(
+      () =>
+        companyLocationTypesService.listLocationTypesForClient("company-1", "foreign-client", {
+          page: 1,
+          limit: 10,
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "CLIENT_NOT_FOUND",
+    );
+    assert.equal(listed, false);
   });
 
   it("rejects duplicate explicit code on create before insert", async () => {

@@ -28,6 +28,8 @@ import { EmployeeCreatePage } from "../pages/employees/EmployeeCreatePage";
 import { EmployeeEditPage } from "../pages/employees/EmployeeEditPage";
 import { EmployeeDetailPage } from "../pages/employees/EmployeeDetailPage";
 import { ServicesListPage } from "../pages/services/ServicesListPage";
+import { ClientsListPage } from "../pages/clients/ClientsListPage";
+import { ClientDetailPage } from "../pages/clients/ClientDetailPage";
 import { ServiceCreatePage } from "../pages/services/ServiceCreatePage";
 import { ServiceEditPage } from "../pages/services/ServiceEditPage";
 import { ServiceDetailPage } from "../pages/services/ServiceDetailPage";
@@ -227,6 +229,14 @@ export function AppRoutes() {
               <WorkTeamDetailPage />
             </FeatureRouteGuard>
           }
+        />
+        <Route
+          path="/clients"
+          element={<FeatureRouteGuard anyModuleOf={["attendance", "operations", "absences"]} requiredAnyPermission={["employees:read", "employees:manage"]}><ClientsListPage /></FeatureRouteGuard>}
+        />
+        <Route
+          path="/clients/:id"
+          element={<FeatureRouteGuard anyModuleOf={["attendance", "operations", "absences"]} requiredAnyPermission={["employees:read", "employees:manage"]}><ClientDetailPage /></FeatureRouteGuard>}
         />
         <Route
           path="/services"

@@ -5,6 +5,7 @@ import type {
   EmployeeFilters,
   UpdateEmployeeInput,
 } from "../types/employee";
+import type { Client } from "../types/client";
 import type {
   DeactivateEmployeeInput,
   EmployeeDeactivationImpact,
@@ -31,6 +32,27 @@ export async function getEmployeeById(
   options?: EmployeeRequestOptions,
 ): Promise<Employee> {
   const { data } = await scopedApiClient.get<SingleResponse<Employee>>(`employees/${id}`, options);
+  return data.data;
+}
+
+export async function getEmployeeClients(
+  id: string,
+  options?: EmployeeRequestOptions,
+): Promise<Client[]> {
+  const { data } = await scopedApiClient.get<SingleResponse<Client[]>>(`employees/${id}/clients`, options);
+  return data.data;
+}
+
+export async function replaceEmployeeClients(
+  id: string,
+  clientIds: string[],
+  options?: EmployeeRequestOptions,
+): Promise<Client[]> {
+  const { data } = await scopedApiClient.put<SingleResponse<Client[]>>(
+    `employees/${id}/clients`,
+    { clientIds },
+    options,
+  );
   return data.data;
 }
 

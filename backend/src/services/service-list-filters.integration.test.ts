@@ -18,6 +18,7 @@ import { userRepository } from "../repositories/user.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { hashPassword } from "../utils/password";
 import { companyLocationTypesRepository } from "../repositories/company-location-types.repository";
+import { clientService } from "./client.service";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -33,6 +34,8 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
   let noPermUserId = "";
   let noPermEmail = "";
   let formatCode = "";
+  let companyAClientId = "";
+  let companyBClientId = "";
 
   before(async () => {
     setupUnitTestEnv();
@@ -106,6 +109,15 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
       isActive: true,
     });
 
+    const companyAClient = await clientService.create(companyAId, ownerUserId, {
+      name: `Client A ${suffix}`,
+    });
+    const companyBClient = await clientService.create(companyBId, null, {
+      name: `Client B ${suffix}`,
+    });
+    companyAClientId = companyAClient.id;
+    companyBClientId = companyBClient.id;
+
     await serviceService.create(companyAId, {
       name: `Alpha ${suffix}`,
       locality: "  CABA  ",
@@ -114,6 +126,15 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
       serviceFormat: formatCode,
       latitude: -34.6,
       longitude: -58.4,
+      allowedRadiusMeters: 150,
+    });
+    await serviceService.create(companyAId, {
+      name: `Client Palermo ${suffix}`,
+      locality: "CABA",
+      neighborhood: "Palermo",
+      clientId: companyAClientId,
+      latitude: -34.61,
+      longitude: -58.41,
       allowedRadiusMeters: 150,
     });
     await serviceService.create(companyAId, {
@@ -175,6 +196,12 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
   after(async () => {
     const pool = getPool();
     for (const companyId of createdCompanyIds) {
+      await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
+        UPDATE operational_locations
+        SET client_id = NULL
+        WHERE company_id = @companyId;
+        DELETE FROM clients WHERE company_id = @companyId;
+      `);
       await deleteCompanyCascade(companyId);
     }
     for (const userId of createdUserIds) {
@@ -240,6 +267,28 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
     });
     assert.equal(combined.total, combined.items.length);
     assert.ok(combined.items.every((item) => item.neighborhood === "Belgrano"));
+  });
+
+  it("filters services by client within the company scope", async () => {
+    const filtered = await serviceRepository.list(companyAId, {
+      page: 1,
+      limit: 10,
+      clientId: companyAClientId,
+      search: "Client Palermo",
+      active: true,
+      sortDirection: "asc",
+    });
+    assert.equal(filtered.total, 1);
+    assert.equal(filtered.items[0]?.clientId, companyAClientId);
+
+    const foreignClient = await serviceRepository.list(companyAId, {
+      page: 1,
+      limit: 10,
+      clientId: companyBClientId,
+      sortDirection: "asc",
+    });
+    assert.equal(foreignClient.total, 0);
+    assert.deepEqual(foreignClient.items, []);
   });
 
   it("paginates with stable tie-break and sorts asc/desc", async () => {

@@ -1,17 +1,19 @@
-import { Accordion, Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Accordion, Button, Group, NumberInput, Stack, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import {
   AiSuggestionAppliedNotice,
   AiSuggestionCard,
 } from "../ai/AiSuggestionCard";
-import { useServices } from "../../hooks/useServices";
 import { useWorkTeamTeamRecommendation } from "../../hooks/useOperationRecommendations";
+import { ClientSearchAutocomplete } from "../clients/ClientSearchAutocomplete";
 import type { TeamRecommendationOption } from "../../types/recommendation";
+import type { Service } from "../../types/service";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   formatAffinityLabel,
   formatRecommendationReasons,
 } from "../../utils/recommendation-reasons";
+import { WorkTeamServiceSearchAutocomplete } from "./WorkTeamServiceSearchAutocomplete";
 
 function idsFingerprint(ids: string[]): string {
   return [...ids].sort((a, b) => a.localeCompare(b)).join("|");
@@ -50,7 +52,9 @@ export function WorkTeamAiCreationPanel({
   onApplyMembers,
 }: WorkTeamAiCreationPanelProps) {
   const [teamSize, setTeamSize] = useState(6);
+  const [clientId, setClientId] = useState<string | null>(null);
   const [serviceId, setServiceId] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedRank, setSelectedRank] = useState(1);
   const [detailOpen, setDetailOpen] = useState(false);
   const [appliedFingerprint, setAppliedFingerprint] = useState<string | null>(null);
@@ -61,16 +65,6 @@ export function WorkTeamAiCreationPanel({
   const suggestionFullyApplied =
     appliedFingerprint !== null && appliedFingerprint === currentFingerprint && !slotsRemain;
   const teamFilledWithoutSuggestion = !slotsRemain && !suggestionFullyApplied;
-
-  const servicesQuery = useServices({ page: 1, limit: 100, active: true });
-  const serviceOptions = useMemo(
-    () =>
-      (servicesQuery.data?.data ?? []).map((service) => ({
-        value: service.id,
-        label: service.name,
-      })),
-    [servicesQuery.data?.data],
-  );
 
   const recommendationQuery = useWorkTeamTeamRecommendation(
     {
@@ -123,6 +117,19 @@ export function WorkTeamAiCreationPanel({
     setTeamSize((size) => Math.min(20, Math.max(size + 1, lockedIds.length + 1)));
   };
 
+  const handleClientChange = (nextClientId: string | null) => {
+    if (
+      nextClientId !== null &&
+      selectedService !== null &&
+      selectedService.clientId !== nextClientId
+    ) {
+      setServiceId(null);
+      setSelectedService(null);
+    }
+
+    setClientId(nextClientId);
+  };
+
   const title = suggestionTitle(lockedIds.length);
 
   if (suggestionFullyApplied || teamFilledWithoutSuggestion) {
@@ -161,14 +168,12 @@ export function WorkTeamAiCreationPanel({
           onChange={(value) => setTeamSize(typeof value === "number" ? value : Number(value) || 2)}
           aria-label="Tamaño deseado del grupo"
         />
-        <Select
-          label="Sucursal (opcional)"
-          placeholder="Sin sucursal"
-          clearable
-          searchable
-          data={serviceOptions}
+        <ClientSearchAutocomplete value={clientId} onChange={handleClientChange} />
+        <WorkTeamServiceSearchAutocomplete
           value={serviceId}
-          onChange={(value) => setServiceId(value)}
+          clientId={clientId}
+          onChange={setServiceId}
+          onServiceSelected={setSelectedService}
         />
       </Group>
 

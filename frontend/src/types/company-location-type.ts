@@ -1,6 +1,7 @@
 export interface CompanyLocationType {
   id: string;
   companyId: string;
+  clientId: string | null;
   code: string;
   name: string;
   isActive: boolean;
@@ -21,4 +22,11 @@ export interface UpdateCompanyLocationTypeInput {
   code?: string;
   sortOrder?: number;
   isActive?: boolean;
+}
+
+export interface ClientLocationTypeFilters {
+  active?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
 }

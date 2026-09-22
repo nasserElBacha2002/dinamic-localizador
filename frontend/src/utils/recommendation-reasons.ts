@@ -105,6 +105,8 @@ export function formatRecommendationReason(reason: RecommendationReason): string
       return formatLocationProximityReason(params);
     case "OPERATION_TYPE_EXPERIENCE":
       return "Tiene experiencia en este tipo de operación";
+    case "CLIENT_AFFINITY":
+      return "Afinidad con el cliente";
     case "TEAM_HISTORY_COVERAGE": {
       const members = asPositiveInt(params.members);
       const connected = asPositiveInt(params.membersWithConnections);

@@ -2,7 +2,11 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Service } from "../types/domain";
 import { mapServiceRow } from "../utils/row-mappers";
-import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import {
+  applySqlFilters,
+  buildWhereClause,
+  type SqlFilter,
+} from "../utils/sql-list-query";
 import { resolveSqlSort } from "../utils/sql-sort";
 import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
 import {
@@ -51,114 +55,299 @@ export interface ServiceGeoFacets {
 }
 
 export const serviceRepository = {
-  async create(companyId: string, input: ServiceWriteInput): Promise<Service> {
+  async create(
+    companyId: string,
+    input: ServiceWriteInput,
+  ): Promise<Service> {
     const pool = getPool();
+
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(150), input.name)
       .input("address", sql.NVarChar(300), input.address ?? null)
-      .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
-      .input("locality", sql.NVarChar(150), input.locality ?? null)
-      .input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId ?? null)
-      .input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat ?? null)
-      .input("latitude", sql.Decimal(10, 7), input.latitude)
-      .input("longitude", sql.Decimal(10, 7), input.longitude)
-      .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
-      .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
+      .input(
+        "neighborhood",
+        sql.NVarChar(150),
+        input.neighborhood ?? null,
+      )
+      .input(
+        "locality",
+        sql.NVarChar(150),
+        input.locality ?? null,
+      )
+      .input(
+        "locationZoneId",
+        sql.UniqueIdentifier,
+        input.locationZoneId ?? null,
+      )
+      .input(
+        "clientId",
+        sql.UniqueIdentifier,
+        input.clientId ?? null,
+      )
+      .input(
+        "serviceFormat",
+        sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH),
+        input.serviceFormat ?? null,
+      )
+      .input(
+        "latitude",
+        sql.Decimal(10, 7),
+        input.latitude,
+      )
+      .input(
+        "longitude",
+        sql.Decimal(10, 7),
+        input.longitude,
+      )
+      .input(
+        "allowedRadiusMeters",
+        sql.Int,
+        input.allowedRadiusMeters,
+      )
+      .input(
+        "googlePlaceId",
+        sql.NVarChar(255),
+        input.googlePlaceId ?? null,
+      )
       .query(`
         DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+
         INSERT INTO operational_locations (
-          company_id, name, address, neighborhood, locality, location_zone_id, store_format,
-          latitude, longitude, allowed_radius_meters, google_place_id
+          company_id,
+          name,
+          address,
+          neighborhood,
+          locality,
+          location_zone_id,
+          client_id,
+          store_format,
+          latitude,
+          longitude,
+          allowed_radius_meters,
+          google_place_id
         )
         OUTPUT INSERTED.id INTO @inserted (id)
         VALUES (
-          @companyId, @name, @address, @neighborhood, @locality, @locationZoneId, @serviceFormat,
-          @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId
+          @companyId,
+          @name,
+          @address,
+          @neighborhood,
+          @locality,
+          @locationZoneId,
+          @clientId,
+          @serviceFormat,
+          @latitude,
+          @longitude,
+          @allowedRadiusMeters,
+          @googlePlaceId
         );
+
         SELECT ol.*
         FROM operational_locations ol
         INNER JOIN @inserted i ON i.id = ol.id;
       `);
 
-    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+    return mapServiceRow(
+      result.recordset[0] as Record<string, unknown>,
+    );
   },
 
   /** Multi-row insert for imports. Atomic for the whole batch. */
-  async createMany(companyId: string, inputs: ServiceWriteInput[]): Promise<Service[]> {
+  async createMany(
+    companyId: string,
+    inputs: ServiceWriteInput[],
+  ): Promise<Service[]> {
     if (inputs.length === 0) {
       return [];
     }
 
     const pool = getPool();
-    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+
+    const request = pool
+      .request()
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      );
+
     const valueSql: string[] = [];
 
-    for (let index = 0; index < inputs.length; index += 1) {
+    for (
+      let index = 0;
+      index < inputs.length;
+      index += 1
+    ) {
       const input = inputs[index]!;
-      request.input(`name${index}`, sql.NVarChar(150), input.name);
-      request.input(`address${index}`, sql.NVarChar(300), input.address ?? null);
-      request.input(`neighborhood${index}`, sql.NVarChar(150), input.neighborhood ?? null);
-      request.input(`locality${index}`, sql.NVarChar(150), input.locality ?? null);
+
+      request.input(
+        `name${index}`,
+        sql.NVarChar(150),
+        input.name,
+      );
+
+      request.input(
+        `address${index}`,
+        sql.NVarChar(300),
+        input.address ?? null,
+      );
+
+      request.input(
+        `neighborhood${index}`,
+        sql.NVarChar(150),
+        input.neighborhood ?? null,
+      );
+
+      request.input(
+        `locality${index}`,
+        sql.NVarChar(150),
+        input.locality ?? null,
+      );
+
       request.input(
         `locationZoneId${index}`,
         sql.UniqueIdentifier,
         input.locationZoneId ?? null,
       );
+
+      request.input(
+        `clientId${index}`,
+        sql.UniqueIdentifier,
+        input.clientId ?? null,
+      );
+
       request.input(
         `serviceFormat${index}`,
         sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH),
         input.serviceFormat ?? null,
       );
-      request.input(`latitude${index}`, sql.Decimal(10, 7), input.latitude);
-      request.input(`longitude${index}`, sql.Decimal(10, 7), input.longitude);
-      request.input(`allowedRadiusMeters${index}`, sql.Int, input.allowedRadiusMeters);
-      request.input(`googlePlaceId${index}`, sql.NVarChar(255), input.googlePlaceId ?? null);
+
+      request.input(
+        `latitude${index}`,
+        sql.Decimal(10, 7),
+        input.latitude,
+      );
+
+      request.input(
+        `longitude${index}`,
+        sql.Decimal(10, 7),
+        input.longitude,
+      );
+
+      request.input(
+        `allowedRadiusMeters${index}`,
+        sql.Int,
+        input.allowedRadiusMeters,
+      );
+
+      request.input(
+        `googlePlaceId${index}`,
+        sql.NVarChar(255),
+        input.googlePlaceId ?? null,
+      );
+
       valueSql.push(`(
-        @companyId, @name${index}, @address${index}, @neighborhood${index}, @locality${index},
-        @locationZoneId${index}, @serviceFormat${index}, @latitude${index}, @longitude${index},
-        @allowedRadiusMeters${index}, @googlePlaceId${index}
+        @companyId,
+        @name${index},
+        @address${index},
+        @neighborhood${index},
+        @locality${index},
+        @locationZoneId${index},
+        @clientId${index},
+        @serviceFormat${index},
+        @latitude${index},
+        @longitude${index},
+        @allowedRadiusMeters${index},
+        @googlePlaceId${index}
       )`);
     }
 
     const result = await request.query(`
       DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+
       INSERT INTO operational_locations (
-        company_id, name, address, neighborhood, locality, location_zone_id, store_format,
-        latitude, longitude, allowed_radius_meters, google_place_id
+        company_id,
+        name,
+        address,
+        neighborhood,
+        locality,
+        location_zone_id,
+        client_id,
+        store_format,
+        latitude,
+        longitude,
+        allowed_radius_meters,
+        google_place_id
       )
       OUTPUT INSERTED.id INTO @inserted (id)
       VALUES ${valueSql.join(",\n")};
+
       SELECT ol.*
       FROM operational_locations ol
       INNER JOIN @inserted i ON i.id = ol.id;
     `);
 
-    return result.recordset.map((row) => mapServiceRow(row as Record<string, unknown>));
+    return result.recordset.map((row) =>
+      mapServiceRow(
+        row as Record<string, unknown>,
+      ),
+    );
   },
 
-  async findById(companyId: string, id: string): Promise<Service | null> {
+  async findById(
+    companyId: string,
+    id: string,
+  ): Promise<Service | null> {
     const pool = getPool();
+
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM operational_locations WHERE id = @id AND company_id = @companyId");
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
+      .input(
+        "id",
+        sql.UniqueIdentifier,
+        id,
+      )
+      .query(`
+        SELECT *
+        FROM operational_locations
+        WHERE id = @id
+          AND company_id = @companyId
+      `);
 
     if (!result.recordset[0]) {
       return null;
     }
 
-    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+    return mapServiceRow(
+      result.recordset[0] as Record<string, unknown>,
+    );
   },
 
-  async findByCompanyAndName(companyId: string, name: string): Promise<Service | null> {
+  async findByCompanyAndName(
+    companyId: string,
+    name: string,
+  ): Promise<Service | null> {
     const pool = getPool();
+
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("name", sql.NVarChar(150), name)
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
+      .input(
+        "name",
+        sql.NVarChar(150),
+        name,
+      )
       .query(`
         SELECT TOP 1 *
         FROM operational_locations
@@ -170,7 +359,9 @@ export const serviceRepository = {
       return null;
     }
 
-    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+    return mapServiceRow(
+      result.recordset[0] as Record<string, unknown>,
+    );
   },
 
   async findByCompanyAndNameExcludingId(
@@ -179,11 +370,24 @@ export const serviceRepository = {
     excludeId: string,
   ): Promise<Service | null> {
     const pool = getPool();
+
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("name", sql.NVarChar(150), name)
-      .input("excludeId", sql.UniqueIdentifier, excludeId)
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
+      .input(
+        "name",
+        sql.NVarChar(150),
+        name,
+      )
+      .input(
+        "excludeId",
+        sql.UniqueIdentifier,
+        excludeId,
+      )
       .query(`
         SELECT TOP 1 *
         FROM operational_locations
@@ -196,32 +400,66 @@ export const serviceRepository = {
       return null;
     }
 
-    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+    return mapServiceRow(
+      result.recordset[0] as Record<string, unknown>,
+    );
   },
 
   async list(
     companyId: string,
     query: ListServicesQuery,
-  ): Promise<{ items: Service[]; total: number }> {
+  ): Promise<{
+    items: Service[];
+    total: number;
+  }> {
     const pool = getPool();
+
     const filters: SqlFilter[] = [
       {
         clause: "company_id = @companyId",
-        apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+        apply: (request) =>
+          request.input(
+            "companyId",
+            sql.UniqueIdentifier,
+            companyId,
+          ),
       },
     ];
 
     if (query.active !== undefined) {
       filters.push({
         clause: "active = @active",
-        apply: (request) => request.input("active", sql.Bit, query.active),
+        apply: (request) =>
+          request.input(
+            "active",
+            sql.Bit,
+            query.active,
+          ),
+      });
+    }
+
+    if (query.clientId) {
+      filters.push({
+        clause: "client_id = @clientId",
+        apply: (request) =>
+          request.input(
+            "clientId",
+            sql.UniqueIdentifier,
+            query.clientId,
+          ),
       });
     }
 
     if (query.search) {
       filters.push({
-        clause: "(name LIKE @search OR address LIKE @search OR neighborhood LIKE @search OR locality LIKE @search)",
-        apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
+        clause:
+          "(name LIKE @search OR address LIKE @search OR neighborhood LIKE @search OR locality LIKE @search)",
+        apply: (request) =>
+          request.input(
+            "search",
+            sql.NVarChar(150),
+            `%${query.search}%`,
+          ),
       });
     }
 
@@ -229,26 +467,50 @@ export const serviceRepository = {
       filters.push({
         clause: "store_format = @serviceFormat",
         apply: (request) =>
-          request.input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), query.serviceFormat),
+          request.input(
+            "serviceFormat",
+            sql.NVarChar(
+              SERVICE_FORMAT_MAX_LENGTH,
+            ),
+            query.serviceFormat,
+          ),
       });
     }
 
     if (query.locality) {
       filters.push({
         clause: "locality = @locality",
-        apply: (request) => request.input("locality", sql.NVarChar(150), query.locality),
+        apply: (request) =>
+          request.input(
+            "locality",
+            sql.NVarChar(150),
+            query.locality,
+          ),
       });
     }
 
     if (query.neighborhood) {
       filters.push({
-        clause: "neighborhood = @neighborhood",
-        apply: (request) => request.input("neighborhood", sql.NVarChar(150), query.neighborhood),
+        clause:
+          "neighborhood = @neighborhood",
+        apply: (request) =>
+          request.input(
+            "neighborhood",
+            sql.NVarChar(150),
+            query.neighborhood,
+          ),
       });
     }
 
-    const whereClause = buildWhereClause(filters);
-    const sortDirection: "asc" | "desc" = query.sortBy ? query.sortDirection : "desc";
+    const whereClause =
+      buildWhereClause(filters);
+
+    const sortDirection:
+      | "asc"
+      | "desc" = query.sortBy
+      ? query.sortDirection
+      : "desc";
+
     const orderBy = resolveSqlSort(
       query.sortBy,
       SERVICE_LIST_SORT_COLUMNS,
@@ -257,35 +519,75 @@ export const serviceRepository = {
     );
 
     const countRequest = pool.request();
-    applySqlFilters(countRequest, filters);
-    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM operational_locations ${whereClause}`);
-    const total = Number(countResult.recordset[0].total);
+
+    applySqlFilters(
+      countRequest,
+      filters,
+    );
+
+    const countResult =
+      await countRequest.query(`
+        SELECT COUNT(*) AS total
+        FROM operational_locations
+        ${whereClause}
+      `);
+
+    const total = Number(
+      countResult.recordset[0].total,
+    );
 
     const dataRequest = pool.request();
-    applySqlFilters(dataRequest, filters);
-    dataRequest.input("offset", sql.Int, (query.page - 1) * query.limit);
-    dataRequest.input("limit", sql.Int, query.limit);
 
-    const dataResult = await dataRequest.query(`
-      SELECT *
-      FROM operational_locations
-      ${whereClause}
-      ORDER BY ${orderBy}, id ASC
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-    `);
+    applySqlFilters(
+      dataRequest,
+      filters,
+    );
+
+    dataRequest.input(
+      "offset",
+      sql.Int,
+      (query.page - 1) * query.limit,
+    );
+
+    dataRequest.input(
+      "limit",
+      sql.Int,
+      query.limit,
+    );
+
+    const dataResult =
+      await dataRequest.query(`
+        SELECT *
+        FROM operational_locations
+        ${whereClause}
+        ORDER BY ${orderBy}, id ASC
+        OFFSET @offset ROWS
+        FETCH NEXT @limit ROWS ONLY
+      `);
 
     return {
-      items: dataResult.recordset.map((row) => mapServiceRow(row as Record<string, unknown>)),
+      items: dataResult.recordset.map(
+        (row) =>
+          mapServiceRow(
+            row as Record<string, unknown>,
+          ),
+      ),
       total,
     };
   },
 
-  async listGeoFacets(companyId: string): Promise<ServiceGeoFacets> {
+  async listGeoFacets(
+    companyId: string,
+  ): Promise<ServiceGeoFacets> {
     const pool = getPool();
-    // Single round-trip: locality/neighborhood pairs for the company (active + inactive).
+
     const pairsResult = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
       .query(`
         SELECT DISTINCT
           locality,
@@ -297,41 +599,88 @@ export const serviceRepository = {
       `);
 
     const localities: string[] = [];
-    const localitySeen = new Set<string>();
-    const neighborhoodsByLocality: Record<string, string[]> = {};
+    const localitySeen =
+      new Set<string>();
 
-    for (const row of pairsResult.recordset as Array<{
-      locality: string;
-      neighborhood: string | null;
-    }>) {
-      const locality = String(row.locality);
-      if (!localitySeen.has(locality)) {
+    const neighborhoodsByLocality: Record<
+      string,
+      string[]
+    > = {};
+
+    for (
+      const row of pairsResult.recordset as Array<{
+        locality: string;
+        neighborhood: string | null;
+      }>
+    ) {
+      const locality = String(
+        row.locality,
+      );
+
+      if (
+        !localitySeen.has(locality)
+      ) {
         localitySeen.add(locality);
         localities.push(locality);
       }
 
-      if (row.neighborhood === null || row.neighborhood === undefined) {
+      if (
+        row.neighborhood === null ||
+        row.neighborhood === undefined
+      ) {
         continue;
       }
 
-      const neighborhood = String(row.neighborhood);
-      const current = neighborhoodsByLocality[locality] ?? [];
-      if (!current.includes(neighborhood)) {
+      const neighborhood = String(
+        row.neighborhood,
+      );
+
+      const current =
+        neighborhoodsByLocality[
+          locality
+        ] ?? [];
+
+      if (
+        !current.includes(neighborhood)
+      ) {
         current.push(neighborhood);
-        neighborhoodsByLocality[locality] = current;
+
+        neighborhoodsByLocality[
+          locality
+        ] = current;
       }
     }
 
-    return { localities, neighborhoodsByLocality };
+    return {
+      localities,
+      neighborhoodsByLocality,
+    };
   },
 
-  async listAllActive(companyId: string): Promise<Service[]> {
+  async listAllActive(
+    companyId: string,
+  ): Promise<Service[]> {
     const pool = getPool();
+
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query("SELECT * FROM operational_locations WHERE active = 1 AND company_id = @companyId");
-    return result.recordset.map((row) => mapServiceRow(row as Record<string, unknown>));
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
+      .query(`
+        SELECT *
+        FROM operational_locations
+        WHERE active = 1
+          AND company_id = @companyId
+      `);
+
+    return result.recordset.map((row) =>
+      mapServiceRow(
+        row as Record<string, unknown>,
+      ),
+    );
   },
 
   /** Returns existing names keyed by lower-case trimmed name for import duplicate checks. */
@@ -339,141 +688,343 @@ export const serviceRepository = {
     companyId: string,
     names: string[],
   ): Promise<Map<string, string>> {
-    const unique = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
-    const existing = new Map<string, string>();
+    const unique = [
+      ...new Set(
+        names
+          .map((name) => name.trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    const existing =
+      new Map<string, string>();
+
     if (unique.length === 0) {
       return existing;
     }
 
     const pool = getPool();
     const chunkSize = 100;
-    for (let offset = 0; offset < unique.length; offset += chunkSize) {
-      const chunk = unique.slice(offset, offset + chunkSize);
-      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
-      const params = chunk.map((name, index) => {
-        const key = `name${index}`;
-        request.input(key, sql.NVarChar(150), name);
-        return `@${key}`;
-      });
-      const result = await request.query(`
-        SELECT name
-        FROM operational_locations
-        WHERE company_id = @companyId
-          AND name IN (${params.join(", ")})
-      `);
-      for (const row of result.recordset as Array<{ name: string }>) {
-        existing.set(String(row.name).trim().toLowerCase(), String(row.name));
+
+    for (
+      let offset = 0;
+      offset < unique.length;
+      offset += chunkSize
+    ) {
+      const chunk = unique.slice(
+        offset,
+        offset + chunkSize,
+      );
+
+      const request = pool
+        .request()
+        .input(
+          "companyId",
+          sql.UniqueIdentifier,
+          companyId,
+        );
+
+      const params = chunk.map(
+        (name, index) => {
+          const key = `name${index}`;
+
+          request.input(
+            key,
+            sql.NVarChar(150),
+            name,
+          );
+
+          return `@${key}`;
+        },
+      );
+
+      const result =
+        await request.query(`
+          SELECT name
+          FROM operational_locations
+          WHERE company_id = @companyId
+            AND name IN (${params.join(", ")})
+        `);
+
+      for (
+        const row of result.recordset as Array<{
+          name: string;
+        }>
+      ) {
+        existing.set(
+          String(row.name)
+            .trim()
+            .toLowerCase(),
+          String(row.name),
+        );
       }
     }
 
     return existing;
   },
 
-  async update(companyId: string, id: string, input: ServiceUpdateWriteInput): Promise<Service | null> {
+  async update(
+    companyId: string,
+    id: string,
+    input: ServiceUpdateWriteInput,
+  ): Promise<Service | null> {
     const pool = getPool();
+
     const fields: string[] = [];
+
     const request = pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("id", sql.UniqueIdentifier, id);
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
+      .input(
+        "id",
+        sql.UniqueIdentifier,
+        id,
+      );
 
     if (input.name !== undefined) {
-      request.input("name", sql.NVarChar(150), input.name);
+      request.input(
+        "name",
+        sql.NVarChar(150),
+        input.name,
+      );
+
       fields.push("name = @name");
     }
 
     if (input.address !== undefined) {
-      request.input("address", sql.NVarChar(300), input.address);
+      request.input(
+        "address",
+        sql.NVarChar(300),
+        input.address,
+      );
+
       fields.push("address = @address");
     }
 
-    if (input.neighborhood !== undefined) {
-      request.input("neighborhood", sql.NVarChar(150), input.neighborhood);
-      fields.push("neighborhood = @neighborhood");
+    if (
+      input.neighborhood !== undefined
+    ) {
+      request.input(
+        "neighborhood",
+        sql.NVarChar(150),
+        input.neighborhood,
+      );
+
+      fields.push(
+        "neighborhood = @neighborhood",
+      );
     }
 
-    if (input.locality !== undefined) {
-      request.input("locality", sql.NVarChar(150), input.locality);
-      fields.push("locality = @locality");
+    if (
+      input.locality !== undefined
+    ) {
+      request.input(
+        "locality",
+        sql.NVarChar(150),
+        input.locality,
+      );
+
+      fields.push(
+        "locality = @locality",
+      );
     }
 
-    if (input.locationZoneId !== undefined) {
-      request.input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId);
-      fields.push("location_zone_id = @locationZoneId");
+    if (
+      input.locationZoneId !==
+      undefined
+    ) {
+      request.input(
+        "locationZoneId",
+        sql.UniqueIdentifier,
+        input.locationZoneId,
+      );
+
+      fields.push(
+        "location_zone_id = @locationZoneId",
+      );
     }
 
-    if (input.serviceFormat !== undefined) {
-      request.input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat);
-      fields.push("store_format = @serviceFormat");
+    if (input.clientId !== undefined) {
+      request.input(
+        "clientId",
+        sql.UniqueIdentifier,
+        input.clientId,
+      );
+
+      fields.push(
+        "client_id = @clientId",
+      );
     }
 
-    if (input.latitude !== undefined) {
-      request.input("latitude", sql.Decimal(10, 7), input.latitude);
-      fields.push("latitude = @latitude");
+    if (
+      input.serviceFormat !== undefined
+    ) {
+      request.input(
+        "serviceFormat",
+        sql.NVarChar(
+          SERVICE_FORMAT_MAX_LENGTH,
+        ),
+        input.serviceFormat,
+      );
+
+      fields.push(
+        "store_format = @serviceFormat",
+      );
     }
 
-    if (input.longitude !== undefined) {
-      request.input("longitude", sql.Decimal(10, 7), input.longitude);
-      fields.push("longitude = @longitude");
+    if (
+      input.latitude !== undefined
+    ) {
+      request.input(
+        "latitude",
+        sql.Decimal(10, 7),
+        input.latitude,
+      );
+
+      fields.push(
+        "latitude = @latitude",
+      );
     }
 
-    if (input.allowedRadiusMeters !== undefined) {
-      request.input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters);
-      fields.push("allowed_radius_meters = @allowedRadiusMeters");
+    if (
+      input.longitude !== undefined
+    ) {
+      request.input(
+        "longitude",
+        sql.Decimal(10, 7),
+        input.longitude,
+      );
+
+      fields.push(
+        "longitude = @longitude",
+      );
     }
 
-    if (input.googlePlaceId !== undefined) {
-      request.input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId);
-      fields.push("google_place_id = @googlePlaceId");
+    if (
+      input.allowedRadiusMeters !==
+      undefined
+    ) {
+      request.input(
+        "allowedRadiusMeters",
+        sql.Int,
+        input.allowedRadiusMeters,
+      );
+
+      fields.push(
+        "allowed_radius_meters = @allowedRadiusMeters",
+      );
+    }
+
+    if (
+      input.googlePlaceId !== undefined
+    ) {
+      request.input(
+        "googlePlaceId",
+        sql.NVarChar(255),
+        input.googlePlaceId,
+      );
+
+      fields.push(
+        "google_place_id = @googlePlaceId",
+      );
     }
 
     if (input.active !== undefined) {
-      request.input("active", sql.Bit, input.active);
-      fields.push("active = @active");
+      request.input(
+        "active",
+        sql.Bit,
+        input.active,
+      );
+
+      fields.push(
+        "active = @active",
+      );
     }
 
     if (fields.length === 0) {
-      return this.findById(companyId, id);
+      return this.findById(
+        companyId,
+        id,
+      );
     }
 
-    fields.push("updated_at = SYSUTCDATETIME()");
+    fields.push(
+      "updated_at = SYSUTCDATETIME()",
+    );
 
-    const result = await request.query(`
-      DECLARE @updated TABLE (id UNIQUEIDENTIFIER);
-      UPDATE operational_locations
-      SET ${fields.join(", ")}
-      OUTPUT INSERTED.id INTO @updated (id)
-      WHERE id = @id AND company_id = @companyId;
-      SELECT ol.*
-      FROM operational_locations ol
-      INNER JOIN @updated u ON u.id = ol.id;
-    `);
+    const result =
+      await request.query(`
+        DECLARE @updated TABLE (id UNIQUEIDENTIFIER);
+
+        UPDATE operational_locations
+        SET ${fields.join(", ")}
+        OUTPUT INSERTED.id INTO @updated (id)
+        WHERE id = @id
+          AND company_id = @companyId;
+
+        SELECT ol.*
+        FROM operational_locations ol
+        INNER JOIN @updated u
+          ON u.id = ol.id;
+      `);
 
     if (!result.recordset[0]) {
       return null;
     }
 
-    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+    return mapServiceRow(
+      result.recordset[0] as Record<string, unknown>,
+    );
   },
 
-  async deactivate(companyId: string, id: string): Promise<Service | null> {
-    return this.update(companyId, id, { active: false });
+  async deactivate(
+    companyId: string,
+    id: string,
+  ): Promise<Service | null> {
+    return this.update(
+      companyId,
+      id,
+      {
+        active: false,
+      },
+    );
   },
 
-  async hasActiveOrScheduledOperations(companyId: string, serviceId: string): Promise<boolean> {
+  async hasActiveOrScheduledOperations(
+    companyId: string,
+    serviceId: string,
+  ): Promise<boolean> {
     const pool = getPool();
+
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("serviceId", sql.UniqueIdentifier, serviceId)
+      .input(
+        "companyId",
+        sql.UniqueIdentifier,
+        companyId,
+      )
+      .input(
+        "serviceId",
+        sql.UniqueIdentifier,
+        serviceId,
+      )
       .query(`
         SELECT TOP 1 1 AS found
         FROM scheduled_operations
         WHERE service_id = @serviceId
           AND company_id = @companyId
-          AND status IN ('SCHEDULED', 'IN_PROGRESS')
+          AND status IN (
+            'SCHEDULED',
+            'IN_PROGRESS'
+          )
       `);
 
-    return Boolean(result.recordset[0]);
+    return Boolean(
+      result.recordset[0],
+    );
   },
 };

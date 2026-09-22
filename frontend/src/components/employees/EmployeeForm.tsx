@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Box, Input, Stack } from "@mantine/core";
-import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { Box, Input, MultiSelect, Stack } from "@mantine/core";
+import { useEffect, useMemo, useRef } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
 import { terminology } from "../../domain/terminology";
 import {
@@ -15,6 +15,7 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useClients } from "../../hooks/useClients";
 import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
 import { employeeTypeLabels } from "../../utils/labels";
 import { hasAnyPermission, hasPermission } from "../../utils/permissions";
@@ -48,6 +49,8 @@ export function EmployeeForm({
   onSubmit,
 }: EmployeeFormProps) {
   const permissionsQuery = useCompanyPermissions();
+  const clientsQuery = useClients();
+  const initiallyAssociatedClientIds = useRef(new Set(defaultValues.clientIds ?? [])).current;
   const canCreateCategories = hasPermission(
     permissionsQuery.data?.permissions,
     "company:settings:update",
@@ -67,6 +70,14 @@ export function EmployeeForm({
   );
 
   const workerTypeLabel = `Tipo de ${terminology.worker.singular.toLowerCase()}`;
+  const clientOptions = useMemo(
+    () => (clientsQuery.data?.data ?? []).map((client) => ({
+      value: client.id,
+      label: client.isActive ? client.name : `${client.name} (inactivo)`,
+      inactive: !client.isActive,
+    })),
+    [clientsQuery.data],
+  );
 
   const {
     control,
@@ -136,6 +147,30 @@ export function EmployeeForm({
                   <RHFSwitch control={control} name="active" label="Activo" />
                 </Box>
               </Input.Wrapper>
+              <Controller
+                control={control}
+                name="clientIds"
+                render={({ field, fieldState }) => (
+                  <MultiSelect
+                    label="Clientes"
+                    placeholder={clientsQuery.isLoading ? "Cargando clientes..." : "Seleccioná uno o más clientes"}
+                    data={clientOptions.map(({ value, label }) => ({ value, label }))}
+                    value={field.value ?? []}
+                    onChange={(nextValue) => {
+                      const allowed = nextValue.filter((clientId) => {
+                        const option = clientOptions.find((candidate) => candidate.value === clientId);
+                        return option?.inactive !== true || initiallyAssociatedClientIds.has(clientId);
+                      });
+                      field.onChange(allowed);
+                    }}
+                    searchable
+                    clearable
+                    error={fieldState.error?.message}
+                    disabled={loading || clientsQuery.isLoading}
+                    nothingFoundMessage="No se encontraron clientes"
+                  />
+                )}
+              />
             </FormGrid>
 
             <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />

@@ -1,8 +1,0 @@
-repository,method,tenant_scoped,parameterized,transaction_safe,constraints,risk,status
-attendance.repository,mutations/lookups,yes,yes,yes,helpers exact,low,REVIEWED_OK
-whatsapp-message.repository,create,yes,yes,n/a,UQ_message_sid exact helper,low,REMEDIATED
-employee-workday-checkout.command,checkout MessageSid,yes,yes,yes,exact helper,low,REMEDIATED
-attendance.service,source MessageSid,yes,yes,yes,exact helper,low,REMEDIATED
-absence-request.service,source MessageSid,yes,yes,yes,exact UQ only,low,REMEDIATED
-companies,UQ_companies_name live probe,n/a,yes,n/a,integration verified matchesDuplicateKeyConstraint,low,VERIFIED_LIVE
-user-invitation.repository,findById/token,id/token,yes,forUpdate,service re-checks company,med,REVIEWED_JUSTIFIED

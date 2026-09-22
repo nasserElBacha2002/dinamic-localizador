@@ -36,6 +36,8 @@ mockApiModule(
   "api/employees.api",
   {
     getEmployeeById: async () => employee,
+    getEmployeeClients: async () => [],
+    replaceEmployeeClients: async () => [],
   },
   EMPLOYEES_API_EXPORTS,
 );

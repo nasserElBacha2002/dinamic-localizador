@@ -47,6 +47,8 @@ mockApiModule(
   "api/employees.api",
   {
     getEmployeeById: async () => employee,
+    getEmployeeClients: async () => [],
+    replaceEmployeeClients: async () => [],
     updateEmployee: async (_id: string, input: Record<string, unknown>) => {
       updateCalls += 1;
       lastUpdatePayload = input;

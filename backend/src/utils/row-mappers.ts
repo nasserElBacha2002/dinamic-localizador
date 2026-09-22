@@ -122,6 +122,7 @@ export const mapServiceRow = (row: Record<string, unknown>): Service => ({
   active: Boolean(row.active),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
+  clientId: row.client_id ? String(row.client_id) : null,
 });
 
 export const mapOperationRow = (row: Record<string, unknown>): Operation => ({

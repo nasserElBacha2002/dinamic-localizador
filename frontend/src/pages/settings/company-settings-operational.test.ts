@@ -175,7 +175,6 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /SettingsSummaryCard/);
     assert.match(pageFile, /Gestionar configuración operativa/);
     assert.match(pageFile, /Gestionar ausencias/);
-    assert.match(pageFile, /Gestionar formatos/);
     assert.match(pageFile, /LocationZonesDialog/);
     assert.match(pageFile, /setOpenDialog\("locationZones"\)/);
     assert.match(pageFile, /canEditGlobal=\{isPlatformAdmin\}/);
@@ -189,6 +188,7 @@ describe("Company settings page layout", () => {
     assert.doesNotMatch(pageFile, /requireCheckoutLocation/);
     assert.doesNotMatch(pageFile, /allowManualAttendanceCorrections/);
     assert.doesNotMatch(pageFile, /useCompanyModules/);
+    assert.doesNotMatch(pageFile, /Gestionar formatos/);
   });
 
   it("opens operational and other dialogs from summary cards", () => {
@@ -199,16 +199,15 @@ describe("Company settings page layout", () => {
 
     assert.match(pageFile, /CompanyOperationalSettingsDialog/);
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);
-    assert.match(pageFile, /CompanyLocationTypesDialog/);
     assert.match(pageFile, /LocationZonesDialog/);
     assert.match(pageFile, /CompanyWeeklyScheduleDialog/);
     assert.match(pageFile, /setOpenDialog\("operational"\)/);
     assert.match(pageFile, /setOpenDialog\("absences"\)/);
-    assert.match(pageFile, /setOpenDialog\("locationTypes"\)/);
     assert.match(pageFile, /setOpenDialog\("locationZones"\)/);
     assert.match(pageFile, /setOpenDialog\("workSchedule"\)/);
     assert.doesNotMatch(pageFile, /CompanyWeeklyScheduleSection/);
     assert.doesNotMatch(pageFile, /CompanyOperationOperationSettingsDialog/);
+    assert.doesNotMatch(pageFile, /CompanyLocationTypesDialog/);
   });
 });
 

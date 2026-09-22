@@ -63,6 +63,7 @@ export interface Service {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  clientId: string | null;
 }
 
 export interface Operation {
@@ -176,4 +177,15 @@ export interface AttendanceRecordWithRelations extends AttendanceRecord {
   service: Pick<Service, "id" | "name" | "address"> & { allowedRadiusMeters?: number };
   arrivalRegisteredByUser?: { id: string; name: string } | null;
   checkoutRegisteredByUser?: { id: string; name: string } | null;
+}
+
+export interface Client {
+  id: string;
+  companyId: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+  updatedBy: string | null;
 }

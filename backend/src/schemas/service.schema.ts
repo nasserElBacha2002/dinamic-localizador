@@ -30,6 +30,7 @@ export const createServiceSchema = z.object({
   longitude: z.number().min(-180).max(180),
   allowedRadiusMeters: z.number().int().positive().default(150),
   googlePlaceId: z.string().trim().max(255).optional().nullable(),
+  clientId: z.string().uuid().nullable().optional(),
 });
 
 export const updateServiceSchema = z
@@ -43,6 +44,7 @@ export const updateServiceSchema = z
     longitude: z.number().min(-180).max(180).optional(),
     allowedRadiusMeters: z.number().int().positive().optional(),
     googlePlaceId: z.string().trim().max(255).nullable().optional(),
+    clientId: z.string().uuid().nullable().optional(),
     active: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -58,6 +60,7 @@ export const listServicesQuerySchema = paginationQuerySchema
   .merge(searchFilterSchema)
   .merge(tableSortSchema)
   .extend({
+    clientId: z.string().uuid("UUID inválido").optional(),
     serviceFormat: z.string().trim().min(1).max(SERVICE_FORMAT_MAX_LENGTH).optional(),
     locality: z.string().trim().min(1).max(150).optional(),
     neighborhood: z.string().trim().min(1).max(150).optional(),

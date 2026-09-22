@@ -171,6 +171,7 @@ export function getAdminNavItems({
     ) {
       items.push({ label: terminology.worker.plural, path: "/employees", section: "management" });
       items.push({ label: "Grupos de trabajo", path: "/work-teams", section: "management" });
+      items.push({ label: "Clientes", path: "/clients", section: "management" });
     }
 
     if (

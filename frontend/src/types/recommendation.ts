@@ -30,6 +30,7 @@ export const RECOMMENDATION_REASON_CODES = [
   "TEAM_LOCATION_PROXIMITY",
   "TEAM_RECENT_COLLABORATION",
   "TEAM_ISOLATION_NOTE",
+  "CLIENT_AFFINITY",
 ] as const;
 
 export type RecommendationReasonCode = (typeof RECOMMENDATION_REASON_CODES)[number];

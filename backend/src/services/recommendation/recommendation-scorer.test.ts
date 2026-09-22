@@ -372,4 +372,23 @@ describe("recommendation-scorer V1", () => {
 
     assert.deepEqual(buildRecommendationReasons(unknown), []);
   });
+
+  it("keeps the historical score when client affinity is unavailable and rewards a client match", () => {
+    const base = {
+      employeeId: "employee",
+      assignedCount: 1,
+      affinityPairs: [],
+      serviceWorkdayCount: 2,
+      locationBucket: "CLOSE" as const,
+    };
+    const historical = scoreCandidateFeatures({ ...base, clientAffinity: null });
+    const implicitHistorical = scoreCandidateFeatures(base);
+    const matched = scoreCandidateFeatures({ ...base, clientAffinity: 1 });
+    const unmatched = scoreCandidateFeatures({ ...base, clientAffinity: 0 });
+    assert.equal(historical.score, implicitHistorical.score);
+    assert.ok(matched.score > unmatched.score);
+    assert.ok(unmatched.score > 0);
+    assert.equal(buildRecommendationReasons(matched).some((reason) => reason.code === "CLIENT_AFFINITY"), true);
+    assert.equal(buildRecommendationReasons(unmatched).some((reason) => reason.code === "CLIENT_AFFINITY"), false);
+  });
 });

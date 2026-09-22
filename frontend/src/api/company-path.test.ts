@@ -82,6 +82,14 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/work-teams`,
     );
     assert.equal(
+      scopedApiPath("clients"),
+      `companies/${ACTIVE_COMPANY_ID}/clients`,
+    );
+    assert.equal(
+      scopedApiPath("clients/client-id/location-types"),
+      `companies/${ACTIVE_COMPANY_ID}/clients/client-id/location-types`,
+    );
+    assert.equal(
       scopedApiPath("work-team-assignment-batches/batch-id"),
       `companies/${ACTIVE_COMPANY_ID}/work-team-assignment-batches/batch-id`,
     );
@@ -144,12 +152,16 @@ describe("scopedApiPath", () => {
     );
   });
 
-  it("uses explicit scopeCompanyId over active company for shift-templates", () => {
+  it("uses explicit scopeCompanyId over the active company", () => {
     setRuntimeCompanyId(ACTIVE_COMPANY_ID);
     const routeCompanyId = "22222222-2222-2222-2222-222222222222";
     assert.equal(
       scopedApiPath("shift-templates", routeCompanyId),
       `companies/${routeCompanyId}/shift-templates`,
+    );
+    assert.equal(
+      scopedApiPath("clients", routeCompanyId),
+      `companies/${routeCompanyId}/clients`,
     );
   });
 

@@ -1,13 +1,319 @@
-import { Button, Group, Stack, Switch, Table, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack, TextInput } from "@mantine/core";
+import { useCallback, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import { ErrorState, LoadingState, PageHeader, StatusBadge } from "../../design-system";
-import { useClient, useClientLocationTypes, useCreateClientLocationType, useDisableClientLocationType, useUpdateClientLocationType } from "../../hooks/useClients";
-import { useState } from "react";
+import {
+  DataTable,
+  ErrorState,
+  FilterBar,
+  FormErrorAlert,
+  LoadingState,
+  mapApiPaginationMeta,
+  PageHeader,
+  PaginationControls,
+  ResponsiveModal,
+  SearchInput,
+  StatusBadge,
+  type DataTableColumn,
+  type DataTableMobileCardConfig,
+} from "../../design-system";
+import {
+  useActivateClient,
+  useClient,
+  useClientLocationTypes,
+  useCreateClientLocationType,
+  useDeactivateClient,
+  useDisableClientLocationType,
+  useUpdateClient,
+  useUpdateClientLocationType,
+} from "../../hooks/useClients";
+import { useTableUrlState } from "../../hooks/useTableUrlState";
+import type { CompanyLocationType } from "../../types/company-location-type";
+import { getApiErrorMessage } from "../../utils/errors";
+
+const TABLE_DEFAULTS = {
+  page: 1,
+  pageSize: 10,
+  search: "",
+  active: "all" as "all" | "true" | "false",
+};
+
+const TABLE_FIELDS = {
+  active: { type: "enum", values: ["all", "true", "false"] },
+} as const;
 
 export function ClientDetailPage() {
-  const { id } = useParams<{ id: string }>(); const client = useClient(id); const types = useClientLocationTypes(id); const create = useCreateClientLocationType(id ?? ""); const update = useUpdateClientLocationType(id ?? ""); const disable = useDisableClientLocationType(id ?? ""); const [name, setName] = useState("");
-  if (!id) return <ErrorState message="Cliente no encontrado." />; if (client.isLoading) return <LoadingState />; if (!client.data) return <ErrorState message="Cliente no encontrado." />;
-  return <Stack><PageHeader title={client.data.name} description="Formatos propios del cliente." action={<StatusBadge label={client.data.isActive ? "Activo" : "Inactivo"} tone={client.data.isActive ? "success" : "neutral"} />} />
-    <Group align="end"><TextInput label="Nuevo formato" value={name} onChange={(e) => setName(e.currentTarget.value)} /><Button disabled={!client.data.isActive || !name.trim()} onClick={() => void create.mutateAsync({ name }).then(() => setName(""))}>Nuevo formato</Button></Group>
-    <Table><Table.Thead><Table.Tr><Table.Th>Nombre</Table.Th><Table.Th>Código</Table.Th><Table.Th>Activo</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{(types.data ?? []).map((type) => <Table.Tr key={type.id}><Table.Td>{type.name}</Table.Td><Table.Td>{type.code}</Table.Td><Table.Td><Switch checked={type.isActive} onChange={(e) => void (e.currentTarget.checked ? update.mutateAsync({ id: type.id, input: { isActive: true } }) : disable.mutateAsync(type.id))} /></Table.Td></Table.Tr>)}</Table.Tbody></Table></Stack>;
+  const { id } = useParams<{ id: string }>();
+  const table = useTableUrlState({ defaults: TABLE_DEFAULTS, fields: TABLE_FIELDS });
+  const client = useClient(id);
+  const types = useClientLocationTypes(id, {
+    page: table.page,
+    limit: table.pageSize,
+    search: table.state.search || undefined,
+    active: table.state.active === "all" ? undefined : table.state.active === "true",
+  });
+  const create = useCreateClientLocationType(id ?? "");
+  const update = useUpdateClientLocationType(id ?? "");
+  const disable = useDisableClientLocationType(id ?? "");
+  const updateClient = useUpdateClient();
+  const activate = useActivateClient();
+  const deactivate = useDeactivateClient();
+  const [createOpened, setCreateOpened] = useState(false);
+  const [formatName, setFormatName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [editClient, setEditClient] = useState(false);
+  const [clientName, setClientName] = useState("");
+  const [editType, setEditType] = useState<CompanyLocationType | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const columns = useMemo<DataTableColumn<CompanyLocationType>[]>(
+    () => [
+      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      { key: "code", header: "Código", getValue: (row) => row.code },
+      {
+        key: "isActive",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge
+            label={row.isActive ? "Activo" : "Inactivo"}
+            tone={row.isActive ? "success" : "neutral"}
+          />
+        ),
+      },
+    ],
+    [],
+  );
+
+  const mobileCard = useMemo<DataTableMobileCardConfig<CompanyLocationType>>(
+    () => ({
+      title: (row) => row.name,
+      subtitle: (row) => row.code,
+      status: (row) => (
+        <StatusBadge
+          label={row.isActive ? "Activo" : "Inactivo"}
+          tone={row.isActive ? "success" : "neutral"}
+        />
+      ),
+      fields: [],
+    }),
+    [],
+  );
+
+  const closeCreate = () => {
+    setCreateOpened(false);
+    setFormatName("");
+    setCreateError(null);
+  };
+
+  const submitCreate = async () => {
+    try {
+      setCreateError(null);
+      await create.mutateAsync({ name: formatName.trim() });
+      closeCreate();
+    } catch (error) {
+      setCreateError(getApiErrorMessage(error));
+    }
+  };
+
+  const submitEditType = async () => {
+    if (!editType) return;
+    try {
+      setEditError(null);
+      await update.mutateAsync({
+        id: editType.id,
+        input: { name: editType.name.trim(), code: editType.code.trim() },
+      });
+      setEditType(null);
+    } catch (error) {
+      setEditError(getApiErrorMessage(error));
+    }
+  };
+
+  const handleActiveFilterChange = useCallback(
+    (value: string | null) => {
+      if (value) table.setField("active", value as "all" | "true" | "false");
+    },
+    [table],
+  );
+
+  if (!id) return <ErrorState message="Cliente no encontrado." />;
+  if (client.isLoading) return <LoadingState />;
+  if (!client.data) return <ErrorState message="Cliente no encontrado." />;
+
+  return (
+    <Stack>
+      <PageHeader
+        title={client.data.name}
+        description="Formatos propios del cliente."
+        action={
+          <Group>
+            <Button
+              variant="default"
+              onClick={() => {
+                setClientName(client.data.name);
+                setEditClient(true);
+              }}
+            >
+              Editar
+            </Button>
+            <Button
+              loading={activate.isPending || deactivate.isPending}
+              disabled={activate.isPending || deactivate.isPending}
+              onClick={() =>
+                void (client.data.isActive
+                  ? deactivate.mutateAsync(client.data.id)
+                  : activate.mutateAsync(client.data.id))
+              }
+            >
+              {client.data.isActive ? "Desactivar" : "Activar"}
+            </Button>
+            <StatusBadge
+              label={client.data.isActive ? "Activo" : "Inactivo"}
+              tone={client.data.isActive ? "success" : "neutral"}
+            />
+          </Group>
+        }
+      />
+
+      <PageHeader
+        title="Formatos"
+        action={
+          <Button disabled={!client.data.isActive} onClick={() => setCreateOpened(true)}>
+            Nuevo formato
+          </Button>
+        }
+      />
+
+      <FilterBar
+        search={
+          <SearchInput
+            value={table.searchInput}
+            onChange={table.setSearch}
+            onSearch={table.commitSearch}
+            placeholder="Buscar por nombre o código"
+            label="Buscar"
+          />
+        }
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
+      >
+        <FilterBar.Item>
+          <Select
+            label="Estado"
+            value={table.state.active}
+            onChange={handleActiveFilterChange}
+            data={[
+              { value: "all", label: "Todos" },
+              { value: "true", label: "Activos" },
+              { value: "false", label: "Inactivos" },
+            ]}
+          />
+        </FilterBar.Item>
+      </FilterBar>
+
+      <DataTable
+        rows={types.data?.data ?? []}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        loading={types.isPending}
+        error={types.isError ? getApiErrorMessage(types.error) : undefined}
+        emptyTitle="No hay formatos"
+        emptyDescription="Creá el primer formato para este cliente."
+        onRowClick={(row) => {
+          setEditError(null);
+          setEditType(row);
+        }}
+        aria-label="Listado de formatos del cliente"
+        mobileView="cards"
+        mobileCard={mobileCard}
+        pagination={
+          types.data && types.data.data.length > 0 ? (
+            <PaginationControls
+              meta={mapApiPaginationMeta(types.data.meta)}
+              onPageChange={table.onPageChange}
+              pageSize={table.pageSize}
+              onPageSizeChange={table.onPageSizeChange}
+              showPageSizeSelector
+            />
+          ) : undefined
+        }
+      />
+
+      <ResponsiveModal
+        opened={createOpened}
+        onClose={closeCreate}
+        title="Nuevo formato"
+        footer={
+          <Group justify="flex-end">
+            <Button variant="default" disabled={create.isPending} onClick={closeCreate}>
+              Cancelar
+            </Button>
+            <Button loading={create.isPending} disabled={!formatName.trim()} onClick={() => void submitCreate()}>
+              Crear
+            </Button>
+          </Group>
+        }
+      >
+        <TextInput
+          label="Nombre"
+          value={formatName}
+          onChange={(event) => setFormatName(event.currentTarget.value)}
+        />
+        <FormErrorAlert message={createError} />
+      </ResponsiveModal>
+
+      <ResponsiveModal opened={editClient} onClose={() => setEditClient(false)} title="Editar cliente">
+        <TextInput label="Nombre" value={clientName} onChange={(event) => setClientName(event.currentTarget.value)} />
+        <Button
+          mt="md"
+          loading={updateClient.isPending}
+          disabled={!clientName.trim()}
+          onClick={() => void updateClient.mutateAsync({ id, name: clientName.trim() }).then(() => setEditClient(false))}
+        >
+          Guardar
+        </Button>
+      </ResponsiveModal>
+
+      <ResponsiveModal opened={Boolean(editType)} onClose={() => setEditType(null)} title="Editar formato">
+        {editType ? (
+          <>
+            <TextInput
+              label="Nombre"
+              value={editType.name}
+              onChange={(event) => setEditType({ ...editType, name: event.currentTarget.value })}
+            />
+            <TextInput
+              mt="sm"
+              label="Código"
+              value={editType.code}
+              onChange={(event) => setEditType({ ...editType, code: event.currentTarget.value })}
+            />
+            <Group mt="md" justify="space-between">
+              <Button
+                color={editType.isActive ? "red" : undefined}
+                variant="default"
+                loading={disable.isPending || update.isPending}
+                disabled={disable.isPending || update.isPending}
+                onClick={() =>
+                  void (editType.isActive
+                    ? disable.mutateAsync(editType.id)
+                    : update.mutateAsync({ id: editType.id, input: { isActive: true } }))
+                      .then((changed) => setEditType(changed))
+                }
+              >
+                {editType.isActive ? "Desactivar" : "Activar"}
+              </Button>
+              <Button
+                loading={update.isPending}
+                disabled={!editType.name.trim() || !editType.code.trim() || disable.isPending}
+                onClick={() => void submitEditType()}
+              >
+                Guardar
+              </Button>
+            </Group>
+            <FormErrorAlert message={editError} />
+          </>
+        ) : null}
+      </ResponsiveModal>
+    </Stack>
+  );
 }

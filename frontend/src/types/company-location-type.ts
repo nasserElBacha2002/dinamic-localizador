@@ -23,3 +23,10 @@ export interface UpdateCompanyLocationTypeInput {
   sortOrder?: number;
   isActive?: boolean;
 }
+
+export interface ClientLocationTypeFilters {
+  active?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+}

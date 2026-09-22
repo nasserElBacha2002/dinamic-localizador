@@ -11,6 +11,9 @@ export interface Client {
 
 export interface ClientFilters {
   active?: boolean;
+  search?: string;
+  sortBy?: "name" | "updatedAt";
+  sortDirection?: "asc" | "desc";
   page?: number;
   limit?: number;
 }

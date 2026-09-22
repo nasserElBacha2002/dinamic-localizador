@@ -2,6 +2,7 @@ import sql from "mssql";
 import { LEGACY_COMPANY_LOCATION_TYPE_SEEDS } from "../constants/company-location-types";
 import { getPool } from "../database/connection";
 import type { CompanyLocationType } from "../types/company";
+import type { ListClientLocationTypesQuery } from "../schemas/company-location-type.schema";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const toIsoString = (value: Date | string): string =>
@@ -83,6 +84,55 @@ export const companyLocationTypesRepository = {
         ${activeOnly ? "AND is_active = 1" : ""}
         ORDER BY sort_order ASC, name ASC`);
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
+  },
+
+  async listPageByClientId(
+    companyId: string,
+    clientId: string,
+    query: ListClientLocationTypesQuery,
+  ): Promise<{ items: CompanyLocationType[]; total: number }> {
+    const request = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("clientId", sql.UniqueIdentifier, clientId);
+    const filters = ["company_id = @companyId", "client_id = @clientId"];
+
+    if (query.active !== undefined) {
+      filters.push("is_active = @active");
+      request.input("active", sql.Bit, query.active ? 1 : 0);
+    }
+    if (query.search) {
+      filters.push("(name LIKE @search OR code LIKE @search)");
+      request.input("search", sql.NVarChar(200), `%${query.search}%`);
+    }
+
+    const whereClause = `WHERE ${filters.join(" AND ")}`;
+    const countResult = await request.query(`
+      SELECT COUNT(*) AS total
+      FROM company_location_types
+      ${whereClause}
+    `);
+    const offset = (query.page - 1) * query.limit;
+    const listResult = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("clientId", sql.UniqueIdentifier, clientId)
+      .input("offset", sql.Int, offset)
+      .input("limit", sql.Int, query.limit)
+      .input("active", sql.Bit, query.active === undefined ? null : query.active ? 1 : 0)
+      .input("search", sql.NVarChar(200), query.search ? `%${query.search}%` : null)
+      .query(`
+        SELECT *
+        FROM company_location_types
+        ${whereClause}
+        ORDER BY sort_order ASC, name ASC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `);
+
+    return {
+      items: listResult.recordset.map((row) => mapRow(row as Record<string, unknown>)),
+      total: Number(countResult.recordset[0]?.total ?? 0),
+    };
   },
 
   async findByIdForClient(companyId: string, clientId: string, id: string): Promise<CompanyLocationType | null> {

@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Box } from "@mantine/core";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
   FormActions,
@@ -74,6 +74,19 @@ export function ServiceForm({
   const { data: locationTypes = [] } = useCompanyLocationTypes(false);
   const { data: clientsResponse } = useClients();
   const clients = clientsResponse?.data ?? [];
+  const previousClientId = useRef(watchedValues.clientId ?? defaultValues.clientId ?? "");
+
+  useEffect(() => {
+    const clientId = watchedValues.clientId ?? "";
+    const format = watchedValues.serviceFormat ?? "";
+    if (previousClientId.current !== clientId && format) {
+      const assigned = locationTypes.find((type) => type.code === format);
+      if (assigned?.clientId !== null && assigned?.clientId !== clientId) {
+        setValue("serviceFormat", "", { shouldDirty: true });
+      }
+    }
+    previousClientId.current = clientId;
+  }, [locationTypes, setValue, watchedValues.clientId, watchedValues.serviceFormat]);
 
   const picker = useLocationPickerState({
     isEditMode,
@@ -144,14 +157,20 @@ export function ServiceForm({
                 label="Nombre de la ubicación"
                 required
               />
+              <RHFSelect 
+                control={control}
+                name="clientId"
+                label="Cliente"
+                data={clientOptions} 
+                />
               <RHFSelect
                 control={control}
                 name="serviceFormat"
                 label="Formato"
                 data={serviceFormatOptions}
+                disabled={!watchedValues.clientId}
                 clearable
               />
-              <RHFSelect control={control} name="clientId" label="Cliente" data={clientOptions} />
             </FormGrid>
             <Box mt="md">
               <RHFSwitch control={control} name="active" label="Activa" />

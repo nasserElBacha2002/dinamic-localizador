@@ -78,8 +78,12 @@ export const clientController = {
 
   async listLocationTypes(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const data = await companyLocationTypesService.listLocationTypesForClient(companyId, String(req.params.clientId));
-    res.status(200).json({ data });
+    const result = await companyLocationTypesService.listLocationTypesForClient(
+      companyId,
+      String(req.params.clientId),
+      req.validatedQuery as never,
+    );
+    res.status(200).json(result);
   },
   async createLocationType(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);

@@ -218,12 +218,13 @@ export const serviceService = {
 
     const effectiveClientId = normalized.clientId !== undefined ? normalized.clientId : existing.clientId;
     const effectiveServiceFormat = normalized.serviceFormat !== undefined ? normalized.serviceFormat : existing.serviceFormat;
+    const serviceFormatChanged = normalized.serviceFormat !== undefined && normalized.serviceFormat !== existing.serviceFormat;
     if (normalized.serviceFormat !== undefined || normalized.clientId !== undefined) {
       await companyLocationTypesService.assertActiveServiceFormat(
         companyId,
         effectiveServiceFormat,
         effectiveClientId,
-        normalized.serviceFormat === undefined,
+        !serviceFormatChanged,
       );
     }
 

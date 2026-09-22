@@ -8,6 +8,16 @@ export const listCompanyLocationTypesQuerySchema = z.object({
     .transform((value) => value === "true"),
 });
 
+export const listClientLocationTypesQuerySchema = z.object({
+  active: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === "true")),
+  search: z.string().trim().min(1).max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export const companyLocationTypeIdParamSchema = companyIdParamSchema.extend({
   locationTypeId: z.string().uuid("UUID inválido"),
 });
@@ -37,3 +47,4 @@ export const updateCompanyLocationTypeSchema = z
 
 export type CreateCompanyLocationTypeInput = z.infer<typeof createCompanyLocationTypeSchema>;
 export type UpdateCompanyLocationTypeInput = z.infer<typeof updateCompanyLocationTypeSchema>;
+export type ListClientLocationTypesQuery = z.infer<typeof listClientLocationTypesQuerySchema>;

@@ -5,8 +5,10 @@ import { companyRepository } from "../repositories/company.repository";
 import { clientRepository } from "../repositories/client.repository";
 import type {
   CreateCompanyLocationTypeInput,
+  ListClientLocationTypesQuery,
   UpdateCompanyLocationTypeInput,
 } from "../schemas/company-location-type.schema";
+import { buildPaginationMeta } from "../utils/pagination";
 import type { CompanyLocationType, CompanyMembershipSummary } from "../types/company";
 import { normalizeLocationTypeCode } from "../utils/location-type-code";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
@@ -61,10 +63,18 @@ export const companyLocationTypesService = {
     return companyLocationTypesRepository.listByCompanyId(companyId, activeOnly);
   },
 
-  async listLocationTypesForClient(companyId: string, clientId: string, activeOnly = false) {
+  async listLocationTypesForClient(
+    companyId: string,
+    clientId: string,
+    query: ListClientLocationTypesQuery,
+  ) {
     const client = await clientRepository.findById(companyId, clientId);
     if (!client) throw new AppError(404, "CLIENT_NOT_FOUND", "Cliente no encontrado");
-    return companyLocationTypesRepository.listByClientId(companyId, clientId, activeOnly);
+    const result = await companyLocationTypesRepository.listPageByClientId(companyId, clientId, query);
+    return {
+      data: result.items,
+      meta: buildPaginationMeta(query.page, query.limit, result.total),
+    };
   },
 
   async createLocationTypeForClient(companyId: string, clientId: string, input: CreateCompanyLocationTypeInput) {

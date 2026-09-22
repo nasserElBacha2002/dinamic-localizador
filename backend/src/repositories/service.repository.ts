@@ -438,6 +438,18 @@ export const serviceRepository = {
       });
     }
 
+    if (query.clientId) {
+      filters.push({
+        clause: "client_id = @clientId",
+        apply: (request) =>
+          request.input(
+            "clientId",
+            sql.UniqueIdentifier,
+            query.clientId,
+          ),
+      });
+    }
+
     if (query.search) {
       filters.push({
         clause:

@@ -54,6 +54,7 @@ export interface ServiceFilters {
   limit?: number;
   active?: boolean;
   search?: string;
+  clientId?: string;
   serviceFormat?: string;
   locality?: string;
   neighborhood?: string;

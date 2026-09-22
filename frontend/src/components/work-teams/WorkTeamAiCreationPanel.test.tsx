@@ -140,15 +140,60 @@ function renderPanel(
 
 describe("WorkTeamAiCreationPanel", () => {
   let postBodies: unknown[] = [];
+  let getCalls: Array<{
+    path: string;
+    params: Record<string, unknown>;
+    scopeCompanyId: string | undefined;
+  }> = [];
   const originalPost = scopedApiClient.post;
   const originalGet = scopedApiClient.get;
 
   beforeEach(() => {
     setRuntimeCompanyId("company-1");
     postBodies = [];
-    scopedApiClient.get = (async () => ({
-      data: { data: [], meta: { page: 1, pageSize: 100, totalItems: 0, totalPages: 0 } },
-    })) as typeof scopedApiClient.get;
+    getCalls = [];
+    scopedApiClient.get = (async (path, config) => {
+      const params = (config?.params ?? {}) as Record<string, unknown>;
+      getCalls.push({
+        path: String(path),
+        params,
+        scopeCompanyId: config?.scopeCompanyId,
+      });
+
+      if (String(path) === "clients") {
+        return {
+          data: {
+            data: [
+              {
+                id: "client-a",
+                name: "Carrefour",
+                isActive: true,
+              },
+            ],
+            meta: { page: 1, limit: 10, total: 1, totalPages: 1 },
+          },
+        };
+      }
+
+      if (String(path) === "services") {
+        return {
+          data: {
+            data: [
+              {
+                id: "service-a",
+                name: "Palermo Carrefour",
+                address: "Palermo",
+                active: true,
+                clientId: params.clientId === "client-a" ? "client-a" : null,
+              },
+            ],
+            meta: { page: 1, limit: 10, total: 1, totalPages: 1 },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected GET ${String(path)}`);
+    }) as typeof scopedApiClient.get;
     scopedApiClient.post = (async (_url: string, body?: unknown) => {
       postBodies.push(body);
       return { data: { data: teamResponse() } };
@@ -176,6 +221,25 @@ describe("WorkTeamAiCreationPanel", () => {
     const body = postBodies[0] as { lockedEmployeeIds: string[]; teamSize: number };
     assert.deepEqual(body.lockedEmployeeIds, ["w1"]);
     assert.equal(body.teamSize, 6);
+  });
+
+  it("loads the initial dynamic lookups with a bounded, company-scoped page", async () => {
+    const view = renderPanel();
+
+    await waitFor(() =>
+      assert.ok(
+        getCalls.some(
+          (call) => call.path === "services" && call.params.limit === 10,
+        ),
+      ),
+    );
+    assert.ok(
+      getCalls.every((call) => call.scopeCompanyId === "company-1"),
+    );
+    assert.ok(!getCalls.some((call) => call.path === "services" && call.params.limit === 100));
+    assert.ok(getCalls.some((call) => call.path === "clients" && call.params.limit === 10));
+    assert.ok(view.getByLabelText("Cliente (opcional)"));
+    assert.ok(view.getByLabelText("Sucursal (opcional)"));
   });
 
   it("applies suggestion to multi-select without creating the group", async () => {

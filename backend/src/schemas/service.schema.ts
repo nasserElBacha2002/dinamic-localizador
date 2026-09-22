@@ -60,6 +60,7 @@ export const listServicesQuerySchema = paginationQuerySchema
   .merge(searchFilterSchema)
   .merge(tableSortSchema)
   .extend({
+    clientId: z.string().uuid("UUID inválido").optional(),
     serviceFormat: z.string().trim().min(1).max(SERVICE_FORMAT_MAX_LENGTH).optional(),
     locality: z.string().trim().min(1).max(150).optional(),
     neighborhood: z.string().trim().min(1).max(150).optional(),

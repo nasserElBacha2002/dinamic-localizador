@@ -10,10 +10,11 @@ import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
 import { SERVICE_LIST_SORT_COLUMNS } from "../repositories/service.repository";
 
 describe("listServicesQuerySchema", () => {
-  it("accepts format, locality, neighborhood and sort filters", () => {
+  it("accepts format, client, locality, neighborhood and sort filters", () => {
     const parsed = listServicesQuerySchema.parse({
       page: "1",
       limit: "10",
+      clientId: "a9a11422-c346-4fb0-a381-8bc556f934aa",
       serviceFormat: "SUPER",
       locality: "CABA",
       neighborhood: "Palermo",
@@ -22,10 +23,15 @@ describe("listServicesQuerySchema", () => {
     });
 
     assert.equal(parsed.serviceFormat, "SUPER");
+    assert.equal(parsed.clientId, "a9a11422-c346-4fb0-a381-8bc556f934aa");
     assert.equal(parsed.locality, "CABA");
     assert.equal(parsed.neighborhood, "Palermo");
     assert.equal(parsed.sortBy, "name");
     assert.equal(parsed.sortDirection, "desc");
+  });
+
+  it("rejects an invalid client filter", () => {
+    assert.throws(() => listServicesQuerySchema.parse({ clientId: "not-a-uuid" }), z.ZodError);
   });
 
   it("rejects unknown sort fields", () => {

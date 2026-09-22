@@ -311,6 +311,7 @@ describe("serviceService client validation", () => {
   it("preserves an omitted client, unlinks null, and accepts an active replacement on update", async () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../repositories/client.repository");
+    const { companyLocationTypesService } = await import("./company-location-types.service");
     const { serviceRepository } = await import("../repositories/service.repository");
     const { serviceService } = await import("./service.service");
     const assignedClientId = "44444444-4444-4444-8444-444444444444";
@@ -318,6 +319,7 @@ describe("serviceService client validation", () => {
     const existing = { ...sampleService, clientId: assignedClientId };
 
     mock.method(serviceRepository, "findById", async () => existing);
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
     mock.method(serviceRepository, "findByCompanyAndNameExcludingId", async () => null);
     mock.method(clientRepository, "findById", async (companyId, clientId) => {
       assert.equal(companyId, "company-1");

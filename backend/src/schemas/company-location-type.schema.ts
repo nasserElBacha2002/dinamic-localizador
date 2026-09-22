@@ -12,6 +12,11 @@ export const companyLocationTypeIdParamSchema = companyIdParamSchema.extend({
   locationTypeId: z.string().uuid("UUID inválido"),
 });
 
+export const clientLocationTypeParamsSchema = z.object({
+  clientId: z.string().uuid("UUID inválido"),
+  locationTypeId: z.string().uuid("UUID inválido").optional(),
+});
+
 export const createCompanyLocationTypeSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio.").max(200),
   code: z.string().trim().min(1).max(80).optional(),

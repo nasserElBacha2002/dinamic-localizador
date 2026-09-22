@@ -90,8 +90,9 @@ export function ServiceForm({
   });
 
   const serviceFormatOptions = useMemo(() => {
+    const currentClientId = watchedValues.clientId ?? defaultValues.clientId ?? "";
     const activeOptions = locationTypes
-      .filter((type) => type.isActive)
+      .filter((type) => type.isActive && (type.clientId === null || type.clientId === currentClientId))
       .map((type) => ({ value: type.code, label: type.name }));
 
     const currentFormat = watchedValues.serviceFormat ?? defaultValues.serviceFormat ?? "";
@@ -107,7 +108,7 @@ export function ServiceForm({
     }
 
     return [{ value: "", label: "Sin tipo" }, ...activeOptions];
-  }, [defaultValues.serviceFormat, locationTypes, watchedValues.serviceFormat]);
+  }, [defaultValues.clientId, defaultValues.serviceFormat, locationTypes, watchedValues.clientId, watchedValues.serviceFormat]);
 
   const clientOptions = useMemo(() => {
     const activeOptions = clients

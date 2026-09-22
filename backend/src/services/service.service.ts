@@ -106,6 +106,7 @@ export const serviceService = {
     await companyLocationTypesService.assertActiveServiceFormat(
       companyId,
       normalized.serviceFormat,
+      normalized.clientId,
     );
 
     const name = input.name.trim();
@@ -215,10 +216,14 @@ export const serviceService = {
       normalized.clientId,
     );
 
-    if (normalized.serviceFormat !== undefined) {
+    const effectiveClientId = normalized.clientId !== undefined ? normalized.clientId : existing.clientId;
+    const effectiveServiceFormat = normalized.serviceFormat !== undefined ? normalized.serviceFormat : existing.serviceFormat;
+    if (normalized.serviceFormat !== undefined || normalized.clientId !== undefined) {
       await companyLocationTypesService.assertActiveServiceFormat(
         companyId,
-        normalized.serviceFormat,
+        effectiveServiceFormat,
+        effectiveClientId,
+        normalized.serviceFormat === undefined,
       );
     }
 

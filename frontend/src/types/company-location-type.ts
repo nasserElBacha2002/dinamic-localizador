@@ -1,6 +1,7 @@
 export interface CompanyLocationType {
   id: string;
   companyId: string;
+  clientId: string | null;
   code: string;
   name: string;
   isActive: boolean;

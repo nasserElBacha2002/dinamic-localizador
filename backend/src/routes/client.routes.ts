@@ -10,6 +10,7 @@ import {
   listClientsQuerySchema,
   updateClientSchema,
 } from "../schemas/client.schema";
+import { createCompanyLocationTypeSchema, updateCompanyLocationTypeSchema, clientLocationTypeParamsSchema } from "../schemas/company-location-type.schema";
 
 export const clientRouter = Router();
 
@@ -19,6 +20,11 @@ clientRouter.post(
   validate(createClientSchema),
   asyncHandler(clientController.create),
 );
+
+clientRouter.get("/:clientId/location-types", requirePermission("employees:read"), validate(clientIdParamSchema, "params"), asyncHandler(clientController.listLocationTypes));
+clientRouter.post("/:clientId/location-types", requirePermission("employees:manage"), validate(clientIdParamSchema, "params"), validate(createCompanyLocationTypeSchema), asyncHandler(clientController.createLocationType));
+clientRouter.patch("/:clientId/location-types/:locationTypeId", requirePermission("employees:manage"), validate(clientLocationTypeParamsSchema, "params"), validate(updateCompanyLocationTypeSchema), asyncHandler(clientController.updateLocationType));
+clientRouter.delete("/:clientId/location-types/:locationTypeId", requirePermission("employees:manage"), validate(clientLocationTypeParamsSchema, "params"), asyncHandler(clientController.disableLocationType));
 
 clientRouter.get(
   "/",

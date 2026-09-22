@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 
 import { clientService } from "../services/client.service";
+import { companyLocationTypesService } from "../services/company-location-types.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const clientController = {
@@ -73,5 +74,26 @@ export const clientController = {
     );
 
     res.status(200).json({ data: client });
+  },
+
+  async listLocationTypes(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await companyLocationTypesService.listLocationTypesForClient(companyId, String(req.params.clientId));
+    res.status(200).json({ data });
+  },
+  async createLocationType(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await companyLocationTypesService.createLocationTypeForClient(companyId, String(req.params.clientId), req.body);
+    res.status(201).json({ data });
+  },
+  async updateLocationType(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await companyLocationTypesService.updateLocationTypeForClient(companyId, String(req.params.clientId), String(req.params.locationTypeId), req.body);
+    res.status(200).json({ data });
+  },
+  async disableLocationType(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await companyLocationTypesService.disableLocationTypeForClient(companyId, String(req.params.clientId), String(req.params.locationTypeId));
+    res.status(200).json({ data });
   },
 };

@@ -63,6 +63,7 @@ export interface Service {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  clientId: string | null;
 }
 
 export interface Operation {
@@ -188,4 +189,3 @@ export interface Client {
   createdBy: string | null;
   updatedBy: string | null;
 }
-

@@ -1,6 +1,11 @@
 import { AppError } from "../errors/app-error";
+import { clientRepository } from "../repositories/client.repository";
 import { serviceRepository } from "../repositories/service.repository";
-import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
+import type {
+  CreateServiceInput,
+  ListServicesQuery,
+  UpdateServiceInput,
+} from "../schemas/service.schema";
 import { normalizeOptionalText } from "../utils/normalize-optional-text";
 import { buildPaginationMeta } from "../utils/pagination";
 import { isOperationalLocationNameDuplicateKeyError } from "../utils/service-name-duplicate-errors";
@@ -12,9 +17,41 @@ const SERVICE_NAME_ALREADY_EXISTS_MESSAGE =
 
 const throwIfDuplicateName = (error: unknown): never => {
   if (isOperationalLocationNameDuplicateKeyError(error)) {
-    throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
+    throw new AppError(
+      409,
+      "SERVICE_NAME_ALREADY_EXISTS",
+      SERVICE_NAME_ALREADY_EXISTS_MESSAGE,
+    );
   }
+
   throw error;
+};
+
+const validateClientForService = async (
+  companyId: string,
+  clientId: string | null | undefined,
+): Promise<void> => {
+  if (clientId === undefined || clientId === null) {
+    return;
+  }
+
+  const client = await clientRepository.findById(companyId, clientId);
+
+  if (!client) {
+    throw new AppError(
+      404,
+      "CLIENT_NOT_FOUND",
+      "Cliente no encontrado",
+    );
+  }
+
+  if (!client.isActive) {
+    throw new AppError(
+      409,
+      "CLIENT_INACTIVE",
+      "No se puede asignar el servicio a un cliente inactivo",
+    );
+  }
 };
 
 function normalizeServiceTextFields<
@@ -28,44 +65,84 @@ function normalizeServiceTextFields<
   const next = { ...input };
 
   if ("address" in input) {
-    next.address = normalizeOptionalText(input.address) as T["address"];
+    next.address = normalizeOptionalText(
+      input.address,
+    ) as T["address"];
   }
+
   if ("neighborhood" in input) {
-    next.neighborhood = normalizeOptionalText(input.neighborhood) as T["neighborhood"];
+    next.neighborhood = normalizeOptionalText(
+      input.neighborhood,
+    ) as T["neighborhood"];
   }
+
   if ("locality" in input) {
-    next.locality = normalizeOptionalText(input.locality) as T["locality"];
+    next.locality = normalizeOptionalText(
+      input.locality,
+    ) as T["locality"];
   }
+
   if ("serviceFormat" in input) {
-    next.serviceFormat = normalizeOptionalText(input.serviceFormat) as T["serviceFormat"];
+    next.serviceFormat = normalizeOptionalText(
+      input.serviceFormat,
+    ) as T["serviceFormat"];
   }
 
   return next;
 }
 
 export const serviceService = {
-  async create(companyId: string, input: CreateServiceInput) {
+  async create(
+    companyId: string,
+    input: CreateServiceInput,
+  ) {
     const normalized = normalizeServiceTextFields(input);
-    await companyLocationTypesService.assertActiveServiceFormat(companyId, normalized.serviceFormat);
+
+    await validateClientForService(
+      companyId,
+      normalized.clientId,
+    );
+
+    await companyLocationTypesService.assertActiveServiceFormat(
+      companyId,
+      normalized.serviceFormat,
+    );
 
     const name = input.name.trim();
-    const existing = await serviceRepository.findByCompanyAndName(companyId, name);
+
+    const existing =
+      await serviceRepository.findByCompanyAndName(
+        companyId,
+        name,
+      );
+
     if (existing) {
-      throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
+      throw new AppError(
+        409,
+        "SERVICE_NAME_ALREADY_EXISTS",
+        SERVICE_NAME_ALREADY_EXISTS_MESSAGE,
+      );
     }
 
-    const zone = await locationZoneService.findOrCreateByNameLocality(
-      companyId,
-      normalized.neighborhood ?? "",
-      normalized.locality ?? null,
-    );
+    const zone =
+      await locationZoneService.findOrCreateByNameLocality(
+        companyId,
+        normalized.neighborhood ?? "",
+        normalized.locality ?? null,
+      );
 
     try {
       return await serviceRepository.create(companyId, {
         ...normalized,
         name,
-        neighborhood: zone?.name ?? normalized.neighborhood ?? null,
-        locality: zone?.locality ?? normalized.locality ?? null,
+        neighborhood:
+          zone?.name ??
+          normalized.neighborhood ??
+          null,
+        locality:
+          zone?.locality ??
+          normalized.locality ??
+          null,
         locationZoneId: zone?.id ?? null,
       });
     } catch (error) {
@@ -73,11 +150,22 @@ export const serviceService = {
     }
   },
 
-  async list(companyId: string, query: ListServicesQuery) {
-    const result = await serviceRepository.list(companyId, query);
+  async list(
+    companyId: string,
+    query: ListServicesQuery,
+  ) {
+    const result = await serviceRepository.list(
+      companyId,
+      query,
+    );
+
     return {
       data: result.items,
-      meta: buildPaginationMeta(query.page, query.limit, result.total),
+      meta: buildPaginationMeta(
+        query.page,
+        query.limit,
+        result.total,
+      ),
     };
   },
 
@@ -89,25 +177,58 @@ export const serviceService = {
     return serviceRepository.listGeoFacets(companyId);
   },
 
-  async getById(companyId: string, id: string) {
-    const service = await serviceRepository.findById(companyId, id);
+  async getById(
+    companyId: string,
+    id: string,
+  ) {
+    const service = await serviceRepository.findById(
+      companyId,
+      id,
+    );
+
     if (!service) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+      throw new AppError(
+        404,
+        "SERVICE_NOT_FOUND",
+        "Servicio no encontrado",
+      );
     }
+
     return service;
   },
 
-  async update(companyId: string, id: string, input: UpdateServiceInput) {
-    const existing = await this.getById(companyId, id);
+  async update(
+    companyId: string,
+    id: string,
+    input: UpdateServiceInput,
+  ) {
+    const existing = await this.getById(
+      companyId,
+      id,
+    );
 
-    const normalized = normalizeServiceTextFields(input);
+    const normalized =
+      normalizeServiceTextFields(input);
+
+    await validateClientForService(
+      companyId,
+      normalized.clientId,
+    );
 
     if (normalized.serviceFormat !== undefined) {
-      await companyLocationTypesService.assertActiveServiceFormat(companyId, normalized.serviceFormat);
+      await companyLocationTypesService.assertActiveServiceFormat(
+        companyId,
+        normalized.serviceFormat,
+      );
     }
 
     if (normalized.active === false) {
-      const hasSchedules = await serviceRepository.hasActiveOrScheduledOperations(companyId, id);
+      const hasSchedules =
+        await serviceRepository.hasActiveOrScheduledOperations(
+          companyId,
+          id,
+        );
+
       if (hasSchedules) {
         throw new AppError(
           409,
@@ -118,29 +239,53 @@ export const serviceService = {
     }
 
     const neighborhood =
-      normalized.neighborhood !== undefined ? normalized.neighborhood : existing.neighborhood;
-    const locality = normalized.locality !== undefined ? normalized.locality : existing.locality;
-    const geoTouched =
-      normalized.neighborhood !== undefined || normalized.locality !== undefined;
+      normalized.neighborhood !== undefined
+        ? normalized.neighborhood
+        : existing.neighborhood;
 
-    let locationZoneId: string | null | undefined = undefined;
-    let syncedNeighborhood: string | null | undefined = undefined;
-    let syncedLocality: string | null | undefined = undefined;
+    const locality =
+      normalized.locality !== undefined
+        ? normalized.locality
+        : existing.locality;
+
+    const geoTouched =
+      normalized.neighborhood !== undefined ||
+      normalized.locality !== undefined;
+
+    let locationZoneId: string | null | undefined =
+      undefined;
+
+    let syncedNeighborhood:
+      | string
+      | null
+      | undefined = undefined;
+
+    let syncedLocality:
+      | string
+      | null
+      | undefined = undefined;
 
     if (geoTouched) {
-      const zone = await locationZoneService.findOrCreateByNameLocality(
-        companyId,
-        neighborhood ?? "",
-        locality ?? null,
-      );
+      const zone =
+        await locationZoneService.findOrCreateByNameLocality(
+          companyId,
+          neighborhood ?? "",
+          locality ?? null,
+        );
+
       locationZoneId = zone?.id ?? null;
-      syncedNeighborhood = zone?.name ?? neighborhood ?? null;
-      syncedLocality = zone?.locality ?? locality ?? null;
+      syncedNeighborhood =
+        zone?.name ?? neighborhood ?? null;
+      syncedLocality =
+        zone?.locality ?? locality ?? null;
     }
 
     const updatePayload = {
       ...normalized,
-      name: input.name !== undefined ? input.name.trim() : undefined,
+      name:
+        input.name !== undefined
+          ? input.name.trim()
+          : undefined,
       ...(geoTouched
         ? {
             neighborhood: syncedNeighborhood,
@@ -151,33 +296,60 @@ export const serviceService = {
     };
 
     if (updatePayload.name !== undefined) {
-      const duplicate = await serviceRepository.findByCompanyAndNameExcludingId(
-        companyId,
-        updatePayload.name,
-        id,
-      );
+      const duplicate =
+        await serviceRepository.findByCompanyAndNameExcludingId(
+          companyId,
+          updatePayload.name,
+          id,
+        );
+
       if (duplicate) {
-        throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
+        throw new AppError(
+          409,
+          "SERVICE_NAME_ALREADY_EXISTS",
+          SERVICE_NAME_ALREADY_EXISTS_MESSAGE,
+        );
       }
     }
 
     try {
-      const updated = await serviceRepository.update(companyId, id, updatePayload);
+      const updated =
+        await serviceRepository.update(
+          companyId,
+          id,
+          updatePayload,
+        );
+
       if (!updated) {
-        throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+        throw new AppError(
+          404,
+          "SERVICE_NOT_FOUND",
+          "Servicio no encontrado",
+        );
       }
+
       return updated;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
+
       throwIfDuplicateName(error);
     }
   },
 
-  async deactivate(companyId: string, id: string) {
+  async deactivate(
+    companyId: string,
+    id: string,
+  ) {
     await this.getById(companyId, id);
-    const hasSchedules = await serviceRepository.hasActiveOrScheduledOperations(companyId, id);
+
+    const hasSchedules =
+      await serviceRepository.hasActiveOrScheduledOperations(
+        companyId,
+        id,
+      );
+
     if (hasSchedules) {
       throw new AppError(
         409,
@@ -186,10 +358,20 @@ export const serviceService = {
       );
     }
 
-    const updated = await serviceRepository.deactivate(companyId, id);
+    const updated =
+      await serviceRepository.deactivate(
+        companyId,
+        id,
+      );
+
     if (!updated) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+      throw new AppError(
+        404,
+        "SERVICE_NOT_FOUND",
+        "Servicio no encontrado",
+      );
     }
+
     return updated;
   },
 };

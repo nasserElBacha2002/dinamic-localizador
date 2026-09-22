@@ -12,6 +12,7 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
+import { useClients } from "../../hooks/useClients";
 import { serviceFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
 import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
 import { ServiceInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
@@ -71,6 +72,8 @@ export function ServiceForm({
 
   const watchedValues = useWatch({ control });
   const { data: locationTypes = [] } = useCompanyLocationTypes(false);
+  const { data: clientsResponse } = useClients({ limit: 100 });
+  const clients = clientsResponse?.data ?? [];
 
   const picker = useLocationPickerState({
     isEditMode,
@@ -106,6 +109,23 @@ export function ServiceForm({
     return [{ value: "", label: "Sin tipo" }, ...activeOptions];
   }, [defaultValues.serviceFormat, locationTypes, watchedValues.serviceFormat]);
 
+  const clientOptions = useMemo(() => {
+    const activeOptions = clients
+      .filter((client) => client.isActive)
+      .map((client) => ({ value: client.id, label: client.name }));
+    const currentClientId = watchedValues.clientId ?? defaultValues.clientId ?? "";
+
+    if (currentClientId && !activeOptions.some((option) => option.value === currentClientId)) {
+      const assigned = clients.find((client) => client.id === currentClientId);
+      activeOptions.unshift({
+        value: currentClientId,
+        label: assigned ? `${assigned.name} (inactivo)` : "Cliente actual (no disponible)",
+      });
+    }
+
+    return [{ value: "", label: "Sin cliente" }, ...activeOptions];
+  }, [clients, defaultValues.clientId, watchedValues.clientId]);
+
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormErrorAlert message={errorMessage} />
@@ -130,6 +150,7 @@ export function ServiceForm({
                 data={serviceFormatOptions}
                 clearable
               />
+              <RHFSelect control={control} name="clientId" label="Cliente" data={clientOptions} />
             </FormGrid>
             <Box mt="md">
               <RHFSwitch control={control} name="active" label="Activa" />

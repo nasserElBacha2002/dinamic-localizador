@@ -18,6 +18,7 @@ const sampleService = {
   active: true,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  clientId: null,
 };
 
 describe("serviceService location type validation", () => {
@@ -180,6 +181,170 @@ describe("serviceService location type validation", () => {
 
     const service = await serviceService.getById("company-1", sampleService.id);
     assert.equal(service.serviceFormat, "LEGACY_INACTIVE");
+  });
+});
+
+describe("serviceService client validation", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("creates without a client and does not validate one", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { locationZoneService } = await import("./location-zone.service");
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(clientRepository, "findById", async () => {
+      throw new Error("A client should not be looked up when it is omitted");
+    });
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(locationZoneService, "findOrCreateByNameLocality", async () => null);
+    mock.method(serviceRepository, "findByCompanyAndName", async () => null);
+    mock.method(serviceRepository, "create", async (_companyId, input) => ({
+      ...sampleService,
+      clientId: input.clientId ?? null,
+    }));
+
+    const created = await serviceService.create("company-1", {
+      name: "Sucursal sin cliente",
+      latitude: -34.6,
+      longitude: -58.38,
+    });
+
+    assert.equal(created.clientId, null);
+  });
+
+  it("creates with an active client from the same company", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { locationZoneService } = await import("./location-zone.service");
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+    const clientId = "11111111-1111-4111-8111-111111111111";
+
+    mock.method(clientRepository, "findById", async (companyId, id) => {
+      assert.equal(companyId, "company-1");
+      assert.equal(id, clientId);
+      return {
+        id: clientId,
+        companyId,
+        name: "Cliente activo",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: null,
+        updatedBy: null,
+      };
+    });
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(locationZoneService, "findOrCreateByNameLocality", async () => null);
+    mock.method(serviceRepository, "findByCompanyAndName", async () => null);
+    mock.method(serviceRepository, "create", async (_companyId, input) => ({
+      ...sampleService,
+      clientId: input.clientId ?? null,
+    }));
+
+    const created = await serviceService.create("company-1", {
+      name: "Sucursal con cliente",
+      latitude: -34.6,
+      longitude: -58.38,
+      clientId,
+    });
+
+    assert.equal(created.clientId, clientId);
+  });
+
+  it("rejects a missing or cross-company client", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(clientRepository, "findById", async (companyId) => {
+      assert.equal(companyId, "company-1");
+      return null;
+    });
+
+    await assert.rejects(
+      () =>
+        serviceService.create("company-1", {
+          name: "Sucursal inválida",
+          latitude: -34.6,
+          longitude: -58.38,
+          clientId: "22222222-2222-4222-8222-222222222222",
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "CLIENT_NOT_FOUND",
+    );
+  });
+
+  it("rejects an inactive client", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(clientRepository, "findById", async () => ({
+      id: "33333333-3333-4333-8333-333333333333",
+      companyId: "company-1",
+      name: "Cliente inactivo",
+      isActive: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: null,
+      updatedBy: null,
+    }));
+
+    await assert.rejects(
+      () =>
+        serviceService.create("company-1", {
+          name: "Sucursal inválida",
+          latitude: -34.6,
+          longitude: -58.38,
+          clientId: "33333333-3333-4333-8333-333333333333",
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "CLIENT_INACTIVE",
+    );
+  });
+
+  it("preserves an omitted client, unlinks null, and accepts an active replacement on update", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+    const assignedClientId = "44444444-4444-4444-8444-444444444444";
+    const replacementClientId = "55555555-5555-4555-8555-555555555555";
+    const existing = { ...sampleService, clientId: assignedClientId };
+
+    mock.method(serviceRepository, "findById", async () => existing);
+    mock.method(serviceRepository, "findByCompanyAndNameExcludingId", async () => null);
+    mock.method(clientRepository, "findById", async (companyId, clientId) => {
+      assert.equal(companyId, "company-1");
+      assert.equal(clientId, replacementClientId);
+      return {
+        id: replacementClientId,
+        companyId,
+        name: "Cliente B",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: null,
+        updatedBy: null,
+      };
+    });
+    mock.method(serviceRepository, "update", async (_companyId, _id, input) => ({
+      ...existing,
+      clientId: input.clientId === undefined ? existing.clientId : input.clientId,
+    }));
+
+    const preserved = await serviceService.update("company-1", existing.id, { name: "Nuevo nombre" });
+    const unlinked = await serviceService.update("company-1", existing.id, { clientId: null });
+    const replaced = await serviceService.update("company-1", existing.id, { clientId: replacementClientId });
+
+    assert.equal(preserved.clientId, assignedClientId);
+    assert.equal(unlinked.clientId, null);
+    assert.equal(replaced.clientId, replacementClientId);
   });
 });
 

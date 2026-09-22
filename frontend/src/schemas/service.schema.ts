@@ -19,6 +19,7 @@ export const serviceFormSchema = z.object({
   longitude: z.number().min(-180, "Longitud mínima -180").max(180, "Longitud máxima 180"),
   allowedRadiusMeters: z.number().int().positive("El radio debe ser mayor que 0"),
   googlePlaceId: z.string().trim().optional().or(z.literal("")),
+  clientId: z.string().uuid().optional().or(z.literal("")),
   active: z.boolean(),
 });
 
@@ -34,4 +35,8 @@ export function toNullableServiceFormat(value: ServiceFormValues["serviceFormat"
   }
 
   return value;
+}
+
+export function toNullableServiceClientId(value: ServiceFormValues["clientId"]): string | null {
+  return value || null;
 }

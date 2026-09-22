@@ -177,3 +177,15 @@ export interface AttendanceRecordWithRelations extends AttendanceRecord {
   arrivalRegisteredByUser?: { id: string; name: string } | null;
   checkoutRegisteredByUser?: { id: string; name: string } | null;
 }
+
+export interface Client {
+  id: string;
+  companyId: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+

@@ -1,6 +1,6 @@
-import { Button, Group, Select, Stack, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack, Tabs, TextInput } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import {
   DataTable,
   ErrorState,
@@ -25,7 +25,12 @@ import {
   useDisableClientLocationType,
   useUpdateClient,
   useUpdateClientLocationType,
+  useClientEmployees,
+  useReplaceClientEmployees,
+  useRemoveClientEmployee,
 } from "../../hooks/useClients";
+import { WorkTeamMemberMultiSelect } from "../../components/work-teams/WorkTeamMemberMultiSelect";
+import type { Employee } from "../../types/employee";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import type { CompanyLocationType } from "../../types/company-location-type";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -43,6 +48,8 @@ const TABLE_FIELDS = {
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "employees" ? "employees" : "formats";
   const table = useTableUrlState({ defaults: TABLE_DEFAULTS, fields: TABLE_FIELDS });
   const client = useClient(id);
   const types = useClientLocationTypes(id, {
@@ -50,7 +57,7 @@ export function ClientDetailPage() {
     limit: table.pageSize,
     search: table.state.search || undefined,
     active: table.state.active === "all" ? undefined : table.state.active === "true",
-  });
+  }, activeTab === "formats");
   const create = useCreateClientLocationType(id ?? "");
   const update = useUpdateClientLocationType(id ?? "");
   const disable = useDisableClientLocationType(id ?? "");
@@ -64,6 +71,14 @@ export function ClientDetailPage() {
   const [clientName, setClientName] = useState("");
   const [editType, setEditType] = useState<CompanyLocationType | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const employees = useClientEmployees(id, activeTab === "employees");
+  const replaceEmployees = useReplaceClientEmployees(id ?? "");
+  const removeEmployee = useRemoveClientEmployee(id ?? "");
+  const [employeesOpened, setEmployeesOpened] = useState(false);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeeActive, setEmployeeActive] = useState<"all" | "true" | "false">("all");
+  const [employeeError, setEmployeeError] = useState<string | null>(null);
 
   const columns = useMemo<DataTableColumn<CompanyLocationType>[]>(
     () => [
@@ -97,6 +112,21 @@ export function ClientDetailPage() {
     }),
     [],
   );
+
+  const employeeRows = useMemo(() => (employees.data ?? []).filter((employee) =>
+    (!employeeSearch || employee.name.toLowerCase().includes(employeeSearch.toLowerCase())) &&
+    (employeeActive === "all" || employee.active === (employeeActive === "true")),
+  ), [employeeActive, employeeSearch, employees.data]);
+  const employeeColumns = useMemo<DataTableColumn<Employee>[]>(() => [
+    { key: "name", header: "Nombre", getValue: (row) => row.name },
+    { key: "active", header: "Estado", render: (row) => <StatusBadge label={row.active ? "Activo" : "Inactivo"} tone={row.active ? "success" : "neutral"} /> },
+    { key: "actions", header: "Acciones", render: (row) => <Button size="compact-sm" color="red" variant="subtle" loading={removeEmployee.isPending} disabled={removeEmployee.isPending} onClick={(event) => { event.stopPropagation(); void removeEmployee.mutateAsync(row.id); }}>Quitar</Button> },
+  ], [removeEmployee]);
+  const employeeMobileCard = useMemo<DataTableMobileCardConfig<Employee>>(() => ({
+    title: (row) => row.name,
+    status: (row) => <StatusBadge label={row.active ? "Activo" : "Inactivo"} tone={row.active ? "success" : "neutral"} />,
+    fields: [],
+  }), []);
 
   const closeCreate = () => {
     setCreateOpened(false);
@@ -174,16 +204,32 @@ export function ClientDetailPage() {
         }
       />
 
-      <PageHeader
-        title="Formatos"
-        action={
-          <Button disabled={!client.data.isActive} onClick={() => setCreateOpened(true)}>
-            Nuevo formato
-          </Button>
-        }
-      />
+      <Tabs
+        value={activeTab}
+        onChange={(value) => {
+          const next = new URLSearchParams(searchParams);
+          if (value === "employees") next.set("tab", "employees");
+          else next.delete("tab");
+          setSearchParams(next);
+        }}
+      >
+        <Tabs.List>
+          <Tabs.Tab value="formats">Formatos</Tabs.Tab>
+          <Tabs.Tab value="employees">Colaboradores</Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
 
-      <FilterBar
+      {activeTab === "formats" ? <>
+        <PageHeader
+          title="Formatos"
+          action={
+            <Button disabled={!client.data.isActive} onClick={() => setCreateOpened(true)}>
+              Nuevo formato
+            </Button>
+          }
+        />
+
+        <FilterBar
         search={
           <SearchInput
             value={table.searchInput}
@@ -208,9 +254,9 @@ export function ClientDetailPage() {
             ]}
           />
         </FilterBar.Item>
-      </FilterBar>
+        </FilterBar>
 
-      <DataTable
+        <DataTable
         rows={types.data?.data ?? []}
         columns={columns}
         getRowKey={(row) => row.id}
@@ -236,9 +282,16 @@ export function ClientDetailPage() {
             />
           ) : undefined
         }
-      />
+        />
+      </> : <>
+        <PageHeader title="Colaboradores" action={<Button disabled={!client.data.isActive} onClick={() => { setSelectedEmployeeIds((employees.data ?? []).map((employee) => employee.id)); setEmployeeError(null); setEmployeesOpened(true); }}>Asignar colaboradores</Button>} />
+        <FilterBar search={<SearchInput value={employeeSearch} onChange={setEmployeeSearch} onSearch={setEmployeeSearch} placeholder="Buscar por nombre" label="Buscar" />} activeFilterCount={(employeeSearch ? 1 : 0) + (employeeActive === "all" ? 0 : 1)} onClearFilters={() => { setEmployeeSearch(""); setEmployeeActive("all"); }}>
+          <FilterBar.Item><Select label="Estado" value={employeeActive} onChange={(value) => value && setEmployeeActive(value as "all" | "true" | "false")} data={[{ value: "all", label: "Todos" }, { value: "true", label: "Activos" }, { value: "false", label: "Inactivos" }]} /></FilterBar.Item>
+        </FilterBar>
+        <DataTable rows={employeeRows} columns={employeeColumns} getRowKey={(row) => row.id} loading={employees.isPending} error={employees.isError ? getApiErrorMessage(employees.error) : undefined} emptyTitle="No hay colaboradores asociados" emptyDescription="Asigná colaboradores a este cliente." aria-label="Listado de colaboradores del cliente" mobileView="cards" mobileCard={employeeMobileCard} />
+      </>}
 
-      <ResponsiveModal
+      {activeTab === "formats" ? <ResponsiveModal
         opened={createOpened}
         onClose={closeCreate}
         title="Nuevo formato"
@@ -259,7 +312,12 @@ export function ClientDetailPage() {
           onChange={(event) => setFormatName(event.currentTarget.value)}
         />
         <FormErrorAlert message={createError} />
-      </ResponsiveModal>
+      </ResponsiveModal> : null}
+
+      {activeTab === "employees" ? <ResponsiveModal opened={employeesOpened} onClose={() => setEmployeesOpened(false)} title="Asignar colaboradores" footer={<Group justify="flex-end"><Button variant="default" disabled={replaceEmployees.isPending} onClick={() => setEmployeesOpened(false)}>Cancelar</Button><Button loading={replaceEmployees.isPending} onClick={() => void (async () => { try { setEmployeeError(null); await replaceEmployees.mutateAsync(selectedEmployeeIds); setEmployeesOpened(false); } catch (error) { setEmployeeError(getApiErrorMessage(error)); } })()}>Guardar</Button></Group>}>
+        <WorkTeamMemberMultiSelect selectedEmployeeIds={selectedEmployeeIds} onChange={setSelectedEmployeeIds} existingMembers={employees.data ?? []} allowCreate={false} />
+        <FormErrorAlert message={employeeError} />
+      </ResponsiveModal> : null}
 
       <ResponsiveModal opened={editClient} onClose={() => setEditClient(false)} title="Editar cliente">
         <TextInput label="Nombre" value={clientName} onChange={(event) => setClientName(event.currentTarget.value)} />
@@ -273,7 +331,7 @@ export function ClientDetailPage() {
         </Button>
       </ResponsiveModal>
 
-      <ResponsiveModal opened={Boolean(editType)} onClose={() => setEditType(null)} title="Editar formato">
+      {activeTab === "formats" ? <ResponsiveModal opened={Boolean(editType)} onClose={() => setEditType(null)} title="Editar formato">
         {editType ? (
           <>
             <TextInput
@@ -313,7 +371,7 @@ export function ClientDetailPage() {
             <FormErrorAlert message={editError} />
           </>
         ) : null}
-      </ResponsiveModal>
+      </ResponsiveModal> : null}
     </Stack>
   );
 }

@@ -22,6 +22,14 @@ export const clientIdParamSchema = z.object({
   clientId: z.string().uuid("El identificador del cliente no es válido"),
 });
 
+export const clientEmployeeParamsSchema = clientIdParamSchema.extend({
+  employeeId: z.string().uuid("El identificador del colaborador no es válido"),
+});
+
+export const replaceClientEmployeesSchema = z.object({
+  employeeIds: z.array(z.string().uuid("El identificador del colaborador no es válido")).max(500),
+});
+
 export const listClientsQuerySchema = z.object({
   active: z
     .enum(["true", "false"])

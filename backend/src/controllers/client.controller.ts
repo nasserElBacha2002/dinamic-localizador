@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 
 import { clientService } from "../services/client.service";
 import { companyLocationTypesService } from "../services/company-location-types.service";
+import { employeeClientService } from "../services/employee-client.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const clientController = {
@@ -99,5 +100,17 @@ export const clientController = {
     const companyId = requireRequestCompanyId(req);
     const data = await companyLocationTypesService.disableLocationTypeForClient(companyId, String(req.params.clientId), String(req.params.locationTypeId));
     res.status(200).json({ data });
+  },
+  async listEmployees(req: Request, res: Response) {
+    const data = await employeeClientService.listForClient(requireRequestCompanyId(req), String(req.params.clientId));
+    res.status(200).json(data);
+  },
+  async replaceEmployees(req: Request, res: Response) {
+    const data = await employeeClientService.replaceForClient(requireRequestCompanyId(req), String(req.params.clientId), req.body.employeeIds, req.auth?.userId ?? null);
+    res.status(200).json(data);
+  },
+  async removeEmployee(req: Request, res: Response) {
+    const data = await employeeClientService.removeFromClient(requireRequestCompanyId(req), String(req.params.clientId), String(req.params.employeeId), req.auth?.userId ?? null);
+    res.status(200).json(data);
   },
 };

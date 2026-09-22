@@ -11,6 +11,8 @@ import { EntityAvatar, ErrorState, LoadingState } from "../../design-system";
 import {
   useDeactivateEmployee,
   useEmployee,
+  useEmployeeClients,
+  useReplaceEmployeeClients,
   useUpdateEmployee,
 } from "../../hooks/useEmployees";
 import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
@@ -27,7 +29,9 @@ export function EmployeeEditPage() {
   const { id } = useParams<{ id: string }>();
   const unsaved = useUnsavedChangesController({ active: true });
   const employeeQuery = useEmployee(id);
+  const employeeClientsQuery = useEmployeeClients(id);
   const updateMutation = useUpdateEmployee(id ?? "");
+  const replaceClientsMutation = useReplaceEmployeeClients(id ?? "");
   const deactivateMutation = useDeactivateEmployee(id ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [deactivationImpact, setDeactivationImpact] = useState<EmployeeDeactivationImpact | null>(
@@ -42,15 +46,15 @@ export function EmployeeEditPage() {
     return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
   }
 
-  if (employeeQuery.isLoading) {
+  if (employeeQuery.isLoading || employeeClientsQuery.isLoading) {
     return <LoadingState />;
   }
 
-  if (employeeQuery.isError || !employeeQuery.data) {
+  if (employeeQuery.isError || employeeClientsQuery.isError || !employeeQuery.data) {
     return (
       <ErrorState
         message={getApiErrorMessage(
-          employeeQuery.error,
+          employeeQuery.error ?? employeeClientsQuery.error,
           `${terminology.worker.singular} no encontrado.`,
         )}
       />
@@ -59,7 +63,7 @@ export function EmployeeEditPage() {
 
   const employee = employeeQuery.data;
   const formBusy =
-    updateMutation.isPending || deactivateMutation.isPending || impactLoading;
+    updateMutation.isPending || deactivateMutation.isPending || replaceClientsMutation.isPending || impactLoading;
 
   const goToDetail = () => {
     navigate(getEntityDetailPath("employees", id), { state: location.state });
@@ -98,9 +102,14 @@ export function EmployeeEditPage() {
           ...buildProfilePayload(values),
           active: values.active,
         });
+        await replaceClientsMutation.mutateAsync(values.clientIds, id);
         finishSuccess();
       } catch (error) {
-        setErrorMessage(getApiErrorMessage(error));
+        setErrorMessage(
+          updateMutation.isSuccess
+            ? `Se actualizó el colaborador, pero no se pudieron guardar sus clientes: ${getApiErrorMessage(error)}`
+            : getApiErrorMessage(error),
+        );
       } finally {
         unsaved.setSubmitting(false);
       }
@@ -115,6 +124,7 @@ export function EmployeeEditPage() {
           confirmAffectedRelease: false,
           profile: buildProfilePayload(values),
         });
+        await replaceClientsMutation.mutateAsync(values.clientIds, id);
         finishSuccess();
         return;
       }
@@ -142,6 +152,7 @@ export function EmployeeEditPage() {
         confirmAffectedRelease: true,
         profile: buildProfilePayload(pendingValues),
       });
+      await replaceClientsMutation.mutateAsync(pendingValues.clientIds, id);
       setDeactivationImpact(null);
       setPendingValues(null);
       finishSuccess();
@@ -181,6 +192,7 @@ export function EmployeeEditPage() {
           categoryId: employee.categoryId,
           locationZoneId: employee.locationZoneId,
           active: employee.active,
+          clientIds: (employeeClientsQuery.data ?? []).map((client) => client.id),
         }}
         retainedCategory={
           employee.category

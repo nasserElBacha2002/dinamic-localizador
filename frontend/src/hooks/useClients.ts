@@ -9,6 +9,9 @@ import {
   getClientById,
   getClientLocationTypes,
   getClients,
+  getClientEmployees,
+  removeClientEmployee,
+  replaceClientEmployees,
   updateClient,
   updateClientLocationType,
 } from "../api/clients.api";
@@ -97,8 +100,9 @@ export const useDeactivateClient = () =>
 export function useClientLocationTypes(
   clientId?: string,
   filters: ClientLocationTypeFilters = {},
+  extraEnabled = true,
 ) {
-  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(clientId));
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(clientId) && extraEnabled);
   return useQuery({
     queryKey: [...clientLocationTypesQueryKey(companyId, clientId), filters],
     queryFn: () =>
@@ -146,3 +150,49 @@ export const useDisableClientLocationType = (clientId: string) =>
   useClientLocationTypeMutation(clientId, (companyId, id: string) =>
     disableClientLocationType(clientId, id, { scopeCompanyId: companyId }),
   );
+
+export const clientEmployeesQueryKey = (companyId: string | undefined, clientId: string | undefined) =>
+  ["client-employees", companyId, clientId] as const;
+
+export function useClientEmployees(clientId?: string, extraEnabled = true) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(clientId) && extraEnabled);
+  return useQuery({
+    queryKey: clientEmployeesQueryKey(companyId, clientId),
+    queryFn: () => getClientEmployees(clientId!, { scopeCompanyId: requireCompanyId(companyId) }),
+    enabled,
+  });
+}
+
+export function useReplaceClientEmployees(clientId: string) {
+  const queryClient = useQueryClient();
+  const { companyId: activeCompanyId } = useOperationalQueryEnabled();
+  const mutation = useMutation({
+    mutationFn: ({ companyId, employeeIds }: { companyId: string; employeeIds: string[] }) =>
+      replaceClientEmployees(clientId, employeeIds, { scopeCompanyId: companyId }),
+    onSuccess: async (_result, { companyId }) => {
+      await queryClient.invalidateQueries({ queryKey: clientEmployeesQueryKey(companyId, clientId) });
+    },
+  });
+  return {
+    ...mutation,
+    mutateAsync: (employeeIds: string[], options?: Parameters<typeof mutation.mutateAsync>[1]) =>
+      mutation.mutateAsync({ companyId: requireCompanyId(activeCompanyId), employeeIds }, options),
+  };
+}
+
+export function useRemoveClientEmployee(clientId: string) {
+  const queryClient = useQueryClient();
+  const { companyId: activeCompanyId } = useOperationalQueryEnabled();
+  const mutation = useMutation({
+    mutationFn: ({ companyId, employeeId }: { companyId: string; employeeId: string }) =>
+      removeClientEmployee(clientId, employeeId, { scopeCompanyId: companyId }),
+    onSuccess: async (_result, { companyId }) => {
+      await queryClient.invalidateQueries({ queryKey: clientEmployeesQueryKey(companyId, clientId) });
+    },
+  });
+  return {
+    ...mutation,
+    mutateAsync: (employeeId: string, options?: Parameters<typeof mutation.mutateAsync>[1]) =>
+      mutation.mutateAsync({ companyId: requireCompanyId(activeCompanyId), employeeId }, options),
+  };
+}

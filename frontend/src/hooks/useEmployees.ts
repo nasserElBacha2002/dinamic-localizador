@@ -5,7 +5,10 @@ import {
   getEmployeeById,
   getEmployees,
   updateEmployee,
+  getEmployeeClients,
+  replaceEmployeeClients,
 } from "../api/employees.api";
+import { clientEmployeesQueryKey } from "./useClients";
 import type {
   CreateEmployeeInput,
   EmployeeFilters,
@@ -35,6 +38,47 @@ export function useEmployee(employeeId?: string) {
     queryFn: () => getEmployeeById(employeeId!),
     enabled,
   });
+}
+
+export const employeeClientsQueryKey = (companyId: string | undefined, employeeId: string | undefined) =>
+  ["employee-clients", companyId, employeeId] as const;
+
+export function useEmployeeClients(employeeId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(employeeId));
+  return useQuery({
+    queryKey: employeeClientsQueryKey(companyId, employeeId),
+    queryFn: () => getEmployeeClients(employeeId!, { scopeCompanyId: requireCompanyId(companyId) }),
+    enabled,
+  });
+}
+
+export function useReplaceEmployeeClients(employeeId?: string) {
+  const queryClient = useQueryClient();
+  const { companyId: activeCompanyId } = useOperationalQueryEnabled();
+  const mutation = useMutation({
+    mutationFn: ({ companyId, clientIds, targetEmployeeId }: { companyId: string; clientIds: string[]; targetEmployeeId: string }) =>
+      replaceEmployeeClients(targetEmployeeId, clientIds, { scopeCompanyId: companyId }),
+    onSuccess: async (_result, { companyId, clientIds, targetEmployeeId }) => {
+      const previous = queryClient.getQueryData<{ id: string }[]>(employeeClientsQueryKey(companyId, targetEmployeeId)) ?? [];
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: employeeClientsQueryKey(companyId, targetEmployeeId) }),
+        ...[...new Set([...previous.map((client) => client.id), ...clientIds])].map((clientId) =>
+          queryClient.invalidateQueries({ queryKey: clientEmployeesQueryKey(companyId, clientId) }),
+        ),
+      ]);
+    },
+  });
+  return {
+    ...mutation,
+    mutateAsync: (
+      clientIds: string[],
+      targetEmployeeId = employeeId,
+      options?: Parameters<typeof mutation.mutateAsync>[1],
+    ) => {
+      if (!targetEmployeeId) throw new Error("EMPLOYEE_ID_REQUIRED");
+      return mutation.mutateAsync({ companyId: requireCompanyId(activeCompanyId), clientIds, targetEmployeeId }, options);
+    },
+  };
 }
 
 export function useCreateEmployee() {

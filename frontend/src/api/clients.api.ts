@@ -2,6 +2,7 @@ import type { PaginatedResponse } from "../types/api";
 import type { Client, ClientFilters } from "../types/client";
 import type { ClientLocationTypeFilters, CompanyLocationType, CreateCompanyLocationTypeInput, UpdateCompanyLocationTypeInput } from "../types/company-location-type";
 import type { SingleResponse } from "../types/api";
+import type { Employee } from "../types/employee";
 import { buildParams } from "./client";
 import { scopedApiClient, type ScopedAxiosRequestConfig } from "./scoped-client";
 
@@ -62,6 +63,18 @@ export async function updateClientLocationType(clientId: string, id: string, inp
 }
 export async function disableClientLocationType(clientId: string, id: string, options?: ClientRequestOptions): Promise<CompanyLocationType> {
   const { data } = await scopedApiClient.delete<SingleResponse<CompanyLocationType>>(`clients/${clientId}/location-types/${id}`, options);
+  return data.data;
+}
+export async function getClientEmployees(clientId: string, options?: ClientRequestOptions): Promise<Employee[]> {
+  const { data } = await scopedApiClient.get<SingleResponse<Employee[]>>(`clients/${clientId}/employees`, options);
+  return data.data;
+}
+export async function replaceClientEmployees(clientId: string, employeeIds: string[], options?: ClientRequestOptions): Promise<Employee[]> {
+  const { data } = await scopedApiClient.put<SingleResponse<Employee[]>>(`clients/${clientId}/employees`, { employeeIds }, options);
+  return data.data;
+}
+export async function removeClientEmployee(clientId: string, employeeId: string, options?: ClientRequestOptions): Promise<Employee[]> {
+  const { data } = await scopedApiClient.delete<SingleResponse<Employee[]>>(`clients/${clientId}/employees/${employeeId}`, options);
   return data.data;
 }
 

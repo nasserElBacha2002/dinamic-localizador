@@ -1,6 +1,0 @@
-targeted unit sql+attendance: 13 pass / 0 fail
-SQL integration UQ_companies_name: PASS (1 pass / 0 fail); number shape TOP_LEVEL|ORIGINAL_ERROR asserted
-backend lint: PASS
-backend build/typecheck: PASS
-backend npm test: 1957 pass / 0 fail / 354 files
-frontend npm test: 830 pass / 0 fail (no FE code changes; TAP force-exit noise vs 837 baseline)

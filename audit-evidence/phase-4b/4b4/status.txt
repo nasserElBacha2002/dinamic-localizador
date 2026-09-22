@@ -1,1 +1,0 @@
-See review/ for full diffs (gitignored). Tracked evidence is markdown + compact status/diffstat only.

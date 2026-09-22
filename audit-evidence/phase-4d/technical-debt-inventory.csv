@@ -1,8 +1,0 @@
-file,marker,context,classification,action,status
-whatsapp-company-context.service.ts,TODO(phase-1.7),multi-company WA number map,dangerous_still_required,document_compat,DEFERRED
-routes/user-invitation.routes.ts,DEPRECATED GET preview,token in query,dangerous_still_required,retain_4a_compat,DEFERRED
-employee.controller.ts,deactivateLegacy,soft-deact path,still_required,retain,DEFERRED
-attendance.schema.ts,legacy derived fields,ignore+log,still_required,retain_4a,DEFERRED
-middleware/rate-limit.ts,@deprecated local map,tests/memory,docs,retain,JUSTIFIED
-bot-runtime-context.ts,@deprecated sim helper,docs,retain,JUSTIFIED
-company-settings / absence types,@deprecated fields,API compat,still_required,retain,DEFERRED

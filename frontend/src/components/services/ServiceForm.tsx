@@ -72,7 +72,7 @@ export function ServiceForm({
 
   const watchedValues = useWatch({ control });
   const { data: locationTypes = [] } = useCompanyLocationTypes(false);
-  const { data: clientsResponse } = useClients({ limit: 100 });
+  const { data: clientsResponse } = useClients();
   const clients = clientsResponse?.data ?? [];
 
   const picker = useLocationPickerState({

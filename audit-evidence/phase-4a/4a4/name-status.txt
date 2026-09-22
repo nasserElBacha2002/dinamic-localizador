@@ -1,2 +1,0 @@
-# Placeholder — 4a4/name-status.txt emptied in ZIP
-See 4a4/implementation.md and audit-evidence/phase-4a/EVIDENCE-RECOVERY.md

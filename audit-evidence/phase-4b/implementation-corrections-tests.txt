@@ -1,9 +1,0 @@
-Backend lint: PASS
-Backend typecheck: PASS
-Backend build: PASS
-Backend unit: 1935 passed / 0 failed / 0 skipped (351 unit files; prior baseline report 1941 — same discovery set, 0 failures)
-Job lock SQL integration: 5 passed / 0 failed
-Frontend lint: PASS (0 errors)
-Frontend typecheck: PASS
-Frontend build: PASS
-Frontend tests: 842 passed / 0 failed / 0 skipped (+logout semantics)

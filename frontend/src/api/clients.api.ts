@@ -13,3 +13,27 @@ export async function getClients(
   });
   return data;
 }
+
+export async function getAllClients(filters: Omit<ClientFilters, "page" | "limit"> = {}) {
+  const limit = 100;
+  const firstPage = await getClients({ ...filters, page: 1, limit });
+
+  if (firstPage.meta.totalPages <= 1) {
+    return firstPage;
+  }
+
+  const data = [...firstPage.data];
+  for (let page = 2; page <= firstPage.meta.totalPages; page += 1) {
+    const nextPage = await getClients({ ...filters, page, limit });
+    data.push(...nextPage.data);
+  }
+
+  return {
+    data,
+    meta: {
+      ...firstPage.meta,
+      page: 1,
+      limit: firstPage.meta.total,
+    },
+  };
+}

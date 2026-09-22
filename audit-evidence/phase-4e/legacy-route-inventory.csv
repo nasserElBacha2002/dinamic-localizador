@@ -1,5 +1,0 @@
-route,preferred_replacement,auth_middleware,tenant_middleware,permission_middleware,consumers,telemetry,removal_readiness,action
-GET /api/invitations/preview?token=,POST /api/invitations/preview,none (public token),n/a,n/a (token hash),SPA uses POST only; GET retained for probes,access log redacts token,MEDIUM — zero GET traffic not proven,RETAIN_DEPRECATED
-PUT .../employees/:id/absence-balances/...,POST .../adjustments,authenticate,resolveCompanyContext,module+permission,legacy admin UI path possible,Deprecation+Sunset headers,MEDIUM,RETAIN_DEPRECATED
-/api/companies/:id/workers/*,/employees/*,authenticate,resolveCompanyContext,moduleGuard (shared),frontend may use either,same employeeRouter,LOW (alias intentional),RETAIN_ALIAS
-/api/stores|/locations|/inventories (legacy names),/services|/operations,n/a,n/a,n/a,removed from route registration,api-route-aliases.test.ts,REMOVED,NOT_APPLICABLE

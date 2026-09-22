@@ -1,2 +1,0 @@
-# Placeholder — 4a1/diffstat.txt emptied in ZIP
-See 4a1/implementation.md and audit-evidence/phase-4a/EVIDENCE-RECOVERY.md

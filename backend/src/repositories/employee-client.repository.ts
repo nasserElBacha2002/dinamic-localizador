@@ -15,6 +15,29 @@ const mapClientRow = (row: Record<string, unknown>): Client => ({
 });
 
 export const employeeClientRepository = {
+  async listAssociatedEmployeeIds(
+    companyId: string,
+    clientId: string,
+    candidateEmployeeIds: string[],
+  ): Promise<string[]> {
+    if (candidateEmployeeIds.length === 0) {
+      return [];
+    }
+    const result = await getPool().request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("clientId", sql.UniqueIdentifier, clientId)
+      .input("candidateIds", sql.NVarChar(sql.MAX), JSON.stringify(candidateEmployeeIds))
+      .query(`
+        SELECT ec.employee_id
+        FROM employee_clients ec
+        INNER JOIN OPENJSON(@candidateIds) candidates
+          ON TRY_CAST(candidates.[value] AS UNIQUEIDENTIFIER) = ec.employee_id
+        WHERE ec.company_id = @companyId
+          AND ec.client_id = @clientId
+      `);
+    return result.recordset.map((row) => String((row as { employee_id: string }).employee_id));
+  },
+
   async listByClient(companyId: string, clientId: string): Promise<Employee[]> {
     const result = await getPool().request()
       .input("companyId", sql.UniqueIdentifier, companyId)

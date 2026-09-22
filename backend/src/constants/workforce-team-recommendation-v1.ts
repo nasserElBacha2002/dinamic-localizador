@@ -44,6 +44,14 @@ export const WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS = {
   location: 0.2,
 } as const;
 
+/** Used only when the operation's service has a client. */
+export const WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY = {
+  teamAffinity: 0.4,
+  serviceExperience: 0.24,
+  location: 0.16,
+  clientAffinity: 0.2,
+} as const;
+
 /**
  * Pre-pruning blend (deterministic) before loading sparse pair matrix.
  * Connectivity is set-based aggregate — not full N² materialization.
@@ -53,6 +61,15 @@ export const WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS = {
   affinityToFixed: 0.25,
   serviceExperience: 0.2,
   location: 0.1,
+} as const;
+
+/** Used only when clientAffinity is available for the operation candidate pool. */
+export const WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS_WITH_CLIENT_AFFINITY = {
+  historicalConnectivity: 0.36,
+  affinityToFixed: 0.2,
+  serviceExperience: 0.16,
+  location: 0.08,
+  clientAffinity: 0.2,
 } as const;
 
 /** Caps for connectivity aggregate used only in pre-pruning. */

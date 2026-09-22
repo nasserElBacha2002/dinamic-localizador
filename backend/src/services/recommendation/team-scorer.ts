@@ -6,6 +6,7 @@ import {
 import {
   WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS,
   WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS,
+  WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY,
 } from "../../constants/workforce-team-recommendation-v1";
 import type { RecommendationReason } from "../../types/recommendation";
 import { saturate } from "./recommendation-scorer";
@@ -24,6 +25,8 @@ export interface TeamMemberFeatures {
   employeeId: string;
   serviceWorkdayCount: number;
   locationBucket: LocationProximityBucket;
+  /** null when the operation has no client; otherwise 0 or 1. */
+  clientAffinity?: number | null;
 }
 
 export interface TeamScoreBreakdown {
@@ -31,6 +34,7 @@ export interface TeamScoreBreakdown {
   serviceExperience: number | null;
   /** null = location feature unavailable (no service geo OR no known evidence). */
   location: number | null;
+  clientAffinity: number | null;
   /**
    * Observability / reasons only — NOT a score weight (affinity already time-decays).
    */
@@ -100,6 +104,7 @@ export const scoreTeam = (
   options: {
     serviceContextAvailable: boolean;
     locationContextAvailable: boolean;
+    clientAffinityAvailable?: boolean;
   },
 ): TeamScoreBreakdown => {
   const sortedIds = [...memberIds].sort((a, b) => a.localeCompare(b));
@@ -155,6 +160,8 @@ export const scoreTeam = (
   let closeMembers = 0;
   let knownLocationMembers = 0;
   let locationSum = 0;
+  let clientAffinitySum = 0;
+  let clientAffinityMemberCount = 0;
 
   for (const id of sortedIds) {
     const features = featuresById.get(id);
@@ -173,6 +180,10 @@ export const scoreTeam = (
         closeMembers += 1;
       }
     }
+    if (features?.clientAffinity !== null && features?.clientAffinity !== undefined) {
+      clientAffinityMemberCount += 1;
+      clientAffinitySum += features.clientAffinity;
+    }
   }
 
   const serviceExperience: number | null = options.serviceContextAvailable
@@ -188,26 +199,39 @@ export const scoreTeam = (
       ? (closeMembers / knownLocationMembers) * 0.6 +
         (locationSum / knownLocationMembers) * 0.4
       : null;
+  const clientAffinity: number | null =
+    options.clientAffinityAvailable === true && clientAffinityMemberCount > 0
+      ? clientAffinitySum / clientAffinityMemberCount
+      : null;
 
   const recencySignal =
     pairsWithHistory > 0 ? Math.min(1, recentPairCount / pairsWithHistory) : 0;
 
+  const weights = clientAffinity === null
+    ? WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS
+    : WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY;
   const parts: Array<{ weight: number; value: number }> = [
     {
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS.teamAffinity,
+      weight: weights.teamAffinity,
       value: teamAffinity,
     },
   ];
   if (serviceExperience !== null) {
     parts.push({
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS.serviceExperience,
+      weight: weights.serviceExperience,
       value: serviceExperience,
     });
   }
   if (location !== null) {
     parts.push({
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS.location,
+      weight: weights.location,
       value: location,
+    });
+  }
+  if (clientAffinity !== null) {
+    parts.push({
+      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY.clientAffinity,
+      value: clientAffinity,
     });
   }
 
@@ -222,6 +246,7 @@ export const scoreTeam = (
     teamAffinity,
     serviceExperience,
     location,
+    clientAffinity,
     recencySignal,
     locationCoverage,
     isolationPenalty,
@@ -275,6 +300,13 @@ export const buildTeamReasons = (
         experiencedMembers: breakdown.experiencedMembers,
         teamSize,
       },
+    });
+  }
+
+  if (breakdown.clientAffinity !== null && breakdown.clientAffinity > 0) {
+    reasons.push({
+      code: "CLIENT_AFFINITY",
+      params: { clientAffinity: Math.round(breakdown.clientAffinity * 100) / 100 },
     });
   }
 

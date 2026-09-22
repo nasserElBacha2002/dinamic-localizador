@@ -6,6 +6,7 @@ import {
   WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS,
   WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_CAPS,
   WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS,
+  WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS_WITH_CLIENT_AFFINITY,
 } from "../../constants/workforce-team-recommendation-v1";
 import type { CandidateConnectivitySummary } from "../../repositories/recommendation-feature.repository";
 import { saturate } from "./recommendation-scorer";
@@ -16,6 +17,8 @@ export interface PreselectCandidateInput {
   connectivity: CandidateConnectivitySummary | null;
   /** Average saturated affinity to fixed/locked members (0 when none). */
   affinityToFixed: number;
+  /** null when no client exists for the operation; otherwise 0 or 1. */
+  clientAffinity?: number | null;
 }
 
 /**
@@ -26,6 +29,10 @@ export const computePreselectScore = (
   input: PreselectCandidateInput,
   options: { serviceContextAvailable: boolean; locationContextAvailable: boolean },
 ): number => {
+  const clientAffinity = input.clientAffinity ?? null;
+  const weights = clientAffinity === null
+    ? WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS
+    : WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS_WITH_CLIENT_AFFINITY;
   const conn = input.connectivity;
   const related = saturate(
     conn?.relatedEmployeeCount ?? 0,
@@ -43,18 +50,18 @@ export const computePreselectScore = (
 
   const parts: Array<{ weight: number; value: number }> = [
     {
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS.historicalConnectivity,
+      weight: weights.historicalConnectivity,
       value: connectivityScore,
     },
     {
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS.affinityToFixed,
+      weight: weights.affinityToFixed,
       value: input.affinityToFixed,
     },
   ];
 
   if (options.serviceContextAvailable) {
     parts.push({
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS.serviceExperience,
+      weight: weights.serviceExperience,
       value: saturate(input.features.serviceWorkdayCount, 5),
     });
   }
@@ -64,10 +71,16 @@ export const computePreselectScore = (
     const loc = LOCATION_PROXIMITY_BUCKET_SCORES[bucket];
     if (loc !== null) {
       parts.push({
-        weight: WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS.location,
+        weight: weights.location,
         value: loc,
       });
     }
+  }
+  if (clientAffinity !== null) {
+    parts.push({
+      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS_WITH_CLIENT_AFFINITY.clientAffinity,
+      value: clientAffinity,
+    });
   }
 
   const weightSum = parts.reduce((sum, part) => sum + part.weight, 0);

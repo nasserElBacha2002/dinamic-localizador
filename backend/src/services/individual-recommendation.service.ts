@@ -1,5 +1,6 @@
 import { AppError } from "../errors/app-error";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { employeeClientRepository } from "../repositories/employee-client.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { recommendationFeatureRepository } from "../repositories/recommendation-feature.repository";
@@ -126,7 +127,8 @@ export const individualRecommendationService = {
         assignedEmployeeIds,
       );
 
-      const [affinityPairs, serviceExperienceRows] = await Promise.all([
+      const candidateIds = candidates.map((candidate) => candidate.employeeId);
+      const [affinityPairs, serviceExperienceRows, associatedClientEmployeeIds] = await Promise.all([
         recommendationFeatureRepository.listAffinityPairs({
           companyId,
           assignedEmployeeIds,
@@ -140,7 +142,15 @@ export const individualRecommendationService = {
           historyCutoffDate,
           excludeOperationId: operationId,
         }),
+        service.clientId === null
+          ? Promise.resolve([])
+          : employeeClientRepository.listAssociatedEmployeeIds(
+              companyId,
+              service.clientId,
+              candidateIds,
+            ),
       ]);
+      const associatedClientEmployeeIdSet = new Set(associatedClientEmployeeIds);
 
       const affinityByCandidate = new Map<string, AffinityPairStats[]>();
       for (const pair of affinityPairs) {
@@ -185,6 +195,12 @@ export const individualRecommendationService = {
           locationBucket,
           // Reuse the single Haversine result for explainability (Phase B); score uses bucket only.
           distanceMeters,
+          clientAffinity:
+            service.clientId === null
+              ? null
+              : associatedClientEmployeeIdSet.has(candidate.employeeId)
+                ? 1
+                : 0,
         });
       });
 

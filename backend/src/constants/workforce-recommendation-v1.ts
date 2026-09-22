@@ -25,6 +25,14 @@ export const WORKFORCE_RECOMMENDATION_V1_WEIGHTS = {
   locationProximity: 0.25,
 } as const;
 
+/** Used only when the operation's service has a client, so clientAffinity is available. */
+export const WORKFORCE_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY = {
+  teamAffinity: 0.36,
+  serviceExperience: 0.24,
+  locationProximity: 0.2,
+  clientAffinity: 0.2,
+} as const;
+
 /**
  * Recency windows for co-occurrence weighting (calendar days before today in operation TZ).
  * SQL classification MUST use these values via request parameters — never hardcode 90/365.

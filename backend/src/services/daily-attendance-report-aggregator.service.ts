@@ -113,6 +113,8 @@ export const dailyAttendanceReportAggregator = {
         timezoneId: input.timezoneId,
         evaluatedAtIso: evaluatedAt.toISOString(),
         totals: {
+          scheduledWorkdays: 0, presentWorkdays: 0, absentWorkdays: 0, justifiedWorkdays: 0,
+          confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0, rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 0, extraWorkedMinutes: 0,
           operationsCount: 0,
           scheduledEmployeesCount: 0,
           presentCount: 0,
@@ -140,6 +142,8 @@ export const dailyAttendanceReportAggregator = {
     const workdays: DailyAttendanceReportWorkday[] = [];
     let totalIncidentCount = 0;
     const totals: DailyAttendanceReportTotals = {
+      scheduledWorkdays: 0, presentWorkdays: 0, absentWorkdays: 0, justifiedWorkdays: 0,
+      confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0, rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 0, extraWorkedMinutes: 0,
       operationsCount: 0,
       scheduledEmployeesCount: 0,
       presentCount: 0,
@@ -209,6 +213,15 @@ export const dailyAttendanceReportAggregator = {
         missingCheckout: classified.missingCheckout, unavailable: classified.unavailable,
         justified: classified.justified, present: classified.present, incomplete: classified.incomplete,
       });
+      totals.scheduledWorkdays += 1;
+      if (classified.justified) totals.justifiedWorkdays += 1;
+      if (classified.present) totals.presentWorkdays += 1;
+      if (classified.missingCheckin) totals.absentWorkdays += 1;
+      const finalAbsent = !classified.present && !classified.justified && !classified.incomplete;
+      if (finalAbsent && row.confirmation_status === "CONFIRMED") { totals.confirmedButAbsentWorkdays += 1; pushIncident(incidents, { kind: "CONFIRMED_BUT_ABSENT", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Confirmó asistencia pero faltó", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
+      if (finalAbsent && row.confirmation_status !== "UNAVAILABLE" && String(row.expectation_status) !== "JUSTIFIED") { totals.unannouncedAbsenceWorkdays += 1; pushIncident(incidents, { kind: "UNANNOUNCED_ABSENCE", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Falta sin aviso", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
+      if (row.validation_status === "PENDING_REVIEW") { totals.pendingReviewAttendances += 1; pushIncident(incidents, { kind: "PENDING_REVIEW", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Pendiente de revisión", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
+      if (row.validation_status === "REJECTED") { totals.rejectedAttendances += 1; pushIncident(incidents, { kind: "REJECTED_ATTENDANCE", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Asistencia rechazada", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
 
       if (classified.justified) {
         op.justified += 1;

@@ -16,6 +16,9 @@ const toIso = (value: Date | string | null | undefined): string | null => {
 };
 
 const emptyTotals = (): DailyAttendanceReportTotals => ({
+  scheduledWorkdays: 0, presentWorkdays: 0, absentWorkdays: 0, justifiedWorkdays: 0,
+  confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0,
+  rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 0, extraWorkedMinutes: 0,
   operationsCount: 0,
   scheduledEmployeesCount: 0,
   presentCount: 0,
@@ -42,6 +45,9 @@ const mapRun = (row: Record<string, unknown>): DailyAttendanceReportRun => ({
   status: String(row.status) as DailyAttendanceReportRunStatus,
   recipientCount: Number(row.recipient_count ?? 0),
   totals: {
+    scheduledWorkdays: Number(row.scheduled_employees_count ?? 0), presentWorkdays: Number(row.present_count ?? 0),
+    absentWorkdays: Number(row.missing_checkin_count ?? 0), justifiedWorkdays: Number(row.justified_count ?? 0),
+    confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0, rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 0, extraWorkedMinutes: 0,
     operationsCount: Number(row.operations_count ?? 0),
     scheduledEmployeesCount: Number(row.scheduled_employees_count ?? 0),
     presentCount: Number(row.present_count ?? 0),

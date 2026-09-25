@@ -26,6 +26,17 @@ export type CompanyReportEmailRecipientUpdateInput = {
 };
 
 export interface DailyAttendanceReportTotals {
+  scheduledWorkdays: number;
+  presentWorkdays: number;
+  absentWorkdays: number;
+  justifiedWorkdays: number;
+  confirmedButAbsentWorkdays: number;
+  unannouncedAbsenceWorkdays: number;
+  pendingReviewAttendances: number;
+  rejectedAttendances: number;
+  outsideGeofenceAttendances: number;
+  workedMinutes: number;
+  extraWorkedMinutes: number;
   operationsCount: number;
   scheduledEmployeesCount: number;
   presentCount: number;
@@ -65,10 +76,10 @@ export interface DailyAttendanceReportIncident {
     | "MISSING_CHECKIN"
     | "MISSING_CHECKOUT"
     | "LATE"
-    | "EARLY_LEAVE"
+    | "EARLY_LEAVE" | "EARLY_CHECKOUT"
     | "UNAVAILABLE"
     | "PENDING_CONFIRMATION"
-    | "INCOMPLETE";
+    | "INCOMPLETE" | "CONFIRMED_BUT_ABSENT" | "UNANNOUNCED_ABSENCE" | "PENDING_REVIEW" | "REJECTED_ATTENDANCE" | "OUTSIDE_GEOFENCE";
   employeeName: string;
   serviceName: string;
   operationId: string;
@@ -103,6 +114,12 @@ export interface DailyAttendanceReportWorkday {
   justified: boolean;
   present: boolean;
   incomplete: boolean;
+  operationShiftId?: string | null;
+  shiftNameSnapshot?: string | null;
+  locationStatus?: string | null;
+  checkoutStatus?: string | null;
+  workedMinutes?: number;
+  extraWorkedMinutes?: number;
 }
 
 export interface DailyAttendanceReportPayload {

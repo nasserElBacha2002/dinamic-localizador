@@ -2,15 +2,6 @@ import * as XLSX from "xlsx";
 import type { DailyAttendanceReportPayload } from "../types/daily-attendance-report";
 import { getAttendanceIncidentLabel } from "../utils/attendance-report-presentation";
 
-const labels: Record<string, string> = {
-  MISSING_CHECKIN: "No registró llegada", MISSING_CHECKOUT: "No registró salida",
-  LATE: "Llegó tarde", EARLY_LEAVE: "Salida anticipada", UNAVAILABLE: "Avisó que no asistiría",
-  PENDING_CONFIRMATION: "Pendiente de confirmación", INCOMPLETE: "Jornada abierta",
-  PENDING_REVIEW: "Pendiente de revisión", REJECTED: "Asistencia rechazada",
-  OUTSIDE_GEOFENCE: "Fuera de geocerca", CONFIRMED_BUT_ABSENT: "Confirmó asistencia pero faltó",
-  UNANNOUNCED_ABSENCE: "Falta sin aviso",
-};
-
 const hhmm = (value: string | null | undefined, timezoneId: string): string => value ? new Date(value).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: timezoneId }) : "";
 
 export const buildDailyAttendanceReportXlsx = (payload: DailyAttendanceReportPayload): Buffer => {

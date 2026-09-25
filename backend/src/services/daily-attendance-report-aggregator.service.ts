@@ -74,6 +74,7 @@ export const dailyAttendanceReportAggregator = {
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("reportDate", sql.Date, input.reportDate)
+      .input("referenceAt", sql.DateTime2, evaluatedAt)
       .query(`
         SELECT
           c.name AS company_name,

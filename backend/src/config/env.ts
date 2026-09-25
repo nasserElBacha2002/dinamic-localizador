@@ -159,6 +159,8 @@ const envSchema = z
       .int()
       .positive()
       .default(60_000),
+    MONTHLY_ATTENDANCE_REPORT_WORKER_ENABLED: z.stringbool().default(false),
+    MONTHLY_ATTENDANCE_REPORT_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),

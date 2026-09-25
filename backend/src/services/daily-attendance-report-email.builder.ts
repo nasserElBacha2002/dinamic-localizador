@@ -1,127 +1,22 @@
-import {
-  DAILY_ATTENDANCE_REPORT_MAX_INCIDENTS_IN_EMAIL,
-} from "../constants/daily-attendance-report";
 import type { DailyAttendanceReportPayload } from "../types/daily-attendance-report";
 import { escapeHtml } from "../utils/daily-attendance-report-email";
+import { getAttendanceIncidentLabel, getAttendanceIncidentPriority } from "../utils/attendance-report-presentation";
 
-export type DailyAttendanceReportEmailContent = {
-  subject: string;
-  text: string;
-  html: string;
-};
+const labels: Record<string, string> = { MISSING_CHECKIN: "No registró llegada", MISSING_CHECKOUT: "No registró salida", LATE: "Llegó tarde", EARLY_LEAVE: "Salida anticipada", UNAVAILABLE: "Avisó que no asistiría", PENDING_REVIEW: "Pendiente de revisión", REJECTED: "Asistencia rechazada", OUTSIDE_GEOFENCE: "Fuera de geocerca", CONFIRMED_BUT_ABSENT: "Confirmó asistencia pero faltó", UNANNOUNCED_ABSENCE: "Falta sin aviso", INCOMPLETE: "Jornada abierta" };
+const priority: Record<string, number> = { REJECTED: 1, PENDING_REVIEW: 2, OUTSIDE_GEOFENCE: 3, CONFIRMED_BUT_ABSENT: 4, UNANNOUNCED_ABSENCE: 5, MISSING_CHECKIN: 6, MISSING_CHECKOUT: 7, EARLY_LEAVE: 8, LATE: 9, UNAVAILABLE: 10 };
 
-export const buildDailyAttendanceReportEmail = (
-  payload: DailyAttendanceReportPayload,
-): DailyAttendanceReportEmailContent => {
-  const subject = `Reporte de asistencia ${payload.reportDate} — ${payload.companyName}`;
+export const buildDailyAttendanceReportEmail = (payload: DailyAttendanceReportPayload) => {
   const t = payload.totals;
-  const truncated =
-    payload.totalIncidentCount > DAILY_ATTENDANCE_REPORT_MAX_INCIDENTS_IN_EMAIL;
-  const truncationNote = truncated
-    ? `Mostrando ${payload.incidents.length} de ${payload.totalIncidentCount} incidencias.`
-    : null;
-
-  const textLines = [
-    `Reporte diario de asistencia`,
-    `Empresa: ${payload.companyName}`,
-    `Fecha reportada: ${payload.reportDate} (${payload.timezoneId})`,
-    `Evaluado en: ${payload.evaluatedAtIso}`,
-    "",
-    "Resumen",
-    `- Jornadas/operaciones: ${t.operationsCount}`,
-    `- Empleados programados: ${t.scheduledEmployeesCount}`,
-    `- Con llegada: ${t.checkinCount}`,
-    `- Con salida: ${t.checkoutCount}`,
-    `- Presentes (con check-in válido): ${t.presentCount}`,
-    `- Llegadas tarde: ${t.lateCount}`,
-    `- Salidas anticipadas: ${t.earlyLeaveCount}`,
-    `- No asistirá (informado): ${t.unavailableCount}`,
-    `- Justificados: ${t.justifiedCount}`,
-    `- Confirmación pendiente: ${t.pendingConfirmationCount}`,
-    `- Sin llegada: ${t.missingCheckinCount}`,
-    `- Sin salida: ${t.missingCheckoutCount}`,
-    `- Incompletos al evaluar: ${t.incompleteCount}`,
-    `- Incidencias totales: ${payload.totalIncidentCount}`,
-    "",
-    "Incidencias",
-    ...(truncationNote ? [truncationNote] : []),
-    ...(payload.incidents.length === 0
-      ? ["(sin incidencias listadas)"]
-      : payload.incidents.map(
-          (i) => `- [${i.kind}] ${i.employeeName} @ ${i.serviceName}: ${i.detail}`,
-        )),
-    "",
-    "Desglose por jornada",
-    ...payload.operations.map(
-      (o) =>
-        `- ${o.serviceName}: programados=${o.scheduledEmployees} presente=${o.present} sin_llegada=${o.missingCheckin} sin_salida=${o.missingCheckout}`,
-    ),
-  ];
-
-  const incidentRows = payload.incidents
-    .map(
-      (i) =>
-        `<tr><td>${escapeHtml(i.kind)}</td><td>${escapeHtml(i.employeeName)}</td><td>${escapeHtml(i.serviceName)}</td><td>${escapeHtml(i.detail)}</td></tr>`,
-    )
-    .join("");
-
-  const operationRows = payload.operations
-    .map(
-      (o) =>
-        `<tr><td>${escapeHtml(o.serviceName)}</td><td>${o.scheduledEmployees}</td><td>${o.present}</td><td>${o.missingCheckin}</td><td>${o.missingCheckout}</td><td>${o.late}</td><td>${o.earlyLeave}</td><td>${o.unavailable}</td></tr>`,
-    )
-    .join("");
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>${escapeHtml(subject)}</title>
-<style>
-body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;line-height:1.45;margin:0;padding:16px;background:#f6f7f9}
-.card{max-width:720px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:20px}
-h1{font-size:18px;margin:0 0 8px}h2{font-size:15px;margin:20px 0 8px}
-.meta{color:#4b5563;font-size:13px;margin-bottom:16px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.stat{background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px}
-.stat b{display:block;font-size:18px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{border-bottom:1px solid #e5e7eb;text-align:left;padding:8px;vertical-align:top}
-th{background:#f3f4f6}
-@media(max-width:600px){.grid{grid-template-columns:1fr}}
-</style></head>
-<body><div class="card">
-<h1>Reporte diario de asistencia</h1>
-<div class="meta">
-<div><strong>${escapeHtml(payload.companyName)}</strong></div>
-<div>Fecha reportada: ${escapeHtml(payload.reportDate)} · TZ: ${escapeHtml(payload.timezoneId)}</div>
-<div>Evaluado: ${escapeHtml(payload.evaluatedAtIso)}</div>
-</div>
-<h2>Resumen</h2>
-<div class="grid">
-<div class="stat"><span>Jornadas</span><b>${t.operationsCount}</b></div>
-<div class="stat"><span>Programados</span><b>${t.scheduledEmployeesCount}</b></div>
-<div class="stat"><span>Con llegada</span><b>${t.checkinCount}</b></div>
-<div class="stat"><span>Con salida</span><b>${t.checkoutCount}</b></div>
-<div class="stat"><span>Tarde</span><b>${t.lateCount}</b></div>
-<div class="stat"><span>Salida anticipada</span><b>${t.earlyLeaveCount}</b></div>
-<div class="stat"><span>No asistirá</span><b>${t.unavailableCount}</b></div>
-<div class="stat"><span>Justificados</span><b>${t.justifiedCount}</b></div>
-<div class="stat"><span>Sin llegada</span><b>${t.missingCheckinCount}</b></div>
-<div class="stat"><span>Sin salida</span><b>${t.missingCheckoutCount}</b></div>
-<div class="stat"><span>Confirm. pendiente</span><b>${t.pendingConfirmationCount}</b></div>
-<div class="stat"><span>Incompletos</span><b>${t.incompleteCount}</b></div>
-</div>
-<h2>Incidencias (${payload.totalIncidentCount})</h2>
-${truncationNote ? `<p>${escapeHtml(truncationNote)}</p>` : ""}
-${
-  payload.incidents.length === 0
-    ? "<p>Sin incidencias listadas.</p>"
-    : `<table><thead><tr><th>Tipo</th><th>Empleado</th><th>Servicio</th><th>Detalle</th></tr></thead><tbody>${incidentRows}</tbody></table>`
-}
-<h2>Por jornada</h2>
-<table><thead><tr><th>Servicio</th><th>Prog.</th><th>Pres.</th><th>Sin llegada</th><th>Sin salida</th><th>Tarde</th><th>Anticipada</th><th>No asiste</th></tr></thead>
-<tbody>${operationRows || "<tr><td colspan='8'>Sin jornadas</td></tr>"}</tbody></table>
-</div></body></html>`;
-
-  return { subject, text: textLines.join("\n"), html };
+  const incidents = [...payload.incidents].sort((a, b) => getAttendanceIncidentPriority(a.kind) - getAttendanceIncidentPriority(b.kind) || (priority[a.kind] ?? 99) - (priority[b.kind] ?? 99) || a.employeeName.localeCompare(b.employeeName) || a.serviceName.localeCompare(b.serviceName));
+  const grouped = new Map<string, string[]>();
+  for (const i of incidents) { const key = `${i.employeeName} — ${i.serviceName}`; const list = grouped.get(key) ?? []; list.push(getAttendanceIncidentLabel(i.kind)); grouped.set(key, list); }
+  const absence = t.absentWorkdays;
+  const incidentSummary = payload.totalIncidentCount > incidents.length
+    ? `Mostrando ${incidents.length} de ${payload.totalIncidentCount}`
+    : `Total: ${payload.totalIncidentCount}`;
+  const text = ["Reporte diario de asistencia", `Fecha: ${payload.reportDate}`, `Zona horaria: ${payload.timezoneId}`, "", "Resumen", `- Jornadas: ${t.scheduledWorkdays} · Presentes: ${t.presentWorkdays} · Ausentes: ${absence} · Justificadas: ${t.justifiedWorkdays}`, `- Tardanzas: ${t.lateCount} · Sin llegada: ${t.missingCheckinCount} · Sin salida: ${t.missingCheckoutCount}`, `- Avisó que no asistiría: ${t.unavailableCount} · Confirmó y faltó: ${t.confirmedButAbsentWorkdays} · Falta sin aviso: ${t.unannouncedAbsenceWorkdays}`, `- Pendientes de revisión: ${t.pendingReviewAttendances} · Rechazadas: ${t.rejectedAttendances} · Fuera de geocerca: ${t.outsideGeofenceAttendances}`, "", `Incidencias importantes (${incidentSummary})`, ...(incidents.length ? incidents.slice(0, 20).map((i) => `- ${labels[i.kind] ?? i.detail}: ${i.employeeName} — ${i.serviceName}`) : ["No se detectaron incidencias relevantes."]), "", "Empleados que requieren atención", ...(grouped.size ? [...grouped].slice(0, 10).map(([k, v]) => `- ${k}: ${[...new Set(v)].join(", ")}`) : ["No hay empleados con incidencias relevantes."]), "", "El detalle completo está en el archivo XLSX adjunto."].join("\n");
+  const groupedHtml = [...grouped].slice(0, 10).map(([key, values]) => `<li><strong>${escapeHtml(key)}</strong>: ${escapeHtml([...new Set(values)].join(", "))}</li>`).join("");
+  const incidentHtml = incidents.length ? incidents.slice(0, 20).map((i) => `<li>${escapeHtml(labels[i.kind] ?? i.detail)} — ${escapeHtml(i.employeeName)} (${escapeHtml(i.serviceName)})</li>`).join("") : "<li>No se detectaron incidencias relevantes.</li>";
+  const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#202124;line-height:1.45"><h1>Reporte diario de asistencia</h1><p><strong>${escapeHtml(payload.companyName)}</strong><br>Fecha: ${escapeHtml(payload.reportDate)} · Zona horaria: ${escapeHtml(payload.timezoneId)}</p><h2>Resumen</h2><p>${t.scheduledWorkdays} jornadas · ${t.presentWorkdays} presentes · ${absence} ausencias · ${t.justifiedWorkdays} justificadas · ${t.lateCount} tardanzas · ${t.missingCheckinCount} sin llegada · ${t.missingCheckoutCount} sin salida</p><h2>Incidencias importantes</h2><p><strong>${escapeHtml(incidentSummary)}</strong></p><ul>${incidentHtml}</ul><h2>Empleados que requieren atención</h2><ul>${groupedHtml || "<li>No hay empleados con incidencias relevantes.</li>"}</ul><p>El detalle completo está en el archivo XLSX adjunto.</p></body></html>`;
+  return { subject: `Reporte diario de asistencia ${payload.reportDate} — ${payload.companyName}`, text, html };
 };

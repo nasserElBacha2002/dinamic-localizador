@@ -1,0 +1,9 @@
+import assert from "node:assert/strict";
+import * as XLSX from "xlsx";
+import { describe, it } from "node:test";
+import { buildMonthlyAttendanceXlsx } from "./monthly-attendance-report-xlsx.builder";
+import type { MonthlyAttendanceReportDataset } from "../types/monthly-attendance-report";
+
+const metrics = { scheduledWorkdays: 1, presentWorkdays: 1, absentWorkdays: 0, justifiedWorkdays: 0, attendanceRate: 100, absenteeismRate: 0, onTimeWorkdays: 1, lateWorkdays: 0, punctualityRate: 100, earlyCheckoutWorkdays: 0, missingCheckinWorkdays: 0, missingCheckoutWorkdays: 0, notifiedUnavailableWorkdays: 0, confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0, rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 480, extraWorkedMinutes: 30 };
+const dataset = (): MonthlyAttendanceReportDataset => ({ schemaVersion: 1, companyId: "c", period: { year: 2026, month: 9, timezone: "America/Argentina/Buenos_Aires", start: "2026-09-01T03:00:00.000Z", endExclusive: "2026-10-01T03:00:00.000Z" }, evaluatedAt: "2026-10-01T12:00:00.000Z", summary: { ...metrics, totalWorkedMinutes: 480, totalExtraWorkedMinutes: 30 }, employees: [{ employeeId: "e", employeeName: "Ada", ...metrics }], services: [{ serviceId: "s", serviceName: "Sucursal", ...metrics }], incidents: [] });
+describe("monthly attendance XLSX builder", () => { it("creates the five required sheets from dataset values", () => { const workbook = XLSX.read(buildMonthlyAttendanceXlsx(dataset()), { type: "buffer" }); assert.deepEqual(workbook.SheetNames, ["Resumen", "Empleados", "Servicios", "Incidencias", "Horas"]); assert.match(String(XLSX.utils.sheet_to_json(workbook.Sheets.Empleados!, { header: 1 })[1]?.[0]), /Ada/); assert.match(JSON.stringify(XLSX.utils.sheet_to_json(workbook.Sheets.Resumen!, { header: 1 })), /100\.00%/); }); });

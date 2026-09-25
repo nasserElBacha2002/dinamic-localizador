@@ -221,6 +221,7 @@ export const buildEmployeeWorkdayStatisticsCte = (additionalWhereClause = ""): s
       ew.operation_workday_id,
       ew.expectation_status,
       ew.absence_request_id,
+      oa.confirmation_status,
       e.name AS employee_name,
       e.phone_number,
       e.employee_type,
@@ -271,6 +272,9 @@ export const buildEmployeeWorkdayStatisticsCte = (additionalWhereClause = ""): s
     LEFT JOIN absence_requests abs_req
       ON abs_req.id = ew.absence_request_id
      AND abs_req.company_id = ew.company_id
+    LEFT JOIN operation_assignments oa
+      ON oa.id = ew.operation_assignment_id
+     AND oa.company_id = ew.company_id
     LEFT JOIN absence_types abs_type
       ON abs_type.id = abs_req.absence_type_id
     ${CANONICAL_PRODUCTION_ATTENDANCE_APPLY}

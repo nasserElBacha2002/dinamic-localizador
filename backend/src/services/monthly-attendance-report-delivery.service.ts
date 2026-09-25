@@ -13,7 +13,7 @@ import { monthlyAttendanceReportService } from "./monthly-attendance-report.serv
 const owner = () => `monthly-${process.pid}-${randomUUID()}`;
 const retryAt = (attempt: number) => new Date(Date.now() + env.DAILY_ATTENDANCE_REPORT_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
 const eligibleCompanies = async (): Promise<Array<{ id: string; name: string; timezone: string; reportTime: string }>> => {
-  const r = await getPool().request().query("SELECT c.id,c.name,COALESCE(cs.operation_timezone,c.default_timezone,N'America/Argentina/Buenos_Aires') timezone,CONVERT(varchar(5),COALESCE(cs.daily_attendance_report_time,'08:00'),108) report_time FROM companies c LEFT JOIN company_settings cs ON cs.company_id=c.id WHERE c.status=N'ACTIVE'");
+  const r = await getPool().request().query("SELECT c.id,c.name,COALESCE(cs.operation_timezone,c.default_timezone,N'America/Argentina/Buenos_Aires') timezone,CONVERT(varchar(5),COALESCE(cs.daily_attendance_report_time,'08:00'),108) report_time FROM companies c INNER JOIN company_settings cs ON cs.company_id=c.id WHERE c.status=N'ACTIVE' AND cs.daily_attendance_report_enabled=1");
   return r.recordset.map((row) => ({ id: String(row.id), name: String(row.name), timezone: String(row.timezone), reportTime: String(row.report_time).slice(0, 5) }));
 };
 
@@ -35,13 +35,12 @@ export const monthlyAttendanceReportDeliveryService = {
         const dataset = await monthlyAttendanceReportService.buildMonthlyAttendanceReport({ companyId: company.id, year, month, timezone: company.timezone, evaluatedAt: now });
         const email = buildMonthlyAttendanceReportEmail(dataset, company.name);
         const xlsx = buildMonthlyAttendanceXlsx(dataset);
-        await monthlyAttendanceReportRunRepository.snapshot({ run: current, owner: leaseOwner, subject: email.subject, text: email.text, html: email.html, xlsx });
+        const snapshotWritten = await monthlyAttendanceReportRunRepository.snapshot({ run: current, owner: leaseOwner, subject: email.subject, text: email.text, html: email.html, xlsx });
+        if (!snapshotWritten) throw new Error("MONTHLY_REPORT_SNAPSHOT_LEASE_LOST");
         await monthlyAttendanceReportDeliveryRepository.snapshot(current.id, company.id, recipients);
         current = (await monthlyAttendanceReportRunRepository.ensure(company.id, year, month, company.timezone));
       }
-      if ((await monthlyAttendanceReportDeliveryRepository.count(current.id, company.id)) === 0) {
-        await monthlyAttendanceReportDeliveryRepository.snapshot(current.id, company.id, recipients);
-      }
+      await monthlyAttendanceReportDeliveryRepository.snapshot(current.id, company.id, recipients);
       for (;;) {
         const delivery = await monthlyAttendanceReportDeliveryRepository.claim(current.id, company.id, leaseOwner, Math.ceil(env.DAILY_ATTENDANCE_REPORT_LEASE_MS / 1000));
         if (!delivery) break;
@@ -52,7 +51,8 @@ export const monthlyAttendanceReportDeliveryService = {
         } catch (error) { await monthlyAttendanceReportDeliveryRepository.failed(delivery.id, company.id, leaseOwner, error instanceof Error ? error.message : "EMAIL_SEND_FAILED", delivery.attemptCount >= env.DAILY_ATTENDANCE_REPORT_MAX_ATTEMPTS ? null : retryAt(delivery.attemptCount), delivery.attemptCount >= env.DAILY_ATTENDANCE_REPORT_MAX_ATTEMPTS); }
       }
       const counts = await monthlyAttendanceReportDeliveryRepository.counts(current.id, company.id);
-      await monthlyAttendanceReportRunRepository.mark(current.id, company.id, leaseOwner, counts.sent === counts.total ? "SENT" : counts.sent > 0 ? "PARTIAL" : "FAILED");
+      const status = counts.sent === counts.total ? "SENT" : counts.retryable > 0 ? (counts.sent > 0 ? "PARTIAL" : "FAILED") : counts.sent > 0 ? "PARTIAL" : "FAILED";
+      await monthlyAttendanceReportRunRepository.mark(current.id, company.id, leaseOwner, status, null, counts.retryable > 0 ? counts.nextAttemptAt : null);
     } catch (error) { await monthlyAttendanceReportRunRepository.mark(claimed.id, company.id, leaseOwner, "FAILED", error instanceof Error ? error.message : "MONTHLY_REPORT_FAILED"); throw error; }
   },
   async processTick(now = new Date()): Promise<void> { for (const company of await eligibleCompanies()) await this.processPreviousMonth(company, now); },

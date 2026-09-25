@@ -85,6 +85,7 @@ const toIncident = (row: MonthlyAttendanceReportRow, type: MonthlyAttendanceInci
   shiftNameSnapshot: row.shift_name_snapshot ? String(row.shift_name_snapshot) : null,
   confirmationStatus: row.confirmation_status, expectationStatus: String(row.expectation_status),
   effectiveState: String(row.effective_state), checkInAt: iso(row.check_in_at), checkOutAt: iso(row.check_out_at),
+  expectedStartAt: iso(row.expected_start_at), expectedEndAt: iso(row.expected_end_at),
   validationStatus: row.validation_status, locationStatus: row.location_status,
   punctualityStatus: row.punctuality_status, checkoutStatus: row.checkout_status,
 });

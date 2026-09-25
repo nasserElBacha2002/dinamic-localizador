@@ -73,6 +73,36 @@ export interface DailyAttendanceReportIncident {
   serviceName: string;
   operationId: string;
   detail: string;
+  expectedStartAt?: string | null;
+  expectedEndAt?: string | null;
+  actualAt?: string | null;
+  differenceMinutes?: number | null;
+  employeeWorkdayId?: string;
+}
+
+export interface DailyAttendanceReportWorkday {
+  employeeWorkdayId: string;
+  employeeName: string;
+  serviceName: string;
+  operationId: string;
+  operationWorkdayId: string;
+  expectedStartAt: string;
+  expectedEndAt: string | null;
+  receivedAt: string | null;
+  checkoutAt: string | null;
+  expectationStatus: string;
+  confirmationStatus: string | null;
+  punctualityStatus: string | null;
+  validationStatus: string | null;
+  state: string;
+  late: boolean;
+  earlyLeave: boolean;
+  missingCheckin: boolean;
+  missingCheckout: boolean;
+  unavailable: boolean;
+  justified: boolean;
+  present: boolean;
+  incomplete: boolean;
 }
 
 export interface DailyAttendanceReportPayload {
@@ -88,6 +118,7 @@ export interface DailyAttendanceReportPayload {
   incidents: DailyAttendanceReportIncident[];
   totalIncidentCount: number;
   hasActivity: boolean;
+  workdays?: DailyAttendanceReportWorkday[];
 }
 
 export type DailyAttendanceReportEmailSnapshot = {
@@ -108,6 +139,7 @@ export interface DailyAttendanceReportRun {
   totalIncidentCount: number;
   templateVersion: string | null;
   emailSnapshot: DailyAttendanceReportEmailSnapshot | null;
+  xlsxSnapshot: Buffer | null;
   evaluatedAt: string | null;
   attemptCount: number;
   nextAttemptAt: string | null;

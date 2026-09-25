@@ -20,12 +20,14 @@ export const buildMonthlyAttendanceXlsx = (dataset: MonthlyAttendanceReportDatas
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(employeeRows), "Empleados");
   const serviceRows = [["Servicio", ...metricHeaders], ...dataset.services.map((service) => [service.serviceName, ...metricValues(service)])];
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(serviceRows), "Servicios");
-  const incidentRows = [["Fecha", "Empleado", "Servicio", "Operación", "Turno", "Incidencia", "Horario esperado", "Horario real", "Minutos de diferencia", "Dato relevante"], ...dataset.incidents.map((incident: MonthlyAttendanceIncident) => [incident.workDate, incident.employeeName, incident.serviceName, incident.operationId, incident.shiftNameSnapshot ?? "", labels[incident.type] ?? incident.type, incident.checkInAt ?? "", incident.checkOutAt ?? "", "", incident.validationStatus ?? incident.locationStatus ?? ""])];
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(incidentRows), "Incidencias");
-  const hourRows = [["Empleado", "Servicio", "Jornadas", "Minutos trabajados", "Horas trabajadas", "Minutos adicionales", "Horas adicionales"], ...dataset.employees.flatMap((employee) => {
-    const services = dataset.services.length ? dataset.services : [{ serviceName: "" }];
-    return services.map((service) => [employee.employeeName, service.serviceName, employee.scheduledWorkdays, employee.workedMinutes, hours(employee.workedMinutes), employee.extraWorkedMinutes, hours(employee.extraWorkedMinutes)]);
+  const incidentRows = [["Fecha", "Empleado", "Servicio", "Operación", "Turno", "Incidencia", "Horario esperado", "Horario real", "Minutos de diferencia", "Dato relevante"], ...dataset.incidents.map((incident: MonthlyAttendanceIncident) => {
+    const expected = incident.type === "LATE" || incident.type === "MISSING_CHECKIN" ? incident.expectedStartAt : incident.type === "EARLY_CHECKOUT" || incident.type === "MISSING_CHECKOUT" ? incident.expectedEndAt : null;
+    const actual = incident.type === "LATE" ? incident.checkInAt : incident.type === "EARLY_CHECKOUT" ? incident.checkOutAt : null;
+    const difference = incident.type === "LATE" && expected && actual ? Math.round((new Date(actual).getTime() - new Date(expected).getTime()) / 60000) : incident.type === "EARLY_CHECKOUT" && expected && actual ? Math.round((new Date(expected).getTime() - new Date(actual).getTime()) / 60000) : "";
+    return [incident.workDate, incident.employeeName, incident.serviceName, incident.operationId, incident.shiftNameSnapshot ?? "", labels[incident.type] ?? incident.type, expected ?? "", actual ?? "", difference, incident.validationStatus ?? incident.locationStatus ?? ""];
   })];
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(incidentRows), "Incidencias");
+  const hourRows = [["Empleado", "Jornadas", "Minutos trabajados", "Horas trabajadas", "Minutos adicionales", "Horas adicionales"], ...dataset.employees.map((employee) => [employee.employeeName, employee.scheduledWorkdays, employee.workedMinutes, hours(employee.workedMinutes), employee.extraWorkedMinutes, hours(employee.extraWorkedMinutes)])];
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(hourRows), "Horas");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 };

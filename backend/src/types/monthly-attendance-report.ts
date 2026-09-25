@@ -66,6 +66,8 @@ export interface MonthlyAttendanceIncident {
   effectiveState: string;
   checkInAt: string | null;
   checkOutAt: string | null;
+  expectedStartAt: string | null;
+  expectedEndAt: string | null;
   validationStatus: string | null;
   locationStatus: string | null;
   punctualityStatus: string | null;

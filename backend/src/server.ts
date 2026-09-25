@@ -37,7 +37,7 @@ import {
   startDailyAttendanceReportJob,
   stopDailyAttendanceReportJob,
 } from "./jobs/daily-attendance-report.job";
-import { startMonthlyAttendanceReportJob } from "./jobs/monthly-attendance-report.job";
+import { startMonthlyAttendanceReportJob, stopMonthlyAttendanceReportJob } from "./jobs/monthly-attendance-report.job";
 import {
   startOperationLifecycleJob,
   stopOperationLifecycleJob,
@@ -77,6 +77,7 @@ const stopAllSchedulers = (): void => {
   stopOperationLifecycleJob();
   stopAdminAlertJob();
   stopDailyAttendanceReportJob();
+  stopMonthlyAttendanceReportJob();
   stopWhatsappMessageCostSyncJob();
   stopSystemLogRetentionJob();
   stopRateLimitCleanupJob();

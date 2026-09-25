@@ -5,6 +5,7 @@ import type {
   DailyAttendanceReportOperationBreakdown,
   DailyAttendanceReportPayload,
   DailyAttendanceReportTotals,
+  DailyAttendanceReportWorkday,
 } from "../types/daily-attendance-report";
 import { classifyDailyAttendanceReportRow } from "../utils/daily-attendance-report-classify";
 import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../utils/statistics-canonical-attendance";
@@ -103,7 +104,7 @@ export const dailyAttendanceReportAggregator = {
       `);
 
     const rows = result.recordset as Row[];
-    const companyName = rows[0] ? String(rows[0].company_name) : "";
+  const companyName = rows[0] ? String(rows[0].company_name) : "";
     if (rows.length === 0) {
       return {
         companyId: input.companyId,
@@ -130,11 +131,13 @@ export const dailyAttendanceReportAggregator = {
         incidents: [],
         totalIncidentCount: 0,
         hasActivity: false,
+        workdays: [],
       };
     }
 
     const byOw = new Map<string, DailyAttendanceReportOperationBreakdown>();
     const incidents: DailyAttendanceReportIncident[] = [];
+    const workdays: DailyAttendanceReportWorkday[] = [];
     let totalIncidentCount = 0;
     const totals: DailyAttendanceReportTotals = {
       operationsCount: 0,
@@ -190,6 +193,21 @@ export const dailyAttendanceReportAggregator = {
         lateToleranceMinutes: Number(row.late_tolerance_minutes ?? 0),
         earlyLeaveToleranceMinutes: input.earlyLeaveToleranceMinutes,
         evaluatedAt,
+      });
+
+      workdays.push({
+        employeeWorkdayId: String(row.employee_workday_id), employeeName: String(row.employee_name),
+        serviceName: String(row.service_name), operationId: String(row.operation_id),
+        operationWorkdayId: owId, expectedStartAt: toDate(row.expected_start_at)!.toISOString(),
+        expectedEndAt: toDate(row.expected_end_at)?.toISOString() ?? null,
+        receivedAt: toDate(row.received_at)?.toISOString() ?? null,
+        checkoutAt: toDate(row.checkout_at)?.toISOString() ?? null,
+        expectationStatus: String(row.expectation_status), confirmationStatus: row.confirmation_status,
+        punctualityStatus: row.punctuality_status, validationStatus: row.validation_status,
+        state: classified.justified ? "JUSTIFIED" : classified.present ? "PRESENT" : classified.unavailable ? "UNAVAILABLE" : classified.missingCheckin ? "ABSENT" : "PENDING",
+        late: classified.late, earlyLeave: classified.earlyLeave, missingCheckin: classified.missingCheckin,
+        missingCheckout: classified.missingCheckout, unavailable: classified.unavailable,
+        justified: classified.justified, present: classified.present, incomplete: classified.incomplete,
       });
 
       if (classified.justified) {
@@ -299,6 +317,7 @@ export const dailyAttendanceReportAggregator = {
       incidents: incidents.slice(0, MAX_INCIDENTS),
       totalIncidentCount,
       hasActivity: true,
+      workdays,
     };
   },
 };

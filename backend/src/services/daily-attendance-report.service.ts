@@ -24,6 +24,7 @@ import { validateManualReportDate } from "../utils/daily-attendance-report-manua
 import { logDailyAttendanceReportEvent } from "../utils/daily-attendance-report-observability";
 import { assertDailyReportAudienceSchemaReady } from "../utils/daily-attendance-report-schema-guard";
 import type { DailyAttendanceReportRun } from "../types/daily-attendance-report";
+import { buildDailyAttendanceReportXlsx, DAILY_XLSX_CONTENT_TYPE } from "./daily-attendance-report-xlsx.builder";
 
 /**
  * SMTP delivery is at-least-once: if the provider accepts a message but persistence of
@@ -90,7 +91,7 @@ const processDeliveriesFromSnapshot = async (input: {
   leaseOwner: string;
 }): Promise<DeliveryBatchOutcome> => {
   const email = input.run.emailSnapshot;
-  if (!email) {
+  if (!email || !input.run.xlsxSnapshot) {
     return "FAILED";
   }
 
@@ -143,6 +144,7 @@ const processDeliveriesFromSnapshot = async (input: {
         subject: email.subject,
         text: email.text,
         html: email.html,
+        attachments: [{ filename: `reporte-asistencia-${input.run.reportDate}.xlsx`, content: input.run.xlsxSnapshot, contentType: DAILY_XLSX_CONTENT_TYPE }],
       });
 
       if (!result.sent) {
@@ -392,7 +394,7 @@ const generateSnapshotIfNeeded = async (input: {
   earlyLeaveToleranceMinutes: number;
   leaseOwner: string;
 }): Promise<"SKIPPED_NO_RECIPIENTS" | "SKIPPED_NO_ACTIVITY" | "READY" | "FENCE_LOST"> => {
-  if (input.run.generatedAt && input.run.emailSnapshot) {
+  if (input.run.generatedAt && input.run.emailSnapshot && input.run.xlsxSnapshot) {
     return "READY";
   }
 
@@ -448,6 +450,7 @@ const generateSnapshotIfNeeded = async (input: {
   }
 
   const email = buildDailyAttendanceReportEmail(payload);
+  const xlsx = buildDailyAttendanceReportXlsx(payload);
   const persisted = await dailyAttendanceReportRunRepository.persistSnapshotAndAudience({
     runId: input.run.id,
     companyId: input.run.companyId,
@@ -457,6 +460,7 @@ const generateSnapshotIfNeeded = async (input: {
     totalIncidentCount: payload.totalIncidentCount,
     templateVersion: DAILY_ATTENDANCE_REPORT_TEMPLATE_VERSION,
     email,
+    xlsx,
     evaluatedAt,
     recipients: recipients.map((r) => ({
       id: r.id,
@@ -534,7 +538,7 @@ const processClaimedRun = async (input: {
     input.run.companyId,
     input.run.id,
   );
-  if (!refreshed?.emailSnapshot) {
+  if (!refreshed?.emailSnapshot || !refreshed.xlsxSnapshot) {
     return;
   }
 

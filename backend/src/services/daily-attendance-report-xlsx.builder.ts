@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { DailyAttendanceReportPayload } from "../types/daily-attendance-report";
+import { getAttendanceIncidentLabel } from "../utils/attendance-report-presentation";
 
 const labels: Record<string, string> = {
   MISSING_CHECKIN: "No registró llegada", MISSING_CHECKOUT: "No registró salida",
@@ -30,7 +31,7 @@ export const buildDailyAttendanceReportXlsx = (payload: DailyAttendanceReportPay
     Validación: w.validationStatus === "PENDING_REVIEW" ? "Pendiente de revisión" : w.validationStatus === "REJECTED" ? "Asistencia rechazada" : w.validationStatus ?? "", Geocerca: w.locationStatus === "OUTSIDE_GEOFENCE" ? "Fuera de geocerca" : w.locationStatus ?? "", "Minutos trabajados": w.workedMinutes ?? "", "Horas trabajadas": `${Math.floor((w.workedMinutes ?? 0) / 60)}h ${(w.workedMinutes ?? 0) % 60}m`, "Minutos adicionales": w.extraWorkedMinutes ?? "", "Horas adicionales": `${Math.floor((w.extraWorkedMinutes ?? 0) / 60)}h ${(w.extraWorkedMinutes ?? 0) % 60}m`, "Observaciones": w.incomplete ? "Jornada abierta" : "" }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Jornadas");
   const incidents = payload.incidents.map((i) => ({ Fecha: payload.reportDate, Empleado: i.employeeName, Servicio: i.serviceName, Operación: i.operationId,
-    Turno: "", Incidencia: labels[i.kind] ?? i.kind, "Horario esperado": hhmm(i.expectedStartAt ?? null, payload.timezoneId), "Horario real": hhmm(i.actualAt ?? null, payload.timezoneId),
+    Turno: (payload.workdays ?? []).find((w) => w.employeeWorkdayId === i.employeeWorkdayId)?.shiftNameSnapshot ?? "", Incidencia: getAttendanceIncidentLabel(i.kind), "Horario esperado": hhmm(i.expectedStartAt ?? null, payload.timezoneId), "Horario real": hhmm(i.actualAt ?? null, payload.timezoneId),
     "Minutos de diferencia": i.differenceMinutes ?? "", Observación: i.detail }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidents), "Incidencias");
   const byService = new Map<string, Record<string, number>>();

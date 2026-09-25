@@ -114,6 +114,11 @@ export interface DailyAttendanceReportWorkday {
   justified: boolean;
   present: boolean;
   incomplete: boolean;
+  confirmedButAbsent?: boolean;
+  unannouncedAbsence?: boolean;
+  pendingReview?: boolean;
+  rejectedAttendance?: boolean;
+  outsideGeofence?: boolean;
   operationShiftId?: string | null;
   shiftNameSnapshot?: string | null;
   locationStatus?: string | null;

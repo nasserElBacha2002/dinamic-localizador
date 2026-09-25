@@ -9,6 +9,7 @@ import type {
 } from "../types/daily-attendance-report";
 import { classifyDailyAttendanceReportRow } from "../utils/daily-attendance-report-classify";
 import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../utils/statistics-canonical-attendance";
+import { EFFECTIVE_STATE_SQL, WORKED_MINUTES_SQL, OVERTIME_MINUTES_SQL } from "../utils/employee-workday-statistics-projection";
 import { toDateOnlyString } from "../utils/row-mappers";
 
 const MAX_INCIDENTS = 40;
@@ -16,6 +17,8 @@ const MAX_INCIDENTS = 40;
 type Row = {
   operation_id: string;
   operation_workday_id: string;
+  operation_shift_id: string | null;
+  shift_name_snapshot: string | null;
   work_date: Date | string;
   service_name: string;
   expected_start_at: Date | string;
@@ -29,6 +32,12 @@ type Row = {
   checkout_at: Date | string | null;
   punctuality_status: string | null;
   validation_status: string | null;
+  location_status: string | null;
+  checkout_status: string | null;
+  extra_worked_minutes: number;
+  effective_state: string;
+  worked_minutes: number;
+  overtime_minutes: number;
   company_name: string;
 };
 
@@ -70,6 +79,8 @@ export const dailyAttendanceReportAggregator = {
           c.name AS company_name,
           ow.operation_id,
           ow.id AS operation_workday_id,
+          ow.operation_shift_id,
+          ow.shift_name_snapshot,
           ow.work_date,
           s.name AS service_name,
           ow.expected_start_at,
@@ -82,7 +93,13 @@ export const dailyAttendanceReportAggregator = {
           ar.received_at,
           ar.checkout_at,
           ar.punctuality_status,
-          ar.validation_status
+          ar.validation_status,
+          ar.location_status,
+          ar.checkout_status,
+          ar.extra_worked_minutes,
+          ${EFFECTIVE_STATE_SQL} AS effective_state,
+          ${WORKED_MINUTES_SQL} AS worked_minutes,
+          ${OVERTIME_MINUTES_SQL} AS overtime_minutes
         FROM operation_workdays ow
         INNER JOIN companies c ON c.id = ow.company_id
         INNER JOIN scheduled_operations i
@@ -208,20 +225,29 @@ export const dailyAttendanceReportAggregator = {
         checkoutAt: toDate(row.checkout_at)?.toISOString() ?? null,
         expectationStatus: String(row.expectation_status), confirmationStatus: row.confirmation_status,
         punctualityStatus: row.punctuality_status, validationStatus: row.validation_status,
-        state: classified.justified ? "JUSTIFIED" : classified.present ? "PRESENT" : classified.unavailable ? "UNAVAILABLE" : classified.missingCheckin ? "ABSENT" : "PENDING",
+        state: String(row.effective_state),
         late: classified.late, earlyLeave: classified.earlyLeave, missingCheckin: classified.missingCheckin,
         missingCheckout: classified.missingCheckout, unavailable: classified.unavailable,
         justified: classified.justified, present: classified.present, incomplete: classified.incomplete,
+        operationShiftId: row.operation_shift_id, shiftNameSnapshot: row.shift_name_snapshot,
+        locationStatus: row.location_status, checkoutStatus: row.checkout_status,
+        workedMinutes: Number(row.worked_minutes ?? 0), extraWorkedMinutes: Number(row.overtime_minutes ?? 0),
+        confirmedButAbsent: row.effective_state === "ABSENT" && row.confirmation_status === "CONFIRMED",
+        unannouncedAbsence: row.effective_state === "ABSENT" && row.confirmation_status !== "UNAVAILABLE" && String(row.expectation_status) !== "JUSTIFIED",
+        pendingReview: row.validation_status === "PENDING_REVIEW", rejectedAttendance: row.validation_status === "REJECTED", outsideGeofence: row.location_status === "OUTSIDE_GEOFENCE",
       });
       totals.scheduledWorkdays += 1;
       if (classified.justified) totals.justifiedWorkdays += 1;
       if (classified.present) totals.presentWorkdays += 1;
-      if (classified.missingCheckin) totals.absentWorkdays += 1;
-      const finalAbsent = !classified.present && !classified.justified && !classified.incomplete;
+      if (row.effective_state === "ABSENT") totals.absentWorkdays += 1;
+      totals.workedMinutes += Number(row.worked_minutes ?? 0);
+      totals.extraWorkedMinutes += Number(row.overtime_minutes ?? 0);
+      const finalAbsent = row.effective_state === "ABSENT";
       if (finalAbsent && row.confirmation_status === "CONFIRMED") { totals.confirmedButAbsentWorkdays += 1; pushIncident(incidents, { kind: "CONFIRMED_BUT_ABSENT", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Confirmó asistencia pero faltó", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
       if (finalAbsent && row.confirmation_status !== "UNAVAILABLE" && String(row.expectation_status) !== "JUSTIFIED") { totals.unannouncedAbsenceWorkdays += 1; pushIncident(incidents, { kind: "UNANNOUNCED_ABSENCE", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Falta sin aviso", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
       if (row.validation_status === "PENDING_REVIEW") { totals.pendingReviewAttendances += 1; pushIncident(incidents, { kind: "PENDING_REVIEW", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Pendiente de revisión", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
       if (row.validation_status === "REJECTED") { totals.rejectedAttendances += 1; pushIncident(incidents, { kind: "REJECTED_ATTENDANCE", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Asistencia rechazada", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
+      if (row.location_status === "OUTSIDE_GEOFENCE") { totals.outsideGeofenceAttendances += 1; pushIncident(incidents, { kind: "OUTSIDE_GEOFENCE", employeeName: String(row.employee_name), serviceName: String(row.service_name), operationId: String(row.operation_id), detail: "Fuera de geocerca", employeeWorkdayId: String(row.employee_workday_id) }); totalIncidentCount += 1; }
 
       if (classified.justified) {
         op.justified += 1;

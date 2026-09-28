@@ -37,6 +37,7 @@ import {
   startDailyAttendanceReportJob,
   stopDailyAttendanceReportJob,
 } from "./jobs/daily-attendance-report.job";
+import { startMonthlyAttendanceReportJob, stopMonthlyAttendanceReportJob } from "./jobs/monthly-attendance-report.job";
 import {
   startOperationLifecycleJob,
   stopOperationLifecycleJob,
@@ -49,6 +50,10 @@ import {
   startSystemLogRetentionJob,
   stopSystemLogRetentionJob,
 } from "./jobs/system-log-retention.job";
+import {
+  startRateLimitCleanupJob,
+  stopRateLimitCleanupJob,
+} from "./jobs/rate-limit-cleanup.job";
 import {
   initSystemLogPersistSink,
   shutdownSystemLogPersistSink,
@@ -72,8 +77,10 @@ const stopAllSchedulers = (): void => {
   stopOperationLifecycleJob();
   stopAdminAlertJob();
   stopDailyAttendanceReportJob();
+  stopMonthlyAttendanceReportJob();
   stopWhatsappMessageCostSyncJob();
   stopSystemLogRetentionJob();
+  stopRateLimitCleanupJob();
 };
 
 const closeHttpServer = async (): Promise<void> => {
@@ -140,11 +147,27 @@ const startServer = async (): Promise<void> => {
   startOperationLifecycleJob();
   startAdminAlertJob();
   startDailyAttendanceReportJob();
+  startMonthlyAttendanceReportJob();
   startWhatsappMessageCostSyncJob();
   startSystemLogRetentionJob();
+  startRateLimitCleanupJob();
 
   httpServer = app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`API listening on 0.0.0.0:${env.PORT}`);
+  });
+
+  httpServer.on("error", (error: NodeJS.ErrnoException) => {
+    systemLogger.error({
+      module: "http",
+      event: "http.request.failed",
+      message:
+        error.code === "EADDRINUSE"
+          ? `API listen failed: port ${env.PORT} already in use (another process is bound). Jobs may keep running without accepting HTTP.`
+          : `API listen failed: ${error.message}`,
+      error,
+      metadata: { port: env.PORT, code: error.code ?? null },
+    });
+    void gracefulShutdown(1);
   });
 };
 

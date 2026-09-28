@@ -3,6 +3,7 @@ import { employeeService } from "../services/employee.service";
 import { employeeDeactivationService } from "../services/employee-deactivation.service";
 import { employeeAvailabilityService } from "../services/employee-availability.service";
 import { employeeOperationsService } from "../services/employee-operations.service";
+import { employeeClientService } from "../services/employee-client.service";
 import type { ListEmployeeOperationsQuery } from "../schemas/employee.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 import { projectEmployeeForRole } from "../utils/employee-residence-privacy";
@@ -27,6 +28,23 @@ export const employeeController = {
     const companyId = requireRequestCompanyId(req);
     const employee = await employeeService.getById(companyId, String(req.params.id));
     res.status(200).json({ data: projectEmployeeForRole(employee, req.companyRole) });
+  },
+
+  async listClients(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await employeeClientService.listForEmployee(companyId, String(req.params.id));
+    res.status(200).json(result);
+  },
+
+  async replaceClients(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await employeeClientService.replaceForEmployee(
+      companyId,
+      String(req.params.id),
+      req.body.clientIds,
+      req.auth?.userId ?? null,
+    );
+    res.status(200).json(result);
   },
 
   async getOperationalAvailability(req: Request, res: Response) {

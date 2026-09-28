@@ -7,6 +7,7 @@ import type {
   CompanyRole,
   UserCompanyMembership,
 } from "../types/company";
+import { userRepository } from "./user.repository";
 
 const wouldRemoveActiveOwner = (
   existing: UserCompanyMembership,
@@ -362,60 +363,138 @@ export const userCompanyMembershipRepository = {
    * Serializes last-OWNER protection and membership writes in one transaction.
    * Locks active OWNER rows for the company, then the target membership.
    */
-  async applyMembershipUpdateWithGuards(
+  /**
+   * Single transactional path for company-user updates (profile and/or membership).
+   *
+   * Lock order (deadlock-safe):
+   * 1. Active OWNER memberships for the company (UPDLOCK, HOLDLOCK) when membership
+   *    patch may demote/deactivate an OWNER — serializes last-owner races.
+   * 2. Target + actor memberships for this company, ordered by user_id ascending
+   *    (UPDLOCK, HOLDLOCK) — proves company scope and refreshes actor role.
+   * 3. Actor `users` row (UPDLOCK) to re-read is_platform_admin from persistence.
+   *
+   * Profile writes (name/email/phone) and membership writes share this transaction
+   * so a mid-flight failure rolls everything back (including audit-before-commit).
+   */
+  async applyCompanyUserUpdateWithGuards(
     companyId: string,
-    userId: string,
+    targetUserId: string,
+    actorUserId: string,
     patch: {
-      role?: CompanyRole;
-      status?: CompanyMembershipStatus;
-      isDefault?: boolean;
+      membership?: {
+        role?: CompanyRole;
+        status?: CompanyMembershipStatus;
+        isDefault?: boolean;
+      };
+      profile?: {
+        name?: string;
+        email?: string;
+        phoneNumber?: string | null;
+      };
     },
-    validateLockedMembership: (existing: UserCompanyMembership) => void,
+    validateLocked: (input: {
+      existing: UserCompanyMembership;
+      actorRole: CompanyRole | undefined;
+      actorIsPlatformAdmin: boolean;
+    }) => void,
     beforeCommit?: (input: {
       transaction: sql.Transaction;
       previous: UserCompanyMembership;
       updated: UserCompanyMembership;
       row: Record<string, unknown>;
+      actorRole: CompanyRole | undefined;
+      actorIsPlatformAdmin: boolean;
     }) => Promise<void>,
   ): Promise<{
     previous: UserCompanyMembership;
     updated: UserCompanyMembership;
     row: Record<string, unknown>;
+    actorRole: CompanyRole | undefined;
+    actorIsPlatformAdmin: boolean;
   }> {
+    const membershipPatch = patch.membership ?? {};
+    const profilePatch = patch.profile ?? {};
+    const hasMembershipWrite =
+      membershipPatch.role !== undefined ||
+      membershipPatch.status !== undefined ||
+      membershipPatch.isDefault !== undefined;
+    const hasProfileWrite =
+      profilePatch.name !== undefined ||
+      profilePatch.email !== undefined ||
+      profilePatch.phoneNumber !== undefined;
+
+    if (!hasMembershipWrite && !hasProfileWrite) {
+      throw new AppError(400, "EMPTY_UPDATE", "Debe enviar al menos un campo para actualizar.");
+    }
+
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
-      // Serialize concurrent OWNER demotions/deactivations for this company.
-      await new sql.Request(transaction)
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .query(`
-          SELECT id
-          FROM user_company_memberships WITH (UPDLOCK, HOLDLOCK)
-          WHERE company_id = @companyId
-            AND role = 'OWNER'
-            AND status = 'ACTIVE'
-        `);
+      const mayTouchOwner =
+        hasMembershipWrite &&
+        (membershipPatch.role !== undefined || membershipPatch.status === "INACTIVE");
 
-      const existingResult = await new sql.Request(transaction)
-        .input("userId", sql.UniqueIdentifier, userId)
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .query(`
-          SELECT m.*
-          FROM user_company_memberships m WITH (UPDLOCK, HOLDLOCK)
-          WHERE m.user_id = @userId
-            AND m.company_id = @companyId
-        `);
+      if (mayTouchOwner) {
+        await new sql.Request(transaction)
+          .input("companyId", sql.UniqueIdentifier, companyId)
+          .query(`
+            SELECT id
+            FROM user_company_memberships WITH (UPDLOCK, HOLDLOCK)
+            WHERE company_id = @companyId
+              AND role = 'OWNER'
+              AND status = 'ACTIVE'
+          `);
+      }
 
-      if (!existingResult.recordset[0]) {
+      const lockUserIds = [...new Set([targetUserId, actorUserId])].sort((a, b) =>
+        a.localeCompare(b),
+      );
+      const lockedMemberships = new Map<string, UserCompanyMembership>();
+      for (const userId of lockUserIds) {
+        const locked = await new sql.Request(transaction)
+          .input("userId", sql.UniqueIdentifier, userId)
+          .input("companyId", sql.UniqueIdentifier, companyId)
+          .query(`
+            SELECT m.*
+            FROM user_company_memberships m WITH (UPDLOCK, HOLDLOCK)
+            WHERE m.user_id = @userId
+              AND m.company_id = @companyId
+          `);
+        if (userId === targetUserId && !locked.recordset[0]) {
+          throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
+        }
+        if (locked.recordset[0]) {
+          lockedMemberships.set(
+            userId,
+            mapMembershipRow(locked.recordset[0] as Record<string, unknown>),
+          );
+        }
+      }
+
+      const existing = lockedMemberships.get(targetUserId);
+      if (!existing) {
         throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
       }
 
-      const existing = mapMembershipRow(existingResult.recordset[0] as Record<string, unknown>);
-      validateLockedMembership(existing);
+      const actorUserResult = await new sql.Request(transaction)
+        .input("actorUserId", sql.UniqueIdentifier, actorUserId)
+        .query(`
+          SELECT is_platform_admin
+          FROM users WITH (UPDLOCK, ROWLOCK)
+          WHERE id = @actorUserId
+        `);
+      if (!actorUserResult.recordset[0]) {
+        throw new AppError(403, "USER_UPDATE_FORBIDDEN", "Actor no encontrado.");
+      }
+      const actorIsPlatformAdmin = Boolean(actorUserResult.recordset[0].is_platform_admin);
+      const actorMembership = lockedMemberships.get(actorUserId);
+      const actorRole = actorMembership?.role;
 
-      if (wouldRemoveActiveOwner(existing, patch)) {
+      validateLocked({ existing, actorRole, actorIsPlatformAdmin });
+
+      if (hasMembershipWrite && wouldRemoveActiveOwner(existing, membershipPatch)) {
         const ownerCount = await this.countActiveOwners(companyId, transaction);
         if (ownerCount <= 1) {
           throw new AppError(
@@ -426,16 +505,44 @@ export const userCompanyMembershipRepository = {
         }
       }
 
-      const updated = await this.updateMembership(companyId, userId, patch, transaction);
-      if (!updated) {
-        throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
+      if (hasProfileWrite) {
+        if (profilePatch.name !== undefined || profilePatch.email !== undefined) {
+          await userRepository.updateProfileFields(
+            targetUserId,
+            {
+              ...(profilePatch.name !== undefined ? { name: profilePatch.name } : {}),
+              ...(profilePatch.email !== undefined ? { email: profilePatch.email } : {}),
+            },
+            transaction,
+          );
+        }
+        if (profilePatch.phoneNumber !== undefined) {
+          await userRepository.updatePhoneNumber(
+            targetUserId,
+            profilePatch.phoneNumber,
+            transaction,
+          );
+        }
       }
 
-      if (patch.isDefault) {
-        await this.clearDefaultForUser(userId, companyId, transaction);
+      let updated = existing;
+      if (hasMembershipWrite) {
+        const next = await this.updateMembership(
+          companyId,
+          targetUserId,
+          membershipPatch,
+          transaction,
+        );
+        if (!next) {
+          throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
+        }
+        updated = next;
+        if (membershipPatch.isDefault) {
+          await this.clearDefaultForUser(targetUserId, companyId, transaction);
+        }
       }
 
-      const row = await this.findCompanyUserRow(companyId, userId, transaction);
+      const row = await this.findCompanyUserRow(companyId, targetUserId, transaction);
       if (!row) {
         throw new AppError(
           500,
@@ -445,11 +552,24 @@ export const userCompanyMembershipRepository = {
       }
 
       if (beforeCommit) {
-        await beforeCommit({ transaction, previous: existing, updated, row });
+        await beforeCommit({
+          transaction,
+          previous: existing,
+          updated,
+          row,
+          actorRole,
+          actorIsPlatformAdmin,
+        });
       }
 
       await transaction.commit();
-      return { previous: existing, updated, row };
+      return {
+        previous: existing,
+        updated,
+        row,
+        actorRole,
+        actorIsPlatformAdmin,
+      };
     } catch (error) {
       try {
         await transaction.rollback();

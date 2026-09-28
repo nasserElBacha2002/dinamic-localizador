@@ -5,7 +5,6 @@ import { useSearchParams } from "react-router";
 import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useAbsenceAttachmentStorageHealth } from "../../hooks/useAbsenceAttachments";
 import { useCompanyAbsenceSettings } from "../../hooks/useCompanyAbsenceSettings";
-import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
@@ -18,7 +17,6 @@ import { hasPermission } from "../../utils/permissions";
 import {
   buildAbsenceSummary,
   buildEmployeeCategoriesSummary,
-  buildLocationTypesSummary,
   buildLocationZonesSummary,
   buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
@@ -33,7 +31,6 @@ import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalenda
 import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypePolicyDialog";
-import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
 import { CompanyShiftTemplatesDialog } from "./components/CompanyShiftTemplatesDialog";
@@ -53,7 +50,6 @@ type DialogKey =
   | "absenceTypePolicy"
   | "absenceCalendar"
   | "absenceOperationalIntegration"
-  | "locationTypes"
   | "workSchedule"
   | "shiftTemplates"
   | "employeeCategories"
@@ -89,7 +85,6 @@ export function CompanySettingsPage() {
   const whatsappQuotaQuery = useWhatsAppQuotaSettings(companyTabEnabled && canRead);
   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
   const shiftTemplatesQuery = useShiftTemplates({}, companyTabEnabled);
-  const locationTypesQuery = useCompanyLocationTypes(false);
   const employeeCategoriesQuery = useEmployeeCategories(
     { includeInactive: true },
     companyTabEnabled,
@@ -330,29 +325,6 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar plantillas"
               canEdit={canManageShiftTemplates && !shiftTemplatesQuery.isError}
               onAction={() => setOpenDialog("shiftTemplates")}
-            />
-
-            <SettingsSummaryCard
-              title="Formato"
-              description="Clasificación de servicios, depósitos y otros puntos operativos."
-              summaryItems={
-                locationTypesQuery.data
-                  ? buildLocationTypesSummary(locationTypesQuery.data).summaryItems
-                  : []
-              }
-              chips={
-                locationTypesQuery.data
-                  ? buildLocationTypesSummary(locationTypesQuery.data).chips
-                  : []
-              }
-              loading={locationTypesQuery.isLoading}
-              error={
-                locationTypesQuery.isError ? getApiErrorMessage(locationTypesQuery.error) : null
-              }
-              onRetry={() => void locationTypesQuery.refetch()}
-              actionLabel="Gestionar formatos"
-              canEdit={canUpdate && !locationTypesQuery.isError}
-              onAction={() => setOpenDialog("locationTypes")}
             />
 
             <SettingsSummaryCard
@@ -639,15 +611,6 @@ export function CompanySettingsPage() {
           onClose={() => setOpenDialog(null)}
           canUpdate={canUpdate}
           onSaved={handleSaved}
-        />
-      ) : null}
-
-      {openDialog === "locationTypes" && locationTypesQuery.data ? (
-        <CompanyLocationTypesDialog
-          opened
-          onClose={() => setOpenDialog(null)}
-          locationTypes={locationTypesQuery.data}
-          canUpdate={canUpdate}
         />
       ) : null}
 

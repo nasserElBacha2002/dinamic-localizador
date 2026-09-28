@@ -87,6 +87,8 @@ authRouter.post(
 
 authRouter.get("/me", authenticate, asyncHandler(authController.me));
 
+authRouter.post("/logout", authenticate, asyncHandler(authController.logout));
+
 authRouter.get("/2fa/status", authenticate, asyncHandler(authController.twoFactorStatus));
 authRouter.post("/2fa/setup", authenticate, asyncHandler(authController.twoFactorSetup));
 authRouter.post(

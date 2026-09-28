@@ -53,6 +53,10 @@ export const employeeIdParamSchema = z.object({
   id: z.string().uuid("UUID inválido"),
 });
 
+export const replaceEmployeeClientsSchema = z.object({
+  clientIds: z.array(z.string().uuid("UUID de cliente inválido")).max(500),
+});
+
 export const deactivateEmployeeSchema = z.object({
   confirmAffectedRelease: z.boolean().optional().default(false),
   profile: z

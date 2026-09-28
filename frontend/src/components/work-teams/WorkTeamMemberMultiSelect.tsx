@@ -13,12 +13,14 @@ interface WorkTeamMemberMultiSelectProps {
   selectedEmployeeIds: string[];
   onChange: (employeeIds: string[]) => void;
   existingMembers?: Employee[];
+  allowCreate?: boolean;
 }
 
 export function WorkTeamMemberMultiSelect({
   selectedEmployeeIds,
   onChange,
   existingMembers = [],
+  allowCreate = true,
 }: WorkTeamMemberMultiSelectProps) {
   const [fetchedEmployees, setFetchedEmployees] = useState<Map<string, Employee>>(new Map());
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
@@ -94,7 +96,8 @@ export function WorkTeamMemberMultiSelect({
         onChange={() => {}}
         onEmployeeSelected={handleEmployeeSelected}
         excludeIds={selectedEmployeeIds}
-        activeOnly
+            activeOnly
+            allowCreate={allowCreate}
         descriptionMode="assignment"
         placeholder="Buscar colaborador activo"
       />

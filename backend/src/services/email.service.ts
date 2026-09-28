@@ -8,6 +8,13 @@ export interface SendEmailInput {
   subject: string;
   text: string;
   html: string;
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
 }
 
 export type EmailTransportMode = "smtp" | "console" | "disabled";
@@ -63,7 +70,8 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
     console.info("[email:console]", {
       to: input.to,
       subject: input.subject,
-      text: redactInvitationSecrets(input.text),
+    text: redactInvitationSecrets(input.text),
+      attachments: input.attachments?.map((attachment) => attachment.filename),
     });
     return {
       sent: false,
@@ -80,6 +88,7 @@ export async function sendEmail(input: SendEmailInput): Promise<EmailSendResult>
     subject: input.subject,
     text: input.text,
     html: input.html,
+    attachments: input.attachments,
   });
 
   return {

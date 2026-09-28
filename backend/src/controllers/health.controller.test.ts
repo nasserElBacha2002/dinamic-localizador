@@ -27,6 +27,8 @@ describe("public health endpoints", () => {
   });
 
   it("readiness is opaque and does not expose GCS", async () => {
+    const previous = process.env.RATE_LIMIT_BACKEND;
+    process.env.RATE_LIMIT_BACKEND = "memory";
     mock.method(dbProbe, "ping", async () => undefined);
     let statusCode = 0;
     let body: unknown = null;
@@ -41,9 +43,18 @@ describe("public health endpoints", () => {
       },
     } as unknown as Response;
 
-    await getReadiness({} as Request, res);
-    assert.equal(statusCode, 200);
-    assert.deepEqual(Object.keys(body as object).sort(), ["status", "timestamp"]);
-    assert.doesNotMatch(JSON.stringify(body), /gcs|bucket|configured|connected/i);
+    try {
+      await getReadiness({} as Request, res);
+      assert.equal(statusCode, 200);
+      assert.deepEqual(Object.keys(body as object).sort(), ["status", "timestamp"]);
+      assert.doesNotMatch(JSON.stringify(body), /gcs|bucket|configured|connected|rate_limit/i);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.RATE_LIMIT_BACKEND;
+      } else {
+        process.env.RATE_LIMIT_BACKEND = previous;
+      }
+      mock.restoreAll();
+    }
   });
 });

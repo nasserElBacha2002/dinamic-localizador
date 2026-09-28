@@ -322,4 +322,26 @@ describe("team-composition-engine V1", () => {
     });
     assert.ok(recentScore.score > olderScore.score);
   });
+
+  it("rewards teams with a higher client-affinity proportion without excluding mixed teams", () => {
+    const features = new Map([
+      ["A", member("A", { clientAffinity: 1 })],
+      ["B", member("B", { clientAffinity: 1 })],
+      ["C", member("C", { clientAffinity: 0 })],
+    ]);
+    const pairMap = buildTeamPairMap([]);
+    const matched = scoreTeam(["A", "B"], features, pairMap, {
+      serviceContextAvailable: false,
+      locationContextAvailable: false,
+      clientAffinityAvailable: true,
+    });
+    const mixed = scoreTeam(["A", "C"], features, pairMap, {
+      serviceContextAvailable: false,
+      locationContextAvailable: false,
+      clientAffinityAvailable: true,
+    });
+    assert.ok(matched.score > mixed.score);
+    assert.equal(mixed.clientAffinity, 0.5);
+    assert.equal(buildTeamReasons(matched, 2).some((reason) => reason.code === "CLIENT_AFFINITY"), true);
+  });
 });

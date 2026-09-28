@@ -93,6 +93,10 @@ export const ATTENDANCE_API_EXPORTS = [
   "getAttendanceReviews",
   "reviewAttendanceRecord",
   "exportAttendanceCsv",
+  "previewManualAttendance",
+  "createManualAttendance",
+  "editManualAttendance",
+  "getAttendanceAuditLogs",
 ] as const;
 
 export const PLATFORM_COMPANIES_API_EXPORTS = [
@@ -106,6 +110,8 @@ export const PLATFORM_COMPANIES_API_EXPORTS = [
 export const EMPLOYEES_API_EXPORTS = [
   "getEmployees",
   "getEmployeeById",
+  "getEmployeeClients",
+  "replaceEmployeeClients",
   "getEmployeeDeactivationImpact",
   "getEmployeeOperationalAvailability",
   "getEmployeeOperations",

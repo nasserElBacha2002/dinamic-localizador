@@ -24,6 +24,13 @@ export const previewInvitationQuerySchema = z.object({
   token: z.string().trim().min(20, "Token inválido").max(200),
 });
 
+/** Prefer POST body over query string to avoid token leakage in access logs. */
+export const previewInvitationBodySchema = z
+  .object({
+    token: z.string().trim().min(20, "Token inválido").max(200),
+  })
+  .strict();
+
 export const acceptInvitationSchema = z
   .object({
     token: z.string().trim().min(20, "Token inválido").max(200),

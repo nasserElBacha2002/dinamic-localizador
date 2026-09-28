@@ -2,10 +2,13 @@ import { roleHasPermission } from "../constants/company-permissions";
 import { AppError } from "../errors/app-error";
 import { companyLocationTypesRepository } from "../repositories/company-location-types.repository";
 import { companyRepository } from "../repositories/company.repository";
+import { clientRepository } from "../repositories/client.repository";
 import type {
   CreateCompanyLocationTypeInput,
+  ListClientLocationTypesQuery,
   UpdateCompanyLocationTypeInput,
 } from "../schemas/company-location-type.schema";
+import { buildPaginationMeta } from "../utils/pagination";
 import type { CompanyLocationType, CompanyMembershipSummary } from "../types/company";
 import { normalizeLocationTypeCode } from "../utils/location-type-code";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
@@ -21,6 +24,12 @@ const assertSettingsPermission = (role: CompanyMembershipSummary["role"]): void 
   if (!roleHasPermission(role, "company:settings:update")) {
     throw new AppError(403, "FORBIDDEN", "No tiene permisos para actualizar la configuración.");
   }
+};
+
+const assertActiveClient = async (companyId: string, clientId: string): Promise<void> => {
+  const client = await clientRepository.findById(companyId, clientId);
+  if (!client) throw new AppError(404, "CLIENT_NOT_FOUND", "Cliente no encontrado");
+  if (!client.isActive) throw new AppError(409, "CLIENT_INACTIVE", "Cliente inactivo");
 };
 
 const resolveRequestedCode = async (
@@ -52,6 +61,45 @@ export const companyLocationTypesService = {
     await assertActiveCompany(companyId);
     await this.ensureLocationTypesCatalogForCompany(companyId);
     return companyLocationTypesRepository.listByCompanyId(companyId, activeOnly);
+  },
+
+  async listLocationTypesForClient(
+    companyId: string,
+    clientId: string,
+    query: ListClientLocationTypesQuery,
+  ) {
+    const client = await clientRepository.findById(companyId, clientId);
+    if (!client) throw new AppError(404, "CLIENT_NOT_FOUND", "Cliente no encontrado");
+    const result = await companyLocationTypesRepository.listPageByClientId(companyId, clientId, query);
+    return {
+      data: result.items,
+      meta: buildPaginationMeta(query.page, query.limit, result.total),
+    };
+  },
+
+  async createLocationTypeForClient(companyId: string, clientId: string, input: CreateCompanyLocationTypeInput) {
+    await assertActiveCompany(companyId);
+    await assertActiveClient(companyId, clientId);
+    const code = await resolveRequestedCode(companyId, input.name, input.code);
+    const all = await companyLocationTypesRepository.listByClientId(companyId, clientId, false);
+    return companyLocationTypesRepository.create(companyId, {
+      clientId, code, name: input.name.trim(), sortOrder: input.sortOrder ?? Math.max(0, ...all.map((type) => type.sortOrder)) + 1,
+      isActive: input.isActive ?? true,
+    });
+  },
+
+  async updateLocationTypeForClient(companyId: string, clientId: string, locationTypeId: string, input: UpdateCompanyLocationTypeInput) {
+    const existing = await companyLocationTypesRepository.findByIdForClient(companyId, clientId, locationTypeId);
+    if (!existing) throw new AppError(404, "LOCATION_TYPE_NOT_FOUND", "Tipo de ubicación/servicio no encontrado.");
+    const payload = { ...input };
+    if (input.code !== undefined) payload.code = await resolveRequestedCode(companyId, input.name ?? existing.name, input.code, locationTypeId);
+    const updated = await companyLocationTypesRepository.update(companyId, locationTypeId, payload);
+    if (!updated) throw new AppError(404, "LOCATION_TYPE_NOT_FOUND", "Tipo de ubicación/servicio no encontrado.");
+    return updated;
+  },
+
+  async disableLocationTypeForClient(companyId: string, clientId: string, locationTypeId: string) {
+    return this.updateLocationTypeForClient(companyId, clientId, locationTypeId, { isActive: false });
   },
 
   async createLocationType(
@@ -150,6 +198,8 @@ export const companyLocationTypesService = {
   async assertActiveServiceFormat(
     companyId: string,
     serviceFormat: string | null | undefined,
+    clientId?: string | null,
+    allowInactive = false,
   ): Promise<void> {
     if (!serviceFormat?.trim()) {
       return;
@@ -165,12 +215,15 @@ export const companyLocationTypesService = {
       );
     }
 
-    if (!locationType.isActive) {
+    if (!locationType.isActive && !allowInactive) {
       throw new AppError(
         400,
         "INACTIVE_LOCATION_TYPE",
         "El tipo de ubicación/servicio está inactivo y no puede asignarse.",
       );
+    }
+    if (locationType.clientId !== null && locationType.clientId !== clientId) {
+      throw new AppError(400, "INCOMPATIBLE_LOCATION_TYPE_CLIENT", "El formato no es compatible con el cliente de la sucursal.");
     }
   },
 

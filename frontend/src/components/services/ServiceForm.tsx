@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Box } from "@mantine/core";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
   FormActions,
@@ -12,6 +12,7 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
+import { useClients } from "../../hooks/useClients";
 import { serviceFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
 import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
 import { ServiceInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
@@ -71,6 +72,21 @@ export function ServiceForm({
 
   const watchedValues = useWatch({ control });
   const { data: locationTypes = [] } = useCompanyLocationTypes(false);
+  const { data: clientsResponse } = useClients();
+  const clients = clientsResponse?.data ?? [];
+  const previousClientId = useRef(watchedValues.clientId ?? defaultValues.clientId ?? "");
+
+  useEffect(() => {
+    const clientId = watchedValues.clientId ?? "";
+    const format = watchedValues.serviceFormat ?? "";
+    if (previousClientId.current !== clientId && format) {
+      const assigned = locationTypes.find((type) => type.code === format);
+      if (assigned?.clientId !== null && assigned?.clientId !== clientId) {
+        setValue("serviceFormat", "", { shouldDirty: true });
+      }
+    }
+    previousClientId.current = clientId;
+  }, [locationTypes, setValue, watchedValues.clientId, watchedValues.serviceFormat]);
 
   const picker = useLocationPickerState({
     isEditMode,
@@ -87,8 +103,9 @@ export function ServiceForm({
   });
 
   const serviceFormatOptions = useMemo(() => {
+    const currentClientId = watchedValues.clientId ?? defaultValues.clientId ?? "";
     const activeOptions = locationTypes
-      .filter((type) => type.isActive)
+      .filter((type) => type.isActive && (type.clientId === null || type.clientId === currentClientId))
       .map((type) => ({ value: type.code, label: type.name }));
 
     const currentFormat = watchedValues.serviceFormat ?? defaultValues.serviceFormat ?? "";
@@ -104,7 +121,24 @@ export function ServiceForm({
     }
 
     return [{ value: "", label: "Sin tipo" }, ...activeOptions];
-  }, [defaultValues.serviceFormat, locationTypes, watchedValues.serviceFormat]);
+  }, [defaultValues.clientId, defaultValues.serviceFormat, locationTypes, watchedValues.clientId, watchedValues.serviceFormat]);
+
+  const clientOptions = useMemo(() => {
+    const activeOptions = clients
+      .filter((client) => client.isActive)
+      .map((client) => ({ value: client.id, label: client.name }));
+    const currentClientId = watchedValues.clientId ?? defaultValues.clientId ?? "";
+
+    if (currentClientId && !activeOptions.some((option) => option.value === currentClientId)) {
+      const assigned = clients.find((client) => client.id === currentClientId);
+      activeOptions.unshift({
+        value: currentClientId,
+        label: assigned ? `${assigned.name} (inactivo)` : "Cliente actual (no disponible)",
+      });
+    }
+
+    return [{ value: "", label: "Sin cliente" }, ...activeOptions];
+  }, [clients, defaultValues.clientId, watchedValues.clientId]);
 
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -123,11 +157,18 @@ export function ServiceForm({
                 label="Nombre de la ubicación"
                 required
               />
+              <RHFSelect 
+                control={control}
+                name="clientId"
+                label="Cliente"
+                data={clientOptions} 
+                />
               <RHFSelect
                 control={control}
                 name="serviceFormat"
                 label="Formato"
                 data={serviceFormatOptions}
+                disabled={!watchedValues.clientId}
                 clearable
               />
             </FormGrid>

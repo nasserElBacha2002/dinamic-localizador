@@ -56,6 +56,14 @@ describe("company user schemas", () => {
     assert.equal(parsed.success, false);
   });
 
+  it("accepts name and email updates", () => {
+    const parsed = updateCompanyUserSchema.safeParse({
+      name: "Nuevo Nombre",
+      email: "nuevo@example.com",
+    });
+    assert.equal(parsed.success, true);
+  });
+
   it("accepts phone-only update and clearing phone", () => {
     const withPhone = updateCompanyUserSchema.safeParse({ phoneNumber: "+5491112345678" });
     const clearPhone = updateCompanyUserSchema.safeParse({ phoneNumber: null });

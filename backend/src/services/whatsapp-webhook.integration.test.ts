@@ -223,6 +223,7 @@ const setupCommonWebhookMocks = async (options: {
   const { attendanceNotificationRepository } = await import(
     "../repositories/attendance-notification.repository"
   );
+  const { whatsappUsageQuotaService } = await import("./whatsapp-usage-quota.service");
 
   mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () => runtimeSettings(companyId));
   mock.method(companyModuleService, "getModuleStates", async () => options.moduleStates ?? enabledStates());
@@ -235,6 +236,29 @@ const setupCommonWebhookMocks = async (options: {
   mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
   mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
   mock.method(botSessionService, "createMenuSelectionSession", async () => ({} as never));
+
+  // Menu/help/hola are EMPLOYEE_LIMITED and call admit before routing. Without a pool
+  // (or after sibling IT suites tear it down), resolvePolicy fails closed → empty TwiML.
+  // Keep quotas OFF for this mock suite (same pattern as whatsapp-bot-module-gating).
+  mock.method(whatsappUsageQuotaService, "admitNonCriticalTurn", async () => ({
+    decision: "ADMITTED" as const,
+    reasonCode: "MODE_OFF",
+    mode: "OFF" as const,
+    policy: {
+      mode: "OFF" as const,
+      dailyTurns: 20,
+      weeklyTurns: 60,
+      burstTurns: 5,
+      burstWindowSeconds: 60,
+      dailyOutbounds: 40,
+      weeklyOutbounds: 120,
+      companyDailyOutbounds: 500,
+      limitNoticeEnabled: false,
+      timezoneId: "America/Argentina/Buenos_Aires",
+    },
+  }));
+  mock.method(whatsappUsageQuotaService, "recordExemptCritical", async () => undefined);
+  mock.method(whatsappUsageQuotaService, "recordAmbiguousHeld", async () => undefined);
 
   if (options.employee === null) {
     mock.method(employeeRepository, "findById", async () => null);

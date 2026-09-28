@@ -30,6 +30,7 @@ export interface Service {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  clientId: string | null;
 }
 
 export interface ServiceSummary {
@@ -53,6 +54,7 @@ export interface ServiceFilters {
   limit?: number;
   active?: boolean;
   search?: string;
+  clientId?: string;
   serviceFormat?: string;
   locality?: string;
   neighborhood?: string;
@@ -70,6 +72,7 @@ export interface CreateServiceInput {
   longitude: number;
   allowedRadiusMeters?: number;
   googlePlaceId?: string | null;
+  clientId?: string | null;
 }
 
 export interface UpdateServiceInput {
@@ -82,5 +85,6 @@ export interface UpdateServiceInput {
   longitude?: number;
   allowedRadiusMeters?: number;
   googlePlaceId?: string | null;
+  clientId?: string | null;
   active?: boolean;
 }

@@ -56,6 +56,17 @@ export const authService = {
     return toPublicUser(user);
   },
 
+  /**
+   * Server-side logout: bumps token_version so the current (and any other) JWT becomes invalid.
+   */
+  async logout(userId: string): Promise<void> {
+    const user = await userRepository.findById(userId);
+    if (!user || !user.active) {
+      throw new AppError(401, "UNAUTHORIZED", "Autenticación requerida.");
+    }
+    await userRepository.bumpTokenVersion(userId);
+  },
+
   verifyToken(token: string): AuthTokenPayload {
     try {
       const payload = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload & Partial<AuthTokenPayload>;

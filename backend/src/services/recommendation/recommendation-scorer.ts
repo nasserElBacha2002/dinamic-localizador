@@ -4,6 +4,7 @@ import {
   WORKFORCE_RECOMMENDATION_V1_PROXIMITY_METERS,
   WORKFORCE_RECOMMENDATION_V1_RECENCY,
   WORKFORCE_RECOMMENDATION_V1_WEIGHTS,
+  WORKFORCE_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY,
   type LocationProximityBucket,
 } from "../../constants/workforce-recommendation-v1";
 import { calculateDistanceMeters, InvalidCoordinatesError } from "../../utils/haversine";
@@ -34,6 +35,8 @@ export interface CandidateFeatureInput {
   affinityPairs: AffinityPairStats[];
   serviceWorkdayCount: number;
   locationBucket: LocationProximityBucket;
+  /** null when the operation service has no client; otherwise 0 or 1. */
+  clientAffinity?: number | null;
   /**
    * Haversine meters already computed by the caller (do not recalculate for reasons).
    * null/undefined for SAME_ZONE or when distance was not computable.
@@ -57,6 +60,7 @@ export interface ScoredCandidateFeatures {
   /** Carried through for LOCATION_PROXIMITY reason params only; does not affect score. */
   distanceMeters: number | null;
   hasRecentCollaboration: boolean;
+  clientAffinity?: number | null;
 }
 
 export const saturate = (value: number, cap: number): number => {
@@ -183,23 +187,34 @@ export const combineRecommendationScore = (input: {
   teamAffinity: number | null;
   serviceExperience: number;
   locationProximity: number | null;
+  clientAffinity?: number | null;
 }): number => {
+  const clientAffinity = input.clientAffinity ?? null;
+  const weights = clientAffinity === null
+    ? WORKFORCE_RECOMMENDATION_V1_WEIGHTS
+    : WORKFORCE_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY;
   const parts: Array<{ weight: number; value: number }> = [
     {
-      weight: WORKFORCE_RECOMMENDATION_V1_WEIGHTS.serviceExperience,
+      weight: weights.serviceExperience,
       value: input.serviceExperience,
     },
   ];
   if (input.teamAffinity !== null) {
     parts.push({
-      weight: WORKFORCE_RECOMMENDATION_V1_WEIGHTS.teamAffinity,
+      weight: weights.teamAffinity,
       value: input.teamAffinity,
     });
   }
   if (input.locationProximity !== null) {
     parts.push({
-      weight: WORKFORCE_RECOMMENDATION_V1_WEIGHTS.locationProximity,
+      weight: weights.locationProximity,
       value: input.locationProximity,
+    });
+  }
+  if (clientAffinity !== null) {
+    parts.push({
+      weight: WORKFORCE_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY.clientAffinity,
+      value: clientAffinity,
     });
   }
 
@@ -215,10 +230,12 @@ export const scoreCandidateFeatures = (input: CandidateFeatureInput): ScoredCand
   const affinity = computeTeamAffinity(input.assignedCount, input.affinityPairs);
   const serviceExperience = computeServiceExperience(input.serviceWorkdayCount);
   const locationProximity = LOCATION_PROXIMITY_BUCKET_SCORES[input.locationBucket];
+  const clientAffinity = input.clientAffinity ?? null;
   const score = combineRecommendationScore({
     teamAffinity: affinity.teamAffinity,
     serviceExperience,
     locationProximity,
+    clientAffinity,
   });
 
   return {
@@ -238,6 +255,7 @@ export const scoreCandidateFeatures = (input: CandidateFeatureInput): ScoredCand
         ? null
         : input.distanceMeters,
     hasRecentCollaboration: affinity.hasRecentCollaboration,
+    clientAffinity,
   };
 };
 
@@ -296,6 +314,10 @@ export const buildRecommendationReasons = (
         serviceWorkdays: features.serviceWorkdayCount,
       },
     });
+  }
+
+  if ((features.clientAffinity ?? 0) > 0) {
+    reasons.push({ code: "CLIENT_AFFINITY" });
   }
 
   if (features.locationBucket !== "UNKNOWN") {

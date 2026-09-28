@@ -20,6 +20,11 @@ import { recordInvalidContextualInput } from "../contextual-session-retry.servic
 import { employeeWorkdayAttendanceCommand } from "../employee-workday-attendance.command";
 import { employeeWorkdayAvailabilityService } from "../employee-workday-availability.service";
 import {
+  isActiveAttendanceDuplicateKeyError,
+  isAttendanceSourceMessageSidDuplicateKeyError,
+  isLegacyInventoryActiveAttendanceDuplicateKeyError,
+} from "../../utils/attendance-duplicate-errors";
+import {
   buildArrivalRegisteredMessage,
   buildCheckoutLocationRequestMessage,
   buildLocationRequestMessage,
@@ -288,13 +293,12 @@ export async function processLocationCheckIn(input: {
         flowType: "CHECKIN",
       });
     } catch (error) {
-      if (error instanceof Error) {
-        if (
-          error.message === "EMPLOYEE_WORKDAY_ALREADY_ATTENDED" ||
-          error.message.includes("UQ_attendance_records_source_message_sid") ||
-          error.message.includes("UX_attendance_records_inventory_employee_active") ||
-          error.message.includes("UX_attendance_records_employee_workday_active")
-        ) {
+      if (
+        (error instanceof Error && error.message === "EMPLOYEE_WORKDAY_ALREADY_ATTENDED") ||
+        isAttendanceSourceMessageSidDuplicateKeyError(error) ||
+        isActiveAttendanceDuplicateKeyError(error) ||
+        isLegacyInventoryActiveAttendanceDuplicateKeyError(error)
+      ) {
           await botSessionService.completeSession(
             companyId,
             input.session.id,
@@ -307,7 +311,8 @@ export async function processLocationCheckIn(input: {
             phoneFrom: input.phoneTo,
             phoneTo: input.phoneFrom,
           });
-        }
+      }
+      if (error instanceof Error) {
 
         if (
           error.message === "EMPLOYEE_WORKDAY_NOT_AVAILABLE" ||

@@ -11,6 +11,7 @@ import {
   declineInvitationSchema,
   invitationIdParamSchema,
   listInvitationsQuerySchema,
+  previewInvitationBodySchema,
   previewInvitationQuerySchema,
 } from "../schemas/user-invitation.schema";
 
@@ -50,9 +51,31 @@ companyInvitationRouter.post(
 /** Public invitation preview/accept (token-based). */
 export const publicInvitationRouter = Router();
 
-publicInvitationRouter.get(
+/** Preferred: token in body (not logged by access logger URL). */
+publicInvitationRouter.post(
   "/preview",
   rateLimitInvitations({ scope: "invite-preview", windowMs: 60_000, max: 30 }),
+  validate(previewInvitationBodySchema),
+  asyncHandler(userInvitationController.preview),
+);
+
+/**
+ * DEPRECATED — Legacy GET preview (token in query string).
+ *
+ * Residual risk: email deep-links still put the raw token in the browser URL
+ * (`/invitations/accept?token=…`). The SPA then calls preferred POST /preview
+ * (see frontend `invitations.api.ts`); GET remains for older API probes only.
+ * Prefer POST /preview for API calls so the token is not repeated in subsequent
+ * access-log URLs. Access logger redacts `token` via `:safe-url`, but browser
+ * history / Referer exposure remains for deep-links.
+ *
+ * Removal plan: after telemetry shows zero GET /preview traffic and no external
+ * API consumers remain, delete this route in a dedicated deprecation phase.
+ * Do not remove while older clients may probe GET.
+ */
+publicInvitationRouter.get(
+  "/preview",
+  rateLimitInvitations({ scope: "invite-preview-get", windowMs: 60_000, max: 30 }),
   validate(previewInvitationQuerySchema, "query"),
   asyncHandler(userInvitationController.preview),
 );

@@ -75,4 +75,20 @@ describe("candidate-preselection", () => {
       locationContextAvailable: false,
     }) >= 0);
   });
+
+  it("uses client affinity before the prune cutoff without making it a filter", () => {
+    const candidates = Array.from({ length: 81 }, (_, index) => ({
+      features: features(`employee-${String(index).padStart(3, "0")}`),
+      connectivity: null,
+      affinityToFixed: 0,
+      clientAffinity: index === 80 ? 1 : 0,
+    }));
+    const selected = preselectCandidateIds(candidates, {
+      serviceContextAvailable: false,
+      locationContextAvailable: false,
+      pruneLimit: 80,
+    });
+    assert.ok(selected.includes("employee-080"));
+    assert.equal(selected.length, 80);
+  });
 });

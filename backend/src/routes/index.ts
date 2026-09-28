@@ -49,6 +49,7 @@ import {
   requireAnyCompanyModule,
   requireCompanyModule,
 } from "../middleware/require-company-module";
+import { clientRouter } from "./client.routes";
 
 export const apiRouter = Router();
 
@@ -195,6 +196,16 @@ companyScopedOperationalRouter.use(
   devReminderRouter,
 );
 
+companyScopedOperationalRouter.use(
+  "/clients",
+  requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.OPERATIONS,
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  ),
+  clientRouter,
+);
+
 apiRouter.use("/companies/:companyId", authenticate, companyScopedOperationalRouter);
 
 const operationalRouter = Router();
@@ -212,6 +223,17 @@ operationalRouter.use(
   ),
   workTeamRouter,
 );
+
+operationalRouter.use(
+  "/clients",
+  requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.OPERATIONS,
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  ),
+  clientRouter,
+);
+
 operationalRouter.use(
   "/work-team-assignment-batches",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
@@ -289,5 +311,7 @@ operationalRouter.use(
   requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
   devReminderRouter,
 );
+
+
 
 apiRouter.use(authenticate, operationalRouter);

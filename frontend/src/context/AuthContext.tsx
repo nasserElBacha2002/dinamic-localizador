@@ -4,6 +4,7 @@ import {
   getCurrentUser,
   getStoredToken,
   login as loginRequest,
+  logout as logoutRequest,
   setStoredToken,
   type LoginResult,
   type PublicUser,
@@ -17,9 +18,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
 
   const logout = useCallback(() => {
-    clearStoredToken();
-    setToken(null);
-    setUser(null);
+    void (async () => {
+      const result = await logoutRequest();
+      // Always clear local session — never keep JWT for retry after logout.
+      clearStoredToken();
+      setToken(null);
+      setUser(null);
+      if (!result.serverRevoked) {
+        // Local logout succeeded; remote revocation was not confirmed.
+        console.info("[auth] Sesión local cerrada; revocación remota no confirmada.", {
+          reason: "reason" in result ? result.reason : "unknown",
+        });
+      }
+    })();
   }, []);
 
   const establishSession = useCallback((sessionToken: string, sessionUser: PublicUser) => {

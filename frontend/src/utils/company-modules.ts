@@ -89,6 +89,8 @@ export const MODULE_ROUTE_ACCESS = {
     requiredAnyPermission: [
       "attendance:read",
       "attendance:review",
+      "attendance:manual_create",
+      "attendance:manual_edit",
       "attendance:export",
     ] as const satisfies readonly CompanyPermission[],
   },
@@ -169,6 +171,7 @@ export function getAdminNavItems({
     ) {
       items.push({ label: terminology.worker.plural, path: "/employees", section: "management" });
       items.push({ label: "Grupos de trabajo", path: "/work-teams", section: "management" });
+      items.push({ label: "Clientes", path: "/clients", section: "management" });
     }
 
     if (

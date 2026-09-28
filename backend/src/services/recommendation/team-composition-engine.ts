@@ -14,7 +14,11 @@ import {
 } from "./team-scorer";
 import { LOCATION_PROXIMITY_BUCKET_SCORES } from "../../constants/workforce-recommendation-v1";
 import { saturate } from "./recommendation-scorer";
-import { WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS } from "../../constants/workforce-team-recommendation-v1";
+import {
+  WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS,
+  WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS,
+  WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY,
+} from "../../constants/workforce-team-recommendation-v1";
 
 export interface ComposeTeamInput {
   teamSize: number;
@@ -25,6 +29,7 @@ export interface ComposeTeamInput {
   pairMap: Map<string, TeamPairEdge>;
   serviceContextAvailable: boolean;
   locationContextAvailable: boolean;
+  clientAffinityAvailable?: boolean;
   /** Soft penalty for members already used in prior alternatives (deterministic). */
   usagePenaltyById?: Map<string, number>;
   /** Hard-exclude from flexible picks (alternative generation). */
@@ -43,7 +48,11 @@ const contextualPruneScore = (
   pairMap: Map<string, TeamPairEdge>,
   serviceContextAvailable: boolean,
   locationContextAvailable: boolean,
+  clientAffinityAvailable: boolean,
 ): number => {
+  const weights = clientAffinityAvailable
+    ? WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY
+    : WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS;
   const affinity =
     lockedIds.length > 0
       ? lockedIds.reduce(
@@ -75,13 +84,23 @@ const contextualPruneScore = (
     : null;
 
   const parts: Array<{ weight: number; value: number }> = [
-    { weight: 0.5, value: affinity },
+    { weight: weights.teamAffinity, value: affinity },
   ];
   if (service !== null) {
-    parts.push({ weight: 0.3, value: service });
+    parts.push({ weight: weights.serviceExperience, value: service });
   }
   if (location !== null) {
-    parts.push({ weight: 0.2, value: location });
+    parts.push({ weight: weights.location, value: location });
+  }
+  if (
+    clientAffinityAvailable &&
+    candidate.clientAffinity !== null &&
+    candidate.clientAffinity !== undefined
+  ) {
+    parts.push({
+      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS_WITH_CLIENT_AFFINITY.clientAffinity,
+      value: candidate.clientAffinity,
+    });
   }
   const weightSum = parts.reduce((sum, part) => sum + part.weight, 0);
   return weightSum <= 0
@@ -110,6 +129,7 @@ const pruneCandidates = (
       input.pairMap,
       input.serviceContextAvailable,
       input.locationContextAvailable,
+      input.clientAffinityAvailable === true,
     ),
   }));
   scored.sort((left, right) => {
@@ -160,6 +180,7 @@ const pickBestSeedPair = (
   pairMap: Map<string, TeamPairEdge>,
   serviceContextAvailable: boolean,
   locationContextAvailable: boolean,
+  clientAffinityAvailable: boolean,
   usagePenaltyById: Map<string, number> | undefined,
 ): string[] => {
   let best: { memberIds: string[]; score: number } | null = null;
@@ -176,6 +197,7 @@ const pickBestSeedPair = (
     const breakdown = scoreTeam(memberIds, featuresById, pairMap, {
       serviceContextAvailable,
       locationContextAvailable,
+      clientAffinityAvailable,
     });
     const score = adjustedScore(breakdown, memberIds, usagePenaltyById);
     const candidate = { memberIds, score };
@@ -196,6 +218,7 @@ const pickBestSeedPair = (
       const breakdown = scoreTeam(memberIds, featuresById, pairMap, {
         serviceContextAvailable,
         locationContextAvailable,
+        clientAffinityAvailable,
       });
       const score = adjustedScore(breakdown, memberIds, usagePenaltyById);
       const candidate = { memberIds, score };
@@ -246,6 +269,7 @@ export const composeTeamGreedy = (
           input.pairMap,
           input.serviceContextAvailable,
           input.locationContextAvailable,
+          input.clientAffinityAvailable === true,
           input.usagePenaltyById,
         );
 
@@ -265,6 +289,7 @@ export const composeTeamGreedy = (
       const breakdown = scoreTeam(trial, featuresById, input.pairMap, {
         serviceContextAvailable: input.serviceContextAvailable,
         locationContextAvailable: input.locationContextAvailable,
+        clientAffinityAvailable: input.clientAffinityAvailable,
       });
       const score = adjustedScore(breakdown, trial, input.usagePenaltyById);
       const sig = [...trial].sort((a, b) => a.localeCompare(b)).join(",");
@@ -292,6 +317,7 @@ export const composeTeamGreedy = (
   const breakdown = scoreTeam(team, featuresById, input.pairMap, {
     serviceContextAvailable: input.serviceContextAvailable,
     locationContextAvailable: input.locationContextAvailable,
+    clientAffinityAvailable: input.clientAffinityAvailable,
   });
 
   return { memberIds: team, breakdown };
@@ -405,6 +431,7 @@ export const composeTeamAlternatives = (
       const reduced = scoreTeam(without, featuresById, input.pairMap, {
         serviceContextAvailable: input.serviceContextAvailable,
         locationContextAvailable: input.locationContextAvailable,
+        clientAffinityAvailable: input.clientAffinityAvailable,
       }).score;
       const marginal = full - reduced;
       if (

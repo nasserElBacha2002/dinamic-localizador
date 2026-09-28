@@ -7,6 +7,7 @@ import {
 import { WORKFORCE_RECOMMENDATION_V1_RECENCY } from "../constants/workforce-recommendation-v1";
 import type { EmployeeType } from "../constants/employee-types";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { employeeClientRepository } from "../repositories/employee-client.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import {
@@ -57,12 +58,14 @@ const toMemberFeatures = (
     longitude: number | null;
     locationZoneId: string | null;
   } | null,
+  clientAffinity: number | null,
 ): TeamMemberFeatures => {
   if (!service) {
     return {
       employeeId: row.employeeId,
       serviceWorkdayCount: 0,
       locationBucket: "UNKNOWN",
+      clientAffinity,
     };
   }
   const sameZone = Boolean(
@@ -82,6 +85,7 @@ const toMemberFeatures = (
     employeeId: row.employeeId,
     serviceWorkdayCount,
     locationBucket: resolveLocationProximityBucket(distanceMeters, sameZone),
+    clientAffinity,
   };
 };
 
@@ -215,6 +219,7 @@ const runComposition = async (input: {
   existingIds: ReadonlySet<string>;
   lockedRequested: ReadonlySet<string>;
   operationId: string | null;
+  associatedClientEmployeeIds: ReadonlySet<string> | null;
 }): Promise<TeamRecommendationResponse & { prunedCandidateCount: number }> => {
   const {
     companyId,
@@ -230,6 +235,7 @@ const runComposition = async (input: {
     existingIds,
     lockedRequested,
     operationId,
+    associatedClientEmployeeIds,
   } = input;
 
   if (fixedMemberIds.length + candidates.length < teamSize) {
@@ -272,9 +278,17 @@ const runComposition = async (input: {
       ((serviceContext.latitude !== null && serviceContext.longitude !== null) ||
         serviceContext.locationZoneId),
   );
+  const clientAffinityAvailable = associatedClientEmployeeIds !== null;
 
   const candidateFeatures = candidates.map((row) =>
-    toMemberFeatures(row, serviceByEmployee.get(row.employeeId) ?? 0, serviceCtx),
+    toMemberFeatures(
+      row,
+      serviceByEmployee.get(row.employeeId) ?? 0,
+      serviceCtx,
+      associatedClientEmployeeIds === null
+        ? null
+        : associatedClientEmployeeIds.has(row.employeeId) ? 1 : 0,
+    ),
   );
   const lockedFeatures = new Map<string, TeamMemberFeatures>();
   const fixedById = new Map(fixedRows.map((row) => [row.employeeId, row]));
@@ -287,7 +301,15 @@ const runComposition = async (input: {
         "Uno o más colaboradores fijos no están disponibles",
       );
     }
-    lockedFeatures.set(id, toMemberFeatures(row, serviceByEmployee.get(id) ?? 0, serviceCtx));
+    lockedFeatures.set(
+      id,
+      toMemberFeatures(
+        row,
+        serviceByEmployee.get(id) ?? 0,
+        serviceCtx,
+        associatedClientEmployeeIds === null ? null : associatedClientEmployeeIds.has(id) ? 1 : 0,
+      ),
+    );
   }
 
   const pruneLimit = WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS.candidatePruneLimit;
@@ -336,6 +358,7 @@ const runComposition = async (input: {
     features,
     connectivity: connectivityById.get(features.employeeId) ?? null,
     affinityToFixed: affinityToFixedByCandidate.get(features.employeeId) ?? 0,
+    clientAffinity: features.clientAffinity,
   }));
 
   const prunedIds = preselectCandidateIds(preselectInputs, {
@@ -363,6 +386,7 @@ const runComposition = async (input: {
       pairMap,
       serviceContextAvailable,
       locationContextAvailable,
+      clientAffinityAvailable,
       alternatives,
       immutableIds: fixedMemberIds,
       pruneLimit,
@@ -530,6 +554,19 @@ export const teamRecommendationService = {
         companyId,
         fixedMemberIds,
       );
+      const associationUniverse = [...new Set([
+        ...candidates.map((candidate) => candidate.employeeId),
+        ...fixedMemberIds,
+      ])];
+      const associatedClientEmployeeIds = service.clientId === null
+        ? null
+        : new Set(
+            await employeeClientRepository.listAssociatedEmployeeIds(
+              companyId,
+              service.clientId,
+              associationUniverse,
+            ),
+          );
 
       const response = await runComposition({
         companyId,
@@ -550,6 +587,7 @@ export const teamRecommendationService = {
         existingIds: existingSet,
         lockedRequested: new Set(lockedRequested),
         operationId,
+        associatedClientEmployeeIds,
       });
 
       console.info("[team_recommendation.generated]", {
@@ -670,6 +708,7 @@ export const teamRecommendationService = {
         existingIds: new Set(),
         lockedRequested: new Set(lockedRequested),
         operationId: null,
+        associatedClientEmployeeIds: null,
       });
 
       console.info("[team_recommendation.generated]", {

@@ -113,6 +113,10 @@ describe("recommendation-reasons", () => {
     );
   });
 
+  it("maps CLIENT_AFFINITY without a negative counterpart", () => {
+    assert.equal(formatRecommendationReason({ code: "CLIENT_AFFINITY" }), "Afinidad con el cliente");
+  });
+
   it("degrades unknown reason codes without exposing the raw code", () => {
     const line = formatRecommendationReason({ code: "FUTURE_SIGNAL_X" as never });
     assert.equal(line, "Motivo adicional considerado por la IA");

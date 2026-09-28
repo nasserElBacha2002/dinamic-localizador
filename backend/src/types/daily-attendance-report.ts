@@ -26,6 +26,17 @@ export type CompanyReportEmailRecipientUpdateInput = {
 };
 
 export interface DailyAttendanceReportTotals {
+  scheduledWorkdays: number;
+  presentWorkdays: number;
+  absentWorkdays: number;
+  justifiedWorkdays: number;
+  confirmedButAbsentWorkdays: number;
+  unannouncedAbsenceWorkdays: number;
+  pendingReviewAttendances: number;
+  rejectedAttendances: number;
+  outsideGeofenceAttendances: number;
+  workedMinutes: number;
+  extraWorkedMinutes: number;
   operationsCount: number;
   scheduledEmployeesCount: number;
   presentCount: number;
@@ -65,14 +76,55 @@ export interface DailyAttendanceReportIncident {
     | "MISSING_CHECKIN"
     | "MISSING_CHECKOUT"
     | "LATE"
-    | "EARLY_LEAVE"
+    | "EARLY_LEAVE" | "EARLY_CHECKOUT"
     | "UNAVAILABLE"
     | "PENDING_CONFIRMATION"
-    | "INCOMPLETE";
+    | "INCOMPLETE" | "CONFIRMED_BUT_ABSENT" | "UNANNOUNCED_ABSENCE" | "PENDING_REVIEW" | "REJECTED_ATTENDANCE" | "OUTSIDE_GEOFENCE";
   employeeName: string;
   serviceName: string;
   operationId: string;
   detail: string;
+  expectedStartAt?: string | null;
+  expectedEndAt?: string | null;
+  actualAt?: string | null;
+  differenceMinutes?: number | null;
+  employeeWorkdayId?: string;
+}
+
+export interface DailyAttendanceReportWorkday {
+  employeeWorkdayId: string;
+  employeeName: string;
+  serviceName: string;
+  operationId: string;
+  operationWorkdayId: string;
+  expectedStartAt: string;
+  expectedEndAt: string | null;
+  receivedAt: string | null;
+  checkoutAt: string | null;
+  expectationStatus: string;
+  confirmationStatus: string | null;
+  punctualityStatus: string | null;
+  validationStatus: string | null;
+  state: string;
+  late: boolean;
+  earlyLeave: boolean;
+  missingCheckin: boolean;
+  missingCheckout: boolean;
+  unavailable: boolean;
+  justified: boolean;
+  present: boolean;
+  incomplete: boolean;
+  confirmedButAbsent?: boolean;
+  unannouncedAbsence?: boolean;
+  pendingReview?: boolean;
+  rejectedAttendance?: boolean;
+  outsideGeofence?: boolean;
+  operationShiftId?: string | null;
+  shiftNameSnapshot?: string | null;
+  locationStatus?: string | null;
+  checkoutStatus?: string | null;
+  workedMinutes?: number;
+  extraWorkedMinutes?: number;
 }
 
 export interface DailyAttendanceReportPayload {
@@ -88,6 +140,7 @@ export interface DailyAttendanceReportPayload {
   incidents: DailyAttendanceReportIncident[];
   totalIncidentCount: number;
   hasActivity: boolean;
+  workdays?: DailyAttendanceReportWorkday[];
 }
 
 export type DailyAttendanceReportEmailSnapshot = {
@@ -108,6 +161,7 @@ export interface DailyAttendanceReportRun {
   totalIncidentCount: number;
   templateVersion: string | null;
   emailSnapshot: DailyAttendanceReportEmailSnapshot | null;
+  xlsxSnapshot: Buffer | null;
   evaluatedAt: string | null;
   attemptCount: number;
   nextAttemptAt: string | null;

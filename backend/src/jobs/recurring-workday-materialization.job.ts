@@ -6,25 +6,36 @@ const STARTUP_DELAY_MS = 30_000;
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let startupHandle: NodeJS.Timeout | null = null;
-let isRunning = false;
 
+/**
+ * Cross-replica fencing via session app lock (LOC-P1-004).
+ * No process-local isRunning — concurrent ticks serialize via the lock.
+ */
 const runJobSafely = async (): Promise<void> => {
-  if (isRunning) {
-    console.info("[recurring-workday-materialization] previous run still in progress, skipping tick");
-    return;
-  }
-
-  isRunning = true;
-
   try {
-    const summary = await recurringWorkdayMaterializationService.materializeAllCompaniesHorizon();
+    const result = await recurringWorkdayMaterializationService.runScheduledTick();
+
+    if (result.lockSkipped) {
+      console.info(
+        "[recurring-workday-materialization] skipped (lease held by another replica)",
+      );
+      return;
+    }
+
+    const summary = result.summary;
     console.info("[recurring-workday-materialization] completed", {
       operationsProcessed: summary.operationsProcessed,
       operationsFailed: summary.operationsFailed,
       workdaysCreated: summary.results.reduce((sum, item) => sum + item.operationWorkdaysCreated, 0),
       workdaysUpdated: summary.results.reduce((sum, item) => sum + item.operationWorkdaysUpdated, 0),
-      workdaysCancelled: summary.results.reduce((sum, item) => sum + item.operationWorkdaysCancelled, 0),
-      employeeWorkdaysCreated: summary.results.reduce((sum, item) => sum + item.employeeWorkdaysCreated, 0),
+      workdaysCancelled: summary.results.reduce(
+        (sum, item) => sum + item.operationWorkdaysCancelled,
+        0,
+      ),
+      employeeWorkdaysCreated: summary.results.reduce(
+        (sum, item) => sum + item.employeeWorkdaysCreated,
+        0,
+      ),
       employeeWorkdaysCancelled: summary.results.reduce(
         (sum, item) => sum + item.employeeWorkdaysCancelled,
         0,
@@ -32,8 +43,6 @@ const runJobSafely = async (): Promise<void> => {
     });
   } catch (error) {
     console.error("[recurring-workday-materialization] unexpected job error", error);
-  } finally {
-    isRunning = false;
   }
 };
 

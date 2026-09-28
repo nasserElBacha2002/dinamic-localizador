@@ -70,7 +70,9 @@ export const userInvitationController = {
   },
 
   async preview(req: Request, res: Response) {
-    const token = String((req.validatedQuery as { token: string }).token);
+    const fromBody = (req.body as { token?: string } | undefined)?.token;
+    const fromQuery = (req.validatedQuery as { token?: string } | undefined)?.token;
+    const token = String(fromBody ?? fromQuery ?? "");
     const preview = await userInvitationService.preview(token);
     res.status(200).json({ data: preview });
   },

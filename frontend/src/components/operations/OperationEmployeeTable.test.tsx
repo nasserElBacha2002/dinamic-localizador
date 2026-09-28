@@ -91,6 +91,12 @@ function buildRow(
           earlyDepartureMinutes: null,
           extraWorkedMinutes: null,
           checkoutMessageSid: null,
+          arrivalSource: null,
+          checkoutSource: null,
+          arrivalRegisteredBy: null,
+          arrivalRegisteredAt: null,
+          checkoutRegisteredBy: null,
+          checkoutRegisteredAt: null,
           isSimulation: false,
           simulationSessionId: null,
           createdAt: "2026-01-01T00:00:00.000Z",
@@ -247,5 +253,98 @@ describe("OperationEmployeeTable", () => {
     // Overflow may still expose non-destructive links; destructive cancel must stay hidden.
     assert.equal(view.queryByText("Quitar asignación"), null);
     assert.equal(view.queryByText("Cancelar asignación"), null);
+  });
+
+  it("shows manual attendance actions according to state and permissions", async () => {
+    const rows = [
+      buildRow("a", "PENDING", "NO_CHECK_IN", null),
+      buildRow("b", "CONFIRMED", "VALID", "att-b"),
+    ];
+    const withCheckout = buildRow("c", "CONFIRMED", "VALID", "att-c");
+    withCheckout.attendance = {
+      ...withCheckout.attendance!,
+      checkoutAt: "2026-01-01T18:00:00.000Z",
+      checkoutSource: "MANUAL",
+      checkoutStatus: "CHECKOUT_VALID",
+    };
+    rows.push(withCheckout);
+
+    const view = renderPage(
+      <Routes>
+        <Route
+          path="/operations/:id"
+          element={
+            <OperationEmployeeTable
+              operationId="operation-1"
+              rows={rows}
+              canAssign={false}
+              canReviewAttendance={() => false}
+              manualAttendance={{
+                permissions: ["attendance:manual_create", "attendance:manual_edit"],
+                allowManualAttendanceCorrections: true,
+                onAction: () => undefined,
+              }}
+              onReviewApprove={() => {}}
+              onReviewReject={() => {}}
+              onCancelAssignment={() => {}}
+              onEndAssignment={() => {}}
+              emptyTitle="Sin filas"
+              emptyDescription="Sin datos"
+            />
+          }
+        />
+      </Routes>,
+      { route: "/operations/operation-1", initialEntries: ["/operations/operation-1"] },
+    );
+
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee a/i }));
+    assert.ok(
+      await within(view.baseElement).findByRole("menuitem", { name: "Registrar llegada" }),
+    );
+    assert.ok(within(view.baseElement).getAllByRole("menuitem", { name: "Registrar salida" }).length >= 1);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee b/i }));
+    assert.ok(await within(view.baseElement).findByRole("menuitem", { name: "Editar llegada" }));
+    assert.ok(within(view.baseElement).getAllByRole("menuitem", { name: "Registrar salida" }).length >= 1);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee c/i }));
+    assert.ok(await within(view.baseElement).findByRole("menuitem", { name: "Editar llegada" }));
+    assert.ok(within(view.baseElement).getAllByRole("menuitem", { name: "Editar salida" }).length >= 1);
+  });
+
+  it("hides manual attendance actions without permission", () => {
+    const rows = [buildRow("a", "PENDING", "NO_CHECK_IN", null)];
+    const view = renderPage(
+      <Routes>
+        <Route
+          path="/operations/:id"
+          element={
+            <OperationEmployeeTable
+              operationId="operation-1"
+              rows={rows}
+              canAssign={false}
+              canReviewAttendance={() => false}
+              manualAttendance={{
+                permissions: ["attendance:read"],
+                allowManualAttendanceCorrections: true,
+                onAction: () => undefined,
+              }}
+              onReviewApprove={() => {}}
+              onReviewReject={() => {}}
+              onCancelAssignment={() => {}}
+              onEndAssignment={() => {}}
+              emptyTitle="Sin filas"
+              emptyDescription="Sin datos"
+            />
+          }
+        />
+      </Routes>,
+      { route: "/operations/operation-1", initialEntries: ["/operations/operation-1"] },
+    );
+
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee a/i }));
+    assert.equal(within(view.baseElement).queryByText("Registrar llegada"), null);
   });
 });

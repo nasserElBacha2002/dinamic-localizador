@@ -31,6 +31,7 @@ export const createValidateTwilioSignature = (
     const bodyMetadata = getTwilioBodyKeyMetadata(req.body);
 
     console.info("[twilio-webhook] signature-validation-start", {
+      event: "TWILIO_SIGNATURE_CHECK",
       signaturePresent: Boolean(signature),
       webhookUrl: config.webhookUrl,
       contentType: req.get("content-type"),
@@ -45,6 +46,7 @@ export const createValidateTwilioSignature = (
 
     if (!result.success) {
       const logPayload = {
+        event: result.code,
         signaturePresent: Boolean(signature),
         webhookUrl: config.webhookUrl,
         contentType: req.get("content-type"),
@@ -56,6 +58,7 @@ export const createValidateTwilioSignature = (
         console.warn("[twilio-webhook] signature-validation-failed", logPayload);
       } else {
         console.warn("[twilio-webhook] signature-validation-failed", {
+          event: logPayload.event,
           signaturePresent: logPayload.signaturePresent,
           webhookUrl: logPayload.webhookUrl,
           contentType: logPayload.contentType,

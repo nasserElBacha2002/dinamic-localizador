@@ -1,8 +1,20 @@
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
+import { companySettingsRepository } from "../repositories/company-settings.repository";
 import type { BotRuntimeSettings } from "../types/bot-runtime-settings";
-import { companyOperationalSettingsService } from "./company-operational-settings.service";
+import type { CompanySettings } from "../types/company";
+import { geofencePolicyResolver } from "./geofence-policy.resolver";
+
+const toOperationalSlice = (settings: CompanySettings) => ({
+  companyId: settings.companyId,
+  operationTimezone: settings.operationTimezone,
+  defaultRadiusMeters: settings.defaultRadiusMeters,
+  earlyLeaveToleranceMinutes: settings.earlyLeaveToleranceMinutes,
+  requireCheckoutLocation: settings.requireCheckoutLocation,
+  allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,
+  pendingOperationExpirationHours: settings.pendingOperationExpirationHours,
+});
 
 const buildRuntimeSettings = (
   companyId: string,
@@ -14,6 +26,7 @@ const buildRuntimeSettings = (
     allowManualAttendanceCorrections: boolean;
     pendingOperationExpirationHours: number;
   },
+  geofenceMarginMeters: number,
 ): BotRuntimeSettings => ({
   companyId,
   operationTimezone:
@@ -24,7 +37,7 @@ const buildRuntimeSettings = (
     operational.defaultRadiusMeters > 0
       ? operational.defaultRadiusMeters
       : env.BOT_DEFAULT_RADIUS_METERS,
-  geofenceReviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+  geofenceReviewMarginMeters: geofenceMarginMeters,
   earlyLeaveToleranceMinutes:
     operational.earlyLeaveToleranceMinutes >= 0
       ? operational.earlyLeaveToleranceMinutes
@@ -47,15 +60,31 @@ const shouldRethrowSettingsError = (error: unknown): boolean => {
 };
 
 export const botRuntimeSettingsService = {
+  /**
+   * Loads company settings once, then derives operational + geofence policy
+   * from the same snapshot (CQ-001 / single settings snapshot).
+   */
   async getBotRuntimeSettings(companyId: string): Promise<BotRuntimeSettings> {
     try {
-      const { settings: operational, source } =
-        await companyOperationalSettingsService.getCompanyOperationalSettingsWithSource(companyId);
-      const settings = buildRuntimeSettings(companyId, operational);
+      const row = await companySettingsRepository.findByCompanyId(companyId);
+      const source = row ? "company_settings" : "operational_defaults";
+      const operational = row
+        ? toOperationalSlice(row)
+        : { companyId, ...DEFAULT_COMPANY_OPERATIONAL_SETTINGS };
+
+      const geofencePolicy = geofencePolicyResolver.resolveFromSettings(companyId, row, 0);
+      const settings = buildRuntimeSettings(
+        companyId,
+        operational,
+        geofencePolicy.marginMeters,
+      );
 
       console.info("[bot-runtime-settings] resolved", {
         companyId,
         settingsSource: source,
+        geofenceMarginSource: geofencePolicy.marginSource,
+        geofenceRadiusSource: geofencePolicy.radiusSource,
+        settingsSnapshot: "single",
       });
 
       return settings;
@@ -64,16 +93,19 @@ export const botRuntimeSettingsService = {
         throw error;
       }
 
-      const fallback = buildRuntimeSettings(companyId, {
-        ...DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
-      });
+      if (error instanceof AppError && error.code === "GEOFENCE_POLICY_UNAVAILABLE") {
+        throw error;
+      }
 
-      console.warn("[bot-runtime-settings] failed to load company settings, using fallbacks", {
-        companyId,
-        errorCode: error instanceof Error ? error.message : "UNKNOWN_ERROR",
-      });
-
-      return fallback;
+      throw new AppError(
+        503,
+        "BOT_RUNTIME_SETTINGS_UNAVAILABLE",
+        "No se pudieron cargar la configuración operativa del bot. Reintentá más tarde.",
+        {
+          companyId,
+          cause: error instanceof Error ? error.message : "UNKNOWN",
+        },
+      );
     }
   },
 };

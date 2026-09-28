@@ -23,6 +23,11 @@ export const authController = {
     res.status(200).json({ data: user });
   },
 
+  async logout(req: Request, res: Response) {
+    await authService.logout(req.auth!.userId);
+    res.status(200).json({ data: { message: "Sesión cerrada." } });
+  },
+
   async forgotPassword(req: Request, res: Response) {
     const result = await passwordResetService.forgotPassword(req.body.email);
     res.status(200).json({ data: result });

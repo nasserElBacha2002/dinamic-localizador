@@ -9,7 +9,11 @@ import { EntityAvatar, ErrorState, LoadingState } from "../../design-system";
 import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
 import { useService, useUpdateService } from "../../hooks/useServices";
 import type { ServiceFormValues } from "../../schemas/service.schema";
-import { toNullableServiceFormat, toNullableServiceText } from "../../schemas/service.schema";
+import {
+  toNullableServiceClientId,
+  toNullableServiceFormat,
+  toNullableServiceText,
+} from "../../schemas/service.schema";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { getEntityDetailPath } from "../../utils/entity-routes";
@@ -67,6 +71,7 @@ export function ServiceEditPage() {
         longitude: values.longitude,
         allowedRadiusMeters: values.allowedRadiusMeters,
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
+        clientId: toNullableServiceClientId(values.clientId),
         active: values.active,
       });
       unsaved.markClean();
@@ -113,6 +118,7 @@ export function ServiceEditPage() {
           longitude: service.longitude,
           allowedRadiusMeters: service.allowedRadiusMeters,
           googlePlaceId: service.googlePlaceId ?? "",
+          clientId: service.clientId ?? "",
           active: service.active,
         }}
         submitLabel="Guardar cambios"

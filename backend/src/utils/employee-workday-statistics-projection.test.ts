@@ -47,11 +47,13 @@ describe("employee-workday-statistics-projection contract", () => {
     assert.match(projectionSource, /ow\.shift_name_snapshot/);
   });
 
-  it("uses canonical production attendance and does not filter by assignment state", () => {
+  it("uses canonical production attendance and keeps assignment confirmation tenant-scoped", () => {
     assert.match(projectionSource, /CANONICAL_PRODUCTION_ATTENDANCE_APPLY/);
     assert.match(canonicalSource, /OUTER APPLY/);
     assert.match(canonicalSource, /ar\.is_simulation = 0/);
-    assert.doesNotMatch(projectionSource, /operation_assignments/);
+    assert.match(projectionSource, /LEFT JOIN operation_assignments oa/);
+    assert.match(projectionSource, /oa\.id = ew\.operation_assignment_id/);
+    assert.match(projectionSource, /oa\.company_id = ew\.company_id/);
     assert.doesNotMatch(projectionSource, /oa\.cancelled_at/);
   });
 

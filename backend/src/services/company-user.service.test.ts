@@ -231,9 +231,13 @@ describe("company user service rules", () => {
     }));
     mock.method(
       userCompanyMembershipRepository,
-      "applyMembershipUpdateWithGuards",
-      async (_companyId, _userId, _patch, validate) => {
-        validate(membership({ userId: "owner-1", role: "OWNER", isDefault: true }));
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({
+          existing: membership({ userId: "owner-1", role: "OWNER", isDefault: true }),
+          actorRole: "OWNER",
+          actorIsPlatformAdmin: true,
+        });
         throw new AppError(
           409,
           "LAST_OWNER_PROTECTED",
@@ -258,7 +262,7 @@ describe("company user service rules", () => {
     );
   });
 
-  it("blocks peer-rank company user update", async () => {
+  it("blocks peer-rank company user role update", async () => {
     setupUnitTestEnv();
     const { companyRepository } = await import("../repositories/company.repository");
     const { userRepository } = await import("../repositories/user.repository");
@@ -285,9 +289,9 @@ describe("company user service rules", () => {
     }));
     mock.method(
       userCompanyMembershipRepository,
-      "applyMembershipUpdateWithGuards",
-      async (_companyId, _userId, _patch, validate) => {
-        validate(membership({ userId: "peer-1", role: "OWNER" }));
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({ existing: membership({ userId: "peer-1", role: "OWNER" }), actorRole: "OWNER", actorIsPlatformAdmin: false });
         throw new Error("should not continue after hierarchy denial");
       },
     );
@@ -335,13 +339,13 @@ describe("company user service rules", () => {
     }));
     mock.method(
       userCompanyMembershipRepository,
-      "applyMembershipUpdateWithGuards",
-      async (_companyId, _userId, patch, validate) => {
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, patch, validate) => {
         const existing = membership({ userId: "admin-1", role: "ADMIN" });
-        validate(existing);
+        validate({ existing, actorRole: "OWNER", actorIsPlatformAdmin: false });
         return {
           previous: existing,
-          updated: { ...existing, role: patch.role ?? existing.role },
+          updated: { ...existing, role: patch.membership?.role ?? existing.role },
           row: {
             user_id: "admin-1",
             name: "Admin",
@@ -357,6 +361,8 @@ describe("company user service rules", () => {
             updated_at: new Date().toISOString(),
             last_login_at: null,
           },
+          actorRole: "OWNER",
+          actorIsPlatformAdmin: false,
         };
       },
     );
@@ -409,67 +415,636 @@ describe("company user service rules", () => {
     );
   });
 
-  it("blocks platform admin self-update before any membership write", async () => {
+  it("allows self profile updates while remaining active", async () => {
     setupUnitTestEnv();
-    const { companyUserService } = await import("./company-user.service");
     const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
     const { userCompanyMembershipRepository } = await import(
       "../repositories/user-company-membership.repository"
     );
+    const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("./audit.service");
 
-    let updateCalls = 0;
-    let auditAction: string | null = null;
     mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "self-1",
+      name: "Self",
+      email: "self@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(userRepository, "findByEmail", async () => null);
+    mock.method(userRepository, "updateProfileFields", async () => undefined);
+    mock.method(userRepository, "updatePhoneNumber", async () => undefined);
+    mock.method(auditService, "log", async () => undefined);
     mock.method(
       userCompanyMembershipRepository,
-      "applyMembershipUpdateWithGuards",
-      async () => {
-        updateCalls += 1;
-        throw new Error("should not write");
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, patch, validate, beforeCommit) => {
+        const existing = membership({
+          userId: "self-1",
+          role: "OWNER",
+          status: "ACTIVE",
+          isDefault: true,
+        });
+        validate({ existing, actorRole: "OWNER", actorIsPlatformAdmin: false });
+        const row = {
+          user_id: "self-1",
+          name: "Self Updated",
+          email: "self.new@example.com",
+          phone_number: "+5491111111111",
+          global_role: "ADMIN",
+          is_platform_admin: false,
+          membership_id: "membership-1",
+          company_id: "company-1",
+          company_role: "OWNER",
+          membership_status: patch.membership?.status ?? "ACTIVE",
+          is_default: patch.membership?.isDefault ?? true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_login_at: null,
+        };
+        if (beforeCommit) {
+          await beforeCommit({
+            transaction: {} as never,
+            previous: existing,
+            updated: { ...existing, ...(patch.membership ?? {}) },
+            row,
+            actorRole: "OWNER",
+            actorIsPlatformAdmin: false,
+          });
+        }
+        return { previous: existing, updated: { ...existing, ...(patch.membership ?? {}) }, row };
       },
     );
-    mock.method(auditService, "log", async (_companyId, input) => {
-      auditAction = input.action;
-    });
+
+    const updated = await companyUserService.update(
+      "company-1",
+      "self-1",
+      {
+        name: "Self Updated",
+        email: "self.new@example.com",
+        phoneNumber: "+5491111111111",
+        status: "ACTIVE",
+        isDefault: true,
+      },
+      "self-1",
+      false,
+      "OWNER",
+    );
+
+    assert.equal(updated.name, "Self Updated");
+    assert.equal(updated.email, "self.new@example.com");
+    assert.equal(updated.phoneNumber, "+5491111111111");
+    assert.equal(updated.membershipStatus, "ACTIVE");
+  });
+
+  it("allows profile-only update without status field (no accidental inactivation)", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    let sawMembershipPatch = false;
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "self-1",
+      name: "Self",
+      email: "self@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(userRepository, "findByEmail", async () => null);
+    mock.method(auditService, "log", async () => undefined);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, patch, validate, beforeCommit) => {
+        if (patch.membership) {
+          sawMembershipPatch = true;
+        }
+        const existing = membership({
+          userId: "self-1",
+          role: "ADMIN",
+          status: "ACTIVE",
+          isDefault: false,
+        });
+        validate({ existing, actorRole: "ADMIN", actorIsPlatformAdmin: false });
+        const row = {
+          user_id: "self-1",
+          name: "Renamed",
+          email: "self@example.com",
+          phone_number: null,
+          global_role: "ADMIN",
+          is_platform_admin: false,
+          membership_id: "membership-1",
+          company_id: "company-1",
+          company_role: "ADMIN",
+          membership_status: "ACTIVE",
+          is_default: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_login_at: null,
+        };
+        if (beforeCommit) {
+          await beforeCommit({
+            transaction: {} as never,
+            previous: existing,
+            updated: existing,
+            row,
+            actorRole: "ADMIN",
+            actorIsPlatformAdmin: false,
+          });
+        }
+        return {
+          previous: existing,
+          updated: existing,
+          row,
+          actorRole: "ADMIN",
+          actorIsPlatformAdmin: false,
+        };
+      },
+    );
+
+    const updated = await companyUserService.update(
+      "company-1",
+      "self-1",
+      { name: "Renamed" },
+      "self-1",
+      false,
+      "ADMIN",
+    );
+    assert.equal(updated.name, "Renamed");
+    assert.equal(updated.membershipStatus, "ACTIVE");
+    assert.equal(sawMembershipPatch, false);
+  });
+
+  it("blocks self deactivation even when personal fields are included", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "super-1",
+      name: "Super",
+      email: "super@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: true,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(userRepository, "findByEmail", async () => null);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({ existing: membership({ userId: "super-1", role: "OWNER", status: "ACTIVE" }), actorRole: "OWNER", actorIsPlatformAdmin: false });
+        throw new Error("should not write after self deactivation denial");
+      },
+    );
+    mock.method(auditService, "log", async () => undefined);
 
     await assert.rejects(
       () =>
         companyUserService.update(
           "company-1",
           "super-1",
-          { role: "ADMIN", status: "INACTIVE", isDefault: false },
+          { name: "Super", status: "INACTIVE" },
           "super-1",
           true,
           "OWNER",
         ),
       (error: unknown) =>
-        error instanceof AppError &&
-        error.code === "SELF_EDIT_NOT_ALLOWED" &&
-        error.message.includes("otro usuario autorizado"),
+        error instanceof AppError && error.code === "SELF_DEACTIVATION_NOT_ALLOWED",
     );
-    assert.equal(updateCalls, 0);
-    assert.equal(auditAction, "company_user_self_edit_denied");
   });
 
-  it("blocks platform admin self-deactivate", async () => {
+  it("blocks peer and superior inactivation; allows inferior", async () => {
     setupUnitTestEnv();
-    const { companyUserService } = await import("./company-user.service");
     const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("./audit.service");
+
     mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "target-1",
+      name: "Target",
+      email: "target@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
     mock.method(auditService, "log", async () => undefined);
+
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({ existing: membership({ userId: "target-1", role: "ADMIN", status: "ACTIVE" }), actorRole: "ADMIN", actorIsPlatformAdmin: false });
+        throw new Error("stop");
+      },
+    );
+    await assert.rejects(
+      () =>
+        companyUserService.update(
+          "company-1",
+          "target-1",
+          { status: "INACTIVE" },
+          "actor-1",
+          false,
+          "ADMIN",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "TARGET_ROLE_NOT_LOWER",
+    );
+
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({ existing: membership({ userId: "target-1", role: "OWNER", status: "ACTIVE" }), actorRole: "OWNER", actorIsPlatformAdmin: false });
+        throw new Error("stop");
+      },
+    );
+    await assert.rejects(
+      () =>
+        companyUserService.update(
+          "company-1",
+          "target-1",
+          { status: "INACTIVE" },
+          "actor-1",
+          false,
+          "ADMIN",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "TARGET_ROLE_NOT_LOWER",
+    );
+
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, patch, validate) => {
+        const existing = membership({ userId: "target-1", role: "HR", status: "ACTIVE" });
+        validate({ existing, actorRole: "ADMIN", actorIsPlatformAdmin: false });
+        return {
+          previous: existing,
+          updated: { ...existing, status: "INACTIVE" as const },
+          row: {
+            user_id: "target-1",
+            name: "Target",
+            email: "target@example.com",
+            global_role: "ADMIN",
+            is_platform_admin: false,
+            membership_id: "membership-1",
+            company_id: "company-1",
+            company_role: "HR",
+            membership_status: patch.membership?.status ?? "INACTIVE",
+            is_default: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_login_at: null,
+          },
+          actorRole: "ADMIN",
+          actorIsPlatformAdmin: false,
+        };
+      },
+    );
+    const inactivated = await companyUserService.update(
+      "company-1",
+      "target-1",
+      { status: "INACTIVE" },
+      "actor-1",
+      false,
+      "ADMIN",
+    );
+    assert.equal(inactivated.membershipStatus, "INACTIVE");
+  });
+
+  it("uses locked membership status so stale ACTIVE cannot bypass inactivation rules", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "self-1",
+      name: "Self",
+      email: "self@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(auditService, "log", async () => undefined);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        // Concurrent path: lock sees ACTIVE and still enforces self-deactivation.
+        validate({ existing: membership({ userId: "self-1", role: "ADMIN", status: "ACTIVE" }), actorRole: "ADMIN", actorIsPlatformAdmin: false });
+        throw new Error("should not write");
+      },
+    );
 
     await assert.rejects(
       () =>
         companyUserService.deactivate(
           "company-1",
-          "super-1",
-          "super-1",
-          true,
+          "self-1",
+          "self-1",
+          false,
+          "ADMIN",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "SELF_DEACTIVATION_NOT_ALLOWED",
+    );
+  });
+
+  it("blocks third-party personal profile edits for company admins", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "target-1",
+      name: "Target",
+      email: "target@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(userRepository, "findByEmail", async () => null);
+    mock.method(auditService, "log", async () => undefined);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({
+          existing: membership({ userId: "target-1", role: "HR", status: "ACTIVE" }),
+          actorRole: "OWNER",
+          actorIsPlatformAdmin: false,
+        });
+        throw new Error("should not write after profile denial");
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        companyUserService.update(
+          "company-1",
+          "target-1",
+          { name: "Hacked", email: "hacked@example.com" },
+          "owner-1",
+          false,
           "OWNER",
         ),
-      (error: unknown) => error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED",
+      (error: unknown) =>
+        error instanceof AppError && error.code === "USER_UPDATE_FORBIDDEN",
+    );
+  });
+
+  it("maps duplicate email pre-check and SQL unique violation to EMAIL_ALREADY_EXISTS", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "self-1",
+      name: "Self",
+      email: "self@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(userRepository, "findByEmail", async () => ({
+      id: "other-1",
+      name: "Other",
+      email: "taken@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(auditService, "log", async () => undefined);
+
+    await assert.rejects(
+      () =>
+        companyUserService.update(
+          "company-1",
+          "self-1",
+          { email: "taken@example.com" },
+          "self-1",
+          false,
+          "ADMIN",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "EMAIL_ALREADY_EXISTS",
+    );
+
+    mock.method(userRepository, "findByEmail", async () => null);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async () => {
+        const err = Object.assign(new Error("Violation of UNIQUE KEY constraint 'UQ_users_email'"), {
+          number: 2627,
+        });
+        throw err;
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        companyUserService.update(
+          "company-1",
+          "self-1",
+          { email: "race@example.com" },
+          "self-1",
+          false,
+          "ADMIN",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "EMAIL_ALREADY_EXISTS",
+    );
+  });
+
+  it("deactivate endpoint reuses the same inactivation policy as update", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "target-1",
+      name: "Target",
+      email: "target@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(auditService, "log", async () => undefined);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        validate({
+          existing: membership({ userId: "target-1", role: "ADMIN", status: "ACTIVE" }),
+          actorRole: "ADMIN",
+          actorIsPlatformAdmin: false,
+        });
+        throw new Error("stop");
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        companyUserService.deactivate("company-1", "target-1", "actor-1", false, "ADMIN"),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "TARGET_ROLE_NOT_LOWER",
+    );
+  });
+
+  it("uses locked actor role so a demoted requester loses privileges", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { userCompanyMembershipRepository } = await import(
+      "../repositories/user-company-membership.repository"
+    );
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(userRepository, "findById", async () => ({
+      id: "target-1",
+      name: "Target",
+      email: "target@example.com",
+      passwordHash: "hash",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(auditService, "log", async () => undefined);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyCompanyUserUpdateWithGuards",
+      async (_companyId, _userId, _actorId, _patch, validate) => {
+        // Snapshot said OWNER; lock sees demoted ADMIN (peer of target).
+        validate({
+          existing: membership({ userId: "target-1", role: "ADMIN", status: "ACTIVE" }),
+          actorRole: "ADMIN",
+          actorIsPlatformAdmin: false,
+        });
+        throw new Error("stop");
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        companyUserService.update(
+          "company-1",
+          "target-1",
+          { status: "INACTIVE" },
+          "actor-1",
+          false,
+          "OWNER",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "TARGET_ROLE_NOT_LOWER",
     );
   });
 });

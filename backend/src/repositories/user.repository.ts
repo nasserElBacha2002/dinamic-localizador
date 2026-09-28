@@ -104,6 +104,25 @@ export const userRepository = {
     return nextVersion;
   },
 
+  /** Invalidate all outstanding JWTs for this user (logout / security stamp). */
+  async bumpTokenVersion(id: string, transaction?: sql.Transaction): Promise<number> {
+    const result = await requestFrom(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        UPDATE users
+        SET token_version = token_version + 1,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.token_version
+        WHERE id = @id
+      `);
+
+    const nextVersion = Number(result.recordset[0]?.token_version);
+    if (!Number.isInteger(nextVersion)) {
+      throw new Error("Failed to bump user token_version");
+    }
+    return nextVersion;
+  },
+
   async savePendingTwoFactorSecret(
     id: string,
     encryptedSecret: string,
@@ -314,6 +333,34 @@ export const userRepository = {
             updated_at = SYSUTCDATETIME()
         WHERE id = @id
       `);
+  },
+
+  async updateProfileFields(
+    id: string,
+    input: { name?: string; email?: string },
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    const sets: string[] = [];
+    const request = requestFrom(transaction).input("id", sql.UniqueIdentifier, id);
+
+    if (input.name !== undefined) {
+      sets.push("name = @name");
+      request.input("name", sql.NVarChar(150), input.name);
+    }
+    if (input.email !== undefined) {
+      sets.push("email = @email");
+      request.input("email", sql.NVarChar(255), input.email);
+    }
+    if (sets.length === 0) {
+      return;
+    }
+
+    sets.push("updated_at = SYSUTCDATETIME()");
+    await request.query(`
+      UPDATE users
+      SET ${sets.join(",\n          ")}
+      WHERE id = @id
+    `);
   },
 };
 

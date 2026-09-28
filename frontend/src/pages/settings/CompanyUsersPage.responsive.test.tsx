@@ -26,10 +26,11 @@ mockApiModule("api/company-users.api", {
         userId: "u-1",
         name: "Ada Lovelace",
         email: "ada@example.com",
+        phoneNumber: "+5491111111111",
         globalRole: "ADMIN",
-        companyRole: "ADMIN",
+        companyRole: "HR",
         membershipStatus: "ACTIVE",
-        isDefault: true,
+        isDefault: false,
         membershipId: "m-1",
         companyId: "co-1",
         updatedAt: "2026-07-01T00:00:00.000Z",
@@ -40,10 +41,11 @@ mockApiModule("api/company-users.api", {
         userId: "owner-self",
         name: "Yo Owner",
         email: "owner@example.com",
+        phoneNumber: null,
         globalRole: "ADMIN",
         companyRole: "OWNER",
         membershipStatus: "ACTIVE",
-        isDefault: false,
+        isDefault: true,
         membershipId: "m-2",
         companyId: "co-1",
         updatedAt: "2026-07-01T00:00:00.000Z",
@@ -111,6 +113,16 @@ afterEach(() => {
   mockViewport("desktop");
 });
 
+const ownerAuth = {
+  user: {
+    id: "owner-self",
+    email: "owner@example.com",
+    name: "Yo Owner",
+    role: "ADMIN" as const,
+    isPlatformAdmin: false,
+  },
+};
+
 describe("CompanyUsersPage responsive (real page)", () => {
   it("shows desktop table", async () => {
     mockViewport("desktop");
@@ -125,7 +137,7 @@ describe("CompanyUsersPage responsive (real page)", () => {
     assert.ok(view.getByRole("table"));
   });
 
-  it("disables self-edit and keeps inferior editable", async () => {
+  it("shows only Editar without three-dot actions menu", async () => {
     mockViewport("desktop");
     const view = renderPage(
       <Routes>
@@ -133,15 +145,7 @@ describe("CompanyUsersPage responsive (real page)", () => {
       </Routes>,
       {
         route: "/settings/users",
-        auth: {
-          user: {
-            id: "owner-self",
-            email: "owner@example.com",
-            name: "Yo Owner",
-            role: "ADMIN",
-            isPlatformAdmin: false,
-          },
-        },
+        auth: ownerAuth,
       },
     );
 
@@ -150,14 +154,9 @@ describe("CompanyUsersPage responsive (real page)", () => {
     const adaRow = view.getByText("Ada Lovelace").closest("tr");
     assert.ok(selfRow);
     assert.ok(adaRow);
-    assert.equal(
-      within(selfRow).getByRole("button", { name: "Editar" }).hasAttribute("disabled"),
-      true,
-    );
-    assert.equal(
-      within(adaRow).getByRole("button", { name: "Editar" }).hasAttribute("disabled"),
-      false,
-    );
+    assert.equal(view.queryByRole("button", { name: /Más acciones/i }), null);
+    assert.ok(within(selfRow).getByRole("button", { name: "Editar" }));
+    assert.ok(within(adaRow).getByRole("button", { name: "Editar" }));
   });
 
   it("shows mobile cards and filter drawer", async () => {
@@ -178,5 +177,22 @@ describe("CompanyUsersPage responsive (real page)", () => {
       assert.ok(within(document.body).getByRole("combobox", { name: "Rol" }));
     });
     fireEvent.click(within(document.body).getByRole("button", { name: "Listo" }));
+  });
+
+  it("hides Desactivar when editing self", async () => {
+    mockViewport("desktop");
+    const view = renderPage(
+      <Routes>
+        <Route path="/settings/users" element={<CompanyUsersPage />} />
+      </Routes>,
+      { route: "/settings/users", auth: ownerAuth },
+    );
+
+    await waitFor(() => assert.ok(view.getByText("Yo Owner")));
+    const selfRow = view.getByText("Yo Owner").closest("tr");
+    assert.ok(selfRow);
+    fireEvent.click(within(selfRow).getByRole("button", { name: "Editar" }));
+    await waitFor(() => assert.ok(view.getByRole("button", { name: "Guardar" })));
+    assert.equal(view.queryByRole("button", { name: "Desactivar" }), null);
   });
 });

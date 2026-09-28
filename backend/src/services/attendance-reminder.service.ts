@@ -38,13 +38,15 @@ import {
   classifyTwilioOutboundError,
   isAmbiguousTwilioSendFailure,
 } from "../utils/twilio-error-classifier";
+import {
+  classifyReminderSendOutcome,
+  emptyReminderKindCounts,
+  mergeReminderKindCounts,
+  type ReminderKindCounts,
+  type ReminderSendOutcome,
+} from "./attendance-reminder-outcomes";
 
-export type ReminderSendOutcome =
-  | "sent"
-  | "failed"
-  | "skipped"
-  | "sent_context_failed"
-  | "sent_persistence_unknown";
+export type { ReminderKindCounts, ReminderSendOutcome } from "./attendance-reminder-outcomes";
 
 /**
  * Deterministic concurrency hook: runs after confirmation session prep / early gate,
@@ -58,12 +60,6 @@ export const __setConfirmationReminderPreSendBarrierForTests = (
 ): void => {
   confirmationReminderPreSendBarrierForTests = barrier;
 };
-
-export interface ReminderKindCounts {
-  ONE_TIME: number;
-  RECURRING: number;
-  OTHER: number;
-}
 
 export interface AttendanceReminderRunSummary {
   referenceAt: string;
@@ -89,13 +85,8 @@ export interface AttendanceReminderRunSummary {
   confirmationSkipped: number;
 }
 
-const emptyKindCounts = (): ReminderKindCounts => ({ ONE_TIME: 0, RECURRING: 0, OTHER: 0 });
-
-const mergeKindCounts = (left: ReminderKindCounts, right: ReminderKindCounts): ReminderKindCounts => ({
-  ONE_TIME: left.ONE_TIME + right.ONE_TIME,
-  RECURRING: left.RECURRING + right.RECURRING,
-  OTHER: left.OTHER + right.OTHER,
-});
+const emptyKindCounts = emptyReminderKindCounts;
+const mergeKindCounts = mergeReminderKindCounts;
 
 const emptySummary = (referenceAt: Date): AttendanceReminderRunSummary => ({
   referenceAt: referenceAt.toISOString(),
@@ -968,13 +959,10 @@ const processCandidates = async (
   for (const candidate of candidates) {
     try {
       const outcome = await sendReminderForCandidate(companyId, candidate, notificationType);
-      if (
-        outcome === "sent" ||
-        outcome === "sent_context_failed" ||
-        outcome === "sent_persistence_unknown"
-      ) {
+      const bucket = classifyReminderSendOutcome(outcome);
+      if (bucket === "sent") {
         sent += 1;
-      } else if (outcome === "failed") {
+      } else if (bucket === "failed") {
         failed += 1;
       } else {
         skipped += 1;

@@ -6,7 +6,11 @@ import { PageHeader } from "../../design-system";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCreateService } from "../../hooks/useServices";
 import type { ServiceFormValues } from "../../schemas/service.schema";
-import { toNullableServiceFormat, toNullableServiceText } from "../../schemas/service.schema";
+import {
+  toNullableServiceClientId,
+  toNullableServiceFormat,
+  toNullableServiceText,
+} from "../../schemas/service.schema";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
@@ -32,6 +36,7 @@ export function ServiceCreatePage() {
         longitude: values.longitude,
         allowedRadiusMeters: values.allowedRadiusMeters,
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
+        clientId: toNullableServiceClientId(values.clientId),
       });
       goBackToList();
     } catch (error) {
@@ -66,6 +71,7 @@ export function ServiceCreatePage() {
           longitude: -58.3816,
           allowedRadiusMeters: 150,
           googlePlaceId: "",
+          clientId: "",
           active: true,
         }}
         submitLabel={submitLabel}

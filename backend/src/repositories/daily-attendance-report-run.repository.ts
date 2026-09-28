@@ -16,6 +16,9 @@ const toIso = (value: Date | string | null | undefined): string | null => {
 };
 
 const emptyTotals = (): DailyAttendanceReportTotals => ({
+  scheduledWorkdays: 0, presentWorkdays: 0, absentWorkdays: 0, justifiedWorkdays: 0,
+  confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0,
+  rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 0, extraWorkedMinutes: 0,
   operationsCount: 0,
   scheduledEmployeesCount: 0,
   presentCount: 0,
@@ -42,6 +45,9 @@ const mapRun = (row: Record<string, unknown>): DailyAttendanceReportRun => ({
   status: String(row.status) as DailyAttendanceReportRunStatus,
   recipientCount: Number(row.recipient_count ?? 0),
   totals: {
+    scheduledWorkdays: Number(row.scheduled_employees_count ?? 0), presentWorkdays: Number(row.present_count ?? 0),
+    absentWorkdays: Number(row.missing_checkin_count ?? 0), justifiedWorkdays: Number(row.justified_count ?? 0),
+    confirmedButAbsentWorkdays: 0, unannouncedAbsenceWorkdays: 0, pendingReviewAttendances: 0, rejectedAttendances: 0, outsideGeofenceAttendances: 0, workedMinutes: 0, extraWorkedMinutes: 0,
     operationsCount: Number(row.operations_count ?? 0),
     scheduledEmployeesCount: Number(row.scheduled_employees_count ?? 0),
     presentCount: Number(row.present_count ?? 0),
@@ -66,6 +72,7 @@ const mapRun = (row: Record<string, unknown>): DailyAttendanceReportRun => ({
           html: String(row.email_html_snapshot ?? ""),
         }
       : null,
+  xlsxSnapshot: row.xlsx_snapshot ? Buffer.from(row.xlsx_snapshot as Uint8Array) : null,
   evaluatedAt: toIso(row.evaluated_at as Date | string | null),
   attemptCount: Number(row.attempt_count ?? 0),
   nextAttemptAt: toIso(row.next_attempt_at as Date | string | null),
@@ -329,6 +336,7 @@ export const dailyAttendanceReportRunRepository = {
       totalIncidentCount: number;
       templateVersion: string;
       email: DailyAttendanceReportEmailSnapshot;
+      xlsx: Buffer;
       evaluatedAt: Date;
       recipients: Array<{ id: string; email: string; displayName: string | null }>;
     },
@@ -360,6 +368,7 @@ export const dailyAttendanceReportRunRepository = {
         .input("subject", sql.NVarChar(500), input.email.subject)
         .input("textBody", sql.NVarChar(sql.MAX), input.email.text)
         .input("htmlBody", sql.NVarChar(sql.MAX), input.email.html)
+        .input("xlsx", sql.VarBinary(sql.MAX), input.xlsx)
         .input("evaluatedAt", sql.DateTime2, input.evaluatedAt)
         .query(`
           UPDATE company_daily_attendance_report_runs
@@ -382,6 +391,7 @@ export const dailyAttendanceReportRunRepository = {
               email_subject_snapshot = @subject,
               email_text_snapshot = @textBody,
               email_html_snapshot = @htmlBody,
+              xlsx_snapshot = @xlsx,
               evaluated_at = @evaluatedAt,
               generated_at = SYSUTCDATETIME(),
               updated_at = SYSUTCDATETIME()

@@ -89,4 +89,20 @@ describe("authenticate session checks", () => {
     const response = await apiRequest(baseUrl, "/api/secure", { token });
     assert.equal(response.status, 401);
   });
+
+  it("uses live DB role instead of stale JWT role claim", async () => {
+    mock.method(userRepository, "findById", async () => ({
+      ...user,
+      role: "ADMIN",
+      tokenVersion: 0,
+    }));
+    const token = signTestToken({
+      userId: user.id,
+      email: user.email,
+      role: "ADMIN",
+      tokenVersion: 0,
+    });
+    const response = await apiRequest(baseUrl, "/api/secure", { token });
+    assert.equal(response.status, 200);
+  });
 });

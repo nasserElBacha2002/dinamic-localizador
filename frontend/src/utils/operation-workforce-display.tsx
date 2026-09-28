@@ -29,6 +29,15 @@ export function formatOperationalCheckInCell(attendance: AttendanceRecord | null
 
   const time = formatTime(attendance.receivedAt);
 
+  if (attendance.arrivalSource === "MANUAL") {
+    const status =
+      attendance.punctualityStatus === "LATE" ||
+      attendance.punctualityStatus === "OUTSIDE_TIME_WINDOW"
+        ? "Tarde"
+        : "En punto";
+    return stackedTimeCell(time, `Manual · ${status}`);
+  }
+
   if (
     attendance.validationStatus === "PENDING_REVIEW" ||
     attendance.locationStatus === "OUTSIDE_GEOFENCE" ||
@@ -51,6 +60,15 @@ export function formatOperationalCheckOutCell(attendance: AttendanceRecord | nul
   }
 
   const time = formatTime(attendance.checkoutAt);
+
+  if (attendance.checkoutSource === "MANUAL") {
+    const status =
+      attendance.checkoutStatus === "CHECKOUT_EARLY_WITHIN_TOLERANCE" ||
+      attendance.checkoutStatus === "CHECKOUT_EARLY_REVIEW"
+        ? "Antes de hora"
+        : "A horario";
+    return stackedTimeCell(time, `Manual · ${status}`);
+  }
 
   if (attendance.extraWorkedMinutes && attendance.extraWorkedMinutes > 0) {
     return stackedTimeCell(time, `+${attendance.extraWorkedMinutes} min extra`);

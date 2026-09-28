@@ -41,3 +41,39 @@ export const getDuplicateKeyConstraint = (error: unknown): string | null => {
 
   return match?.[1] ?? null;
 };
+
+const duplicateKeyMessage = (error: unknown): string => {
+  if (typeof error !== "object" || error === null) {
+    return String(error);
+  }
+  return String(
+    (error as { message?: string }).message ??
+      (error as { originalError?: { message?: string } }).originalError?.message ??
+      "",
+  );
+};
+
+/**
+ * True when `error` is a SQL Server duplicate-key (2601/2627) for the given
+ * unique index / constraint name — exact name only (no prefix/substring).
+ *
+ * When the constraint name cannot be parsed, falls back to a quoted-identifier
+ * search in the message (`'Name'` / `` `Name` ``) so `UQ_test` does not match
+ * `UQ_test_archived`.
+ */
+export const matchesDuplicateKeyConstraint = (
+  error: unknown,
+  constraintName: string,
+): boolean => {
+  if (!constraintName || !isDuplicateKeyError(error)) {
+    return false;
+  }
+
+  const extracted = getDuplicateKeyConstraint(error);
+  if (extracted) {
+    return extracted === constraintName;
+  }
+
+  const message = duplicateKeyMessage(error);
+  return message.includes(`'${constraintName}'`) || message.includes(`\`${constraintName}\``);
+};

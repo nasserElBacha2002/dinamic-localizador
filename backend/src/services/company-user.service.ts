@@ -19,9 +19,10 @@ import { auditService } from "./audit.service";
 import {
   assertCanAssignRoleOnInvitation,
   assertMembershipMutationAllowed,
-  assertSelfAdministrativeMutationAllowed,
+  assertPersonalProfileMutationAllowed,
 } from "./company-user.guards";
 import { userInvitationService } from "./user-invitation.service";
+import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const toIsoString = (value: Date | string | null | undefined): string | null => {
   if (!value) {
@@ -130,6 +131,8 @@ const logCompanyUserAudit = async (input: {
 
 const resolveModificationType = (input: UpdateCompanyUserInput): string => {
   const parts: string[] = [];
+  if (input.name !== undefined) parts.push("name");
+  if (input.email !== undefined) parts.push("email");
   if (input.role !== undefined) parts.push("role");
   if (input.status !== undefined) parts.push("status");
   if (input.isDefault !== undefined) parts.push("isDefault");
@@ -140,12 +143,14 @@ const resolveModificationType = (input: UpdateCompanyUserInput): string => {
 const hasMembershipFields = (input: UpdateCompanyUserInput): boolean =>
   input.role !== undefined || input.status !== undefined || input.isDefault !== undefined;
 
+const hasProfileFields = (input: UpdateCompanyUserInput): boolean =>
+  input.name !== undefined || input.email !== undefined || input.phoneNumber !== undefined;
+
 /**
- * Administrative self-edit inventory (company users domain):
- * - PATCH /companies/:id/users/:userId
- * - PATCH /companies/:id/users/:userId/deactivate
- * There is no HTTP admin path to mutate global user name/role/password;
- * password updates are auth/script-only and are not administrative membership edits.
+ * Company users domain mutations:
+ * - PATCH /companies/:id/users/:userId (profile + membership)
+ * - PATCH /companies/:id/users/:userId/deactivate (ACTIVE → INACTIVE only)
+ * Password updates remain auth/script-only.
  */
 export const companyUserService = {
   async list(
@@ -249,7 +254,7 @@ export const companyUserService = {
     input: UpdateCompanyUserInput,
     requesterUserId: string,
     requesterIsPlatformAdmin: boolean,
-    requesterCompanyRole?: CompanyRole,
+    _requesterCompanyRole?: CompanyRole,
     correlationId?: string | null,
   ): Promise<CompanyUserDto> {
     const modificationType = resolveModificationType(input);
@@ -259,46 +264,17 @@ export const companyUserService = {
       ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
     };
     const touchingMembership = hasMembershipFields(input);
-    const touchingPhone = input.phoneNumber !== undefined;
+    const touchingProfile = hasProfileFields(input);
 
-    // Self-edit ban applies to membership/role changes; phone-only is allowed (contact field).
-    if (touchingMembership) {
-      try {
-        assertSelfAdministrativeMutationAllowed(userId, requesterUserId);
-      } catch (error) {
-        if (error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED") {
-          try {
-            await assertActiveCompany(companyId);
-            await logCompanyUserAudit({
-              companyId,
-              actorUserId: requesterUserId,
-              entityType: "company_user_membership",
-              entityId: userId,
-              targetUserId: userId,
-              action: "company_user_self_edit_denied",
-              result: "DENIED",
-              reason: "SELF_EDIT_NOT_ALLOWED",
-              modificationType,
-              previousData: null,
-              newData: {
-                ...sanitizeMembershipAuditSnapshot(input),
-                actorIsPlatformAdmin: requesterIsPlatformAdmin,
-              },
-              correlationId,
-            });
-          } catch {
-            // Company invalid / audit failure must not change the self-edit denial.
-          }
-        }
-        throw error;
-      }
+    if (!touchingMembership && !touchingProfile) {
+      throw new AppError(400, "EMPTY_UPDATE", "Debe enviar al menos un campo para actualizar.");
     }
 
     await assertActiveCompany(companyId);
     await assertTargetUserManageable(userId, requesterIsPlatformAdmin);
 
     let normalizedPhone: string | null | undefined;
-    if (touchingPhone) {
+    if (input.phoneNumber !== undefined) {
       const rawPhone = input.phoneNumber;
       if (rawPhone == null || rawPhone.trim() === "") {
         normalizedPhone = null;
@@ -315,102 +291,139 @@ export const companyUserService = {
       }
     }
 
-    let previousSnapshot: Record<string, unknown> = {};
-    let row: Record<string, unknown>;
+    const nextName = input.name;
+    let nextEmail: string | undefined;
+    if (input.email !== undefined) {
+      nextEmail = normalizeEmail(input.email);
+      const existingEmailOwner = await userRepository.findByEmail(nextEmail);
+      if (existingEmailOwner && existingEmailOwner.id !== userId) {
+        throw new AppError(
+          409,
+          "EMAIL_ALREADY_EXISTS",
+          "Ya existe un usuario con ese email.",
+        );
+      }
+    }
 
-    if (touchingMembership) {
-      try {
-        const result = await userCompanyMembershipRepository.applyMembershipUpdateWithGuards(
-          companyId,
-          userId,
-          membershipPatch,
-          (existing) => {
-            previousSnapshot = sanitizeMembershipAuditSnapshot({
-              role: existing.role,
-              status: existing.status,
-              isDefault: existing.isDefault,
+    const profilePatch = {
+      ...(nextName !== undefined ? { name: nextName } : {}),
+      ...(nextEmail !== undefined ? { email: nextEmail } : {}),
+      ...(normalizedPhone !== undefined ? { phoneNumber: normalizedPhone } : {}),
+    };
+
+    let previousSnapshot: Record<string, unknown> = {};
+
+    try {
+      const result = await userCompanyMembershipRepository.applyCompanyUserUpdateWithGuards(
+        companyId,
+        userId,
+        requesterUserId,
+        {
+          ...(touchingMembership ? { membership: membershipPatch } : {}),
+          ...(touchingProfile ? { profile: profilePatch } : {}),
+        },
+        ({ existing, actorRole, actorIsPlatformAdmin }) => {
+          previousSnapshot = sanitizeMembershipAuditSnapshot({
+            role: existing.role,
+            status: existing.status,
+            isDefault: existing.isDefault,
+          });
+
+          if (touchingProfile) {
+            assertPersonalProfileMutationAllowed({
+              targetUserId: userId,
+              requesterUserId,
+              actorIsPlatformAdmin,
             });
+          }
+
+          if (touchingMembership) {
+            // Actor role is re-read under lock for this companyId (not request snapshot).
             assertMembershipMutationAllowed({
-              requesterCompanyRole,
-              requesterIsPlatformAdmin,
+              targetUserId: userId,
+              requesterUserId,
+              requesterCompanyRole: actorRole,
+              requesterIsPlatformAdmin: actorIsPlatformAdmin,
               existing,
               update: membershipPatch,
             });
-          },
-          async ({ transaction, row: lockedRow }) => {
-            if (normalizedPhone !== undefined) {
-              await userRepository.updatePhoneNumber(userId, normalizedPhone, transaction);
-            }
-            const dtoPreview = mapCompanyUserDto(
-              {
-                ...lockedRow,
-                ...(normalizedPhone !== undefined ? { phone_number: normalizedPhone } : {}),
-              },
-              requesterIsPlatformAdmin,
-            );
-            await auditService.log(
-              companyId,
-              {
-                entityType: "company_user_membership",
-                entityId: userId,
-                action: "company_user_update_allowed",
-                userId: requesterUserId,
-                reason: null,
-                previousData: previousSnapshot,
-                newData: {
-                  ...sanitizeMembershipAuditSnapshot({
-                    role: dtoPreview.companyRole,
-                    status: dtoPreview.membershipStatus,
-                    isDefault: dtoPreview.isDefault,
-                  }),
-                  ...(normalizedPhone !== undefined ? { phoneNumber: normalizedPhone } : {}),
-                  result: "ALLOWED",
-                  modificationType,
-                  actorUserId: requesterUserId,
-                  targetUserId: userId,
-                  companyId,
-                  ...(correlationId ? { correlationId } : {}),
-                },
-              },
-              transaction,
-            );
-          },
-        );
-        row = result.row;
-        if (normalizedPhone !== undefined) {
-          row = { ...row, phone_number: normalizedPhone };
-        }
-      } catch (error) {
-        if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
-          await logCompanyUserAudit({
+          }
+        },
+        async ({ transaction, row: lockedRow, actorIsPlatformAdmin }) => {
+          const dtoPreview = mapCompanyUserDto(
+            {
+              ...lockedRow,
+              ...(nextName !== undefined ? { name: nextName } : {}),
+              ...(nextEmail !== undefined ? { email: nextEmail } : {}),
+              ...(normalizedPhone !== undefined ? { phone_number: normalizedPhone } : {}),
+            },
+            actorIsPlatformAdmin,
+          );
+          await auditService.log(
             companyId,
-            actorUserId: requesterUserId,
-            entityType: "company_user_membership",
-            entityId: userId,
-            targetUserId: userId,
-            action: "company_user_update_denied",
-            result: "DENIED",
-            reason: error.code,
-            modificationType,
-            previousData: previousSnapshot,
-            newData: sanitizeMembershipAuditSnapshot(input),
-            correlationId,
-          });
-        }
-        throw error;
-      }
-    } else if (normalizedPhone !== undefined) {
-      await userRepository.updatePhoneNumber(userId, normalizedPhone);
-      const loaded = await userCompanyMembershipRepository.findCompanyUserRow(companyId, userId);
-      if (!loaded) {
-        throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
-      }
-      row = { ...loaded, phone_number: normalizedPhone };
-    } else {
-      throw new AppError(400, "EMPTY_UPDATE", "Debe enviar al menos un campo para actualizar.");
-    }
+            {
+              entityType: "company_user_membership",
+              entityId: userId,
+              action: "company_user_update_allowed",
+              userId: requesterUserId,
+              reason: null,
+              previousData: previousSnapshot,
+              newData: {
+                ...sanitizeMembershipAuditSnapshot({
+                  role: dtoPreview.companyRole,
+                  status: dtoPreview.membershipStatus,
+                  isDefault: dtoPreview.isDefault,
+                }),
+                ...(nextName !== undefined ? { name: nextName } : {}),
+                ...(nextEmail !== undefined ? { email: nextEmail } : {}),
+                ...(normalizedPhone !== undefined ? { phoneNumber: normalizedPhone } : {}),
+                result: "ALLOWED",
+                modificationType,
+                actorUserId: requesterUserId,
+                targetUserId: userId,
+                companyId,
+                ...(correlationId ? { correlationId } : {}),
+              },
+            },
+            transaction,
+          );
+        },
+      );
 
-    return mapCompanyUserDto(row, requesterIsPlatformAdmin);
+      let row = result.row;
+      if (nextName !== undefined) row = { ...row, name: nextName };
+      if (nextEmail !== undefined) row = { ...row, email: nextEmail };
+      if (normalizedPhone !== undefined) row = { ...row, phone_number: normalizedPhone };
+      return mapCompanyUserDto(row, result.actorIsPlatformAdmin);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        const constraint = getDuplicateKeyConstraint(error);
+        if (!constraint || constraint.includes("UQ_users_email") || /users.*email/i.test(constraint)) {
+          throw new AppError(
+            409,
+            "EMAIL_ALREADY_EXISTS",
+            "Ya existe un usuario con ese email.",
+          );
+        }
+      }
+      if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
+        await logCompanyUserAudit({
+          companyId,
+          actorUserId: requesterUserId,
+          entityType: "company_user_membership",
+          entityId: userId,
+          targetUserId: userId,
+          action: "company_user_update_denied",
+          result: "DENIED",
+          reason: error.code,
+          modificationType,
+          previousData: previousSnapshot,
+          newData: sanitizeMembershipAuditSnapshot(input),
+          correlationId,
+        });
+      }
+      throw error;
+    }
   },
 
   async deactivate(

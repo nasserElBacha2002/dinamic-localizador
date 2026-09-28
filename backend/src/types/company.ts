@@ -155,6 +155,7 @@ export interface CompanyAbsenceSetting {
 export interface CompanyLocationType {
   id: string;
   companyId: string;
+  clientId: string | null;
   code: string;
   name: string;
   isActive: boolean;
@@ -188,6 +189,8 @@ export type CompanyPermission =
   | "operations:manage"
   | "attendance:read"
   | "attendance:review"
+  | "attendance:manual_create"
+  | "attendance:manual_edit"
   | "attendance:export"
   | "absences:read"
   | "absences:review"

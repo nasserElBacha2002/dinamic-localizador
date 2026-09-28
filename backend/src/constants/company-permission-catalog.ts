@@ -171,6 +171,20 @@ export const PERMISSION_CATALOG = {
     label: "Revisar asistencias",
     description: "Permite aprobar o rechazar asistencias pendientes de revisión.",
   },
+  "attendance:manual_create": {
+    module: "attendance",
+    moduleLabel: MODULE_LABELS.attendance,
+    label: "Registrar asistencia manual",
+    description:
+      "Permite registrar llegada o salida manual sin geolocalización (correcciones operativas).",
+  },
+  "attendance:manual_edit": {
+    module: "attendance",
+    moduleLabel: MODULE_LABELS.attendance,
+    label: "Editar asistencia manual",
+    description:
+      "Permite corregir horarios de llegada o salida ya registrados, con auditoría.",
+  },
   "attendance:export": {
     module: "attendance",
     moduleLabel: MODULE_LABELS.attendance,

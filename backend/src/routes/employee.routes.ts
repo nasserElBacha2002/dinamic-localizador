@@ -18,6 +18,7 @@ import {
   createEmployeeSchema,
   deactivateEmployeeSchema,
   employeeIdParamSchema,
+  replaceEmployeeClientsSchema,
   listEmployeeOperationsQuerySchema,
   listEmployeesQuerySchema,
   updateEmployeeSchema,
@@ -30,6 +31,19 @@ employeeRouter.post(
   requirePermission("employees:manage"),
   validate(createEmployeeSchema),
   asyncHandler(employeeController.create),
+);
+employeeRouter.get(
+  "/:id/clients",
+  requirePermission("employees:read"),
+  validate(employeeIdParamSchema, "params"),
+  asyncHandler(employeeController.listClients),
+);
+employeeRouter.put(
+  "/:id/clients",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  validate(replaceEmployeeClientsSchema),
+  asyncHandler(employeeController.replaceClients),
 );
 employeeRouter.get(
   "/",

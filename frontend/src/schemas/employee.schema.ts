@@ -18,6 +18,7 @@ export const employeeFormSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   locationZoneId: z.string().uuid().nullable().optional(),
   active: z.boolean(),
+  clientIds: z.array(z.string().uuid()).default([]),
 });
 
 export type EmployeeFormInputValues = z.input<typeof employeeFormSchema>;

@@ -1,4 +1,5 @@
 import { env } from "../config/env";
+import { RECURRING_WORKDAY_MATERIALIZATION_LOCK_RESOURCE } from "../constants/job-locks";
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
@@ -33,6 +34,7 @@ import {
   computeMaterializationRange,
   iterateDateIsoRange,
 } from "../utils/recurring-workday-range";
+import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
 import {
   buildEmployeeWorkdayIndex,
   employeeWorkdayExpectationService,
@@ -1157,5 +1159,23 @@ export const recurringWorkdayMaterializationService = {
     }
 
     return aggregate;
+  },
+
+  /**
+   * Scheduler entry: session app-lock fences multi-replica ticks (LOC-P1-004).
+   */
+  async runScheduledTick(): Promise<
+    | { lockSkipped: true }
+    | { lockSkipped: false; summary: CompanyMaterializationSummary }
+  > {
+    const lockResult = await withDedicatedSessionAppLock(
+      RECURRING_WORKDAY_MATERIALIZATION_LOCK_RESOURCE,
+      async () => this.materializeAllCompaniesHorizon(),
+      { lockTimeoutMs: 0 },
+    );
+    if (lockResult.outcome === "skipped") {
+      return { lockSkipped: true };
+    }
+    return { lockSkipped: false, summary: lockResult.value };
   },
 };

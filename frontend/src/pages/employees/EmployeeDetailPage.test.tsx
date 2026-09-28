@@ -37,6 +37,8 @@ mockApiModule(
   "api/employees.api",
   {
     getEmployeeById: async () => employee,
+    getEmployeeClients: async () => [],
+    replaceEmployeeClients: async () => [],
     getEmployeeOperations: async (_id, filters) => {
       if (filters?.segment === "past") {
         return {

@@ -22,6 +22,7 @@ import {
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "../bot/bot-response.builder";
 import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
+import { twilioWebhookPayloadToUnknownRecord } from "../../utils/twilio-webhook-payload";
 import {
   handleActiveAbsenceSession,
   handleAbsenceIntent,
@@ -294,7 +295,7 @@ export const whatsappRouterService = {
 
     // Best-effort anti-forward: Twilio Forwarded / FrequentlyForwarded only, before geofence/attendance.
     const locationMetadata = extractLocationMessageMetadata(
-      ctx.payload as unknown as Record<string, unknown>,
+      twilioWebhookPayloadToUnknownRecord(ctx.payload),
     );
     const hasCoordinates = Boolean(ctx.payload.Latitude && ctx.payload.Longitude);
     const flowHint = !ctx.session

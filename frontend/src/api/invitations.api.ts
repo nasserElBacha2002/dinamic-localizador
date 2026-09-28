@@ -12,8 +12,8 @@ import { apiClient } from "./client";
 import { scopedApiClient } from "./scoped-client";
 
 export async function previewInvitation(token: string): Promise<UserInvitationPreview> {
-  const { data } = await apiClient.get<{ data: UserInvitationPreview }>("invitations/preview", {
-    params: { token },
+  const { data } = await apiClient.post<{ data: UserInvitationPreview }>("invitations/preview", {
+    token,
   });
   return data.data;
 }

@@ -122,6 +122,7 @@ export const mapServiceRow = (row: Record<string, unknown>): Service => ({
   active: Boolean(row.active),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
+  clientId: row.client_id ? String(row.client_id) : null,
 });
 
 export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
@@ -268,6 +269,20 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
       ? Number(row.extra_worked_minutes)
       : null,
   checkoutMessageSid: row.checkout_message_sid ? String(row.checkout_message_sid) : null,
+  arrivalSource: row.arrival_source
+    ? (String(row.arrival_source) as AttendanceRecord["arrivalSource"])
+    : null,
+  checkoutSource: row.checkout_source
+    ? (String(row.checkout_source) as AttendanceRecord["checkoutSource"])
+    : null,
+  arrivalRegisteredBy: row.arrival_registered_by ? String(row.arrival_registered_by) : null,
+  arrivalRegisteredAt: row.arrival_registered_at
+    ? toIsoString(row.arrival_registered_at as Date | string)
+    : null,
+  checkoutRegisteredBy: row.checkout_registered_by ? String(row.checkout_registered_by) : null,
+  checkoutRegisteredAt: row.checkout_registered_at
+    ? toIsoString(row.checkout_registered_at as Date | string)
+    : null,
   isSimulation: Boolean(row.is_simulation),
   simulationSessionId: row.simulation_session_id ? String(row.simulation_session_id) : null,
   createdAt: toIsoString(row.created_at as Date | string),
@@ -299,6 +314,20 @@ export const mapAttendanceWithRelationsRow = (
         ? Number(row.service_allowed_radius_meters)
         : undefined,
   },
+  arrivalRegisteredByUser:
+    row.arrival_registered_by && row.arrival_registered_by_name
+      ? {
+          id: String(row.arrival_registered_by),
+          name: String(row.arrival_registered_by_name),
+        }
+      : null,
+  checkoutRegisteredByUser:
+    row.checkout_registered_by && row.checkout_registered_by_name
+      ? {
+          id: String(row.checkout_registered_by),
+          name: String(row.checkout_registered_by_name),
+        }
+      : null,
 });
 
 export const mapBotSessionRow = (

@@ -42,11 +42,6 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;
     IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
       DELETE FROM whatsapp_payroll_receipt_notifications WHERE company_id = @companyId;
-    IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
-      DELETE FROM whatsapp_operation_assignment_notification_send_attempts
-      WHERE company_id = @companyId;
-    IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
-      DELETE FROM whatsapp_operation_assignment_notifications WHERE company_id = @companyId;
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
 

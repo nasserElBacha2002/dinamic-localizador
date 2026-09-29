@@ -1,7 +1,6 @@
 import sql from "mssql";
 import { ATTENDANCE_REMINDER_MAX_ATTEMPTS } from "../constants/attendance-notification";
 import { ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS } from "../constants/admin-alert";
-import { OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS } from "../constants/operation-assignment-notification";
 import {
   flowExecutionTerminalStatusesSqlInList,
   type WhatsappRetentionTableKey,
@@ -14,7 +13,6 @@ export type WhatsappRetentionPolicyParams = {
   batchSize: number;
   attendanceMaxAttempts: number;
   adminAlertMaxAttempts: number;
-  operationAssignmentMaxAttempts: number;
   payrollMaxAttempts: number;
 };
 
@@ -27,9 +25,6 @@ export const defaultWhatsappRetentionPolicyParams = (
   attendanceMaxAttempts: ATTENDANCE_REMINDER_MAX_ATTEMPTS,
   adminAlertMaxAttempts:
     env.ADMIN_ALERT_MAX_ATTEMPTS ?? ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
-  operationAssignmentMaxAttempts:
-    env.OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS ??
-    OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
   payrollMaxAttempts: env.PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS,
 });
 
@@ -64,7 +59,6 @@ const leaseOutboxPurgeWhere = (maxAttemptsParam: string): string => `
 `;
 
 const ADMIN_OUTBOX_PURGE_WHERE = leaseOutboxPurgeWhere("@adminAlertMaxAttempts");
-const OPERATION_OUTBOX_PURGE_WHERE = leaseOutboxPurgeWhere("@operationAssignmentMaxAttempts");
 
 const PAYROLL_OUTBOX_PURGE_WHERE = `
   (
@@ -99,7 +93,6 @@ const bindPolicyParams = (
     .input("batchSize", sql.Int, params.batchSize)
     .input("attendanceMaxAttempts", sql.Int, params.attendanceMaxAttempts)
     .input("adminAlertMaxAttempts", sql.Int, params.adminAlertMaxAttempts)
-    .input("operationAssignmentMaxAttempts", sql.Int, params.operationAssignmentMaxAttempts)
     .input("payrollMaxAttempts", sql.Int, params.payrollMaxAttempts);
 
 const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; deleteSql: string }> =
@@ -186,22 +179,6 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
       WHERE ${ADMIN_OUTBOX_PURGE_WHERE}
     `,
     },
-    whatsapp_operation_assignment_notification_send_attempts: {
-      countSql: `
-      SELECT COUNT(*) AS cnt
-      FROM whatsapp_operation_assignment_notification_send_attempts a
-      INNER JOIN whatsapp_operation_assignment_notifications n
-        ON n.id = a.notification_id AND n.company_id = a.company_id
-      WHERE ${OPERATION_OUTBOX_PURGE_WHERE}
-    `,
-      deleteSql: `
-      DELETE TOP (@batchSize) a
-      FROM whatsapp_operation_assignment_notification_send_attempts a
-      INNER JOIN whatsapp_operation_assignment_notifications n
-        ON n.id = a.notification_id AND n.company_id = a.company_id
-      WHERE ${OPERATION_OUTBOX_PURGE_WHERE}
-    `,
-    },
     whatsapp_payroll_receipt_notification_send_attempts: {
       countSql: `
       SELECT COUNT(*) AS cnt
@@ -246,26 +223,6 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
       WHERE ${ADMIN_OUTBOX_PURGE_WHERE}
         AND NOT EXISTS (
           SELECT 1 FROM whatsapp_admin_alert_notification_send_attempts a
-          WHERE a.notification_id = n.id AND a.company_id = n.company_id
-        )
-    `,
-    },
-    whatsapp_operation_assignment_notifications: {
-      countSql: `
-      SELECT COUNT(*) AS cnt
-      FROM whatsapp_operation_assignment_notifications n
-      WHERE ${OPERATION_OUTBOX_PURGE_WHERE}
-        AND NOT EXISTS (
-          SELECT 1 FROM whatsapp_operation_assignment_notification_send_attempts a
-          WHERE a.notification_id = n.id AND a.company_id = n.company_id
-        )
-    `,
-      deleteSql: `
-      DELETE TOP (@batchSize) n
-      FROM whatsapp_operation_assignment_notifications n
-      WHERE ${OPERATION_OUTBOX_PURGE_WHERE}
-        AND NOT EXISTS (
-          SELECT 1 FROM whatsapp_operation_assignment_notification_send_attempts a
           WHERE a.notification_id = n.id AND a.company_id = n.company_id
         )
     `,

@@ -423,7 +423,6 @@ Ready to **design** retention jobs and env configuration, conditioned on:
 | bot_sessions | `bot-session.repository` | Bot services | Per user flow | Lazy expire only | 15 min active |
 | whatsapp_attendance_notifications | `attendance-notification.repository` | Reminder job, observability | Scheduled + retries | None | Lease |
 | whatsapp_admin_alert_notifications | Admin alert repo | Admin alert job | Alert events | None | Lease |
-| whatsapp_operation_assignment_notifications | Assignment notification repo | Job | Assignment events | None | Lease |
 | whatsapp_payroll_receipt_notifications | Payroll notification repo | Job | Payroll sends | None | Lease |
 
 ---

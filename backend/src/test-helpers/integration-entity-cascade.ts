@@ -47,14 +47,6 @@ export const deleteOperationCascade = async (
     DELETE FROM whatsapp_attendance_notifications
     WHERE company_id = @companyId AND operation_id = @operationId;
 
-    DELETE a
-    FROM whatsapp_operation_assignment_notification_send_attempts a
-    INNER JOIN whatsapp_operation_assignment_notifications n ON n.id = a.notification_id
-    WHERE n.company_id = @companyId
-      AND n.operation_id = @operationId;
-
-    DELETE FROM whatsapp_operation_assignment_notifications
-    WHERE company_id = @companyId AND operation_id = @operationId;
   `);
 
   await bind().query(`
@@ -296,17 +288,6 @@ export const deleteEmployeeCascade = async (
 
       DELETE FROM whatsapp_attendance_notifications
       WHERE company_id = @companyId AND employee_id = @employeeId;
-
-      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
-        DELETE FROM whatsapp_operation_assignment_notification_send_attempts
-        WHERE notification_id IN (
-          SELECT id FROM whatsapp_operation_assignment_notifications
-          WHERE company_id = @companyId AND employee_id = @employeeId
-        );
-
-      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
-        DELETE FROM whatsapp_operation_assignment_notifications
-        WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM whatsapp_messages
       WHERE employee_id = @employeeId

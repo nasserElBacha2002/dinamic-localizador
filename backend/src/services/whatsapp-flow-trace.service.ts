@@ -7,7 +7,6 @@ import {
   type WhatsappFlowStepType,
 } from "../constants/whatsapp-observability";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
-import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
 import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
 import { payrollReceiptNotificationRepository } from "../repositories/payroll-receipt-notification.repository";
 import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
@@ -444,15 +443,11 @@ export const whatsappFlowTraceService = {
       errorCode: input.errorCode,
       errorMessage: input.errorMessage,
     });
-    // Payroll + assignment outboxes: project provider delivery status only —
+    // Payroll outbox: project provider delivery status only —
     // never promote to DELIVERED here. Prefer notificationId when known; always
     // also correlate by provider_message_sid so callbacks work if whatsapp_messages
     // failed to persist after Twilio accepted the send.
     await payrollReceiptNotificationRepository.projectProviderStatusById({
-      notificationId: message.notificationId,
-      providerStatus,
-    });
-    await operationAssignmentNotificationRepository.projectProviderStatusById({
       notificationId: message.notificationId,
       providerStatus,
     });
@@ -468,10 +463,6 @@ export const whatsappFlowTraceService = {
   }): Promise<void> {
     const providerStatus = input.providerStatus.toLowerCase();
     await payrollReceiptNotificationRepository.projectProviderStatusByMessageSid({
-      providerMessageSid: input.providerMessageSid,
-      providerStatus,
-    });
-    await operationAssignmentNotificationRepository.projectProviderStatusByMessageSid({
       providerMessageSid: input.providerMessageSid,
       providerStatus,
     });

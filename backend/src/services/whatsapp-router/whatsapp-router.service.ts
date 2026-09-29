@@ -64,6 +64,7 @@ import {
   resolveWhatsAppTextTurn,
   type WhatsAppTextTurnResolution,
 } from "../whatsapp-turn-routing.resolver";
+import { replacementRequestService } from "../replacement-request.service";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
 
@@ -138,6 +139,25 @@ export const whatsappRouterService = {
     handlers: WhatsAppRouterHandlers,
   ): Promise<string> {
     const { companyId } = ctx;
+
+    // Admin quick replies are authorized server-side against the durable outbox
+    // recipient snapshot. They must run before employee-only intent routing.
+    if (ctx.payload.ButtonPayload) {
+      const reply = await replacementRequestService.handleQuickReply(
+        companyId,
+        ctx.phoneFrom,
+        ctx.payload.ButtonPayload,
+      );
+      if (reply) {
+        return handlers.respond(companyId, {
+          message: reply,
+          employeeId: null,
+          phoneFrom: ctx.phoneTo,
+          phoneTo: ctx.phoneFrom,
+          flowType: "REPLACEMENT_SELECTION",
+        });
+      }
+    }
 
     if (!ctx.employeeId) {
       console.info("[whatsapp-bot] employee not identified", {

@@ -215,10 +215,10 @@ export const employeeAssignmentQueryRepository = {
       .input("at", sql.DateTime2, at)
       .input("limit", sql.Int, limit)
       .query(`
-        ${ASSIGNED_OPERATION_SELECT}
-          AND i.scheduled_start >= @at
+        ${EMPLOYEE_WORKDAY_OPERATIONS_SELECT}
+          AND ow.expected_start_at >= @at
           AND i.status NOT IN ('COMPLETED', 'CANCELLED')
-        ORDER BY i.scheduled_start ASC
+        ORDER BY ow.expected_start_at ASC
         OFFSET 0 ROWS FETCH NEXT @limit ROWS ONLY
       `);
 

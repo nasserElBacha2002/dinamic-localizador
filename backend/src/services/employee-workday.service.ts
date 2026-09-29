@@ -33,6 +33,7 @@ const mapToSelectionOptions = (
 ): OperationSelectionOption[] =>
   assignments.map((assignment) => ({
     operationId: assignment.operationId,
+    employeeWorkdayId: assignment.employeeWorkdayId,
     serviceName: assignment.serviceName,
     serviceAddress: assignment.serviceAddress,
     serviceLocality: assignment.serviceLocality,
@@ -255,12 +256,12 @@ export const employeeWorkdayService = {
     companyId: string,
     employeeId: string,
     operationId: string,
+    employeeWorkdayId?: string | null,
   ): Promise<{ kind: "ok" | "not_found" | "past"; message: string }> {
-    const assignment = await employeeAssignmentQueryRepository.findByOperationForEmployee(
-      companyId,
-      employeeId,
-      operationId,
-    );
+    const assignment = employeeWorkdayId
+      ? (await employeeAssignmentQueryRepository.listUpcomingForEmployee(companyId, employeeId, getBotNow()))
+          .find((item) => item.operationId === operationId && item.employeeWorkdayId === employeeWorkdayId) ?? null
+      : await employeeAssignmentQueryRepository.findByOperationForEmployee(companyId, employeeId, operationId);
     if (!assignment) {
       return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
     }
@@ -272,6 +273,14 @@ export const employeeWorkdayService = {
 
     // Final states: same reply is idempotent; opposite reply does not flip.
     if (assignment.confirmationStatus === "UNAVAILABLE") {
+      if (assignment.employeeWorkdayId) {
+        const { replacementRequestService } = await import("./replacement-request.service");
+        await replacementRequestService.createForUnavailable({
+          companyId,
+          employeeWorkdayId: assignment.employeeWorkdayId,
+          employeeId,
+        });
+      }
       return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
     }
     if (assignment.confirmationStatus === "CONFIRMED") {
@@ -330,6 +339,16 @@ export const employeeWorkdayService = {
         "./attendance-threshold-alert.service"
       );
       await attendanceThresholdAlertService.markEmployeeDirty(companyId, employeeId);
+      // A concrete employee_workday is the only safe vacancy identity. Older
+      // assignments without materialized workdays retain the legacy alert flow.
+      if (assignment.employeeWorkdayId) {
+        const { replacementRequestService } = await import("./replacement-request.service");
+        await replacementRequestService.createForUnavailable({
+          companyId,
+          employeeWorkdayId: assignment.employeeWorkdayId,
+          employeeId,
+        });
+      }
     }
 
     return { kind: "ok", message: this.buildUnavailableMessage(assignment) };

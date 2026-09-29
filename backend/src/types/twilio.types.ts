@@ -62,6 +62,8 @@ export interface BotSession {
 
 export interface OperationSelectionOption {
   operationId: string;
+  /** Occurrence identity for unavailability; omitted only for legacy sessions. */
+  employeeWorkdayId?: string | null;
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;

@@ -11,6 +11,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'IX_employee_workdays_unava
   CREATE INDEX IX_employee_workdays_unavailable ON dbo.employee_workdays(company_id, unavailable_at) WHERE unavailable_at IS NOT NULL;
 GO
 
+-- Required candidate key for the tenant-scoped recipient FK below.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UQ_company_alert_recipients_company_id' AND object_id=OBJECT_ID(N'dbo.company_alert_recipients'))
+  CREATE UNIQUE INDEX UQ_company_alert_recipients_company_id ON dbo.company_alert_recipients(company_id, id);
+GO
+
 IF OBJECT_ID(N'dbo.replacement_requests', N'U') IS NULL
 BEGIN
   CREATE TABLE dbo.replacement_requests (

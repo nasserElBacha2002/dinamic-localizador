@@ -1,6 +1,7 @@
 import { INVALID_SELECTION_MESSAGE } from "./bot/bot-response.builder";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
+import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { adminAlertContextRepository } from "../repositories/admin-alert-context.repository";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
@@ -269,6 +270,48 @@ export const employeeWorkdayService = {
     const at = getBotNow();
     if (!isFutureAssignment(assignment, at)) {
       return { kind: "past", message: PAST_ASSIGNMENT_MESSAGE };
+    }
+
+    // A materialized employee_workday is the occurrence source of truth. This
+    // never changes a recurring operation_assignment used by later workdays.
+    if (assignment.employeeWorkdayId) {
+      const marked = await employeeWorkdayRepository.markUnavailable(
+        companyId,
+        assignment.employeeWorkdayId,
+      );
+      if (marked) {
+        const employee = await employeeRepository.findById(companyId, employeeId);
+        if (employee) {
+          await emitAdminAlertSafely(
+            {
+              companyId,
+              type: "EMPLOYEE_UNAVAILABLE",
+              employeeId,
+              operationId,
+              deduplicationKey: buildUnavailableDedupKey(assignment.assignmentId, 1),
+              occurredAt: new Date(),
+              payload: {
+                employeeName: employee.name,
+                serviceName: assignment.serviceName,
+                serviceAddress: assignment.serviceAddress,
+                serviceLocality: assignment.serviceLocality,
+                scheduledStart: assignment.scheduledStart,
+                scheduledEnd: assignment.scheduledEnd,
+              },
+            },
+            "employee-workday-unavailable",
+          );
+          const { attendanceThresholdAlertService } = await import("./attendance-threshold-alert.service");
+          await attendanceThresholdAlertService.markEmployeeDirty(companyId, employeeId);
+        }
+      }
+      const { replacementRequestService } = await import("./replacement-request.service");
+      await replacementRequestService.createForUnavailable({
+        companyId,
+        employeeWorkdayId: assignment.employeeWorkdayId,
+        employeeId,
+      });
+      return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
     }
 
     // Final states: same reply is idempotent; opposite reply does not flip.

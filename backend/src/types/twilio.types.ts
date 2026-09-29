@@ -198,6 +198,8 @@ export interface TwilioWebhookPayload {
   Address?: string;
   Label?: string;
   NumMedia?: string;
+  ButtonPayload?: string;
+  OriginalRepliedMessageSid?: string;
 }
 
 export interface CompatibleOperation {

@@ -147,6 +147,7 @@ export const whatsappRouterService = {
         companyId,
         ctx.phoneFrom,
         ctx.payload.ButtonPayload,
+        ctx.payload.OriginalRepliedMessageSid ?? null,
       );
       if (reply) {
         return handlers.respond(companyId, {

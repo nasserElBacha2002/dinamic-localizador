@@ -8,7 +8,6 @@ import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import { ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS } from "../constants/admin-alert";
 import { ATTENDANCE_REMINDER_MAX_ATTEMPTS } from "../constants/attendance-notification";
-import { OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS } from "../constants/operation-assignment-notification";
 import { env } from "../config/env";
 import { getPool } from "../database/connection";
 import {
@@ -288,61 +287,6 @@ describeDatabaseIntegration("whatsapp retention outbox terminality (SQL)", () =>
     return id;
   };
 
-  const insertOperationAssignmentNotification = async (input: {
-    status: string;
-    attemptCount: number;
-    nextAttemptAt?: Date | null;
-    activeLease?: boolean;
-    createdAt: Date;
-    sentAt?: Date | null;
-  }): Promise<string> => {
-    const pool = getPool();
-    const assignmentId = randomUUID();
-    const workDate = daysAgo(10);
-    await pool
-      .request()
-      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("workDate", sql.Date, workDate)
-      .query(`
-        INSERT INTO operation_assignments (
-          id, company_id, operation_id, employee_id, valid_from, valid_until
-        )
-        VALUES (@assignmentId, @companyId, @operationId, @employeeId, @workDate, @workDate)
-      `);
-
-    const id = randomUUID();
-    await pool
-      .request()
-      .input("id", sql.UniqueIdentifier, id)
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("status", sql.NVarChar(30), input.status)
-      .input("attemptCount", sql.Int, input.attemptCount)
-      .input("nextAttemptAt", sql.DateTime2, input.nextAttemptAt ?? null)
-      .input("createdAt", sql.DateTime2, input.createdAt)
-      .input("sentAt", sql.DateTime2, input.sentAt ?? null)
-      .query(`
-        INSERT INTO whatsapp_operation_assignment_notifications (
-          id, company_id, operation_assignment_id, operation_id, employee_id, status,
-          attempt_count, next_attempt_at, created_at, updated_at, sent_at${
-            input.activeLease ? ", lease_expires_at" : ""
-          }
-        )
-        VALUES (
-          @id, @companyId, @assignmentId, @operationId, @employeeId, @status,
-          @attemptCount, @nextAttemptAt, @createdAt, @createdAt, @sentAt${
-            input.activeLease ? ", DATEADD(HOUR, 1, SYSUTCDATETIME())" : ""
-          }
-        )
-      `);
-    return id;
-  };
-
   describe("whatsapp_attendance_notifications", () => {
     it("FAILED retryable (attempts below max) is kept even when old", async () => {
       const id = await insertAttendanceNotification({
@@ -558,38 +502,4 @@ describeDatabaseIntegration("whatsapp retention outbox terminality (SQL)", () =>
     });
   });
 
-  describe("whatsapp_operation_assignment_notifications", () => {
-    it("FAILED retryable is kept", async () => {
-      const id = await insertOperationAssignmentNotification({
-        status: "FAILED",
-        attemptCount: 1,
-        nextAttemptAt: daysAgo(1),
-        createdAt: daysAgo(31),
-      });
-      await runRetention();
-      assert.equal(await countRow("whatsapp_operation_assignment_notifications", id), 1);
-    });
-
-    it("FAILED terminal is deleted", async () => {
-      const id = await insertOperationAssignmentNotification({
-        status: "FAILED",
-        attemptCount: OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
-        createdAt: daysAgo(31),
-        sentAt: daysAgo(31),
-      });
-      await runRetention();
-      assert.equal(await countRow("whatsapp_operation_assignment_notifications", id), 0);
-    });
-
-    it("FAILED with active lease is kept", async () => {
-      const id = await insertOperationAssignmentNotification({
-        status: "FAILED",
-        attemptCount: OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
-        activeLease: true,
-        createdAt: daysAgo(31),
-      });
-      await runRetention();
-      assert.equal(await countRow("whatsapp_operation_assignment_notifications", id), 1);
-    });
-  });
 });

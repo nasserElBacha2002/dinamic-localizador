@@ -184,8 +184,6 @@ WHERE t.name IN (
     'whatsapp_attendance_notifications',
     'whatsapp_admin_alert_notifications',
     'whatsapp_admin_alert_notification_send_attempts',
-    'whatsapp_operation_assignment_notifications',
-    'whatsapp_operation_assignment_notification_send_attempts',
     'whatsapp_payroll_receipt_notifications',
     'whatsapp_payroll_receipt_notification_send_attempts',
     'import_jobs',
@@ -309,14 +307,6 @@ SELECT
     SUM(CASE WHEN created_at < @cut30 THEN 1 ELSE 0 END) AS ge_30d,
     SUM(CASE WHEN status IN (N'PENDING', N'PROCESSING', N'RETRYING') THEN 1 ELSE 0 END) AS pending_status
 FROM whatsapp_admin_alert_notifications;
-
-SELECT
-    'whatsapp_operation_assignment_notifications' AS table_name,
-    'created_at' AS retention_column,
-    COUNT(*) AS total,
-    SUM(CASE WHEN created_at < @cut30 THEN 1 ELSE 0 END) AS ge_30d,
-    SUM(CASE WHEN status IN (N'PENDING', N'PROCESSING', N'RETRYING') THEN 1 ELSE 0 END) AS pending_status
-FROM whatsapp_operation_assignment_notifications;
 
 SELECT
     'whatsapp_payroll_receipt_notifications' AS table_name,
@@ -518,10 +508,6 @@ GROUP BY status
 UNION ALL
 SELECT 'whatsapp_admin_alert_notifications', status, COUNT(*)
 FROM whatsapp_admin_alert_notifications
-GROUP BY status
-UNION ALL
-SELECT 'whatsapp_operation_assignment_notifications', status, COUNT(*)
-FROM whatsapp_operation_assignment_notifications
 GROUP BY status
 UNION ALL
 SELECT 'whatsapp_payroll_receipt_notifications', status, COUNT(*)

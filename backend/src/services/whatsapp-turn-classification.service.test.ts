@@ -212,21 +212,6 @@ describe("whatsapp turn classification matrix v3", () => {
     assert.equal(result.systemInteractionId, null);
   });
 
-  it("future assignment confirmation reply can match OPERATION_ASSIGNMENT", () => {
-    const interaction = activeArrivalInteraction({
-      category: "OPERATION_ASSIGNMENT",
-      expiresAt: new Date(NOW + 86_400_000).toISOString(),
-    });
-    const result = classifyWhatsAppTurn({
-      ...base,
-      resolvedIntent: "confirm_attendance",
-      resolvedHandler: "CONFIRMATION",
-      correlatedSystemInteraction: interaction,
-    });
-    assert.equal(result.classification, "CRITICAL_EXEMPT");
-    assert.equal(result.systemInteractionId, interaction.id);
-  });
-
   it("unknown session state with unknown intent uses dedicated reason", () => {
     const result = classifyWhatsAppTurn({
       ...base,

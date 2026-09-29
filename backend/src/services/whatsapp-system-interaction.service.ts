@@ -36,7 +36,7 @@ const isTerminalStatus = (status: string): boolean =>
 
 /**
  * Derive expires_at from existing operational windows (not a universal 2h TTL).
- * - Confirmation / assignment: until scheduledStart (exclusive end of reply window)
+ * - Confirmation: until scheduledStart (exclusive end of reply window)
  * - Arrival/exit reminders: lead window + bot session TTL (time to act after prompt)
  * - No-checkin: short start window + bot session TTL
  */
@@ -47,10 +47,7 @@ export const computeSystemInteractionExpiresAt = (input: {
 }): Date => {
   const sessionTtlMs = env.BOT_SESSION_TTL_MINUTES * 60_000;
 
-  if (
-    input.category === "ATTENDANCE_CONFIRMATION" ||
-    input.category === "OPERATION_ASSIGNMENT"
-  ) {
+  if (input.category === "ATTENDANCE_CONFIRMATION") {
     if (input.scheduledStart) {
       const start = new Date(input.scheduledStart);
       if (Number.isFinite(start.getTime()) && start.getTime() > input.now.getTime()) {
@@ -163,68 +160,6 @@ export const whatsappSystemInteractionService = {
         error,
         metadata: {
           category,
-          sourceKey,
-          companyId: input.companyId,
-          employeeId: input.employeeId,
-        },
-      });
-      return null;
-    }
-  },
-
-  async prepareOperationAssignmentContext(input: {
-    companyId: string;
-    employeeId: string;
-    operationId: string;
-    notificationId: string;
-    scheduledStart?: Date | string | null;
-    now?: Date;
-  }): Promise<SystemInteractionContext | null> {
-    if (!this.isEnabled()) {
-      return null;
-    }
-    const sourceKey = `operation_assignment_notification:${input.notificationId}`;
-    const now = input.now ?? new Date();
-    try {
-      const existing = await whatsappSystemInteractionRepository.findBySourceKey({
-        companyId: input.companyId,
-        sourceKey,
-      });
-      if (existing) {
-        if (existing.status === "SEND_FAILED") {
-          return (
-            (await whatsappSystemInteractionRepository.rearmSendFailed({
-              companyId: input.companyId,
-              sourceKey,
-            })) ?? existing
-          );
-        }
-        return existing;
-      }
-
-      const expiresAt = computeSystemInteractionExpiresAt({
-        category: "OPERATION_ASSIGNMENT",
-        now,
-        scheduledStart: input.scheduledStart,
-      });
-
-      return await whatsappSystemInteractionRepository.prepare({
-        companyId: input.companyId,
-        employeeId: input.employeeId,
-        category: "OPERATION_ASSIGNMENT",
-        relatedOperationId: input.operationId,
-        sourceJob: "operation-assignment-notification",
-        sourceKey,
-        sourceMessageId: input.notificationId,
-        expiresAt,
-      });
-    } catch (error) {
-      systemLogger.warn({
-        module: "whatsapp-inbound",
-        event: "whatsapp.system_interaction.prepare_failed",
-        message: "Failed to prepare assignment system interaction (shadow)",
-        error,
-        metadata: {
           sourceKey,
           companyId: input.companyId,
           employeeId: input.employeeId,
@@ -404,7 +339,4 @@ export const whatsappSystemInteractionService = {
     return `attendance_notification:${notificationId}`;
   },
 
-  sourceKeyForOperationAssignment(notificationId: string): string {
-    return `operation_assignment_notification:${notificationId}`;
-  },
 };

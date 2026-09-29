@@ -6,7 +6,6 @@ import { getDateIsoInTimezone } from "../utils/absence-date";
 import { employeeRepository } from "../repositories/employee.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
-import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
@@ -924,12 +923,6 @@ export const operationAssignmentService = {
     if (!cancelledAssignment) {
       throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
     }
-
-    await operationAssignmentNotificationRepository.requestCancelForAssignment(
-      companyId,
-      input.assignmentId,
-      transaction,
-    );
 
     return cancelledAssignment;
   },

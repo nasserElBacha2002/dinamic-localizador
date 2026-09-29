@@ -99,18 +99,6 @@ async function assignEmployeeWithoutSideEffects(input: {
     `);
 }
 
-async function countAssignmentNotifications(companyId: string): Promise<number> {
-  const result = await getPool()
-    .request()
-    .input("companyId", sql.UniqueIdentifier, companyId)
-    .query(`
-      SELECT COUNT(*) AS cnt
-      FROM whatsapp_operation_assignment_notifications
-      WHERE company_id = @companyId
-    `);
-  return Number(result.recordset[0]?.cnt ?? 0);
-}
-
 const buildControlledAffinityPlan = (input: {
   companyId: string;
   batchId: string;
@@ -427,16 +415,12 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
     await executeHistoricalSeed(plan, catalog);
 
     const currentOperationId = await createCurrentOperation({ companyId, serviceId });
-    const notificationsBefore = await countAssignmentNotifications(companyId);
     await assignEmployeeWithoutSideEffects({
       companyId,
       operationId: currentOperationId,
       employeeId: empA.id,
       validFrom: new Date().toISOString().slice(0, 10),
     });
-    const notificationsAfter = await countAssignmentNotifications(companyId);
-    assert.equal(notificationsAfter, notificationsBefore);
-
     const result = await individualRecommendationService.recommendEmployees(
       companyId,
       currentOperationId,

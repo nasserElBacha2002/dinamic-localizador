@@ -3,7 +3,6 @@ import { AppError } from "../errors/app-error";
 import type { WorkTeamAssignmentSkipReason } from "../constants/work-team-assignment";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
-import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationShiftVersionRepository } from "../repositories/operation-shift-version.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
@@ -343,28 +342,6 @@ export const operationAssignmentCore = {
           shiftWorkday,
           input.employeeId,
           assignment.id,
-        );
-      }
-    }
-
-    // ONE_TIME: enqueue WhatsApp outbox in the same TX as the assignment insert.
-    // Skip when we already know the period does not cover the operation work date
-    // (worker still revalidates for races / missing workDate at enqueue time).
-    if (input.operationKind === "ONE_TIME") {
-      const coversWorkDate =
-        !input.operationWorkDate ||
-        isAssignmentActiveOnWorkDate({
-          validFrom: assignment.validFrom,
-          validUntil: assignment.validUntil,
-          workDate: input.operationWorkDate,
-        });
-      if (coversWorkDate) {
-        await operationAssignmentNotificationRepository.enqueueAssigned(
-          companyId,
-          assignment.id,
-          input.operationId,
-          input.employeeId,
-          transaction,
         );
       }
     }

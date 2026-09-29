@@ -70,12 +70,6 @@ export const systemInteractionMatchesCriticalReply = (
         intent === "confirm_attendance" ||
         intent === "report_unavailability"
       );
-    case "OPERATION_ASSIGNMENT":
-      return (
-        intent === "confirm_attendance" ||
-        intent === "report_unavailability" ||
-        handler === "CONFIRMATION"
-      );
     default:
       return false;
   }

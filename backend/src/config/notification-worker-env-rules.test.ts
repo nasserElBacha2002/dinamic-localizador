@@ -33,12 +33,4 @@ describe("requireContentSidWhenWorkerEnabled", () => {
     }
   });
 
-  it("rejects worker enabled with blank SID", () => {
-    const result = requireContentSidWhenWorkerEnabled(
-      { workerEnabled: true, contentSid: "   " },
-      "TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID",
-      "OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED",
-    );
-    assert.equal(result.ok, false);
-  });
 });

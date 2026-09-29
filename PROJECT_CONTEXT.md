@@ -322,7 +322,7 @@ No hay reporte de cobertura % versionado en repo (no inventar métricas).
 
 - **README desalineado** (terminología inventario/tienda, MUI/Leaflet) → onboarding incorrecto y riesgos de diseño.
 - **Archivos “god” grandes** (~700–950 LOC): `absence-request.service.ts`, `checkout-attendance.flow.ts`, `check-in-attendance.flow.ts`, `attendance.repository.ts`, `operation.service.ts` — alto acoplamiento / dificultad de review.
-- **Workers default-off** (`ADMIN_ALERT_WORKER_ENABLED`, `OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED` false en example): features “implementadas” pueden estar inactivas en un entorno si no se activan conscientemente.
+- **Workers default-off** (`ADMIN_ALERT_WORKER_ENABLED` false en example): features “implementadas” pueden estar inactivas en un entorno si no se activan conscientemente.
 - **Multi-instance:** jobs in-process asumen lease fencing correcto; desplegar N réplicas sin revisar claims = doble envío.
 
 #### MEDIUM
@@ -390,7 +390,7 @@ Antes de modificar, leer con cuidado:
 
 ### 17. Preguntas abiertas
 
-1. ¿En el servidor de producción están habilitados `ADMIN_ALERT_WORKER_ENABLED` y `OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED`?
+1. ¿En el servidor de producción está habilitado `ADMIN_ALERT_WORKER_ENABLED`?
 2. ¿Cuántas réplicas del contenedor backend corren hoy (impacto en jobs)?
 3. ¿El README se mantiene a propósito en terminología “inventario/tienda” para stakeholders, o debe actualizarse a servicio/operación?
 4. ¿Existe un entorno staging separado de `develop` deploy, o develop = prod?
@@ -409,7 +409,6 @@ Antes de modificar, leer con cuidado:
 | WhatsApp observability cleanup | `whatsapp-observability-cleanup.job.ts` | `WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED` |
 | Company deletion purge | `company-deletion.job.ts` | `COMPANY_DELETION_JOB_ENABLED` |
 | Payroll receipt notifications | `payroll-receipt-notification.job.ts` | `PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED` |
-| Operation assignment notifications | `operation-assignment-notification.job.ts` | `OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED` |
 | Operation lifecycle | `operation-lifecycle.job.ts` | `OPERATION_LIFECYCLE_JOB_ENABLED` |
 | Admin alerts | `admin-alert.job.ts` | `ADMIN_ALERT_WORKER_ENABLED` |
 

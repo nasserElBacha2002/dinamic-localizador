@@ -91,6 +91,10 @@ export const attendanceIdParamSchema = z.object({
   id: z.string().uuid("UUID inválido"),
 });
 
+export const attendanceEmployeeWorkdayIdParamSchema = z.object({
+  employeeWorkdayId: z.string().uuid("UUID inválido"),
+});
+
 export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSchema).extend({
   operationId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),

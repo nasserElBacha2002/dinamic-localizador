@@ -338,6 +338,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/attendance/workdays/:employeeWorkdayId"
+          element={
+            <FeatureRouteGuard {...attendanceAccess}>
+              <LazyPage component={AttendanceDetailPage} message="Cargando asistencia..." />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/attendance/:id"
           element={
             <FeatureRouteGuard {...attendanceAccess}>

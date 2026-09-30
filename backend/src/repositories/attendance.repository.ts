@@ -5,6 +5,21 @@ import { getPool } from "../database/connection";
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { AttendanceRecord, AttendanceRecordWithRelations } from "../types/domain";
 import type { CheckoutEligibleOperation } from "../types/twilio.types";
+import { attendanceAuthoritativeClock } from "../utils/attendance-authoritative-clock";
+import {
+  applyExpectedAttendanceListFilters,
+  buildAttendanceListRowKey,
+  buildExpectedAttendanceListFilters,
+  buildExpectedAttendanceListFromClause,
+  buildLegacyOrphanAttendanceFilterClauses,
+  buildSimulationAttendanceListFilterClauses,
+  expectedAttendanceListSelectSql,
+  legacyOrphanAttendanceListSelectSql,
+  mapAttendanceListRow,
+  normalizeAttendanceListIdFilters,
+  simulationAttendanceListSelectSql,
+  type AttendanceListItem,
+} from "../utils/attendance-list-projection";
 import { mapAttendanceRow, mapAttendanceWithRelationsRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
@@ -14,6 +29,7 @@ import type {
 } from "../schemas/attendance.schema";
 
 const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): SqlFilter[] => {
+  const ids = normalizeAttendanceListIdFilters(query);
   const filters: SqlFilter[] = [
     {
       clause: "ar.company_id = @companyId",
@@ -36,7 +52,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   const operationFilter = createUuidInFilter({
     column: "ar.operation_id",
     parameterPrefix: "operationId",
-    values: query.operationIds ?? [],
+    values: ids.operationIds,
   });
   if (operationFilter) {
     filters.push(operationFilter);
@@ -45,7 +61,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   const employeeFilter = createUuidInFilter({
     column: "ar.employee_id",
     parameterPrefix: "employeeId",
-    values: query.employeeIds ?? [],
+    values: ids.employeeIds,
   });
   if (employeeFilter) {
     filters.push(employeeFilter);
@@ -54,7 +70,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   const serviceFilter = createUuidInFilter({
     column: "i.service_id",
     parameterPrefix: "serviceId",
-    values: query.serviceIds ?? [],
+    values: ids.serviceIds,
   });
   if (serviceFilter) {
     filters.push(serviceFilter);
@@ -244,7 +260,20 @@ export const attendanceRepository = {
   async list(
     companyId: string,
     query: ListAttendanceQuery,
-  ): Promise<{ items: AttendanceRecordWithRelations[]; total: number }> {
+  ): Promise<{ items: AttendanceListItem[]; total: number }> {
+    if (query.simulationOnly) {
+      return this.listAttendanceRecordsAsListItems(companyId, query);
+    }
+    if (query.includeSimulation) {
+      return this.listExpectedUnionSimulations(companyId, query);
+    }
+    return this.listExpectedWithLegacyOrphans(companyId, query);
+  },
+
+  async listAttendanceRecordsAsListItems(
+    companyId: string,
+    query: ListAttendanceQuery,
+  ): Promise<{ items: AttendanceListItem[]; total: number }> {
     const pool = getPool();
     const filters = buildAttendanceFilters(companyId, query);
     const whereClause = buildWhereClause(filters);
@@ -286,11 +315,181 @@ export const attendanceRepository = {
     `);
 
     return {
+      items: dataResult.recordset.map((row) => {
+        const mapped = mapAttendanceWithRelationsRow(row as Record<string, unknown>);
+        const scheduledStart = mapped.operation.scheduledStart ?? mapped.createdAt;
+        const listRowKind = mapped.isSimulation ? ("simulation" as const) : ("legacy_orphan" as const);
+        return {
+          ...mapped,
+          hasAttendanceRecord: true as const,
+          effectiveState: "PRESENT" as const,
+          expectedStartAt: scheduledStart,
+          expectedEndAt: mapped.operation.scheduledEnd,
+          shiftNameSnapshot: null,
+          workDate: scheduledStart.slice(0, 10),
+          listRowKind,
+          listRowKey: buildAttendanceListRowKey({
+            listRowKind,
+            employeeWorkdayId: mapped.employeeWorkdayId,
+            attendanceId: mapped.id,
+          }),
+        };
+      }),
+      total,
+    };
+  },
+
+  async listExpectedWithLegacyOrphans(
+    companyId: string,
+    query: ListAttendanceQuery,
+  ): Promise<{ items: AttendanceListItem[]; total: number }> {
+    return this.listCombinedAttendanceUniverse(companyId, query, {
+      includeSimulations: false,
+      includeLegacyOrphans: true,
+    });
+  },
+
+  async listExpectedUnionSimulations(
+    companyId: string,
+    query: ListAttendanceQuery,
+  ): Promise<{ items: AttendanceListItem[]; total: number }> {
+    return this.listCombinedAttendanceUniverse(companyId, query, {
+      includeSimulations: true,
+      includeLegacyOrphans: true,
+    });
+  },
+
+  async listCombinedAttendanceUniverse(
+    companyId: string,
+    query: ListAttendanceQuery,
+    options: { includeSimulations: boolean; includeLegacyOrphans: boolean },
+  ): Promise<{ items: AttendanceListItem[]; total: number }> {
+    const pool = getPool();
+    const referenceAt = attendanceAuthoritativeClock.now();
+    const expectedFilters = buildExpectedAttendanceListFilters(companyId, query);
+    const expectedWhere = buildWhereClause(expectedFilters);
+    const simulation = options.includeSimulations
+      ? buildSimulationAttendanceListFilterClauses(query)
+      : null;
+    const legacy = options.includeLegacyOrphans
+      ? buildLegacyOrphanAttendanceFilterClauses(query)
+      : null;
+
+    const branches: string[] = [
+      `SELECT ${expectedAttendanceListSelectSql}
+       ${buildExpectedAttendanceListFromClause(expectedWhere)}`,
+    ];
+
+    if (simulation) {
+      branches.push(`
+        SELECT ${simulationAttendanceListSelectSql}
+        FROM attendance_records ar
+        INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
+        INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
+        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
+        WHERE ar.company_id = @companyId
+          AND ar.is_simulation = 1
+          ${simulation.andClause}
+      `);
+    }
+
+    if (legacy) {
+      branches.push(`
+        SELECT ${legacyOrphanAttendanceListSelectSql}
+        FROM attendance_records ar
+        INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
+        INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
+        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
+        WHERE ar.company_id = @companyId
+          AND ar.is_simulation = 0
+          AND ar.employee_workday_id IS NULL
+          ${legacy.andClause}
+      `);
+    }
+
+    const combinedSql = branches.join("\nUNION ALL\n");
+
+    const bindRequest = (request: sql.Request) => {
+      applyExpectedAttendanceListFilters(request, expectedFilters, referenceAt);
+      if (simulation) {
+        applySqlFilters(request, simulation.bindStatusFilters);
+      }
+      if (legacy) {
+        applySqlFilters(request, legacy.bindFilters);
+      }
+    };
+
+    const countRequest = pool.request();
+    bindRequest(countRequest);
+    const countResult = await countRequest.query(`
+      SELECT COUNT(*) AS total
+      FROM (
+        ${combinedSql}
+      ) AS attendance_list_universe
+    `);
+    const total = Number(countResult.recordset[0].total);
+
+    const dataRequest = pool.request();
+    bindRequest(dataRequest);
+    dataRequest.input("offset", sql.Int, (query.page - 1) * query.limit);
+    dataRequest.input("limit", sql.Int, query.limit);
+
+    const dataResult = await dataRequest.query(`
+      SELECT *
+      FROM (
+        ${combinedSql}
+      ) AS attendance_list_universe
+      ORDER BY work_date DESC, expected_start_at DESC, employee_name ASC, list_row_kind ASC, attendance_id ASC, employee_workday_id ASC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+    return {
       items: dataResult.recordset.map((row) =>
-        mapAttendanceWithRelationsRow(row as Record<string, unknown>),
+        mapAttendanceListRow(row as Record<string, unknown>),
       ),
       total,
     };
+  },
+
+  async listExpectedWithAttendance(
+    companyId: string,
+    query: ListAttendanceQuery,
+  ): Promise<{ items: AttendanceListItem[]; total: number }> {
+    return this.listExpectedWithLegacyOrphans(companyId, query);
+  },
+
+  async findExpectedByEmployeeWorkdayId(
+    companyId: string,
+    employeeWorkdayId: string,
+  ): Promise<AttendanceListItem | null> {
+    const pool = getPool();
+    const referenceAt = attendanceAuthoritativeClock.now();
+    const filters = buildExpectedAttendanceListFilters(companyId, {
+      page: 1,
+      limit: 1,
+      operationIds: [],
+      employeeIds: [],
+      serviceIds: [],
+      openAttendance: false,
+    });
+    filters.push({
+      clause: "ew.id = @employeeWorkdayId",
+      apply: (request) =>
+        request.input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId),
+    });
+    const whereClause = buildWhereClause(filters);
+    const fromClause = buildExpectedAttendanceListFromClause(whereClause);
+
+    const request = pool.request();
+    applyExpectedAttendanceListFilters(request, filters, referenceAt);
+    const result = await request.query(`
+      SELECT
+        ${expectedAttendanceListSelectSql}
+      ${fromClause}
+    `);
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapAttendanceListRow(row) : null;
   },
 
   async hasActiveRecord(
@@ -532,42 +731,78 @@ export const attendanceRepository = {
     companyId: string,
     query: ListAttendanceQuery,
   ): Promise<Record<string, unknown>[]> {
-    const pool = getPool();
-    const filters = buildAttendanceFilters(companyId, query);
-    const whereClause = buildWhereClause(filters);
-    const request = pool.request();
-    applySqlFilters(request, filters);
+    if (query.simulationOnly) {
+      const pool = getPool();
+      const filters = buildAttendanceFilters(companyId, query);
+      const whereClause = buildWhereClause(filters);
+      const request = pool.request();
+      applySqlFilters(request, filters);
 
-    const result = await request.query(`
-      SELECT
-        ar.*,
-        e.name AS employee_name,
-        e.document_number AS employee_document_number,
-        e.phone_number AS employee_phone_number,
-        i.scheduled_start AS operation_scheduled_start,
-        s.name AS service_name,
-        s.address AS service_address,
-        s.allowed_radius_meters AS service_allowed_radius_meters,
-        reviewer.name AS reviewer_name,
-        ow.operation_shift_id AS operation_shift_id,
-        ow.shift_code_snapshot AS shift_code_snapshot,
-        ow.shift_name_snapshot AS shift_name_snapshot
-      FROM attendance_records ar
-      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
-      INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
-      INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
-      LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
-      LEFT JOIN employee_workdays ew
-        ON ew.id = ar.employee_workday_id
-       AND ew.company_id = ar.company_id
-      LEFT JOIN operation_workdays ow
-        ON ow.id = ew.operation_workday_id
-       AND ow.company_id = ew.company_id
-      ${whereClause}
-      ORDER BY COALESCE(ar.received_at, ar.checkout_at) DESC
-    `);
+      const result = await request.query(`
+        SELECT
+          ar.*,
+          e.name AS employee_name,
+          e.document_number AS employee_document_number,
+          e.phone_number AS employee_phone_number,
+          i.scheduled_start AS operation_scheduled_start,
+          s.name AS service_name,
+          s.address AS service_address,
+          s.allowed_radius_meters AS service_allowed_radius_meters,
+          reviewer.name AS reviewer_name,
+          ow.operation_shift_id AS operation_shift_id,
+          ow.shift_code_snapshot AS shift_code_snapshot,
+          ow.shift_name_snapshot AS shift_name_snapshot,
+          CAST(N'PRESENT' AS NVARCHAR(30)) AS effective_state,
+          ar.id AS attendance_id
+        FROM attendance_records ar
+        INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
+        INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
+        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
+        LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
+        LEFT JOIN employee_workdays ew
+          ON ew.id = ar.employee_workday_id
+         AND ew.company_id = ar.company_id
+        LEFT JOIN operation_workdays ow
+          ON ow.id = ew.operation_workday_id
+         AND ow.company_id = ew.company_id
+        ${whereClause}
+        ORDER BY COALESCE(ar.received_at, ar.checkout_at) DESC
+      `);
 
-    return result.recordset as Record<string, unknown>[];
+      return result.recordset as Record<string, unknown>[];
+    }
+
+    const listed = await this.list(companyId, {
+      ...query,
+      page: 1,
+      limit: 10000,
+    });
+
+    return listed.items.map((item) => ({
+      employee_name: item.employee.name,
+      employee_document_number: null,
+      employee_phone_number: item.employee.phoneNumber,
+      service_name: item.service.name,
+      service_address: item.service.address,
+      operation_id: item.operationId,
+      operation_scheduled_start: item.operation.scheduledStart,
+      operation_shift_id: null,
+      shift_code_snapshot: null,
+      shift_name_snapshot: item.shiftNameSnapshot,
+      received_at: item.receivedAt,
+      distance_meters: item.distanceMeters,
+      service_allowed_radius_meters: item.service.allowedRadiusMeters ?? null,
+      validation_status: item.validationStatus,
+      location_status: item.locationStatus,
+      punctuality_status: item.punctualityStatus,
+      validation_reason: item.validationReason,
+      reviewer_name: null,
+      reviewed_at: item.reviewedAt,
+      effective_state: item.effectiveState,
+      attendance_id: item.hasAttendanceRecord ? item.id : null,
+      employee_workday_id: item.employeeWorkdayId,
+      list_row_kind: item.listRowKind,
+    }));
   },
 
   async applyReview(

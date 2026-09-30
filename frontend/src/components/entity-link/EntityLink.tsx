@@ -10,7 +10,23 @@ import classes from "./EntityLink.module.css";
  * Generic cross-entity navigation link.
  * Renders a non-interactive span when id, route, or permission is missing.
  */
-export function EntityLink({
+function EntityLinkPlain({
+  label,
+  fallback,
+  className,
+  title,
+}: Pick<EntityLinkProps, "label" | "fallback" | "className" | "title">) {
+  const plain = fallback ?? label;
+  const plainClassName = [classes.entityPlain, className].filter(Boolean).join(" ");
+
+  return (
+    <span className={plainClassName} title={title}>
+      {plain}
+    </span>
+  );
+}
+
+function NavigableEntityLink({
   entityType,
   entityId,
   label,
@@ -21,20 +37,12 @@ export function EntityLink({
   className,
   title,
 }: EntityLinkProps) {
-  const isTableEntityReference = useIsTableEntityReference();
   const location = useLocation();
   const access = useEntityLinkAccess(entityType);
   const path = resolveEntityDetailPath(entityType, entityId);
-  const content = label;
-  const plain = fallback ?? content;
-  const plainClassName = [classes.entityPlain, className].filter(Boolean).join(" ");
 
-  if (!path || disabled || isTableEntityReference || access !== "allowed") {
-    return (
-      <span className={plainClassName} title={title}>
-        {plain}
-      </span>
-    );
+  if (!path || disabled || access !== "allowed") {
+    return <EntityLinkPlain label={label} fallback={fallback} className={className} title={title} />;
   }
 
   const to = preserveQuery && location.search ? `${path}${location.search}` : path;
@@ -54,7 +62,17 @@ export function EntityLink({
       onClick={handleClick}
       data-entity-link={entityType}
     >
-      {content}
+      {label}
     </Link>
   );
+}
+
+export function EntityLink(props: EntityLinkProps) {
+  const isTableEntityReference = useIsTableEntityReference();
+
+  if (isTableEntityReference) {
+    return <EntityLinkPlain {...props} />;
+  }
+
+  return <NavigableEntityLink {...props} />;
 }

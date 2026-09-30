@@ -3,7 +3,6 @@ import { notifications } from "@mantine/notifications";
 import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { OperationForm } from "../../components/operations/OperationForm";
-import { OperationShiftsPanel } from "../../components/operations/OperationShiftsPanel";
 import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
 import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
 import { ConfirmDialog, EntityAvatar, ErrorState, LoadingState } from "../../design-system";
@@ -148,12 +147,10 @@ export function OperationEditPage() {
         errorMessage={errorMessage}
         onDirtyChange={unsaved.setDirty}
         onSubmit={handleSubmit}
-      />
-      <OperationShiftsPanel
         operationId={operation.id}
-        scheduleMode={operation.scheduleMode ?? "SINGLE"}
-        canManage={canEdit}
-        onFeedback={(message, severity) => {
+        currentScheduleMode={operation.scheduleMode ?? "SINGLE"}
+        canManageShifts={canEdit}
+        onShiftFeedback={(message, severity) => {
           notifications.show({ color: severity === "error" ? "red" : "green", message });
         }}
       />

@@ -120,6 +120,24 @@ afterEach(() => {
 });
 
 describe("OperationShiftsPanel", () => {
+  it("does not offer schedule-mode transitions", async () => {
+    mockViewport("desktop");
+    const view = renderPage(
+      <OperationShiftsPanel
+        operationId="op-1"
+        scheduleMode="MULTI_SHIFT"
+        canManage
+        onFeedback={() => undefined}
+      />,
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Mañana"));
+    });
+    assert.equal(view.queryByRole("button", { name: /Pasar a multi-turno/i }), null);
+    assert.equal(view.queryByRole("button", { name: /Volver a horario único/i }), null);
+  });
+
   it("shows current and upcoming versions for MULTI_SHIFT", async () => {
     mockViewport("desktop");
     const view = renderPage(

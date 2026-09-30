@@ -7,6 +7,9 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
+import { MemoryRouter } from "react-router";
+import { EntityLinkAccessReactContext } from "../../components/entity-link/entity-link-access-context";
+import { EntityLink } from "../../components/entity-link/EntityLink";
 import { DataTable } from "./DataTable";
 
 interface SampleRow {
@@ -14,6 +17,24 @@ interface SampleRow {
   label: string;
   clickable: boolean;
 }
+
+const allowedEntityLinkAccess = {
+  authLoading: false,
+  isPlatformAdmin: false,
+  modulesLoading: false,
+  modulesError: false,
+  modules: [
+    {
+      companyId: "co-1",
+      moduleKey: "attendance",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  permissionsLoading: false,
+  permissions: ["attendance:read"],
+};
 
 afterEach(() => {
   cleanup();
@@ -85,6 +106,38 @@ describe("DataTable click behavior", () => {
     fireEvent.click(view.getByText("Acción"));
     assert.deepEqual(actionClicks, ["action"]);
     assert.deepEqual(rowClicks, []);
+  });
+
+  it("renders entity references as text and preserves the row click", () => {
+    const rowClicks: string[] = [];
+    const view = render(
+      <MantineProvider>
+        <MemoryRouter>
+          <EntityLinkAccessReactContext.Provider value={allowedEntityLinkAccess}>
+            <DataTable<SampleRow>
+              rows={[{ id: "a", label: "Ada Lovelace", clickable: true }]}
+              columns={[
+                {
+                  key: "employee",
+                  header: "Empleado",
+                  render: (row) => (
+                    <EntityLink entityType="employee" entityId="emp-1" label={row.label} />
+                  ),
+                },
+              ]}
+              getRowKey={(row) => row.id}
+              onRowClick={(row) => rowClicks.push(row.id)}
+            />
+          </EntityLinkAccessReactContext.Provider>
+        </MemoryRouter>
+      </MantineProvider>,
+    );
+
+    assert.equal(view.queryByRole("link", { name: "Ada Lovelace" }), null);
+    const reference = view.getByText("Ada Lovelace");
+    assert.equal(reference.tagName.toLowerCase(), "span");
+    fireEvent.click(reference);
+    assert.deepEqual(rowClicks, ["a"]);
   });
 
   it("keeps Acciones header and cells compact and right-aligned", () => {

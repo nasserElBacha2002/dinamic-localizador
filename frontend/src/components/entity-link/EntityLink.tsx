@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { Link, useLocation } from "react-router";
+import { useIsTableEntityReference } from "../../design-system/components/table-entity-reference-context";
 import type { EntityLinkProps } from "./entity-link.types";
 import { resolveEntityDetailPath } from "./entity-route-registry";
 import { useEntityLinkAccess } from "./use-entity-link-access";
@@ -20,6 +21,7 @@ export function EntityLink({
   className,
   title,
 }: EntityLinkProps) {
+  const isTableEntityReference = useIsTableEntityReference();
   const location = useLocation();
   const access = useEntityLinkAccess(entityType);
   const path = resolveEntityDetailPath(entityType, entityId);
@@ -27,7 +29,7 @@ export function EntityLink({
   const plain = fallback ?? content;
   const plainClassName = [classes.entityPlain, className].filter(Boolean).join(" ");
 
-  if (!path || disabled || access !== "allowed") {
+  if (!path || disabled || isTableEntityReference || access !== "allowed") {
     return (
       <span className={plainClassName} title={title}>
         {plain}

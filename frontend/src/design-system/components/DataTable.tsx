@@ -17,6 +17,7 @@ import type {
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
+import { TableEntityReferenceProvider } from "./table-entity-reference-context";
 
 export type {
   DataTableColumn,
@@ -233,7 +234,9 @@ export function DataTable<T>(props: DataTableProps<T>) {
                   >
                     {columns.map((column) => (
                       <Table.Td key={column.key} style={{ textAlign: column.align ?? "left" }}>
-                        {resolveDataTableCellValue(row, column)}
+                        <TableEntityReferenceProvider>
+                          {resolveDataTableCellValue(row, column)}
+                        </TableEntityReferenceProvider>
                       </Table.Td>
                     ))}
                     {rowActions ? (

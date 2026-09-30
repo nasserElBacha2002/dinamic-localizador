@@ -233,6 +233,45 @@ describe("employeeWorkdayService", () => {
     assert.equal(updateCalls, 0);
   });
 
+  it("marks only the selected recurring occurrence unavailable without changing its base assignment", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
+    const { employeeRepository } = await import("../repositories/employee.repository");
+    const { replacementRequestService } = await import("./replacement-request.service");
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let assignmentUpdates = 0;
+    let markedWorkdayId: string | null = null;
+    let replacementWorkdayId: string | null = null;
+    mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+      assignment({ employeeWorkdayId: "workday-D", operationKind: "RECURRING" }),
+    ]);
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      assignmentUpdates += 1;
+      return true;
+    });
+    mock.method(employeeWorkdayRepository, "markUnavailable", async (_companyId, workdayId) => {
+      markedWorkdayId = workdayId;
+      return true;
+    });
+    mock.method(employeeRepository, "findById", async () => null);
+    mock.method(replacementRequestService, "createForUnavailable", async ({ employeeWorkdayId }) => {
+      replacementWorkdayId = employeeWorkdayId;
+    });
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId, "workday-D"),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.equal(markedWorkdayId, "workday-D");
+    assert.equal(replacementWorkdayId, "workday-D");
+    assert.equal(assignmentUpdates, 0);
+  });
+
   it("does not confirm past assignments", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(

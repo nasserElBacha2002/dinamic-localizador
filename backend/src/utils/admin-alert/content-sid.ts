@@ -3,7 +3,11 @@ import type { AdminAlertTemplateCategory } from "../../constants/admin-alert";
 
 export const resolveAdminAlertContentSid = (
   category: AdminAlertTemplateCategory,
+  alertType?: string,
 ): string | null => {
+  if (alertType === "REPLACEMENT_REQUEST") {
+    return env.TWILIO_ADMIN_REPLACEMENT_REQUEST_CONTENT_SID?.trim() || null;
+  }
   switch (category) {
     case "OPERATIONAL":
     case "SECURITY":

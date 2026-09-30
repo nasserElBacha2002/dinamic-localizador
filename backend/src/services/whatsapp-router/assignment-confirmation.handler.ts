@@ -68,6 +68,7 @@ export const handleActiveAssignmentSelectionSession = async (
     ctx.companyId,
     ctx.employeeId!,
     selected.operationId,
+    selected.employeeWorkdayId,
   );
   await completeSelectionSession(ctx.companyId, session);
   return respond(ctx, handlers, result.message);

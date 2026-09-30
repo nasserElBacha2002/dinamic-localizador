@@ -5,6 +5,7 @@ import {
   editManualAttendance,
   exportAttendanceCsv,
   getAttendanceAuditLogs,
+  getAttendanceByEmployeeWorkdayId,
   getAttendanceById,
   getAttendanceRecords,
   getAttendanceReviews,
@@ -62,6 +63,16 @@ export function useAttendanceRecord(attendanceId?: string) {
   return useQuery({
     queryKey: attendanceKeys.detail(companyId, attendanceId),
     queryFn: () => getAttendanceById(attendanceId!),
+    enabled,
+  });
+}
+
+export function useAttendanceByEmployeeWorkday(employeeWorkdayId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(employeeWorkdayId));
+
+  return useQuery({
+    queryKey: attendanceKeys.detail(companyId, employeeWorkdayId ? `workday:${employeeWorkdayId}` : undefined),
+    queryFn: () => getAttendanceByEmployeeWorkdayId(employeeWorkdayId!),
     enabled,
   });
 }

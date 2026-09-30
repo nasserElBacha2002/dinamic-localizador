@@ -10,12 +10,22 @@ import {
 } from "@mantine/core";
 import { useCallback, useEffect, useId, useMemo, useRef } from "react";
 import type { KeyboardEvent } from "react";
+import { consumeLookupSearchGroupForSelection } from "../../utils/consume-lookup-search-group";
 
 export interface EntityMultiSelectOption {
   value: string;
   label: string;
   description?: string;
   disabled?: boolean;
+  /**
+   * Index within `sourceSearch` of the lookup group that produced this option.
+   * Only safe to apply when the current input still matches `sourceSearch`.
+   */
+  searchGroupIndex?: number;
+  /** Stable group text from that snapshot (`terms.join(" ")`). */
+  searchGroupKey?: string;
+  /** Search string that generated this option (detects stale refetch windows). */
+  sourceSearch?: string;
 }
 
 export interface EntityMultiSelectProps {
@@ -78,9 +88,17 @@ export function EntityMultiSelect({
   const listboxId = useId();
   const fieldRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
+  /** Last search typed by the user; survives Combobox clearing the field before submit. */
+  const typedSearchRef = useRef(inputValue);
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
+
+  // EmployeeMultiSelect owns input state but clears it on company change without
+  // going through the field onChange — keep the ref aligned with the prop.
+  useEffect(() => {
+    typedSearchRef.current = inputValue;
+  }, [inputValue]);
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 
@@ -125,7 +143,16 @@ export function EntityMultiSelect({
         return;
       }
       onChange([...value, id]);
-      onInputChange("");
+      const remainingSearch = consumeLookupSearchGroupForSelection(
+        typedSearchRef.current,
+        {
+          groupIndex: option?.searchGroupIndex,
+          groupKey: option?.searchGroupKey,
+          sourceSearch: option?.sourceSearch,
+        },
+      );
+      typedSearchRef.current = remainingSearch;
+      onInputChange(remainingSearch);
       combobox.openDropdown();
       requestAnimationFrame(() => fieldRef.current?.focus());
     },
@@ -157,6 +184,7 @@ export function EntityMultiSelect({
       return;
     }
     onChange([]);
+    typedSearchRef.current = "";
     onInputChange("");
     requestAnimationFrame(() => fieldRef.current?.focus());
   }, [disabled, onChange, onInputChange, value.length]);
@@ -277,7 +305,9 @@ export function EntityMultiSelect({
                 placeholder={value.length === 0 ? placeholder : "Agregar..."}
                 disabled={disabled}
                 onChange={(event) => {
-                  onInputChange(event.currentTarget.value);
+                  const next = event.currentTarget.value;
+                  typedSearchRef.current = next;
+                  onInputChange(next);
                   combobox.openDropdown();
                   combobox.updateSelectedOptionIndex();
                 }}

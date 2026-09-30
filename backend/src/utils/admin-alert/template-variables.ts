@@ -96,6 +96,13 @@ const alertCopyByType: Record<
     detail: () => "Informó que no podrá asistir.",
     context: formatOperationContext,
   },
+  // Replacement requests are enqueued directly with the approved seven-variable
+  // template snapshot; this fallback only keeps generic alert contracts exhaustive.
+  REPLACEMENT_REQUEST: {
+    title: "Reemplazo requerido",
+    detail: () => "Se requiere cubrir una jornada.",
+    context: formatOperationContext,
+  },
   MISSING_CHECKIN_AFTER_OPERATION: {
     title: "Sin registro de llegada",
     detail: () => "No existe registro de llegada al finalizar la jornada.",

@@ -159,7 +159,9 @@ describe("OperationDetailPage entity identity", () => {
     assert.match(view.getByRole("link", { name: "Ver asistencias" }).getAttribute("href") ?? "", /\/attendance\?operationIds=op-1/);
     assert.equal(view.queryByRole("button", { name: "Más acciones de la operación" }), null);
     assert.ok(view.getByRole("button", { name: /^Editar$/i }));
-    assert.ok(view.getByRole("button", { name: /Editar operación/i }));
+    assert.equal(view.queryByRole("button", { name: /Editar operación/i }), null);
+    assert.equal(view.queryByText("Turnos de la operación"), null);
+    assert.equal(view.queryByText("Cambiar a multi-turno"), null);
     assert.match(view.container.textContent ?? "", /Detalle de la operación/i);
     assert.equal(view.queryByText("Configuración"), null);
   });

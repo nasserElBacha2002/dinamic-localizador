@@ -206,10 +206,11 @@ export function OperationIndividualAssignmentPanel({
         activeOnly
         clearValueOnCompanyChange={false}
         placeholder="Nombre o teléfono"
+        allowCommaSelection={false}
         description={
           isCoverage
             ? "Seleccioná un colaborador distinto al cubierto."
-            : "Buscá y agregá uno o más colaboradores. Usá Enter o coma para confirmar."
+            : "Buscá uno o más colaboradores separados por coma. Usá Enter para confirmar."
         }
         maxVisibleChips={4}
       />

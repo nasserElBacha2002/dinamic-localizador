@@ -123,4 +123,18 @@ describe("OperationForm edit date fields", () => {
       assert.equal(current.value, "2026-07-20");
     });
   });
+
+  it("opens the specific schedule editor in a dialog without rendering the company schedule", async () => {
+    const view = renderHarness();
+
+    assert.ok(view.getByRole("button", { name: "Configurar horario específico" }));
+    assert.equal(view.queryByText("Horario semanal personalizado"), null);
+
+    fireEvent.click(view.getByRole("button", { name: "Configurar horario específico" }));
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Horario específico"));
+    });
+    assert.ok(view.getByRole("button", { name: "Guardar horario específico" }));
+  });
 });

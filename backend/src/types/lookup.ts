@@ -1,6 +1,11 @@
 export interface EmployeeLookup {
   id: string;
   fullName: string;
+  /**
+   * Index of the comma-separated search group that produced this row.
+   * Set for text searches so the UI can consume that group on select.
+   */
+  matchedGroupIndex?: number;
 }
 
 export interface ServiceLookup {

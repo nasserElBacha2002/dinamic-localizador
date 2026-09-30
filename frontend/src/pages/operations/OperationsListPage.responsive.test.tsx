@@ -127,10 +127,9 @@ describe("OperationsListPage responsive (real page)", () => {
     assert.match(view.container.textContent ?? "", /15 min/);
     assert.ok(view.getByRole("button", { name: /Importar operaciones/i }));
     assert.equal(view.queryByRole("button", { name: "Más acciones de operaciones" }), null);
-    const serviceLink = await waitFor(() =>
-      view.getByRole("link", { name: /Sucursal Centro/i }),
-    );
-    assert.equal(serviceLink.getAttribute("href"), "/services/svc-1");
+    const serviceReference = view.getByText("Sucursal Centro");
+    assert.equal(serviceReference.closest("a"), null);
+    assert.equal(view.queryByRole("link", { name: /Sucursal Centro/i }), null);
   });
 
   it("shows mobile cards, filters drawer, actions and navigates to detail", async () => {

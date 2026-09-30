@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Anchor,
   Badge,
   Box,
   Button,
@@ -15,16 +14,15 @@ import {
   TextInput,
   UnstyledButton,
 } from "@mantine/core";
-import { useEffect, useMemo } from "react";
-import { Link as RouterLink } from "react-router";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { WeeklyScheduleEditor } from "../schedules/WeeklyScheduleEditor";
-import { WeeklySchedulePreview } from "../schedules/WeeklySchedulePreview";
 import {
   FormActions,
   FormErrorAlert,
   FormGrid,
   FormSection,
+  ResponsiveModal,
   RHFDateTimeInput,
   RHFNumberInput,
   RHFSelect,
@@ -36,18 +34,16 @@ import {
   type OperationFormValues,
 } from "../../schemas/operation.schema";
 import type { OperationKind, OperationStatus } from "../../types/operation";
-import type { CompanyWorkSchedule } from "../../types/schedule";
+import type { CompanyWorkSchedule, WeeklyScheduleDay } from "../../types/schedule";
 import { getCurrentDatetimeLocal } from "../../utils/dates";
 import { getAllowedStatusOptions, isOperationEditable } from "../../utils/operation-status";
-import {
-  buildCompanySchedulePreviewLabel,
-  operationKindLabels,
-  scheduleSourceLabels,
-} from "../../utils/operation-schedule-display";
+import { operationKindLabels } from "../../utils/operation-schedule-display";
 import { operationStatusLabels } from "../../utils/labels";
 import { isOvernightShift, getCompanyWorkingIsoDays } from "../../utils/operation-shift-payload";
 import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
 import { OperationTimeInput } from "../../pages/settings/components/OperationTimeInput";
+import { OperationShiftsPanel } from "./OperationShiftsPanel";
+import type { ScheduleMode } from "../../types/operation-shift";
 
 const ISO_DAY_OPTIONS = [
   { value: 1, label: "Lun" },
@@ -102,6 +98,11 @@ interface OperationFormProps {
   embedded?: boolean;
   formId?: string;
   hideActions?: boolean;
+  /** Existing operation identity enables multi-shift management inside the edit form. */
+  operationId?: string;
+  currentScheduleMode?: ScheduleMode;
+  canManageShifts?: boolean;
+  onShiftFeedback?: (message: string, severity: "success" | "error") => void;
 }
 
 function OperationKindCard({
@@ -155,6 +156,10 @@ export function OperationForm({
   embedded = false,
   formId,
   hideActions = false,
+  operationId,
+  currentScheduleMode,
+  canManageShifts = false,
+  onShiftFeedback,
 }: OperationFormProps) {
   const validationSchema = useMemo(
     () => (mode === "create" ? createOperationFormSchema : operationFormSchema),
@@ -178,6 +183,10 @@ export function OperationForm({
   });
 
   const templatesQuery = useShiftTemplates({ activeOnly: true }, mode === "create");
+  const [scheduleEditorOpen, setScheduleEditorOpen] = useState(false);
+  const [customScheduleDraft, setCustomScheduleDraft] = useState<WeeklyScheduleDay[] | null>(
+    null,
+  );
   const activeTemplates = templatesQuery.data ?? [];
   const templateOptions = activeTemplates.map((template) => ({
     value: template.id,
@@ -197,6 +206,7 @@ export function OperationForm({
   const operationKind = useWatch({ control, name: "operationKind" });
   const scheduleSource = useWatch({ control, name: "scheduleSource" });
   const scheduleMode = useWatch({ control, name: "scheduleMode" });
+  const scheduleDays = useWatch({ control, name: "scheduleDays" });
   const earlyToleranceSource = useWatch({ control, name: "earlyToleranceSource" });
   const lateToleranceSource = useWatch({ control, name: "lateToleranceSource" });
   const lockedKind = mode === "edit" ? (currentOperationKind ?? operationKind) : operationKind;
@@ -276,6 +286,31 @@ export function OperationForm({
   );
 
   const minScheduledStart = mode === "create" ? getCurrentDatetimeLocal() : undefined;
+  const showShiftManagement =
+    mode === "edit" &&
+    currentScheduleMode === "MULTI_SHIFT" &&
+    Boolean(operationId) &&
+    Boolean(onShiftFeedback);
+
+  const openCustomScheduleEditor = () => {
+    setCustomScheduleDraft(scheduleDays as WeeklyScheduleDay[]);
+    setScheduleEditorOpen(true);
+  };
+
+  const useCompanySchedule = () => {
+    setValue("scheduleSource", "COMPANY", { shouldDirty: true, shouldValidate: true });
+    setValue("scheduleDays", defaultValues.scheduleDays);
+    setScheduleEditorOpen(false);
+  };
+
+  const saveCustomSchedule = () => {
+    setValue("scheduleSource", "CUSTOM", { shouldDirty: true, shouldValidate: true });
+    setValue("scheduleDays", customScheduleDraft ?? (scheduleDays as WeeklyScheduleDay[]), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setScheduleEditorOpen(false);
+  };
 
   const formContent = (
     <Stack gap="md">
@@ -634,143 +669,76 @@ export function OperationForm({
             />
           </FormGrid>
 
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>
-              Origen del horario
+          {isMultiCreate ? (
+            <Text size="sm" c="dimmed">
+              En multi-turno, cada turno define su propio horario.
             </Text>
-            {isMultiCreate ? (
-              <Stack gap={6}>
-                <Text size="sm" c="dimmed">
-                  En multi-turno los horarios los definen cada turno. Los días laborables de la
-                  empresa se usan como base al crear turnos; no hace falta configurar un horario
-                  semanal de la operación.
-                </Text>
-                {companyWorkScheduleLoading ? (
-                  <Text size="sm" c="dimmed">
-                    Cargando días laborables de la empresa…
-                  </Text>
-                ) : companyWorkSchedule ? (
-                  <Text size="sm" c="dimmed">
-                    Días laborables de la empresa:{" "}
-                    {buildCompanySchedulePreviewLabel(companyWorkSchedule.days)}
-                  </Text>
-                ) : (
-                  <Stack gap={4}>
-                    <Text size="sm" c="red">
-                      La empresa no tiene un horario laboral semanal configurado. Se usarán lun–vie
-                      por defecto.
-                    </Text>
-                    <Anchor component={RouterLink} to="/settings" size="sm">
-                      Configurar horario de la empresa
-                    </Anchor>
-                  </Stack>
-                )}
-              </Stack>
-            ) : (
-              <>
-            <FormGrid>
-              <Controller
-                name="scheduleSource"
-                control={control}
-                render={({ field }) => (
-                  <>
-                    <FormGrid.Full>
-                      <OperationKindCard
-                        selected={field.value === "COMPANY"}
-                        title="Usar horario de la empresa"
-                        description="Los próximos días de trabajo usarán el horario semanal configurado para la empresa."
-                        onClick={() => {
-                          if (companySourceDisabled) {
-                            return;
-                          }
-                          field.onChange("COMPANY");
-                          setValue("scheduleDays", defaultValues.scheduleDays);
-                        }}
-                        disabled={companySourceDisabled}
-                      />
-                    </FormGrid.Full>
-                    <FormGrid.Full>
-                      <OperationKindCard
-                        selected={field.value === "CUSTOM"}
-                        title="Configurar horario específico"
-                        description="Esta operación tendrá su propio horario semanal."
-                        onClick={() => field.onChange("CUSTOM")}
-                        disabled={serviceFieldDisabled}
-                      />
-                    </FormGrid.Full>
-                  </>
-                )}
-              />
-            </FormGrid>
-            {!companyWorkScheduleLoading && !companyScheduleAvailable ? (
-              <Stack gap={4}>
-                <Text size="sm" c="red">
-                  La empresa no tiene un horario laboral semanal configurado.
-                </Text>
-                <Anchor component={RouterLink} to="/settings" size="sm">
-                  Configurar horario de la empresa
-                </Anchor>
-              </Stack>
-            ) : null}
-              </>
-            )}
-          </Stack>
-
-          {isMultiCreate ? null : scheduleSource === "COMPANY" ? (
-            <Stack gap={4}>
-              <Text size="sm" fw={500}>
-                Horario de la empresa
-              </Text>
-              {companyWorkScheduleLoading ? (
-                <Text size="sm" c="dimmed">
-                  Cargando horario de la empresa...
-                </Text>
-              ) : companyWorkSchedule ? (
-                <>
-                  <Text size="sm" c="dimmed">
-                    {buildCompanySchedulePreviewLabel(companyWorkSchedule.days)}
-                  </Text>
-                  <WeeklySchedulePreview days={companyWorkSchedule.days} />
-                </>
-              ) : (
-                <Stack gap={4}>
-                  <Text size="sm" c="red">
-                    La empresa no tiene un horario laboral semanal configurado.
-                  </Text>
-                  <Anchor component={RouterLink} to="/settings" size="sm">
-                    Configurar horario de la empresa
-                  </Anchor>
-                </Stack>
-              )}
-            </Stack>
           ) : (
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                {scheduleSourceLabels.CUSTOM}
-              </Text>
-              <Controller
-                name="scheduleDays"
-                control={control}
-                render={({ field, fieldState }) => (
-                  <Stack gap={4}>
-                    <WeeklyScheduleEditor
-                      value={field.value as import("../../types/schedule").WeeklyScheduleDay[]}
-                      onChange={field.onChange}
-                      disabled={serviceFieldDisabled}
-                      readOnly={mode === "edit" && serviceFieldDisabled}
-                    />
-                    {fieldState.error ? (
-                      <Text size="xs" c="red">
-                        {fieldState.error.message}
-                      </Text>
-                    ) : null}
-                  </Stack>
-                )}
-              />
-            </Stack>
+            <Group justify="space-between" align="center">
+              <Stack gap={2}>
+                <Text size="sm" fw={500}>
+                  Horario
+                </Text>
+                <Text size="sm" c="dimmed">
+                  {scheduleSource === "CUSTOM" ? "Horario específico" : "Horario de la empresa"}
+                </Text>
+              </Stack>
+              <Button
+                type="button"
+                variant="light"
+                onClick={openCustomScheduleEditor}
+                disabled={serviceFieldDisabled}
+              >
+                {scheduleSource === "CUSTOM"
+                  ? "Editar horario específico"
+                  : "Configurar horario específico"}
+              </Button>
+            </Group>
           )}
         </Stack>
       )}
+
+      {lockedKind === "RECURRING" && !isMultiCreate ? (
+        <ResponsiveModal
+          opened={scheduleEditorOpen}
+          onClose={() => setScheduleEditorOpen(false)}
+          title="Horario específico"
+          size="lg"
+          footer={
+            <Group justify="space-between" gap="sm">
+              <Button
+                type="button"
+                variant="default"
+                onClick={useCompanySchedule}
+                disabled={companySourceDisabled}
+              >
+                Usar horario de la empresa
+              </Button>
+              <Group gap="sm">
+                <Button type="button" variant="default" onClick={() => setScheduleEditorOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={saveCustomSchedule} disabled={serviceFieldDisabled}>
+                  Guardar horario específico
+                </Button>
+              </Group>
+            </Group>
+          }
+        >
+          <Stack gap="sm">
+            <Text size="sm" c="dimmed">
+              Configurá el horario semanal solo cuando esta operación no deba usar el horario de la
+              empresa.
+            </Text>
+            <WeeklyScheduleEditor
+              value={customScheduleDraft ?? (scheduleDays as WeeklyScheduleDay[])}
+              onChange={setCustomScheduleDraft}
+              disabled={serviceFieldDisabled}
+              readOnly={mode === "edit" && serviceFieldDisabled}
+            />
+          </Stack>
+        </ResponsiveModal>
+      ) : null}
 
       <FormGrid>
         <Stack gap="xs">
@@ -829,6 +797,15 @@ export function OperationForm({
             <RHFSelect control={control} name="status" label="Estado" data={statusOptions} />
           </FormGrid.Full>
         </FormGrid>
+      ) : null}
+
+      {showShiftManagement && operationId && onShiftFeedback ? (
+        <OperationShiftsPanel
+          operationId={operationId}
+          scheduleMode="MULTI_SHIFT"
+          canManage={canManageShifts}
+          onFeedback={onShiftFeedback}
+        />
       ) : null}
 
       {!hideActions ? (

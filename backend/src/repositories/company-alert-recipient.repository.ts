@@ -39,6 +39,13 @@ const categoryColumn = (category: AdminAlertTemplateCategory): string => {
 };
 
 export const companyAlertRecipientRepository = {
+  async listEnabledCompanyIdsByPhone(phoneNumber: string): Promise<string[]> {
+    const result = await getPool().request().input("phoneNumber", sql.NVarChar(20), phoneNumber).query(`
+      SELECT DISTINCT company_id FROM company_alert_recipients
+      WHERE phone_number=@phoneNumber AND is_enabled=1 AND receive_operational_alerts=1
+    `);
+    return result.recordset.map((row) => String((row as Record<string, unknown>).company_id));
+  },
   async listByCompany(companyId: string): Promise<CompanyAlertRecipient[]> {
     const result = await getPool()
       .request()

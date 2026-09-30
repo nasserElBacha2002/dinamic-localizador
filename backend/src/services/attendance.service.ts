@@ -211,7 +211,42 @@ export const attendanceService = {
 
     return {
       ...record,
+      hasAttendanceRecord: true as const,
       technical,
+    };
+  },
+
+  async getByEmployeeWorkdayId(companyId: string, employeeWorkdayId: string) {
+    const record = await attendanceRepository.findExpectedByEmployeeWorkdayId(
+      companyId,
+      employeeWorkdayId,
+    );
+    if (!record) {
+      throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Asistencia esperada no encontrada");
+    }
+
+    if (record.hasAttendanceRecord) {
+      const technical = await this.getTechnicalDetails(companyId, record);
+      return {
+        ...record,
+        technical,
+      };
+    }
+
+    return {
+      ...record,
+      technical: {
+        sourceMessageSid: null,
+        phoneNumber: record.employee.phoneNumber,
+        message: null,
+        session: null,
+        coordinates: {
+          latitude: null,
+          longitude: null,
+        },
+        distanceMeters: null,
+        validationReason: null,
+      },
     };
   },
 
@@ -411,27 +446,49 @@ export const attendanceService = {
 
   async exportCsv(companyId: string, query: ListAttendanceQuery): Promise<string> {
     const rows = await attendanceRepository.listForExport(companyId, { ...query, page: 1, limit: 10000 });
-    const csvRows = rows.map((row) => [
-      String(row.employee_name ?? ""),
-      row.employee_document_number ? String(row.employee_document_number) : "",
-      String(row.employee_phone_number ?? ""),
-      String(row.service_name ?? ""),
-      row.service_address ? String(row.service_address) : "",
-      String(row.operation_id ?? ""),
-      formatLocalDateTime(row.operation_scheduled_start as string),
-      row.operation_shift_id ? String(row.operation_shift_id) : "",
-      row.shift_code_snapshot ? String(row.shift_code_snapshot) : "",
-      row.shift_name_snapshot ? String(row.shift_name_snapshot) : "",
-      formatLocalDateTime(row.received_at as string),
-      row.distance_meters !== undefined ? Number(row.distance_meters) : "",
-      row.service_allowed_radius_meters !== undefined ? Number(row.service_allowed_radius_meters) : "",
-      String(row.validation_status ?? ""),
-      String(row.location_status ?? ""),
-      String(row.punctuality_status ?? ""),
-      row.validation_reason ? String(row.validation_reason) : "",
-      row.reviewer_name ? String(row.reviewer_name) : "",
-      formatLocalDateTime(row.reviewed_at as string | null),
-    ]);
+    const csvRows = rows.map((row) => {
+      const isExpectedProjection = Object.prototype.hasOwnProperty.call(row, "attendance_id");
+      const hasAttendance = isExpectedProjection
+        ? Boolean(row.attendance_id)
+        : row.list_row_kind
+          ? Boolean(row.attendance_id)
+          : true;
+      const validation = hasAttendance
+        ? String(row.validation_status ?? "")
+        : String(row.effective_state ?? "");
+      const location = hasAttendance
+        ? String(row.location_status ?? "")
+        : "NOT_RECORDED";
+      const punctuality = hasAttendance
+        ? String(row.punctuality_status ?? "")
+        : String(row.effective_state ?? "");
+
+      return [
+        String(row.employee_name ?? ""),
+        row.employee_document_number ? String(row.employee_document_number) : "",
+        String(row.employee_phone_number ?? ""),
+        String(row.service_name ?? ""),
+        row.service_address ? String(row.service_address) : "",
+        String(row.operation_id ?? ""),
+        formatLocalDateTime(row.operation_scheduled_start as string),
+        row.operation_shift_id ? String(row.operation_shift_id) : "",
+        row.shift_code_snapshot ? String(row.shift_code_snapshot) : "",
+        row.shift_name_snapshot ? String(row.shift_name_snapshot) : "",
+        formatLocalDateTime(row.received_at as string),
+        row.distance_meters !== undefined && row.distance_meters !== null
+          ? Number(row.distance_meters)
+          : "",
+        row.service_allowed_radius_meters !== undefined && row.service_allowed_radius_meters !== null
+          ? Number(row.service_allowed_radius_meters)
+          : "",
+        validation,
+        location,
+        punctuality,
+        row.validation_reason ? String(row.validation_reason) : "",
+        row.reviewer_name ? String(row.reviewer_name) : "",
+        formatLocalDateTime(row.reviewed_at as string | null),
+      ];
+    });
 
     return buildCsv(
       [

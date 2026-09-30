@@ -45,6 +45,7 @@ describe("whatsappCompanyContextService", () => {
   it("prefers an active session company over default company fallback", async () => {
     setupUnitTestEnv();
     const { botSessionRepository } = await import("../repositories/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../repositories/company-alert-recipient.repository");
     const { employeeRepository } = await import("../repositories/employee.repository");
     const { companyRepository } = await import("../repositories/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
@@ -126,6 +127,7 @@ describe("whatsappCompanyContextService", () => {
     setupUnitTestEnv();
     process.env.BOT_DEFAULT_COMPANY_ID = companyA;
     const { botSessionRepository } = await import("../repositories/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../repositories/company-alert-recipient.repository");
     const { employeeRepository } = await import("../repositories/employee.repository");
     const { companyRepository } = await import("../repositories/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
@@ -138,6 +140,7 @@ describe("whatsappCompanyContextService", () => {
     ]);
     mock.method(employeeRepository, "findByPhone", async () => null);
     mock.method(botSessionRepository, "findValidActiveByPhone", async () => null);
+    mock.method(companyAlertRecipientRepository, "listEnabledCompanyIdsByPhone", async () => []);
 
     const resolution = await whatsappCompanyContextService.resolve({
       phoneFrom: phone,
@@ -156,6 +159,7 @@ describe("whatsappCompanyContextService", () => {
   it("blocks when company context cannot be resolved safely", async () => {
     setupUnitTestEnv();
     const { botSessionRepository } = await import("../repositories/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../repositories/company-alert-recipient.repository");
     const { employeeRepository } = await import("../repositories/employee.repository");
     const { companyRepository } = await import("../repositories/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
@@ -166,6 +170,7 @@ describe("whatsappCompanyContextService", () => {
       { id: companyA, name: "A", status: "ACTIVE" },
       { id: companyB, name: "B", status: "ACTIVE" },
     ]);
+    mock.method(companyAlertRecipientRepository, "listEnabledCompanyIdsByPhone", async () => []);
 
     const resolution = await whatsappCompanyContextService.resolve({
       phoneFrom: phone,
@@ -182,6 +187,7 @@ describe("whatsappCompanyContextService", () => {
   it("uses legacy default fallback when exactly one active company exists", async () => {
     setupUnitTestEnv();
     const { botSessionRepository } = await import("../repositories/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../repositories/company-alert-recipient.repository");
     const { employeeRepository } = await import("../repositories/employee.repository");
     const { companyRepository } = await import("../repositories/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
@@ -191,6 +197,7 @@ describe("whatsappCompanyContextService", () => {
     mock.method(companyRepository, "listActive", async () => [{ id: companyA, name: "A", status: "ACTIVE" }]);
     mock.method(employeeRepository, "findByPhone", async () => null);
     mock.method(botSessionRepository, "findValidActiveByPhone", async () => null);
+    mock.method(companyAlertRecipientRepository, "listEnabledCompanyIdsByPhone", async () => []);
 
     const resolution = await whatsappCompanyContextService.resolve({
       phoneFrom: phone,

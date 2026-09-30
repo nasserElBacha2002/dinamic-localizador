@@ -16,6 +16,7 @@ import { getEmployeeLookups, getOperationLookups, getServiceLookups } from "../.
 import { terminology } from "../../domain/terminology";
 import { formatDateTime } from "../../utils/dates";
 import { MAX_MULTI_FILTER_IDS } from "../../utils/multi-value-filter";
+import { parseLookupSearchGroups } from "../../utils/consume-lookup-search-group";
 
 type SharedMultiProps = Omit<
   EntityMultiSelectProps,
@@ -153,9 +154,22 @@ export function EmployeeMultiSelect({
         { signal },
       );
       const excluded = new Set(excludeIds);
+      const groups = parseLookupSearchGroups(search);
       return rows
         .filter((row) => !excluded.has(row.id))
-        .map((row) => ({ value: row.id, label: row.fullName }));
+        .map((row) => {
+          const groupTerms =
+            row.matchedGroupIndex !== undefined
+              ? groups[row.matchedGroupIndex]
+              : undefined;
+          return {
+            value: row.id,
+            label: row.fullName,
+            searchGroupIndex: row.matchedGroupIndex,
+            searchGroupKey: groupTerms ? groupTerms.join(" ") : undefined,
+            sourceSearch: search || undefined,
+          };
+        });
     },
     fetchSelected: async (ids, signal) => {
       if (ids.length === 0) {
@@ -169,7 +183,11 @@ export function EmployeeMultiSelect({
         { signal },
       );
       return orderByIds(
-        rows.map((row) => ({ value: row.id, label: row.fullName })),
+        rows.map((row) => ({
+          value: row.id,
+          label: row.fullName,
+          searchGroupIndex: row.matchedGroupIndex,
+        })),
         ids,
       );
     },

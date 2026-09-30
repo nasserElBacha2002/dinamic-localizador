@@ -89,6 +89,7 @@ export const WORK_TEAMS_API_EXPORTS = [
 export const ATTENDANCE_API_EXPORTS = [
   "getAttendanceRecords",
   "getAttendanceById",
+  "getAttendanceByEmployeeWorkdayId",
   "createAttendanceRecord",
   "getAttendanceReviews",
   "reviewAttendanceRecord",

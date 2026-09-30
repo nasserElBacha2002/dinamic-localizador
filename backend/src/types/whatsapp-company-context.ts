@@ -4,6 +4,7 @@ export type WhatsAppResolutionSource =
   | "active_session"
   | "receiving_number"
   | "employee_phone_unique_match"
+  | "alert_recipient_phone"
   | "default_company_fallback"
   | "simulation_forced_company";
 

@@ -22,6 +22,14 @@ export type CheckoutStatus =
 
 export type OperationalStatus = "NO_CHECK_IN" | "VALID" | "PENDING_REVIEW" | "REJECTED";
 
+/** Workday effective presence state (shared with statistics). */
+export type AttendanceEffectiveState =
+  | "EXPECTED"
+  | "JUSTIFIED"
+  | "PRESENT"
+  | "ABSENT"
+  | "CANCELLED";
+
 export type AttendanceRegistrationSource = "WHATSAPP" | "MANUAL" | "IMPORT" | "SYSTEM";
 
 export type ManualAttendanceKind = "CHECK_IN" | "CHECK_OUT";
@@ -129,7 +137,9 @@ export interface AttendanceOperationSummary {
   scheduledEnd: string | null;
 }
 
-export interface AttendanceRecordWithRelations extends AttendanceRecord {
+export interface AttendanceRecordWithRelations extends Omit<AttendanceRecord, "validationStatus"> {
+  /** Null only for expected rows without a persisted punch. */
+  validationStatus: ValidationStatus | null;
   employee: AttendanceEmployeeSummary;
   operation: AttendanceOperationSummary;
   service: {
@@ -141,6 +151,15 @@ export interface AttendanceRecordWithRelations extends AttendanceRecord {
   };
   arrivalRegisteredByUser?: { id: string; name: string } | null;
   checkoutRegisteredByUser?: { id: string; name: string } | null;
+  /** Present on company attendance list (expected workdays LEFT JOIN punches). */
+  hasAttendanceRecord?: boolean;
+  effectiveState?: AttendanceEffectiveState;
+  expectedStartAt?: string | null;
+  expectedEndAt?: string | null;
+  shiftNameSnapshot?: string | null;
+  workDate?: string;
+  listRowKind?: "expected_workday" | "simulation" | "legacy_orphan";
+  listRowKey?: string;
 }
 
 export interface AttendanceReview {

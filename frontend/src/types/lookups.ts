@@ -1,6 +1,11 @@
 export interface EmployeeLookup {
   id: string;
   fullName: string;
+  /**
+   * Index of the comma-separated search group that produced this row.
+   * Present on multi/single text searches from lookups/employees.
+   */
+  matchedGroupIndex?: number;
   /** Present on platform-wide observability lookups. */
   companyId?: string;
   companyName?: string;

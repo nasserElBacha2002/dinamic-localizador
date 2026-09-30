@@ -20,6 +20,10 @@ export const twilioWebhookSchema = z
     NumMedia: z.string().optional(),
     Forwarded: z.string().optional(),
     FrequentlyForwarded: z.string().optional(),
+    /** Twilio WhatsApp quick-reply postback payload. */
+    ButtonPayload: z.string().trim().min(1).optional(),
+    /** Twilio WhatsApp reply context: the outbound message containing the button. */
+    OriginalRepliedMessageSid: z.string().trim().min(1).optional(),
   })
   .passthrough();
 

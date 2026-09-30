@@ -26,6 +26,7 @@ import {
 } from "../../design-system";
 import {
   useAttendanceAuditLogs,
+  useAttendanceByEmployeeWorkday,
   useAttendanceRecord,
   useAttendanceReviews,
   useCreateManualAttendance,
@@ -37,7 +38,15 @@ import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import type { AttendanceAuditLog, AttendanceReview } from "../../types/attendance";
 import { formatDateTime } from "../../utils/dates";
-import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
+import { formatAttendanceArrivalLabel, ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL } from "../../utils/attendance-display";
+import {
+  attendanceListLocationTone,
+  attendanceListPunctualityLabel,
+  attendanceListPunctualityTone,
+  attendanceListValidationLabel,
+  attendanceListValidationTone,
+} from "../../utils/attendance-list-display";
+import { attendanceEffectiveStateTone } from "../../utils/attendance-status-tones";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorCode, getApiErrorMessage, parseApiError } from "../../utils/errors";
 import {
@@ -53,6 +62,7 @@ import {
   resolveManualAttendanceActions,
   type ManualAttendanceAction,
 } from "../../utils/manual-attendance-actions";
+import { employeeWorkdayEffectiveStateLabels } from "../../utils/statistics-display-labels";
 
 function manualAuditActionLabel(action: string): string {
   switch (action) {
@@ -100,14 +110,29 @@ function formatAuditData(value: Record<string, unknown> | null): string {
 }
 
 export function AttendanceDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id, employeeWorkdayId } = useParams<{ id?: string; employeeWorkdayId?: string }>();
   const { goBackToList } = useListBackNavigation("/attendance");
   const pagination = usePaginationState(10);
   const auditPagination = usePaginationState(10);
-  const attendanceQuery = useAttendanceRecord(id);
-  const reviewsQuery = useAttendanceReviews(id, pagination.page, pagination.pageSize);
-  const auditLogsQuery = useAttendanceAuditLogs(id, auditPagination.page, auditPagination.pageSize);
-  const reviewMutation = useReviewAttendanceRecord(id ?? "");
+  const byIdQuery = useAttendanceRecord(employeeWorkdayId ? undefined : id);
+  const byWorkdayQuery = useAttendanceByEmployeeWorkday(employeeWorkdayId);
+  const attendanceQuery = employeeWorkdayId ? byWorkdayQuery : byIdQuery;
+  const recordForActions = attendanceQuery.data;
+  const persistedAttendanceId =
+    recordForActions?.hasAttendanceRecord === false
+      ? undefined
+      : recordForActions?.id ?? (employeeWorkdayId ? undefined : id);
+  const reviewsQuery = useAttendanceReviews(
+    persistedAttendanceId,
+    pagination.page,
+    pagination.pageSize,
+  );
+  const auditLogsQuery = useAttendanceAuditLogs(
+    persistedAttendanceId,
+    auditPagination.page,
+    auditPagination.pageSize,
+  );
+  const reviewMutation = useReviewAttendanceRecord(persistedAttendanceId ?? "");
   const createManualMutation = useCreateManualAttendance();
   const editManualMutation = useEditManualAttendance();
   const permissionsQuery = useCompanyPermissions();
@@ -126,7 +151,7 @@ export function AttendanceDetailPage() {
       operationId: record.operationId,
       employeeId: record.employeeId,
       employeeWorkdayId: record.employeeWorkdayId ?? null,
-      attendanceId: record.id,
+      attendanceId: record.hasAttendanceRecord === false ? null : record.id,
       employeeName: record.employee.name,
       initialOccurredAt,
       expectedOccurredAt: action.mode === "edit" ? initialOccurredAt : null,
@@ -245,7 +270,7 @@ export function AttendanceDetailPage() {
     [],
   );
 
-  if (!id) {
+  if (!id && !employeeWorkdayId) {
     return <ErrorState message="Registro no encontrado." />;
   }
 
@@ -260,7 +285,9 @@ export function AttendanceDetailPage() {
   }
 
   const record = attendanceQuery.data;
+  const hasAttendanceRecord = record.hasAttendanceRecord !== false;
   const canReview =
+    hasAttendanceRecord &&
     !record.reviewedAt &&
     (record.validationStatus === "PENDING_REVIEW" || record.validationStatus === "REJECTED");
 
@@ -270,10 +297,10 @@ export function AttendanceDetailPage() {
       companySettingsQuery.data?.allowManualAttendanceCorrections ?? false,
   });
 
-  const reviews = reviewsQuery.data?.data ?? [];
-  const reviewsMeta = reviewsQuery.data?.meta;
-  const auditLogs = auditLogsQuery.data?.data ?? [];
-  const auditMeta = auditLogsQuery.data?.meta;
+  const reviews = hasAttendanceRecord ? (reviewsQuery.data?.data ?? []) : [];
+  const reviewsMeta = hasAttendanceRecord ? reviewsQuery.data?.meta : undefined;
+  const auditLogs = hasAttendanceRecord ? (auditLogsQuery.data?.data ?? []) : [];
+  const auditMeta = hasAttendanceRecord ? auditLogsQuery.data?.meta : undefined;
 
   const reviewMenuItems: ActionMenuItem[] = [
     ...manualActions.map((action) => ({
@@ -393,45 +420,85 @@ export function AttendanceDetailPage() {
               ),
             },
             {
+              label: "Turno esperado",
+              value:
+                record.expectedStartAt || record.shiftNameSnapshot
+                  ? [
+                      record.shiftNameSnapshot?.trim() || null,
+                      record.expectedStartAt
+                        ? `${formatDateTime(record.expectedStartAt)}${
+                            record.expectedEndAt ? ` – ${formatDateTime(record.expectedEndAt)}` : ""
+                          }`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "—"
+                  : "—",
+            },
+            {
+              label: "Estado",
+              value: record.effectiveState ? (
+                <StatusBadge
+                  label={
+                    employeeWorkdayEffectiveStateLabels[record.effectiveState] ??
+                    record.effectiveState
+                  }
+                  tone={attendanceEffectiveStateTone(record.effectiveState)}
+                />
+              ) : (
+                <StatusBadge
+                  label={attendanceListValidationLabel(record)}
+                  tone={attendanceListValidationTone(record)}
+                />
+              ),
+            },
+            {
               label: "Llegada",
               value: formatAttendanceArrivalLabel(record.receivedAt, formatDateTime),
             },
             {
               label: "Estado llegada",
-              value: record.receivedAt ? (
+              value: hasAttendanceRecord && record.receivedAt ? (
                 <Group gap="xs" wrap="wrap">
                   <StatusBadge
                     label={manualArrivalStatusLabel(record.punctualityStatus)}
-                    tone="neutral"
+                    tone={attendanceListPunctualityTone(record)}
                   />
                   {record.arrivalSource === "MANUAL" ? (
                     <StatusBadge label="Manual" tone="info" />
                   ) : null}
                 </Group>
               ) : (
-                "—"
+                <StatusBadge
+                  label={attendanceListPunctualityLabel(record)}
+                  tone={attendanceListPunctualityTone(record)}
+                />
               ),
             },
             {
               label: "Origen llegada",
-              value: registrationSourceLabel(record.arrivalSource),
+              value: hasAttendanceRecord ? registrationSourceLabel(record.arrivalSource) : "—",
             },
             {
               label: "Registrado por (llegada)",
-              value: record.arrivalRegisteredByUser?.name
-                ?? (record.arrivalRegisteredBy ? record.arrivalRegisteredBy : "—"),
+              value: hasAttendanceRecord
+                ? record.arrivalRegisteredByUser?.name
+                  ?? (record.arrivalRegisteredBy ? record.arrivalRegisteredBy : "—")
+                : "—",
             },
             {
               label: "Registrado el (llegada)",
-              value: formatDateTime(record.arrivalRegisteredAt),
+              value: hasAttendanceRecord ? formatDateTime(record.arrivalRegisteredAt) : "—",
             },
             {
               label: "Salida",
-              value: formatDateTime(record.checkoutAt),
+              value: hasAttendanceRecord
+                ? formatDateTime(record.checkoutAt)
+                : formatAttendanceArrivalLabel(null, formatDateTime),
             },
             {
               label: "Estado salida",
-              value: record.checkoutStatus ? (
+              value: hasAttendanceRecord && record.checkoutStatus ? (
                 <Group gap="xs" wrap="wrap">
                   <StatusBadge
                     label={manualCheckoutStatusLabel(record.checkoutStatus)}
@@ -441,8 +508,10 @@ export function AttendanceDetailPage() {
                     <StatusBadge label="Manual" tone="info" />
                   ) : null}
                 </Group>
-              ) : (
+              ) : hasAttendanceRecord ? (
                 "—"
+              ) : (
+                <StatusBadge label={ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL} tone="neutral" />
               ),
             },
             {
@@ -451,25 +520,34 @@ export function AttendanceDetailPage() {
             },
             {
               label: "Registrado por (salida)",
-              value: record.checkoutRegisteredByUser?.name
-                ?? (record.checkoutRegisteredBy ? record.checkoutRegisteredBy : "—"),
+              value: hasAttendanceRecord
+                ? record.checkoutRegisteredByUser?.name
+                  ?? (record.checkoutRegisteredBy ? record.checkoutRegisteredBy : "—")
+                : "—",
             },
             {
               label: "Registrado el (salida)",
-              value: formatDateTime(record.checkoutRegisteredAt),
+              value: hasAttendanceRecord ? formatDateTime(record.checkoutRegisteredAt) : "—",
             },
             {
               label: "Coordenadas llegada",
-              value: formatCoordPair(record.receivedLatitude, record.receivedLongitude),
+              value: hasAttendanceRecord
+                ? formatCoordPair(record.receivedLatitude, record.receivedLongitude)
+                : "—",
             },
-            { label: "Distancia llegada", value: formatMeters(record.distanceMeters) },
+            {
+              label: "Distancia llegada",
+              value: hasAttendanceRecord ? formatMeters(record.distanceMeters) : "—",
+            },
             {
               label: "Coordenadas salida",
-              value: formatCoordPair(record.checkoutLatitude, record.checkoutLongitude),
+              value: hasAttendanceRecord
+                ? formatCoordPair(record.checkoutLatitude, record.checkoutLongitude)
+                : "—",
             },
             {
               label: "Distancia salida",
-              value: formatMeters(record.checkoutDistanceMeters),
+              value: hasAttendanceRecord ? formatMeters(record.checkoutDistanceMeters) : "—",
             },
             {
               label: "Radio permitido",
@@ -482,29 +560,63 @@ export function AttendanceDetailPage() {
               label: "Validación detallada",
               value: (
                 <Group gap="xs" wrap="wrap">
-                  <StatusBadge label={validationStatusLabels[record.validationStatus]} tone="neutral" />
-                  <StatusBadge label={locationStatusLabels[record.locationStatus]} tone="neutral" />
-                  <StatusBadge
-                    label={punctualityStatusLabels[record.punctualityStatus]}
-                    tone="neutral"
-                  />
-                  {record.checkoutStatus ? (
-                    <StatusBadge
-                      label={checkoutStatusLabels[record.checkoutStatus]}
-                      tone="neutral"
-                    />
-                  ) : null}
+                  {hasAttendanceRecord ? (
+                    <>
+                      <StatusBadge
+                        label={
+                          record.validationStatus
+                            ? validationStatusLabels[record.validationStatus]
+                            : attendanceListValidationLabel(record)
+                        }
+                        tone={attendanceListValidationTone(record)}
+                      />
+                      <StatusBadge
+                        label={locationStatusLabels[record.locationStatus]}
+                        tone={attendanceListLocationTone(record)}
+                      />
+                      <StatusBadge
+                        label={punctualityStatusLabels[record.punctualityStatus]}
+                        tone={attendanceListPunctualityTone(record)}
+                      />
+                      {record.checkoutStatus ? (
+                        <StatusBadge
+                          label={checkoutStatusLabels[record.checkoutStatus]}
+                          tone="neutral"
+                        />
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <StatusBadge
+                        label={attendanceListValidationLabel(record)}
+                        tone={attendanceListValidationTone(record)}
+                      />
+                      <StatusBadge label={ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL} tone="neutral" />
+                    </>
+                  )}
                   {record.isSimulation ? <StatusBadge label="Simulación" tone="info" /> : null}
                 </Group>
               ),
             },
-            { label: "Motivo original", value: record.validationReason ?? "—" },
-            { label: "Motivo salida", value: record.checkoutReviewReason ?? "—" },
+            {
+              label: "Motivo original",
+              value: hasAttendanceRecord ? (record.validationReason ?? "—") : "—",
+            },
+            {
+              label: "Motivo salida",
+              value: hasAttendanceRecord ? (record.checkoutReviewReason ?? "—") : "—",
+            },
             {
               label: "Revisado",
-              value: record.reviewedAt ? formatDateTime(record.reviewedAt) : "—",
+              value:
+                hasAttendanceRecord && record.reviewedAt
+                  ? formatDateTime(record.reviewedAt)
+                  : "—",
             },
-            { label: "Motivo de revisión", value: record.reviewReason ?? "—" },
+            {
+              label: "Motivo de revisión",
+              value: hasAttendanceRecord ? (record.reviewReason ?? "—") : "—",
+            },
           ]}
         />
       </SectionCard>

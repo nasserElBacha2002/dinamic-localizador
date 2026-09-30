@@ -5,6 +5,7 @@ import { requireAnyPermission, requirePermission } from "../middleware/company-c
 import { validate } from "../middleware/validate";
 import { reviewAttendanceSchema, attendanceReviewsQuerySchema } from "../schemas/attendance-review.schema";
 import {
+  attendanceEmployeeWorkdayIdParamSchema,
   attendanceIdParamSchema,
   createAttendanceSchema,
   listAttendanceQuerySchema,
@@ -53,6 +54,12 @@ attendanceRouter.get(
   requirePermission("attendance:export"),
   validate(listAttendanceQuerySchema, "query"),
   asyncHandler(attendanceController.exportCsv),
+);
+attendanceRouter.get(
+  "/workdays/:employeeWorkdayId",
+  requirePermission("attendance:read"),
+  validate(attendanceEmployeeWorkdayIdParamSchema, "params"),
+  asyncHandler(attendanceController.getByEmployeeWorkdayId),
 );
 attendanceRouter.patch(
   "/:id/review",

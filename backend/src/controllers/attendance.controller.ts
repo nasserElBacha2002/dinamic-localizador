@@ -32,6 +32,15 @@ export const attendanceController = {
     res.status(200).json({ data: record });
   },
 
+  async getByEmployeeWorkdayId(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const record = await attendanceService.getByEmployeeWorkdayId(
+      companyId,
+      String(req.params.employeeWorkdayId),
+    );
+    res.status(200).json({ data: record });
+  },
+
   async listReviews(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const query = req.validatedQuery as { page: number; limit: number };

@@ -1,4 +1,4 @@
-import type { AttendanceRecord, ManualAttendanceKind } from "../types/attendance";
+import type { AttendanceRecord } from "../types/attendance";
 import type { CompanyPermission } from "../types/permissions";
 import { hasPermission } from "./permissions";
 
@@ -15,8 +15,13 @@ export interface ManualAttendanceAction {
   mode: "create" | "edit";
 }
 
+type ManualAttendanceKind = import("../types/attendance").ManualAttendanceKind;
+
 export function resolveManualAttendanceActions(
-  attendance: AttendanceRecord | null | undefined,
+  attendance: (Pick<AttendanceRecord, "receivedAt" | "checkoutAt"> & {
+    hasAttendanceRecord?: boolean;
+    validationStatus?: AttendanceRecord["validationStatus"] | null;
+  }) | null | undefined,
   options: {
     permissions: readonly string[] | undefined;
     allowManualAttendanceCorrections: boolean;
@@ -35,6 +40,7 @@ export function resolveManualAttendanceActions(
     "attendance:manual_edit",
   );
 
+  // Ignore placeholder/null validation — only punch timestamps matter.
   const hasArrival = Boolean(attendance?.receivedAt);
   const hasCheckout = Boolean(attendance?.checkoutAt);
   const actions: ManualAttendanceAction[] = [];

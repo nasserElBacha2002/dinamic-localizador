@@ -41,6 +41,16 @@ import { getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/da
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../utils/date-range-url";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
 import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
+import {
+  attendanceListDetailPath,
+  attendanceListLocationLabel,
+  attendanceListLocationTone,
+  attendanceListPunctualityLabel,
+  attendanceListPunctualityTone,
+  attendanceListRowKey,
+  attendanceListValidationLabel,
+  attendanceListValidationTone,
+} from "../../utils/attendance-list-display";
 import { formatDistanceMeters, getRelatedName } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -222,21 +232,30 @@ export function AttendanceListPage() {
         key: "validationStatus",
         header: "Validación",
         render: (row) => (
-          <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
+          <StatusBadge
+            label={attendanceListValidationLabel(row)}
+            tone={attendanceListValidationTone(row)}
+          />
         ),
       },
       {
         key: "locationStatus",
         header: "Ubicación",
         render: (row) => (
-          <StatusBadge label={locationStatusLabels[row.locationStatus]} tone="neutral" />
+          <StatusBadge
+            label={attendanceListLocationLabel(row)}
+            tone={attendanceListLocationTone(row)}
+          />
         ),
       },
       {
         key: "punctualityStatus",
         header: "Puntualidad",
         render: (row) => (
-          <StatusBadge label={punctualityStatusLabels[row.punctualityStatus]} tone="neutral" />
+          <StatusBadge
+            label={attendanceListPunctualityLabel(row)}
+            tone={attendanceListPunctualityTone(row)}
+          />
         ),
       },
       {
@@ -264,7 +283,10 @@ export function AttendanceListPage() {
           />
       ),
       status: (row) => (
-        <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
+        <StatusBadge
+          label={attendanceListValidationLabel(row)}
+          tone={attendanceListValidationTone(row)}
+        />
       ),
       fields: [
         {
@@ -314,13 +336,13 @@ export function AttendanceListPage() {
         {
           key: "locationStatus",
           label: "Ubicación",
-          getValue: (row) => locationStatusLabels[row.locationStatus],
+          getValue: (row) => attendanceListLocationLabel(row),
           visibility: "expanded",
         },
         {
           key: "punctualityStatus",
           label: "Puntualidad",
-          getValue: (row) => punctualityStatusLabels[row.punctualityStatus],
+          getValue: (row) => attendanceListPunctualityLabel(row),
           visibility: "expanded",
         },
         {
@@ -535,13 +557,18 @@ export function AttendanceListPage() {
       <DataTable
         rows={data?.data ?? []}
         columns={columns}
-        getRowKey={(row) => row.id}
+        getRowKey={(row) => attendanceListRowKey(row)}
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
-        emptyTitle="No hay asistencias registradas"
-        emptyDescription="Ajustá los filtros o esperá nuevos registros de asistencia."
+        emptyTitle="No hay asistencias esperadas"
+        emptyDescription="Ajustá los filtros o esperá nuevas jornadas / registros de asistencia."
         onRowClick={(row) =>
-          navigateWithListContext(navigate, `/attendance/${row.id}`, ATTENDANCE_LIST_PATH, location)
+          navigateWithListContext(
+            navigate,
+            attendanceListDetailPath(row),
+            ATTENDANCE_LIST_PATH,
+            location,
+          )
         }
         mobileView="summary"
         mobileCard={mobileCard}

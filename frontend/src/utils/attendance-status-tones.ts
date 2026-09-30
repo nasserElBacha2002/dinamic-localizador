@@ -1,5 +1,6 @@
 import type { AssignmentConfirmationStatus } from "../types/assignment-confirmation";
 import type {
+  AttendanceEffectiveState,
   CheckoutStatus,
   LocationStatus,
   OperationalStatus,
@@ -44,6 +45,18 @@ export function punctualityStatusTone(status: PunctualityStatus): StatusBadgeTon
   if (status === "EARLY") return "info";
   if (status === "LATE") return "warning";
   if (status === "OUTSIDE_TIME_WINDOW") return "danger";
+  return "neutral";
+}
+
+/** Tones for expected-workday effective state (no-punch ABSENT vs still EXPECTED). */
+export function attendanceEffectiveStateTone(
+  state: AttendanceEffectiveState,
+): StatusBadgeTone {
+  if (state === "PRESENT") return "success";
+  if (state === "EXPECTED") return "neutral";
+  if (state === "ABSENT") return "danger";
+  if (state === "JUSTIFIED") return "info";
+  if (state === "CANCELLED") return "neutral";
   return "neutral";
 }
 

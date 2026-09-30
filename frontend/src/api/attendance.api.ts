@@ -33,6 +33,15 @@ export async function getAttendanceById(id: string): Promise<AttendanceDetail> {
   return data.data;
 }
 
+export async function getAttendanceByEmployeeWorkdayId(
+  employeeWorkdayId: string,
+): Promise<AttendanceDetail> {
+  const { data } = await scopedApiClient.get<SingleResponse<AttendanceDetail>>(
+    `attendance/workdays/${employeeWorkdayId}`,
+  );
+  return data.data;
+}
+
 export async function createAttendanceRecord(
   input: CreateAttendanceInput,
   options?: { scopeCompanyId?: string; signal?: AbortSignal },

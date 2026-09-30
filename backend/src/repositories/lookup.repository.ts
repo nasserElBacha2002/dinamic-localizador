@@ -10,6 +10,7 @@ import type {
   OperationLookupQuery,
   ServiceLookupQuery,
 } from "../schemas/lookup.schema";
+import { buildMultiTermLikeSearchClause } from "../utils/multi-term-like-search";
 
 const toIsoString = (value: Date | string | null): string | null => {
   if (!value) {
@@ -46,8 +47,13 @@ export const lookupRepository = {
     }
 
     if (query.search) {
-      request.input("search", sql.NVarChar(150), `%${query.search}%`);
-      filters.push("e.name LIKE @search");
+      const nameSearch = buildMultiTermLikeSearchClause("e.name", query.search);
+      if (nameSearch.clause) {
+        for (const param of nameSearch.params) {
+          request.input(param.name, sql.NVarChar(150), param.value);
+        }
+        filters.push(nameSearch.clause);
+      }
     }
 
     if (query.active === true) {

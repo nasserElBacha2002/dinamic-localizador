@@ -1,7 +1,9 @@
 import { Button, Group } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { OperationForm } from "../../components/operations/OperationForm";
+import { OperationShiftsPanel } from "../../components/operations/OperationShiftsPanel";
 import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
 import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
 import { ConfirmDialog, EntityAvatar, ErrorState, LoadingState } from "../../design-system";
@@ -22,10 +24,7 @@ import { getOperationDisplayName } from "../../utils/operation-display";
 import { isOperationEditable } from "../../utils/operation-status";
 import { hasPermission } from "../../utils/permissions";
 
-/**
- * Dedicated `/operations/:id/edit` route reusing OperationForm.
- * Embedded edit on OperationDetailPage remains until the operations migration phase.
- */
+/** Dedicated `/operations/:id/edit` route for all editable operation configuration. */
 export function OperationEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -149,6 +148,14 @@ export function OperationEditPage() {
         errorMessage={errorMessage}
         onDirtyChange={unsaved.setDirty}
         onSubmit={handleSubmit}
+      />
+      <OperationShiftsPanel
+        operationId={operation.id}
+        scheduleMode={operation.scheduleMode ?? "SINGLE"}
+        canManage={canEdit}
+        onFeedback={(message, severity) => {
+          notifications.show({ color: severity === "error" ? "red" : "green", message });
+        }}
       />
       <ConfirmDialog
         open={resetConfirmOpen}

@@ -3,7 +3,6 @@ import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
-import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
@@ -15,37 +14,30 @@ import {
   LoadingState,
   MetricCard,
   PageHeader,
-  SectionCard,
   StatusBadge,
   type ActionMenuItem,
   type StatusBadgeTone,
 } from "../../design-system";
 import { EntityLink } from "../../components/entity-link";
 import { OperationTeamSection } from "../../components/operations/OperationTeamSection";
-import { OperationShiftsPanel } from "../../components/operations/OperationShiftsPanel";
-import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
   useCancelOperation,
   useOperation,
   useOperationWorkdays,
   useReactivateOperation,
-  useUpdateOperation,
 } from "../../hooks/useOperations";
-import type { OperationFormValues } from "../../schemas/operation.schema";
 import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { terminology } from "../../domain/terminology";
-import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
+import { getApiErrorMessage } from "../../utils/errors";
 import { getEntityEditPath } from "../../utils/entity-routes";
 import { getOperationDisplayName } from "../../utils/operation-display";
 import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
 import {
-  buildOperationEditDefaultValues,
   formatOperationDetailScheduleTitle,
   resolveOperationReferenceDate,
-  toOperationUpdatePayload,
 } from "../../utils/operation-detail-display";
 import {
   formatRecurringValidity,
@@ -82,18 +74,14 @@ export function OperationDetailPage() {
   const navigate = useNavigate();
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
-  const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
   const companySettingsQuery = useCompanySettings(Boolean(id));
   const modulesQuery = useCompanyModules(Boolean(id));
   const permissionsQuery = useCompanyPermissions();
-  const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
   const reactivateMutation = useReactivateOperation();
 
-  const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [confirmReactivateOpen, setConfirmReactivateOpen] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [teamWorkdayOverride, setTeamWorkdayOverride] =
     useState<OperationTeamWorkdaySelection | null>(null);
 
@@ -133,11 +121,6 @@ export function OperationDetailPage() {
     () => (operation ? resolveOperationReferenceDate(operation) : ""),
     [operation],
   );
-  const editDefaultValues = useMemo(
-    () => (operation ? buildOperationEditDefaultValues(operation) : null),
-    [operation],
-  );
-
   if (!id) {
     return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
   }
@@ -199,23 +182,6 @@ export function OperationDetailPage() {
           description: `Fin ${formatDateTime(operation.scheduledEnd)} · ${operationKindLabel}`,
         };
 
-  const handleUpdate = async (values: OperationFormValues) => {
-    setErrorMessage(null);
-
-    try {
-      await updateMutation.mutateAsync(toOperationUpdatePayload(operation, values));
-      setEditing(false);
-      showFeedback(`${terminology.operation.singular} actualizada correctamente.`);
-    } catch (error) {
-      if (isRecurringWorkdaySyncError(error)) {
-        setEditing(false);
-        showFeedback(getApiErrorMessage(error), "error");
-        return;
-      }
-      setErrorMessage(getApiErrorMessage(error));
-    }
-  };
-
   const handleCancel = async () => {
     try {
       await cancelMutation.mutateAsync(id);
@@ -240,7 +206,7 @@ export function OperationDetailPage() {
   };
 
   const headerMenuItems: ActionMenuItem[] = [];
-  if (canEdit && !editing) {
+  if (canEdit) {
     headerMenuItems.push({
       key: "edit-page",
       label: "Editar",
@@ -248,16 +214,6 @@ export function OperationDetailPage() {
     });
   }
   if (canEdit) {
-    headerMenuItems.push({
-      key: "toggle-edit",
-      label: editing
-        ? "Cancelar edición"
-        : `Editar ${terminology.operation.singular.toLowerCase()}`,
-      onClick: () => {
-        setEditing((current) => !current);
-        setErrorMessage(null);
-      },
-    });
     headerMenuItems.push({
       key: "cancel-operation",
       label: `Cancelar ${terminology.operation.singular.toLowerCase()}`,
@@ -274,14 +230,6 @@ export function OperationDetailPage() {
       onClick: () => setConfirmReactivateOpen(true),
     });
   }
-  if (editing && canEdit) {
-    headerMenuItems.push({
-      key: "back",
-      label: "Volver al listado",
-      onClick: goBackToList,
-    });
-  }
-
   return (
     <>
       <PageHeader
@@ -290,30 +238,20 @@ export function OperationDetailPage() {
         action={
           <ActionMenu
             primary={
-              editing && canEdit ? (
-                <Button
-                  type="submit"
-                  form={OPERATION_DETAIL_FORM_ID}
-                  loading={updateMutation.isPending}
-                >
-                  Guardar cambios
-                </Button>
-              ) : (
-                <Group gap="sm" wrap="nowrap">
-                  {canViewAttendance ? (
-                    <Button
-                      component={Link}
-                      to={buildOperationAttendanceHref(operation.id)}
-                      variant="filled"
-                    >
-                      Ver asistencias
-                    </Button>
-                  ) : null}
-                  <Button variant="default" onClick={goBackToList}>
-                    Volver al listado
+              <Group gap="sm" wrap="nowrap">
+                {canViewAttendance ? (
+                  <Button
+                    component={Link}
+                    to={buildOperationAttendanceHref(operation.id)}
+                    variant="filled"
+                  >
+                    Ver asistencias
                   </Button>
-                </Group>
-              )
+                ) : null}
+                <Button variant="default" onClick={goBackToList}>
+                  Volver al listado
+                </Button>
+              </Group>
             }
             items={headerMenuItems}
             menuLabel="Más acciones de la operación"
@@ -371,13 +309,6 @@ export function OperationDetailPage() {
           />
         </SimpleGrid>
 
-        <OperationShiftsPanel
-          operationId={operation.id}
-          scheduleMode={operation.scheduleMode ?? "SINGLE"}
-          canManage={canManage}
-          onFeedback={(message, severity) => showFeedback(message, severity)}
-        />
-
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
             <OperationTeamSection
@@ -393,28 +324,6 @@ export function OperationDetailPage() {
               onFeedback={(message, severity) => showFeedback(message, severity)}
             />
           </Box>
-
-          {editing && canEdit && editDefaultValues ? (
-            <Box className={layoutClasses.editSection}>
-              <SectionCard title={`Editar ${terminology.operation.singular.toLowerCase()}`}>
-                <OperationForm
-                  mode="edit"
-                  currentStatus={operation.status}
-                  currentOperationKind={operation.operationKind ?? "ONE_TIME"}
-                  companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
-                  defaultValues={editDefaultValues}
-                  submitLabel="Guardar cambios"
-                  cancelTo={`/operations/${operation.id}`}
-                  loading={updateMutation.isPending}
-                  errorMessage={errorMessage}
-                  onSubmit={handleUpdate}
-                  embedded
-                  formId={OPERATION_DETAIL_FORM_ID}
-                  hideActions
-                />
-              </SectionCard>
-            </Box>
-          ) : null}
         </Box>
       </Stack>
 

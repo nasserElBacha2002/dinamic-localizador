@@ -18,8 +18,6 @@ import {
   useCreateOperationShift,
   useDeactivateOperationShift,
   useOperationShifts,
-  useTransitionOperationToMultiShift,
-  useTransitionOperationToSingle,
   useUpsertOperationShiftException,
 } from "../../hooks/useOperationShifts";
 import { useShiftTemplates } from "../../hooks/useShiftTemplates";
@@ -91,8 +89,6 @@ export function OperationShiftsPanel({
   const deactivateShiftMutation = useDeactivateOperationShift(operationId);
   const addVersionMutation = useAddOperationShiftVersion(operationId);
   const upsertExceptionMutation = useUpsertOperationShiftException(operationId);
-  const toMultiMutation = useTransitionOperationToMultiShift(operationId);
-  const toSingleMutation = useTransitionOperationToSingle(operationId);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [addMode, setAddMode] = useState<"template" | "custom" | null>(null);
@@ -102,13 +98,6 @@ export function OperationShiftsPanel({
   const [customStart, setCustomStart] = useState("08:00");
   const [customEnd, setCustomEnd] = useState("16:00");
   const [effectiveFrom, setEffectiveFrom] = useState(getTodayDateInput());
-
-  const [toMultiOpen, setToMultiOpen] = useState(false);
-  const [toSingleOpen, setToSingleOpen] = useState(false);
-  const [transitionDate, setTransitionDate] = useState(getTodayDateInput());
-  const [selectedTemplateIdsForTransition, setSelectedTemplateIdsForTransition] = useState<
-    string[]
-  >([]);
 
   const [versionShift, setVersionShift] = useState<OperationShiftWithVersions | null>(null);
   const [versionFrom, setVersionFrom] = useState(getTodayDateInput());
@@ -143,9 +132,7 @@ export function OperationShiftsPanel({
     createShiftMutation.isPending ||
     deactivateShiftMutation.isPending ||
     addVersionMutation.isPending ||
-    upsertExceptionMutation.isPending ||
-    toMultiMutation.isPending ||
-    toSingleMutation.isPending;
+    upsertExceptionMutation.isPending;
 
   const resetAddForm = () => {
     setAddMode(null);
@@ -291,46 +278,6 @@ export function OperationShiftsPanel({
     }
   };
 
-  const handleTransitionToMulti = async () => {
-    setErrorMessage(null);
-    const selected = activeTemplates.filter((template) =>
-      selectedTemplateIdsForTransition.includes(template.id),
-    );
-    if (selected.length === 0) {
-      setErrorMessage("Seleccioná al menos una plantilla para el cambio a multi-turno.");
-      return;
-    }
-    try {
-      await toMultiMutation.mutateAsync({
-        effectiveFrom: transitionDate,
-        shifts: selected.map((template, index) => ({
-          code: template.code,
-          name: template.name,
-          templateId: template.id,
-          sortOrder: index,
-          startTime: template.startTime,
-          endTime: template.endTime,
-        })),
-      });
-      setToMultiOpen(false);
-      setSelectedTemplateIdsForTransition([]);
-      onFeedback("La operación pasó a modo multi-turno.", "success");
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
-    }
-  };
-
-  const handleTransitionToSingle = async () => {
-    setErrorMessage(null);
-    try {
-      await toSingleMutation.mutateAsync({ effectiveFrom: transitionDate });
-      setToSingleOpen(false);
-      onFeedback("La operación volvió a modo horario único.", "success");
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
-    }
-  };
-
   return (
     <>
       <SectionCard
@@ -338,7 +285,7 @@ export function OperationShiftsPanel({
         description={
           isMulti
             ? "Modo multi-turno: cada jornada se materializa por turno. Fecha operativa de referencia: hoy."
-            : "Modo horario único. Podés pasar a multi-turno cuando la operación necesite varios turnos."
+            : "Modo horario único definido al crear la operación."
         }
       >
         <Stack gap="md">
@@ -354,32 +301,6 @@ export function OperationShiftsPanel({
           </Group>
 
           <FormErrorAlert message={errorMessage} />
-
-          {canManage && !isMulti ? (
-            <Alert color="blue" title="Cambiar a multi-turno">
-              <Stack gap="sm">
-                <Text size="sm">
-                  Vas a definir turnos a partir de plantillas de la empresa. Las asignaciones
-                  actuales se redistribuyen según la configuración del servidor.
-                </Text>
-                <Button
-                  size="xs"
-                  variant="light"
-                  disabled={busy}
-                  onClick={() => {
-                    setTransitionDate(getTodayDateInput());
-                    setSelectedTemplateIdsForTransition(
-                      activeTemplates.slice(0, 2).map((template) => template.id),
-                    );
-                    setErrorMessage(null);
-                    setToMultiOpen(true);
-                  }}
-                >
-                  Pasar a multi-turno
-                </Button>
-              </Stack>
-            </Alert>
-          ) : null}
 
           {isMulti ? (
             <>
@@ -515,19 +436,6 @@ export function OperationShiftsPanel({
                         onClick={() => setAddMode("custom")}
                       >
                         Turno personalizado
-                      </Button>
-                      <Button
-                        size="xs"
-                        color="orange"
-                        variant="light"
-                        disabled={busy}
-                        onClick={() => {
-                          setTransitionDate(getTodayDateInput());
-                          setErrorMessage(null);
-                          setToSingleOpen(true);
-                        }}
-                      >
-                        Volver a horario único
                       </Button>
                     </Group>
                   ) : (
@@ -771,112 +679,6 @@ export function OperationShiftsPanel({
         </Stack>
       </ResponsiveModal>
 
-      <ResponsiveModal
-        opened={toMultiOpen}
-        onClose={toMultiMutation.isPending ? () => undefined : () => setToMultiOpen(false)}
-        title="Pasar a multi-turno"
-        size="md"
-        closeOnClickOutside={!toMultiMutation.isPending}
-        closeOnEscape={!toMultiMutation.isPending}
-        footer={
-          <Group justify="flex-end" gap="sm">
-            <Button
-              variant="default"
-              disabled={toMultiMutation.isPending}
-              onClick={() => setToMultiOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              loading={toMultiMutation.isPending}
-              onClick={() => void handleTransitionToMulti()}
-            >
-              Confirmar multi-turno
-            </Button>
-          </Group>
-        }
-      >
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            Confirmá la fecha de vigencia y las plantillas iniciales. El cambio se confirma
-            cuando el servidor responde (sin éxito optimista).
-          </Text>
-          <TextInput
-            label="Vigente desde"
-            type="date"
-            value={transitionDate}
-            onChange={(event) => setTransitionDate(event.currentTarget.value)}
-            required
-          />
-          {activeTemplates.length === 0 ? (
-            <Alert color="yellow">
-              No hay plantillas activas. Creá plantillas en Configuración → Plantillas de turnos.
-            </Alert>
-          ) : (
-            <Stack gap={6}>
-              <Text size="sm" fw={500}>
-                Plantillas iniciales
-              </Text>
-              {activeTemplates.map((template) => (
-                <Checkbox
-                  key={template.id}
-                  label={`${template.name} (${template.startTime}–${template.endTime})`}
-                  checked={selectedTemplateIdsForTransition.includes(template.id)}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked;
-                    setSelectedTemplateIdsForTransition((current) =>
-                      checked
-                        ? [...current, template.id]
-                        : current.filter((id) => id !== template.id),
-                    );
-                  }}
-                />
-              ))}
-            </Stack>
-          )}
-        </Stack>
-      </ResponsiveModal>
-
-      <ResponsiveModal
-        opened={toSingleOpen}
-        onClose={toSingleMutation.isPending ? () => undefined : () => setToSingleOpen(false)}
-        title="Volver a horario único"
-        size="md"
-        closeOnClickOutside={!toSingleMutation.isPending}
-        closeOnEscape={!toSingleMutation.isPending}
-        footer={
-          <Group justify="flex-end" gap="sm">
-            <Button
-              variant="default"
-              disabled={toSingleMutation.isPending}
-              onClick={() => setToSingleOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              color="red"
-              loading={toSingleMutation.isPending}
-              onClick={() => void handleTransitionToSingle()}
-            >
-              Confirmar horario único
-            </Button>
-          </Group>
-        }
-      >
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            Se desactivará el modo multi-turno desde la fecha indicada. Confirmá solo si ya no
-            necesitás varios turnos en esta operación.
-          </Text>
-          <TextInput
-            label="Vigente desde"
-            type="date"
-            value={transitionDate}
-            onChange={(event) => setTransitionDate(event.currentTarget.value)}
-            required
-          />
-        </Stack>
-      </ResponsiveModal>
     </>
   );
 }

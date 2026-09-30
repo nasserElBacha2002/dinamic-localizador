@@ -5,7 +5,7 @@ setupDomEnvironment();
 import assert from "node:assert/strict";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { MemoryRouter } from "react-router";
@@ -124,39 +124,45 @@ afterEach(() => {
 });
 
 describe("OperationForm recurring create review fixes", () => {
-  it("shows missing company schedule message and settings link", () => {
+  it("keeps company schedule details out of the main form", () => {
     const view = renderForm({
       companyWorkSchedule: null,
       companyWorkScheduleLoading: false,
     });
 
     fireEvent.click(view.getByText("Trabajo habitual"));
-    assert.ok(
-      view.getByText("La empresa no tiene un horario laboral semanal configurado."),
+    assert.ok(view.getByRole("button", { name: /horario específico/i }));
+    assert.equal(
+      view.queryByText("La empresa no tiene un horario laboral semanal configurado."),
+      null,
     );
-    assert.ok(view.getByText("Configurar horario de la empresa"));
+    assert.equal(view.queryByText("Configurar horario de la empresa"), null);
   });
 
-  it("renders company schedule preview when schedule exists", () => {
+  it("shows the company schedule as a compact summary", () => {
     const view = renderForm({
       companyWorkSchedule,
       companyWorkScheduleLoading: false,
     });
 
     fireEvent.click(view.getByText("Trabajo habitual"));
-    fireEvent.click(view.getByText("Usar horario de la empresa"));
     assert.ok(view.getByText("Horario de la empresa"));
-    assert.ok(view.getAllByText("09:00–18:00").length >= 1);
+    assert.equal(view.queryByText("09:00–18:00"), null);
   });
 
-  it("shows custom schedule editor when selecting horario específico", () => {
+  it("opens the custom schedule editor in a dialog", async () => {
     const view = renderForm({
       companyWorkSchedule: null,
       companyWorkScheduleLoading: false,
     });
 
     fireEvent.click(view.getByText("Trabajo habitual"));
-    fireEvent.click(view.getByText("Configurar horario específico"));
+    fireEvent.click(view.getByRole("button", { name: /horario específico/i }));
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("dialog", { name: "Horario específico" }));
+    });
     assert.ok(view.getByLabelText("Lunes"));
+    assert.ok(view.getByRole("button", { name: "Guardar horario específico" }));
   });
 });

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { operationScheduleModeTransitionService } from "../services/operation-schedule-mode-transition.service";
+import { AppError } from "../errors/app-error";
 import { operationShiftService } from "../services/operation-shift.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
@@ -133,23 +133,19 @@ export const operationShiftController = {
     });
   },
 
-  async transitionToMultiShift(req: Request, res: Response) {
-    const companyId = requireRequestCompanyId(req);
-    const result = await operationScheduleModeTransitionService.transitionToMultiShift(
-      companyId,
-      String(req.params.operationId),
-      req.body,
+  async transitionToMultiShift() {
+    throw new AppError(
+      409,
+      "OPERATION_SCHEDULE_MODE_IMMUTABLE",
+      "El modo de horario se define al crear la operación y no puede modificarse después.",
     );
-    res.status(200).json({ data: result });
   },
 
-  async transitionToSingle(req: Request, res: Response) {
-    const companyId = requireRequestCompanyId(req);
-    const result = await operationScheduleModeTransitionService.transitionToSingle(
-      companyId,
-      String(req.params.operationId),
-      req.body,
+  async transitionToSingle() {
+    throw new AppError(
+      409,
+      "OPERATION_SCHEDULE_MODE_IMMUTABLE",
+      "El modo de horario se define al crear la operación y no puede modificarse después.",
     );
-    res.status(200).json({ data: result });
   },
 };

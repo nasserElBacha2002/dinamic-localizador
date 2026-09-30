@@ -32,6 +32,22 @@ mock.module("../../hooks/useShiftTemplates", {
   },
 });
 
+mock.module("../../hooks/useOperationShifts", {
+  namedExports: {
+    useOperationShifts: () => ({
+      data: [],
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: async () => undefined,
+    }),
+    useCreateOperationShift: () => ({ isPending: false, mutateAsync: async () => ({}) }),
+    useDeactivateOperationShift: () => ({ isPending: false, mutateAsync: async () => ({}) }),
+    useAddOperationShiftVersion: () => ({ isPending: false, mutateAsync: async () => ({}) }),
+    useUpsertOperationShiftException: () => ({ isPending: false, mutateAsync: async () => ({}) }),
+  },
+});
+
 import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
@@ -99,5 +115,34 @@ describe("OperationForm multi-shift create", () => {
       assert.ok(view.getByRole("button", { name: /Turno personalizado/i }));
       assert.ok(view.getByText(/Agregá al menos un turno/i));
     });
+  });
+
+  it("renders existing multi-shift management inside the main edit form", async () => {
+    mockViewport("desktop");
+    const defaults = {
+      ...buildOperationCreateDefaultValues(settings),
+      scheduleMode: "MULTI_SHIFT" as const,
+      shifts: [],
+    };
+    const view = renderPage(
+      <OperationForm
+        mode="edit"
+        currentStatus="SCHEDULED"
+        currentOperationKind="ONE_TIME"
+        defaultValues={defaults}
+        submitLabel="Guardar cambios"
+        cancelTo="/operations/op-1"
+        operationId="op-1"
+        currentScheduleMode="MULTI_SHIFT"
+        canManageShifts
+        onShiftFeedback={() => undefined}
+        onSubmit={async () => undefined}
+      />,
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Turnos de la operación"));
+    });
+    assert.ok(view.getByText("Turnos de la operación").closest("form"));
   });
 });

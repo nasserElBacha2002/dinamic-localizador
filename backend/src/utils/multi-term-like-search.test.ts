@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildGroupAndLikeClause,
   buildMultiTermLikeSearchClause,
+  mergeEmployeeLookupGroups,
   parseLookupSearchGroups,
   splitSearchTerms,
 } from "./multi-term-like-search";
@@ -40,6 +42,25 @@ describe("parseLookupSearchGroups", () => {
       ["agustin", "perez"],
       ["ana", "lopez"],
     ]);
+  });
+});
+
+describe("buildGroupAndLikeClause", () => {
+  it("keeps the historical single-term predicate shape", () => {
+    assert.deepEqual(buildGroupAndLikeClause("e.name", ["agustin"], "search"), {
+      clause: "e.name LIKE @search",
+      params: [{ name: "search", value: "%agustin%" }],
+    });
+  });
+
+  it("ANDs multiple tokens for the same person", () => {
+    assert.deepEqual(buildGroupAndLikeClause("e.name", ["juana", "diaz"], "search3"), {
+      clause: "(e.name LIKE @search30 AND e.name LIKE @search31)",
+      params: [
+        { name: "search30", value: "%juana%" },
+        { name: "search31", value: "%diaz%" },
+      ],
+    });
   });
 });
 
@@ -125,5 +146,66 @@ describe("buildMultiTermLikeSearchClause", () => {
       clause: null,
       params: [],
     });
+  });
+});
+
+describe("mergeEmployeeLookupGroups", () => {
+  it("returns a single-group page unchanged aside from stable name sort", () => {
+    const merged = mergeEmployeeLookupGroups([
+      [
+        { id: "2", fullName: "Beatriz" },
+        { id: "1", fullName: "Agustin" },
+      ],
+    ]);
+    assert.deepEqual(merged, [
+      { id: "1", fullName: "Agustin", matchedGroupIndex: 0 },
+      { id: "2", fullName: "Beatriz", matchedGroupIndex: 0 },
+    ]);
+  });
+
+  it("keeps later groups when the first group already fills the per-group limit", () => {
+    // Simulates TOP(10) for "agustin" (10 rows) plus TOP pages for other people.
+    const agustines = Array.from({ length: 10 }, (_, index) => ({
+      id: `agustin-${index}`,
+      fullName: `Agustin ${String(index).padStart(2, "0")}`,
+    }));
+    const ana = { id: "ana-1", fullName: "Ana Lopez" };
+    const marta = { id: "marta-1", fullName: "Marta Gomez" };
+    const juana = { id: "juana-1", fullName: "Juana Diaz" };
+
+    const merged = mergeEmployeeLookupGroups([agustines, [ana], [marta], [juana]]);
+    const ids = merged.map((row) => row.id);
+
+    assert.equal(agustines.length, 10);
+    assert.ok(ids.includes("ana-1"));
+    assert.ok(ids.includes("marta-1"));
+    assert.ok(ids.includes("juana-1"));
+    assert.equal(ids.filter((id) => id.startsWith("agustin-")).length, 10);
+    assert.equal(merged.length, 13);
+    assert.equal(merged.find((row) => row.id === "ana-1")?.matchedGroupIndex, 1);
+    assert.equal(merged.find((row) => row.id === "juana-1")?.matchedGroupIndex, 3);
+  });
+
+  it("deduplicates employees that match more than one independent search", () => {
+    const shared = { id: "ana-1", fullName: "Ana Lopez" };
+    const merged = mergeEmployeeLookupGroups([
+      [shared, { id: "ana-2", fullName: "Ana Maria" }],
+      [shared, { id: "lopez-1", fullName: "Lopez Pedro" }],
+    ]);
+
+    assert.equal(merged.filter((row) => row.id === "ana-1").length, 1);
+    assert.equal(merged.find((row) => row.id === "ana-1")?.matchedGroupIndex, 0);
+    assert.deepEqual(
+      merged.map((row) => row.id).sort(),
+      ["ana-1", "ana-2", "lopez-1"],
+    );
+  });
+
+  it("keeps the first group's index when the same person appears in two groups", () => {
+    const anaLopez = { id: "1", fullName: "Ana Lopez" };
+    const merged = mergeEmployeeLookupGroups([[anaLopez], [anaLopez]]);
+    assert.deepEqual(merged, [
+      { id: "1", fullName: "Ana Lopez", matchedGroupIndex: 0 },
+    ]);
   });
 });

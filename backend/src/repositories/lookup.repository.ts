@@ -10,7 +10,12 @@ import type {
   OperationLookupQuery,
   ServiceLookupQuery,
 } from "../schemas/lookup.schema";
-import { buildMultiTermLikeSearchClause } from "../utils/multi-term-like-search";
+import {
+  buildGroupAndLikeClause,
+  mergeEmployeeLookupGroups,
+  parseLookupSearchGroups,
+  type MultiTermLikeClause,
+} from "../utils/multi-term-like-search";
 
 const toIsoString = (value: Date | string | null): string | null => {
   if (!value) {
@@ -20,59 +25,102 @@ const toIsoString = (value: Date | string | null): string | null => {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 };
 
+const mapEmployeeLookupRows = (recordset: Array<Record<string, unknown>>): EmployeeLookup[] =>
+  recordset.map((row) => ({
+    id: String(row.id),
+    fullName: String(row.full_name),
+  }));
+
+/**
+ * One TOP(@limit) page for a fixed name predicate (or none).
+ * Shared by single-term search and each independent comma-group.
+ */
+const listEmployeesPage = async (
+  companyId: string,
+  query: EmployeeLookupQuery,
+  nameSearch: MultiTermLikeClause | null,
+): Promise<EmployeeLookup[]> => {
+  const pool = getPool();
+  const request = pool
+    .request()
+    .input("companyId", sql.UniqueIdentifier, companyId)
+    .input("limit", sql.Int, query.limit ?? 20);
+
+  const filters = ["e.company_id = @companyId"];
+  const ids = query.ids ?? [];
+
+  if (ids.length === 1) {
+    request.input("id", sql.UniqueIdentifier, ids[0]);
+    filters.push("e.id = @id");
+  } else if (ids.length > 1) {
+    const placeholders = ids.map((id, index) => {
+      const param = `id${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+    filters.push(`e.id IN (${placeholders.join(", ")})`);
+  }
+
+  if (nameSearch?.clause) {
+    for (const param of nameSearch.params) {
+      request.input(param.name, sql.NVarChar(150), param.value);
+    }
+    filters.push(nameSearch.clause);
+  }
+
+  if (query.active === true) {
+    filters.push("e.active = 1");
+  }
+
+  const result = await request.query(`
+    SELECT TOP (@limit)
+      e.id,
+      e.name AS full_name
+    FROM employees e
+    WHERE ${filters.join(" AND ")}
+    ORDER BY e.name ASC
+  `);
+
+  return mapEmployeeLookupRows(result.recordset as Array<Record<string, unknown>>);
+};
+
 export const lookupRepository = {
   async listEmployees(
     companyId: string,
     query: EmployeeLookupQuery,
   ): Promise<EmployeeLookup[]> {
-    const pool = getPool();
-    const request = pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("limit", sql.Int, query.limit ?? 20);
+    const searchGroups = query.search ? parseLookupSearchGroups(query.search) : [];
 
-    const filters = ["e.company_id = @companyId"];
-    const ids = query.ids ?? [];
-
-    if (ids.length === 1) {
-      request.input("id", sql.UniqueIdentifier, ids[0]);
-      filters.push("e.id = @id");
-    } else if (ids.length > 1) {
-      const placeholders = ids.map((id, index) => {
-        const param = `id${index}`;
-        request.input(param, sql.UniqueIdentifier, id);
-        return `@${param}`;
-      });
-      filters.push(`e.id IN (${placeholders.join(", ")})`);
+    // No search text (or only empty commas/spaces): preserve historical single TOP.
+    if (searchGroups.length === 0) {
+      return listEmployeesPage(companyId, query, null);
     }
 
-    if (query.search) {
-      const nameSearch = buildMultiTermLikeSearchClause("e.name", query.search);
-      if (nameSearch.clause) {
-        for (const param of nameSearch.params) {
-          request.input(param.name, sql.NVarChar(150), param.value);
-        }
-        filters.push(nameSearch.clause);
-      }
+    // One independent search: single TOP page (spaces still AND within the person).
+    if (searchGroups.length === 1) {
+      const rows = await listEmployeesPage(
+        companyId,
+        query,
+        buildGroupAndLikeClause("e.name", searchGroups[0]!, "search"),
+      );
+      return rows.map((row) => ({ ...row, matchedGroupIndex: 0 }));
     }
 
-    if (query.active === true) {
-      filters.push("e.active = 1");
+    // Multiple comma-separated searches: apply TOP per group so a populous
+    // first group cannot monopolize the global result page, then dedupe.
+    const perGroupPages: EmployeeLookup[][] = [];
+    for (let groupIndex = 0; groupIndex < searchGroups.length; groupIndex += 1) {
+      const groupTerms = searchGroups[groupIndex]!;
+      perGroupPages.push(
+        await listEmployeesPage(
+          companyId,
+          query,
+          buildGroupAndLikeClause("e.name", groupTerms, `search${groupIndex}`),
+        ),
+      );
     }
 
-    const result = await request.query(`
-      SELECT TOP (@limit)
-        e.id,
-        e.name AS full_name
-      FROM employees e
-      WHERE ${filters.join(" AND ")}
-      ORDER BY e.name ASC
-    `);
-
-    return result.recordset.map((row) => ({
-      id: String(row.id),
-      fullName: String(row.full_name),
-    }));
+    return mergeEmployeeLookupGroups(perGroupPages);
   },
 
   async listServices(companyId: string, query: ServiceLookupQuery): Promise<ServiceLookup[]> {

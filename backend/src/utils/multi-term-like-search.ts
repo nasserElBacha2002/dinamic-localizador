@@ -36,6 +36,37 @@ export type MultiTermLikeClause = {
 };
 
 /**
+ * Build a parameterized AND of LIKE predicates for one person/search group.
+ * A single term keeps the historical `@paramPrefix` shape.
+ */
+export function buildGroupAndLikeClause(
+  columnExpression: string,
+  terms: string[],
+  paramPrefix: string,
+): MultiTermLikeClause {
+  if (terms.length === 0) {
+    return { clause: null, params: [] };
+  }
+
+  if (terms.length === 1) {
+    return {
+      clause: `${columnExpression} LIKE @${paramPrefix}`,
+      params: [{ name: paramPrefix, value: `%${terms[0]}%` }],
+    };
+  }
+
+  const params = terms.map((term, index) => ({
+    name: `${paramPrefix}${index}`,
+    value: `%${term}%`,
+  }));
+
+  return {
+    clause: `(${params.map((param) => `${columnExpression} LIKE @${param.name}`).join(" AND ")})`,
+    params,
+  };
+}
+
+/**
  * Build a parameterized LIKE predicate for employee lookup search.
  *
  * Semantics:
@@ -43,7 +74,8 @@ export type MultiTermLikeClause = {
  * - Spaces within a group → AND of LIKE predicates (same person).
  * - Comma-separated groups → OR between groups (union of people).
  *
- * SQL returns each matching row once even if it satisfies multiple groups.
+ * Prefer per-group queries + {@link mergeEmployeeLookupGroups} when applying
+ * `TOP (@limit)` so one group cannot monopolize the result set.
  */
 export function buildMultiTermLikeSearchClause(
   columnExpression: string,
@@ -55,11 +87,8 @@ export function buildMultiTermLikeSearchClause(
     return { clause: null, params: [] };
   }
 
-  if (groups.length === 1 && groups[0].length === 1) {
-    return {
-      clause: `${columnExpression} LIKE @${paramPrefix}`,
-      params: [{ name: paramPrefix, value: `%${groups[0][0]}%` }],
-    };
+  if (groups.length === 1) {
+    return buildGroupAndLikeClause(columnExpression, groups[0]!, paramPrefix);
   }
 
   const params: LikeSearchParam[] = [];
@@ -78,10 +107,41 @@ export function buildMultiTermLikeSearchClause(
       : `(${termClauses.join(" AND ")})`;
   });
 
-  const clause =
-    groupClauses.length === 1
-      ? groupClauses[0]!
-      : `(${groupClauses.join(" OR ")})`;
+  return {
+    clause: `(${groupClauses.join(" OR ")})`,
+    params,
+  };
+}
 
-  return { clause, params };
+export type EmployeeLookupNameRow = {
+  id: string;
+  fullName: string;
+};
+
+export type EmployeeLookupMergedRow = EmployeeLookupNameRow & {
+  /** Group index from the per-group page that first contributed this id. */
+  matchedGroupIndex: number;
+};
+
+/**
+ * Merge per-group lookup pages (each already limited with TOP) into one
+ * deduplicated, name-sorted list. First occurrence of an id wins and keeps
+ * that group's index as the deterministic origin for UI consumption.
+ */
+export function mergeEmployeeLookupGroups(
+  groups: ReadonlyArray<ReadonlyArray<EmployeeLookupNameRow>>,
+): EmployeeLookupMergedRow[] {
+  const byId = new Map<string, EmployeeLookupMergedRow>();
+
+  groups.forEach((group, groupIndex) => {
+    for (const row of group) {
+      if (!byId.has(row.id)) {
+        byId.set(row.id, { ...row, matchedGroupIndex: groupIndex });
+      }
+    }
+  });
+
+  return [...byId.values()].sort((left, right) =>
+    left.fullName.localeCompare(right.fullName),
+  );
 }

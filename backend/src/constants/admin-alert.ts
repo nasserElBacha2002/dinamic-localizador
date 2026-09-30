@@ -7,6 +7,7 @@ export const ADMIN_ALERT_TYPES = [
   "ATTENDANCE_CONFIRMATION_MISSING",
   "MISSING_CHECKIN_AFTER_START",
   "MISSING_CHECKOUT_AFTER_END",
+  "REPLACEMENT_REQUEST",
 ] as const;
 
 /** Dynamic due-at alerts (selected by worker windows; not lifecycle COMPLETED). */
@@ -89,6 +90,7 @@ export const adminAlertTypeDefaultCategory = (
     case "ATTENDANCE_CONFIRMATION_MISSING":
     case "MISSING_CHECKIN_AFTER_START":
     case "MISSING_CHECKOUT_AFTER_END":
+    case "REPLACEMENT_REQUEST":
     default:
       return "OPERATIONAL";
   }

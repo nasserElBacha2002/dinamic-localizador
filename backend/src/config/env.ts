@@ -113,6 +113,7 @@ const envSchema = z
     PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
     TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID: z.string().optional(),
     TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID: z.string().optional(),
+    TWILIO_ADMIN_REPLACEMENT_REQUEST_CONTENT_SID: z.string().optional(),
     ADMIN_ALERT_WORKER_ENABLED: z.stringbool().default(false),
     ADMIN_ALERT_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     ADMIN_ALERT_LEASE_MS: z.coerce.number().int().positive().default(120_000),

@@ -14,6 +14,7 @@ export type AdminNotificationChannel = (typeof ADMIN_NOTIFICATION_CHANNELS)[numb
 export const ADMIN_WHATSAPP_URGENT_ALERT_TYPES = [
   "EMPLOYEE_UNAVAILABLE",
   "ATTENDANCE_THRESHOLD_CROSSED",
+  "REPLACEMENT_REQUEST",
 ] as const satisfies readonly AdminAlertType[];
 
 /** Informational attendance alerts absorbed by the daily email report. */

@@ -3,6 +3,7 @@ import { AppError } from "../errors/app-error";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { companyRepository } from "../repositories/company.repository";
 import { employeeRepository } from "../repositories/employee.repository";
+import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
 import type {
   ResolveWhatsAppCompanyContextInput,
   WhatsAppCompanyResolution,
@@ -172,6 +173,12 @@ const resolveFromEmployeePhone = async (
   return null;
 };
 
+const resolveFromAlertRecipientPhone = async (phoneNumber: string): Promise<WhatsAppCompanyResolution | null> => {
+  const companyIds = await companyAlertRecipientRepository.listEnabledCompanyIdsByPhone(phoneNumber);
+  if (companyIds.length !== 1) return null;
+  return buildResolvedContext({ companyId: companyIds[0]!, employeeId: null, phoneNumber, session: null, resolutionSource: "alert_recipient_phone" });
+};
+
 /**
  * Legacy/single-tenant fallback only. Not full SaaS routing.
  * Allowed when there is exactly one active company, or when BOT_DEFAULT_COMPANY_* is explicitly configured.
@@ -247,6 +254,9 @@ export const whatsappCompanyContextService = {
     if (fromEmployeePhone) {
       return fromEmployeePhone;
     }
+
+    const fromAlertRecipientPhone = await resolveFromAlertRecipientPhone(phoneNumber);
+    if (fromAlertRecipientPhone) return fromAlertRecipientPhone;
 
     const fromDefaultCompany = await resolveFromDefaultCompany(phoneNumber);
     if (fromDefaultCompany) {

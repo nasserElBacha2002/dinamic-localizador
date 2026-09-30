@@ -305,7 +305,7 @@ const processClaimedNotification = async (
     }
   }
 
-  const contentSid = resolveAdminAlertContentSid(notification.templateCategory);
+  const contentSid = resolveAdminAlertContentSid(notification.templateCategory, notification.alertType);
   if (!contentSid) {
     await adminAlertNotificationRepository.markFailed({
       companyId: notification.companyId,

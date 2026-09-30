@@ -62,6 +62,23 @@ const WORKDAY_SCHEDULE_SELECT = `
 `;
 
 export const employeeWorkdayRepository = {
+  /** Occurrence-level no-show marker; does not mutate the base assignment. */
+  async markUnavailable(companyId: string, employeeWorkdayId: string): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .query(`
+        UPDATE employee_workdays
+        SET unavailable_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = N'EXPECTED'
+          AND unavailable_at IS NULL
+      `);
+    return (result.rowsAffected[0] ?? 0) === 1;
+  },
+
   async findByWorkdayAndEmployee(
     companyId: string,
     operationWorkdayId: string,

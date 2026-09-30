@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { AttendanceRecordWithRelations } from "../types/attendance";
 import {
   attendanceListDetailPath,
+  attendanceListLocationTone,
   attendanceListPunctualityLabel,
   attendanceListPunctualityTone,
   attendanceListRowKey,
@@ -77,23 +78,29 @@ describe("attendance-list-display", () => {
       hasAttendanceRecord: false,
       effectiveState: "EXPECTED" as const,
       punctualityStatus: "NOT_RECORDED" as const,
+      locationStatus: "NOT_RECORDED" as const,
+      validationStatus: null,
     };
     const absent = {
       ...baseRow,
       hasAttendanceRecord: false,
       effectiveState: "ABSENT" as const,
       punctualityStatus: "NOT_RECORDED" as const,
+      locationStatus: "NOT_RECORDED" as const,
+      validationStatus: null,
     };
 
     assert.equal(attendanceListValidationLabel(expected), "Pendiente / esperada");
     assert.equal(attendanceListPunctualityLabel(expected), "Pendiente / esperada");
-    assert.equal(attendanceListValidationTone(expected), "neutral");
-    assert.equal(attendanceListPunctualityTone(expected), "neutral");
+    assert.equal(attendanceListValidationTone(expected), "warning");
+    assert.equal(attendanceListPunctualityTone(expected), "warning");
+    assert.equal(attendanceListLocationTone(expected), "neutral");
 
     assert.equal(attendanceListValidationLabel(absent), "Ausente");
     assert.equal(attendanceListPunctualityLabel(absent), "Ausente");
     assert.equal(attendanceListValidationTone(absent), "danger");
     assert.equal(attendanceListPunctualityTone(absent), "danger");
+    assert.equal(attendanceListLocationTone(absent), "neutral");
   });
 
   it("routes detail by attendance id or employee workday id", () => {

@@ -16,10 +16,10 @@ import {
   mapApiPaginationMeta,
   PageHeader,
   PaginationControls,
-  StatusBadge,
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../design-system";
+import { AttendanceStatusBadge } from "../../components/attendance/AttendanceStatusBadge";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
@@ -232,7 +232,7 @@ export function AttendanceListPage() {
         key: "validationStatus",
         header: "Validación",
         render: (row) => (
-          <StatusBadge
+          <AttendanceStatusBadge
             label={attendanceListValidationLabel(row)}
             tone={attendanceListValidationTone(row)}
           />
@@ -242,7 +242,7 @@ export function AttendanceListPage() {
         key: "locationStatus",
         header: "Ubicación",
         render: (row) => (
-          <StatusBadge
+          <AttendanceStatusBadge
             label={attendanceListLocationLabel(row)}
             tone={attendanceListLocationTone(row)}
           />
@@ -252,7 +252,7 @@ export function AttendanceListPage() {
         key: "punctualityStatus",
         header: "Puntualidad",
         render: (row) => (
-          <StatusBadge
+          <AttendanceStatusBadge
             label={attendanceListPunctualityLabel(row)}
             tone={attendanceListPunctualityTone(row)}
           />
@@ -263,7 +263,7 @@ export function AttendanceListPage() {
         header: "Tipo",
         render: (row) =>
           row.isSimulation ? (
-            <StatusBadge label="Simulación" tone="info" variant="light" />
+            <AttendanceStatusBadge label="Simulación" tone="info" variant="light" />
           ) : (
             "Real"
           ),
@@ -283,7 +283,7 @@ export function AttendanceListPage() {
           />
       ),
       status: (row) => (
-        <StatusBadge
+        <AttendanceStatusBadge
           label={attendanceListValidationLabel(row)}
           tone={attendanceListValidationTone(row)}
         />
@@ -336,19 +336,34 @@ export function AttendanceListPage() {
         {
           key: "locationStatus",
           label: "Ubicación",
-          getValue: (row) => attendanceListLocationLabel(row),
+          render: (row) => (
+            <AttendanceStatusBadge
+              label={attendanceListLocationLabel(row)}
+              tone={attendanceListLocationTone(row)}
+            />
+          ),
           visibility: "expanded",
         },
         {
           key: "punctualityStatus",
           label: "Puntualidad",
-          getValue: (row) => attendanceListPunctualityLabel(row),
+          render: (row) => (
+            <AttendanceStatusBadge
+              label={attendanceListPunctualityLabel(row)}
+              tone={attendanceListPunctualityTone(row)}
+            />
+          ),
           visibility: "expanded",
         },
         {
           key: "recordType",
           label: "Tipo",
-          getValue: (row) => (row.isSimulation ? "Simulación" : "Real"),
+          render: (row) =>
+            row.isSimulation ? (
+              <AttendanceStatusBadge label="Simulación" tone="info" />
+            ) : (
+              "Real"
+            ),
           visibility: "expanded",
         },
       ],

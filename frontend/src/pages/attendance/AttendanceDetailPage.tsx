@@ -18,12 +18,12 @@ import {
   PageHeader,
   PaginationControls,
   SectionCard,
-  StatusBadge,
   mapApiPaginationMeta,
   type ActionMenuItem,
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../design-system";
+import { AttendanceStatusBadge } from "../../components/attendance/AttendanceStatusBadge";
 import {
   useAttendanceAuditLogs,
   useAttendanceByEmployeeWorkday,
@@ -40,13 +40,18 @@ import type { AttendanceAuditLog, AttendanceReview } from "../../types/attendanc
 import { formatDateTime } from "../../utils/dates";
 import { formatAttendanceArrivalLabel, ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL } from "../../utils/attendance-display";
 import {
+  attendanceListLocationLabel,
   attendanceListLocationTone,
   attendanceListPunctualityLabel,
   attendanceListPunctualityTone,
   attendanceListValidationLabel,
   attendanceListValidationTone,
 } from "../../utils/attendance-list-display";
-import { attendanceEffectiveStateTone } from "../../utils/attendance-status-tones";
+import {
+  attendanceEffectiveStateTone,
+  checkoutStatusTone,
+  locationStatusTone,
+} from "../../utils/attendance-status-tones";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorCode, getApiErrorMessage, parseApiError } from "../../utils/errors";
 import {
@@ -438,7 +443,7 @@ export function AttendanceDetailPage() {
             {
               label: "Estado",
               value: record.effectiveState ? (
-                <StatusBadge
+                <AttendanceStatusBadge
                   label={
                     employeeWorkdayEffectiveStateLabels[record.effectiveState] ??
                     record.effectiveState
@@ -446,7 +451,7 @@ export function AttendanceDetailPage() {
                   tone={attendanceEffectiveStateTone(record.effectiveState)}
                 />
               ) : (
-                <StatusBadge
+                <AttendanceStatusBadge
                   label={attendanceListValidationLabel(record)}
                   tone={attendanceListValidationTone(record)}
                 />
@@ -460,16 +465,16 @@ export function AttendanceDetailPage() {
               label: "Estado llegada",
               value: hasAttendanceRecord && record.receivedAt ? (
                 <Group gap="xs" wrap="wrap">
-                  <StatusBadge
+                  <AttendanceStatusBadge
                     label={manualArrivalStatusLabel(record.punctualityStatus)}
                     tone={attendanceListPunctualityTone(record)}
                   />
                   {record.arrivalSource === "MANUAL" ? (
-                    <StatusBadge label="Manual" tone="info" />
+                    <AttendanceStatusBadge label="Manual" tone="info" />
                   ) : null}
                 </Group>
               ) : (
-                <StatusBadge
+                <AttendanceStatusBadge
                   label={attendanceListPunctualityLabel(record)}
                   tone={attendanceListPunctualityTone(record)}
                 />
@@ -500,18 +505,21 @@ export function AttendanceDetailPage() {
               label: "Estado salida",
               value: hasAttendanceRecord && record.checkoutStatus ? (
                 <Group gap="xs" wrap="wrap">
-                  <StatusBadge
+                  <AttendanceStatusBadge
                     label={manualCheckoutStatusLabel(record.checkoutStatus)}
-                    tone="neutral"
+                    tone={checkoutStatusTone(record.checkoutStatus)}
                   />
                   {record.checkoutSource === "MANUAL" ? (
-                    <StatusBadge label="Manual" tone="info" />
+                    <AttendanceStatusBadge label="Manual" tone="info" />
                   ) : null}
                 </Group>
               ) : hasAttendanceRecord ? (
                 "—"
               ) : (
-                <StatusBadge label={ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL} tone="neutral" />
+                <AttendanceStatusBadge
+                  label={ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL}
+                  tone={locationStatusTone("NOT_RECORDED")}
+                />
               ),
             },
             {
@@ -562,7 +570,7 @@ export function AttendanceDetailPage() {
                 <Group gap="xs" wrap="wrap">
                   {hasAttendanceRecord ? (
                     <>
-                      <StatusBadge
+                      <AttendanceStatusBadge
                         label={
                           record.validationStatus
                             ? validationStatusLabels[record.validationStatus]
@@ -570,31 +578,36 @@ export function AttendanceDetailPage() {
                         }
                         tone={attendanceListValidationTone(record)}
                       />
-                      <StatusBadge
+                      <AttendanceStatusBadge
                         label={locationStatusLabels[record.locationStatus]}
                         tone={attendanceListLocationTone(record)}
                       />
-                      <StatusBadge
+                      <AttendanceStatusBadge
                         label={punctualityStatusLabels[record.punctualityStatus]}
                         tone={attendanceListPunctualityTone(record)}
                       />
                       {record.checkoutStatus ? (
-                        <StatusBadge
+                        <AttendanceStatusBadge
                           label={checkoutStatusLabels[record.checkoutStatus]}
-                          tone="neutral"
+                          tone={checkoutStatusTone(record.checkoutStatus)}
                         />
                       ) : null}
                     </>
                   ) : (
                     <>
-                      <StatusBadge
+                      <AttendanceStatusBadge
                         label={attendanceListValidationLabel(record)}
                         tone={attendanceListValidationTone(record)}
                       />
-                      <StatusBadge label={ATTENDANCE_ARRIVAL_NOT_RECORDED_LABEL} tone="neutral" />
+                      <AttendanceStatusBadge
+                        label={attendanceListLocationLabel(record)}
+                        tone={attendanceListLocationTone(record)}
+                      />
                     </>
                   )}
-                  {record.isSimulation ? <StatusBadge label="Simulación" tone="info" /> : null}
+                  {record.isSimulation ? (
+                    <AttendanceStatusBadge label="Simulación" tone="info" />
+                  ) : null}
                 </Group>
               ),
             },

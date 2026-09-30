@@ -53,7 +53,7 @@ export function attendanceEffectiveStateTone(
   state: AttendanceEffectiveState,
 ): StatusBadgeTone {
   if (state === "PRESENT") return "success";
-  if (state === "EXPECTED") return "neutral";
+  if (state === "EXPECTED") return "warning";
   if (state === "ABSENT") return "danger";
   if (state === "JUSTIFIED") return "info";
   if (state === "CANCELLED") return "neutral";

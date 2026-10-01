@@ -97,6 +97,32 @@ class BackupPathsTest(unittest.TestCase):
                 retention_days=0,
             )
 
+    def test_log_backup_refuses_after_recovery_transition(self) -> None:
+        from paths import can_run_log_backup
+
+        ok, reason = can_run_log_backup(
+            recovery_before="SIMPLE",
+            recovery_after="FULL",
+            has_full_backup_row=True,
+        )
+        self.assertFalse(ok)
+        self.assertIn("just changed to FULL", reason)
+
+        ok2, _ = can_run_log_backup(
+            recovery_before="FULL",
+            recovery_after="FULL",
+            has_full_backup_row=True,
+        )
+        self.assertTrue(ok2)
+
+        ok3, reason3 = can_run_log_backup(
+            recovery_before="FULL",
+            recovery_after="FULL",
+            has_full_backup_row=False,
+        )
+        self.assertFalse(ok3)
+        self.assertIn("no valid FULL", reason3)
+
 
 if __name__ == "__main__":
     unittest.main()

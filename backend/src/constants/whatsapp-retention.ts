@@ -9,8 +9,6 @@ export const WHATSAPP_RETENTION_TABLE_KEYS = [
   "whatsapp_admin_alert_notification_send_attempts",
   "whatsapp_payroll_receipt_notification_send_attempts",
   "whatsapp_attendance_notifications",
-  // Child of admin alerts (NO ACTION FK) — purge before parent outbox rows.
-  "replacement_request_notifications",
   "whatsapp_admin_alert_notifications",
   "whatsapp_payroll_receipt_notifications",
   "whatsapp_payroll_receipt_query_deliveries",
@@ -30,6 +28,17 @@ export const WHATSAPP_RETENTION_TABLE_KEYS = [
   // Independent cost/audit TTL (gated by WHATSAPP_COST_LEDGER_RETENTION_ENABLED).
   "whatsapp_message_cost_ledger",
 ] as const;
+
+/**
+ * DEBT (replacement FK): `replacement_request_notifications` references
+ * `whatsapp_admin_alert_notifications` with NO ACTION and is functional domain
+ * history (quick-reply correlation), not a disposable WhatsApp technical row.
+ * It is intentionally NOT on the 30-day WhatsApp retention whitelist.
+ * Do not CASCADE. A domain retention policy is required before purge.
+ */
+export const REPLACEMENT_NOTIFICATIONS_RETENTION_DEBT =
+  "replacement_request_notifications blocks admin-alert purge via NO ACTION FK";
+
 
 export type WhatsappRetentionTableKey = (typeof WHATSAPP_RETENTION_TABLE_KEYS)[number];
 

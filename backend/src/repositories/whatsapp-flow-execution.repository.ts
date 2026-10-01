@@ -166,7 +166,11 @@ export const whatsappFlowExecutionRepository = {
             employee_id = COALESCE(@employeeId, employee_id),
             source_message_id = COALESCE(@sourceMessageId, source_message_id),
             finished_at = SYSUTCDATETIME(),
-            duration_ms = DATEDIFF(MILLISECOND, started_at, SYSUTCDATETIME())
+            duration_ms = CASE
+              WHEN DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) > 2147483647 THEN 2147483647
+              WHEN DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) < 0 THEN 0
+              ELSE CAST(DATEDIFF_BIG(MILLISECOND, started_at, SYSUTCDATETIME()) AS INT)
+            END
         WHERE id = @id
       `);
   },

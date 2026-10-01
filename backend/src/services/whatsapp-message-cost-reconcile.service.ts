@@ -26,6 +26,8 @@ export const whatsappMessageCostReconcileService = {
     };
 
     const pool = getPool();
+    // Prefer sargable SID equality (ledger UX index) over COALESCE on both sides.
+    // Filtered IX_wm_outbound_sent_at (migration 151) supports the OUTBOUND access path.
     const selected = await pool.request().input("batchSize", sql.Int, batchSize).query(`
       SELECT TOP (@batchSize)
         m.id,
@@ -39,11 +41,24 @@ export const whatsappMessageCostReconcileService = {
         m.provider_status
       FROM dbo.whatsapp_messages m
       WHERE m.direction = N'OUTBOUND'
-        AND COALESCE(m.provider_message_sid, m.message_sid) IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM dbo.whatsapp_message_cost_ledger l
-          WHERE l.provider_message_sid = COALESCE(m.provider_message_sid, m.message_sid)
+        AND (
+          (
+            m.provider_message_sid IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.whatsapp_message_cost_ledger l
+              WHERE l.provider_message_sid = m.provider_message_sid
+            )
+          )
+          OR (
+            m.provider_message_sid IS NULL
+            AND m.message_sid IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.whatsapp_message_cost_ledger l
+              WHERE l.provider_message_sid = m.message_sid
+            )
+          )
         )
       ORDER BY COALESCE(m.sent_at, m.created_at) ASC;
     `);

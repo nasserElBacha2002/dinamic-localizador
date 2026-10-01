@@ -8,7 +8,7 @@ MSSQL_BACKUP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mssql_backup_log() {
   local level="$1"
   shift
-  printf '%s [%s] %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "${level}" "$*"
+  printf '%s [%s] %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "${level}" "$*" >&2
 }
 
 mssql_backup_load_env() {
@@ -30,6 +30,9 @@ wanted = {
     "MSSQL_BACKUP_CONTAINER_NAME",
     "MSSQL_BACKUP_RETENTION_DAYS",
     "MSSQL_BACKUP_LOCK_FILE",
+    "MSSQL_BACKUP_FULL_HOUR_UTC",
+    "MSSQL_BACKUP_CRON_LOG_DIR",
+    "MSSQL_BACKUP_CRON_USER",
     "DB_NAME",
     "DB_PASSWORD",
     "DB_USER",
@@ -139,6 +142,7 @@ PY
 }
 
 mssql_backup_ensure_full_recovery() {
+  # Sets MSSQL_BACKUP_RECOVERY_BEFORE and MSSQL_BACKUP_RECOVERY_TRANSITION (CHANGED|UNCHANGED).
   local db="${MSSQL_BACKUP_DATABASE}"
   local current
   current="$(
@@ -150,12 +154,17 @@ mssql_backup_ensure_full_recovery() {
     mssql_backup_log ERROR "database ${db} not found"
     exit 3
   fi
+  MSSQL_BACKUP_RECOVERY_BEFORE="${current}"
   if [[ "${current}" != "FULL" ]]; then
     mssql_backup_log WARN "recovery model is ${current}; setting FULL"
     mssql_backup_sqlcmd "ALTER DATABASE [${db}] SET RECOVERY FULL;"
+    MSSQL_BACKUP_RECOVERY_TRANSITION="CHANGED"
   else
     mssql_backup_log INFO "recovery model already FULL"
+    MSSQL_BACKUP_RECOVERY_TRANSITION="UNCHANGED"
   fi
+  export MSSQL_BACKUP_RECOVERY_BEFORE
+  export MSSQL_BACKUP_RECOVERY_TRANSITION
 }
 
 mssql_backup_has_full_chain() {
@@ -172,4 +181,35 @@ WHERE database_name = N'${db}'
 " | tr -d '\r' | awk 'NF && $1 !~ /cnt/ { print $1; exit }'
   )"
   [[ "${count}" =~ ^[1-9][0-9]*$ ]]
+}
+
+mssql_backup_assert_log_allowed() {
+  local recovery_before="$1"
+  local recovery_after="$2"
+  local has_full="false"
+  if mssql_backup_has_full_chain; then
+    has_full="true"
+  fi
+  local decision
+  decision="$(
+    python3 - "${MSSQL_BACKUP_LIB_DIR}" "${recovery_before}" "${recovery_after}" "${has_full}" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from paths import can_run_log_backup
+ok, reason = can_run_log_backup(
+    recovery_before=sys.argv[2],
+    recovery_after=sys.argv[3],
+    has_full_backup_row=(sys.argv[4].lower() == "true"),
+)
+print("OK" if ok else "DENY")
+print(reason)
+PY
+  )"
+  local status reason
+  status="$(printf '%s\n' "${decision}" | sed -n '1p')"
+  reason="$(printf '%s\n' "${decision}" | sed -n '2p')"
+  if [[ "${status}" != "OK" ]]; then
+    mssql_backup_log ERROR "${reason}"
+    exit 5
+  fi
 }

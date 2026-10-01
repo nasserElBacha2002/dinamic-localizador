@@ -14,6 +14,9 @@ Automatic cleanup of **technical and conversational** WhatsApp data. Core busine
   terminal `FAILED` by the same lifecycle job (never marked `PROCESSED`)
 - `whatsapp_message_cost_ledger` uses a **separate** TTL (`WHATSAPP_COST_LEDGER_RETENTION_DAYS`,
   default 365) and stays disabled until `WHATSAPP_COST_LEDGER_RETENTION_ENABLED=true`
+- `replacement_request_notifications` is **not** purged by WhatsApp 30-day retention
+  (functional replacement history / quick-reply correlation; FK NO ACTION debt until a
+  domain retention policy exists)
 
 ## Tables affected
 

@@ -19,12 +19,14 @@ describe("whatsapp quota retention whitelist", () => {
     assert.ok(companyPeriods > reservations);
   });
 
-  it("purges replacement_request_notifications before admin alerts", () => {
-    const keys = [...WHATSAPP_RETENTION_TABLE_KEYS];
-    const replacement = keys.indexOf("replacement_request_notifications");
-    const admin = keys.indexOf("whatsapp_admin_alert_notifications");
-    assert.ok(replacement >= 0);
-    assert.ok(admin > replacement);
+  it("does not purge replacement_request_notifications on WhatsApp 30d TTL (domain debt)", () => {
+    assert.equal(
+      (WHATSAPP_RETENTION_TABLE_KEYS as readonly string[]).includes(
+        "replacement_request_notifications",
+      ),
+      false,
+    );
+    assert.ok(WHATSAPP_RETENTION_TABLE_KEYS.includes("whatsapp_admin_alert_notifications"));
   });
 
   it("lists cost ledger after messages (optional independent TTL)", () => {

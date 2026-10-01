@@ -227,22 +227,6 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
       WHERE ${ATTENDANCE_NOTIFICATION_PURGE_WHERE}
     `,
     },
-    replacement_request_notifications: {
-      countSql: `
-      SELECT COUNT(*) AS cnt
-      FROM replacement_request_notifications r
-      INNER JOIN whatsapp_admin_alert_notifications n
-        ON n.id = r.notification_id AND n.company_id = r.company_id
-      WHERE ${ADMIN_OUTBOX_PURGE_WHERE}
-    `,
-      deleteSql: `
-      DELETE TOP (@batchSize) r
-      FROM replacement_request_notifications r
-      INNER JOIN whatsapp_admin_alert_notifications n
-        ON n.id = r.notification_id AND n.company_id = r.company_id
-      WHERE ${ADMIN_OUTBOX_PURGE_WHERE}
-    `,
-    },
     whatsapp_admin_alert_notifications: {
       countSql: `
       SELECT COUNT(*) AS cnt

@@ -33,10 +33,8 @@ run_backup() {
   mssql_backup_ensure_full_recovery
 
   if [[ "${KIND}" == "LOG" ]]; then
-    if ! mssql_backup_has_full_chain; then
-      mssql_backup_log ERROR "no valid FULL backup chain found; refusing LOG backup"
-      exit 4
-    fi
+    # After SIMPLE→FULL (or any non-FULL→FULL) in this run, historical FULL rows are invalid.
+    mssql_backup_assert_log_allowed "${MSSQL_BACKUP_RECOVERY_BEFORE}" "FULL"
   fi
 
   if [[ "${KIND}" == "FULL" ]]; then
@@ -55,7 +53,7 @@ WITH INIT, CHECKSUM, STATS = 10;
 
   finished_epoch="$(date -u +%s)"
   duration_s=$((finished_epoch - started_epoch))
-  mssql_backup_log INFO "success kind=${KIND} file=${filename} durationSec=${duration_s}"
+  mssql_backup_log INFO "success kind=${KIND} file=${filename} durationSec=${duration_s} recoveryTransition=${MSSQL_BACKUP_RECOVERY_TRANSITION}"
 }
 
 mssql_backup_with_lock "${MSSQL_BACKUP_LOCK_FILE}" run_backup

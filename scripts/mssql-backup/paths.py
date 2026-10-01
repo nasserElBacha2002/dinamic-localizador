@@ -126,3 +126,30 @@ def resolve_host_backup_dir(path: str) -> Path:
     if not str(resolved):
         raise ValueError("backup directory is empty")
     return resolved
+
+
+def can_run_log_backup(
+    *,
+    recovery_before: str,
+    recovery_after: str,
+    has_full_backup_row: bool,
+) -> tuple[bool, str]:
+    """
+    Decide whether LOG backup is allowed.
+
+    After SIMPLE→FULL (or any non-FULL→FULL) transition in this run, historical
+    FULL rows in msdb are not a valid chain for the new FULL recovery state.
+    """
+    before = (recovery_before or "").strip().upper()
+    after = (recovery_after or "").strip().upper()
+    if after != "FULL":
+        return False, f"recovery model must be FULL (current={after or 'UNKNOWN'})"
+    if before != "FULL":
+        return (
+            False,
+            "recovery model was just changed to FULL; take a new FULL backup before LOG "
+            "(historical FULL rows are not a valid chain after the transition)",
+        )
+    if not has_full_backup_row:
+        return False, "no valid FULL backup chain found; refuse LOG backup"
+    return True, "ok"

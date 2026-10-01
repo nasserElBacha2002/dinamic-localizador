@@ -50,8 +50,9 @@ COMPOSE_ONLY_KEYS = {
     "MSSQL_BACKUP_RETENTION_DAYS",
     "MSSQL_BACKUP_LOCK_FILE",
     "MSSQL_BACKUP_ENV_FILE",
-    "MSSQL_BACKUP_FULL_CRON",
-    "MSSQL_BACKUP_LOG_INTERVAL_MINUTES",
+    "MSSQL_BACKUP_FULL_HOUR_UTC",
+    "MSSQL_BACKUP_CRON_LOG_DIR",
+    "MSSQL_BACKUP_CRON_USER",
 }
 
 # Must appear in merged backend.environment (regression guard for production deploy).

@@ -18,4 +18,19 @@ describe("whatsapp quota retention whitelist", () => {
     assert.ok(employeePeriods > admissions);
     assert.ok(companyPeriods > reservations);
   });
+
+  it("purges replacement_request_notifications before admin alerts", () => {
+    const keys = [...WHATSAPP_RETENTION_TABLE_KEYS];
+    const replacement = keys.indexOf("replacement_request_notifications");
+    const admin = keys.indexOf("whatsapp_admin_alert_notifications");
+    assert.ok(replacement >= 0);
+    assert.ok(admin > replacement);
+  });
+
+  it("lists cost ledger after messages (optional independent TTL)", () => {
+    const keys = [...WHATSAPP_RETENTION_TABLE_KEYS];
+    const messages = keys.indexOf("whatsapp_messages");
+    const ledger = keys.indexOf("whatsapp_message_cost_ledger");
+    assert.ok(ledger > messages);
+  });
 });

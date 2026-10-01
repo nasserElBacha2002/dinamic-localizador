@@ -18,6 +18,10 @@ import {
   stopWhatsappRetentionCleanupJob,
 } from "./jobs/whatsapp-retention-cleanup.job";
 import {
+  startWhatsappLifecycleJob,
+  stopWhatsappLifecycleJob,
+} from "./jobs/whatsapp-lifecycle.job";
+import {
   startCompanyDeletionJob,
   stopCompanyDeletionJob,
 } from "./jobs/company-deletion.job";
@@ -67,6 +71,7 @@ const stopAllSchedulers = (): void => {
   stopAbsenceWorkdaySyncJob();
   stopAbsenceAttachmentCleanupJob();
   stopWhatsappRetentionCleanupJob();
+  stopWhatsappLifecycleJob();
   stopCompanyDeletionJob();
   stopPayrollReceiptNotificationJob();
   stopOperationLifecycleJob();
@@ -135,6 +140,7 @@ const startServer = async (): Promise<void> => {
   startAbsenceWorkdaySyncJob();
   startAbsenceAttachmentCleanupJob();
   startWhatsappRetentionCleanupJob();
+  startWhatsappLifecycleJob();
   startCompanyDeletionJob();
   startPayrollReceiptNotificationJob();
   startOperationLifecycleJob();

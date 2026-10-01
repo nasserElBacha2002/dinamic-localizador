@@ -97,31 +97,58 @@ class BackupPathsTest(unittest.TestCase):
                 retention_days=0,
             )
 
-    def test_log_backup_refuses_after_recovery_transition(self) -> None:
+    def test_log_backup_decision_matrix(self) -> None:
         from paths import can_run_log_backup
 
-        ok, reason = can_run_log_backup(
-            recovery_before="SIMPLE",
-            recovery_after="FULL",
-            has_full_backup_row=True,
-        )
+        # SIMPLE → LOG => reject before BACKUP LOG
+        ok, reason = can_run_log_backup(recovery_model="SIMPLE")
         self.assertFalse(ok)
-        self.assertIn("just changed to FULL", reason)
+        self.assertIn("refuse LOG", reason)
+        self.assertIn("FULL", reason)
 
-        ok2, _ = can_run_log_backup(
-            recovery_before="FULL",
-            recovery_after="FULL",
-            has_full_backup_row=True,
-        )
+        # FULL => allow the BACKUP LOG attempt (SQL Server may still reject missing chain)
+        ok2, reason2 = can_run_log_backup(recovery_model="FULL")
         self.assertTrue(ok2)
+        self.assertEqual(reason2, "ok")
 
-        ok3, reason3 = can_run_log_backup(
-            recovery_before="FULL",
-            recovery_after="FULL",
-            has_full_backup_row=False,
-        )
+        ok3, _ = can_run_log_backup(recovery_model="BULK_LOGGED")
         self.assertFalse(ok3)
-        self.assertIn("no valid FULL", reason3)
+
+    def test_full_bootstrap_is_out_of_log_decision_scope(self) -> None:
+        """FULL path may ALTER recovery + take FULL; LOG decision only gates LOG."""
+        from paths import can_run_log_backup
+
+        ok, _ = can_run_log_backup(recovery_model="SIMPLE")
+        self.assertFalse(ok)
+
+    def test_cron_lines_assume_host_utc_no_cron_tz(self) -> None:
+        from paths import host_timezone_is_utc, render_backup_cron_lines
+
+        lines = render_backup_cron_lines(
+            full_hour_utc=3,
+            log_command="/bin/bash /repo/scripts/mssql-backup/run-backup.sh LOG",
+            full_command="/bin/bash /repo/scripts/mssql-backup/run-scheduled.sh FULL",
+        )
+        self.assertTrue(lines[0].startswith("# "))
+        self.assertIn("dinamic-mssql-backup-preamble", lines[0])
+        self.assertNotIn("CRON_TZ", "\n".join(lines))
+        self.assertTrue(lines[1].startswith("*/15 * * * * "))
+        self.assertIn("# dinamic-mssql-backup-log", lines[1])
+        self.assertTrue(lines[2].startswith("0 3 * * * "))
+        self.assertIn("# dinamic-mssql-backup-full", lines[2])
+        # Marker must not appear as an env-var value (no `CRON_TZ=UTC # ...`).
+        for line in lines:
+            self.assertFalse(line.startswith("CRON_TZ="))
+        with self.assertRaises(ValueError):
+            render_backup_cron_lines(
+                full_hour_utc=24,
+                log_command="x",
+                full_command="y",
+            )
+
+        self.assertTrue(host_timezone_is_utc("UTC", 0))
+        self.assertTrue(host_timezone_is_utc("Etc/UTC", 0))
+        self.assertFalse(host_timezone_is_utc("America/Argentina/Buenos_Aires", -10800))
 
 
 if __name__ == "__main__":

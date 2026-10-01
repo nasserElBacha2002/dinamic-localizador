@@ -883,11 +883,13 @@ describeDatabaseIntegration("whatsapp retention cleanup", () => {
       .query(`
         INSERT INTO whatsapp_webhook_events (
           id, company_id, message_sid, event_type, payload_hash,
-          processing_status, attempt_count, max_attempts, created_at, updated_at
+          processing_status, attempt_count, max_attempts, next_attempt_at,
+          created_at, updated_at
         )
         VALUES (
           @id, @companyId, @messageSid, N'INBOUND_MESSAGE', N'ghi',
-          N'FAILED', 2, 8, @createdAt, @createdAt
+          N'FAILED', 2, 8, DATEADD(HOUR, 1, SYSUTCDATETIME()),
+          @createdAt, @createdAt
         )
       `);
     tracked.webhooks.push(failedRetryId);

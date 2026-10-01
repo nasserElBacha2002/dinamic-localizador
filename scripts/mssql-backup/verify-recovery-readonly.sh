@@ -30,7 +30,7 @@ FROM sys.dm_db_log_stats(DB_ID(N'${DB}'));
 
 SELECT
   'log_used_mb' AS metric,
-  CAST(used_log_space_mb AS varchar(32)) AS value
+  CAST(active_log_size_mb AS varchar(32)) AS value
 FROM sys.dm_db_log_stats(DB_ID(N'${DB}'));
 
 SELECT
@@ -69,6 +69,18 @@ SELECT
   CAST(COUNT(*) AS varchar(32)) AS value
 FROM msdb.dbo.backupset
 WHERE database_name = N'${DB}' AND type = 'L';
+
+-- Differential-base metadata only (NOT authoritative for LOG eligibility).
+SELECT
+  'differential_base_lsn_present' AS metric,
+  CASE
+    WHEN EXISTS (
+      SELECT 1 FROM sys.master_files
+      WHERE database_id = DB_ID(N'${DB}')
+        AND type = 0
+        AND differential_base_lsn IS NOT NULL
+    ) THEN '1' ELSE '0'
+  END AS value;
 "
 
 mssql_backup_log INFO "read-only verification finished (no changes made)"

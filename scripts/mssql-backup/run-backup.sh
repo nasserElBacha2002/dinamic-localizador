@@ -21,6 +21,7 @@ mkdir -p "${MSSQL_BACKUP_HOST_PATH}"
 run_backup() {
   local started_epoch finished_epoch duration_s
   local filename container_path
+  local sql_rc=0
   started_epoch="$(date -u +%s)"
 
   local name_paths
@@ -30,25 +31,37 @@ run_backup() {
 
   mssql_backup_log INFO "start kind=${KIND} database=${MSSQL_BACKUP_DATABASE} file=${filename}"
 
-  mssql_backup_ensure_full_recovery
-
-  if [[ "${KIND}" == "LOG" ]]; then
-    # After SIMPLE→FULL (or any non-FULL→FULL) in this run, historical FULL rows are invalid.
-    mssql_backup_assert_log_allowed "${MSSQL_BACKUP_RECOVERY_BEFORE}" "FULL"
-  fi
-
   if [[ "${KIND}" == "FULL" ]]; then
+    # Bootstrap: ensure FULL recovery, then take a new FULL (starts the log chain).
+    mssql_backup_ensure_full_recovery
     mssql_backup_sqlcmd "
 BACKUP DATABASE [${MSSQL_BACKUP_DATABASE}]
 TO DISK = N'${container_path}'
 WITH INIT, CHECKSUM, STATS = 10;
 "
   else
+    # LOG never changes recovery model. Chain validity is enforced by SQL Server.
+    local recovery_model
+    recovery_model="$(mssql_backup_get_recovery_model)"
+    MSSQL_BACKUP_RECOVERY_BEFORE="${recovery_model}"
+    MSSQL_BACKUP_RECOVERY_TRANSITION="UNCHANGED"
+    export MSSQL_BACKUP_RECOVERY_BEFORE
+    export MSSQL_BACKUP_RECOVERY_TRANSITION
+    mssql_backup_assert_log_recovery_full "${recovery_model}"
+
+    set +e
     mssql_backup_sqlcmd "
 BACKUP LOG [${MSSQL_BACKUP_DATABASE}]
 TO DISK = N'${container_path}'
 WITH INIT, CHECKSUM, STATS = 10;
 "
+    sql_rc=$?
+    set -e
+    if [[ "${sql_rc}" -ne 0 ]]; then
+      mssql_backup_log ERROR \
+        "BACKUP LOG failed (sqlcmd exit=${sql_rc}). Original SQL error is above. If no initial FULL exists after a recovery-model bootstrap, run: ${SCRIPT_DIR}/run-backup.sh FULL"
+      exit "${sql_rc}"
+    fi
   fi
 
   finished_epoch="$(date -u +%s)"

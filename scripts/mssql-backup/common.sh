@@ -121,8 +121,14 @@ mssql_backup_with_lock() {
     mssql_backup_log WARN "another backup process holds the lock; skipping"
     exit 0
   fi
-  trap 'rmdir "${lock_dir}" 2>/dev/null || true' EXIT
+  # Expand path now — trap runs after local scope ends under `set -u`.
+  # shellcheck disable=SC2064
+  trap "rmdir $(printf '%q' "${lock_dir}") 2>/dev/null || true" EXIT
   "$@"
+  local rc=$?
+  rmdir "${lock_dir}" 2>/dev/null || true
+  trap - EXIT
+  return "${rc}"
 }
 
 mssql_backup_filenames() {
@@ -141,19 +147,32 @@ print(container)
 PY
 }
 
-mssql_backup_ensure_full_recovery() {
-  # Sets MSSQL_BACKUP_RECOVERY_BEFORE and MSSQL_BACKUP_RECOVERY_TRANSITION (CHANGED|UNCHANGED).
+mssql_backup_get_recovery_model() {
   local db="${MSSQL_BACKUP_DATABASE}"
   local current
   current="$(
     mssql_backup_sqlcmd "SET NOCOUNT ON; SELECT recovery_model_desc FROM sys.databases WHERE name = N'${db}';" \
       | tr -d '\r' \
-      | awk 'NF && $1 !~ /recovery_model_desc/ { print $1; exit }'
+      | awk '
+          BEGIN { IGNORECASE = 1 }
+          NF == 0 { next }
+          $1 ~ /^recovery_model_desc$/ { next }
+          $1 ~ /^-+$/ { next }
+          { print $1; exit }
+        '
   )"
   if [[ -z "${current}" ]]; then
     mssql_backup_log ERROR "database ${db} not found"
     exit 3
   fi
+  printf '%s\n' "${current}"
+}
+
+mssql_backup_ensure_full_recovery() {
+  # FULL path only: may ALTER DATABASE. Sets MSSQL_BACKUP_RECOVERY_BEFORE / TRANSITION.
+  local db="${MSSQL_BACKUP_DATABASE}"
+  local current
+  current="$(mssql_backup_get_recovery_model)"
   MSSQL_BACKUP_RECOVERY_BEFORE="${current}"
   if [[ "${current}" != "FULL" ]]; then
     mssql_backup_log WARN "recovery model is ${current}; setting FULL"
@@ -167,40 +186,17 @@ mssql_backup_ensure_full_recovery() {
   export MSSQL_BACKUP_RECOVERY_TRANSITION
 }
 
-mssql_backup_has_full_chain() {
-  local db="${MSSQL_BACKUP_DATABASE}"
-  local count
-  count="$(
-    mssql_backup_sqlcmd "
-SET NOCOUNT ON;
-SELECT COUNT(*) AS cnt
-FROM msdb.dbo.backupset
-WHERE database_name = N'${db}'
-  AND type = 'D'
-  AND is_copy_only = 0;
-" | tr -d '\r' | awk 'NF && $1 !~ /cnt/ { print $1; exit }'
-  )"
-  [[ "${count}" =~ ^[1-9][0-9]*$ ]]
-}
-
-mssql_backup_assert_log_allowed() {
-  local recovery_before="$1"
-  local recovery_after="$2"
-  local has_full="false"
-  if mssql_backup_has_full_chain; then
-    has_full="true"
-  fi
+mssql_backup_assert_log_recovery_full() {
+  # Refuse LOG when recovery is not FULL. Does not probe differential_base_lsn —
+  # SQL Server enforces log-chain readiness on BACKUP LOG itself.
+  local recovery_model="$1"
   local decision
   decision="$(
-    python3 - "${MSSQL_BACKUP_LIB_DIR}" "${recovery_before}" "${recovery_after}" "${has_full}" <<'PY'
+    python3 - "${MSSQL_BACKUP_LIB_DIR}" "${recovery_model}" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1])
 from paths import can_run_log_backup
-ok, reason = can_run_log_backup(
-    recovery_before=sys.argv[2],
-    recovery_after=sys.argv[3],
-    has_full_backup_row=(sys.argv[4].lower() == "true"),
-)
+ok, reason = can_run_log_backup(recovery_model=sys.argv[2])
 print("OK" if ok else "DENY")
 print(reason)
 PY

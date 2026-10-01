@@ -196,17 +196,20 @@ WHERE OBJECT_NAME(s.object_id) IN (
 ORDER BY modification_counter DESC;
 
 PRINT '=== 6. Table / index storage (rows, data MB, index MB) ===';
+-- Prefer dm_db_partition_stats: correct allocation accounting without the
+-- allocation_units.container_id = partitions.partition_id join pitfalls
+-- (LOB/row-overflow miscounts and duplicated row_count).
 SELECT
-  t.name AS table_name,
-  SUM(CASE WHEN i.index_id IN (0, 1) THEN p.rows ELSE 0 END) AS row_count,
-  CAST(SUM(CASE WHEN a.type_desc = N'IN_ROW_DATA' AND i.index_id IN (0, 1)
-            THEN a.total_pages ELSE 0 END) * 8.0 / 1024 AS DECIMAL(12, 2)) AS data_mb,
-  CAST(SUM(CASE WHEN i.index_id > 1 THEN a.total_pages ELSE 0 END) * 8.0 / 1024 AS DECIMAL(12, 2)) AS index_mb,
-  CAST(SUM(a.total_pages) * 8.0 / 1024 AS DECIMAL(12, 2)) AS total_mb
-FROM sys.tables t
-INNER JOIN sys.indexes i ON i.object_id = t.object_id
-INNER JOIN sys.partitions p ON p.object_id = i.object_id AND p.index_id = i.index_id
-INNER JOIN sys.allocation_units a ON a.container_id = p.partition_id
+  OBJECT_NAME(ps.object_id) AS table_name,
+  SUM(CASE WHEN ps.index_id IN (0, 1) THEN ps.row_count ELSE 0 END) AS row_count,
+  CAST(SUM(CASE WHEN ps.index_id IN (0, 1) THEN ps.used_page_count ELSE 0 END)
+       * 8.0 / 1024 AS DECIMAL(12, 2)) AS data_mb,
+  CAST(SUM(CASE WHEN ps.index_id > 1 THEN ps.used_page_count ELSE 0 END)
+       * 8.0 / 1024 AS DECIMAL(12, 2)) AS index_mb,
+  CAST(SUM(ps.used_page_count) * 8.0 / 1024 AS DECIMAL(12, 2)) AS used_mb,
+  CAST(SUM(ps.reserved_page_count) * 8.0 / 1024 AS DECIMAL(12, 2)) AS total_mb
+FROM sys.dm_db_partition_stats ps
+INNER JOIN sys.tables t ON t.object_id = ps.object_id
 WHERE t.name IN (
   N'absence_workday_sync_jobs',
   N'whatsapp_messages',
@@ -222,7 +225,7 @@ WHERE t.name IN (
   N'platform_audit_logs',
   N'company_settings'
 )
-GROUP BY t.name
+GROUP BY ps.object_id
 ORDER BY total_mb DESC;
 
 PRINT '=== 7. Phase 3/4 index presence check ===';

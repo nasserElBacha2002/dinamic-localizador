@@ -128,28 +128,57 @@ def resolve_host_backup_dir(path: str) -> Path:
     return resolved
 
 
-def can_run_log_backup(
-    *,
-    recovery_before: str,
-    recovery_after: str,
-    has_full_backup_row: bool,
-) -> tuple[bool, str]:
+def can_run_log_backup(*, recovery_model: str) -> tuple[bool, str]:
     """
-    Decide whether LOG backup is allowed.
+    Pre-check before attempting BACKUP LOG.
 
-    After SIMPLE→FULL (or any non-FULL→FULL) transition in this run, historical
-    FULL rows in msdb are not a valid chain for the new FULL recovery state.
+    LOG must not alter recovery model. Only refuse when recovery is not FULL.
+    A valid log chain is enforced by SQL Server itself when BACKUP LOG runs —
+    do not proxy that with differential_base_lsn or historical msdb FULL rows.
     """
-    before = (recovery_before or "").strip().upper()
-    after = (recovery_after or "").strip().upper()
-    if after != "FULL":
-        return False, f"recovery model must be FULL (current={after or 'UNKNOWN'})"
-    if before != "FULL":
+    model = (recovery_model or "").strip().upper()
+    if model != "FULL":
         return (
             False,
-            "recovery model was just changed to FULL; take a new FULL backup before LOG "
-            "(historical FULL rows are not a valid chain after the transition)",
+            f"recovery model is {model or 'UNKNOWN'}; refuse LOG — run "
+            "`scripts/mssql-backup/run-backup.sh FULL` to bootstrap FULL recovery "
+            "and the initial backup chain",
         )
-    if not has_full_backup_row:
-        return False, "no valid FULL backup chain found; refuse LOG backup"
     return True, "ok"
+
+
+def render_backup_cron_lines(
+    *,
+    full_hour_utc: int,
+    log_command: str,
+    full_command: str,
+    marker_log: str = "# dinamic-mssql-backup-log",
+    marker_full: str = "# dinamic-mssql-backup-full",
+    marker_preamble: str = "# dinamic-mssql-backup-preamble",
+) -> list[str]:
+    """
+    Idempotent crontab payload for Ubuntu 22.04 user cron.
+
+    Does NOT emit CRON_TZ (unsupported / unreliable on target Ubuntu 22.04
+    user crontabs). Schedules assume the host clock is UTC — install-cron.sh
+    verifies that precondition.
+    """
+    if full_hour_utc < 0 or full_hour_utc > 23:
+        raise ValueError(f"full_hour_utc must be 0-23, got {full_hour_utc}")
+    return [
+        f"# MSSQL backups scheduled in UTC — host timezone must be UTC {marker_preamble}",
+        f"*/15 * * * * {log_command} {marker_log}",
+        f"0 {full_hour_utc} * * * {full_command} {marker_full}",
+    ]
+
+
+def host_timezone_is_utc(tz_name: str | None, utc_offset_seconds: int | None = None) -> bool:
+    """Return True when the host appears configured for UTC."""
+    name = (tz_name or "").strip()
+    if name in {"UTC", "Etc/UTC", "Etc/Universal", "Universal", "Zulu", "GMT", "Etc/GMT"}:
+        return True
+    if utc_offset_seconds is not None and utc_offset_seconds == 0 and name.upper() in {"", "UTC"}:
+        return True
+    if utc_offset_seconds == 0 and name in {"GMT+0", "GMT-0", "GMT0"}:
+        return True
+    return False

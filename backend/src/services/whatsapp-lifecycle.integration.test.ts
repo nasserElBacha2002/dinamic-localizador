@@ -18,7 +18,7 @@ const daysAgo = (days: number, from: Date): Date =>
   new Date(from.getTime() - days * 24 * 60 * 60 * 1000);
 
 describeDatabaseIntegration("whatsapp lifecycle reconcile", () => {
-  const nowUtc = new Date("2026-10-01T12:00:00.000Z");
+  let nowUtc = new Date(0);
   let companyId = "";
   let employeeId = "";
   const tracked = {
@@ -32,6 +32,13 @@ describeDatabaseIntegration("whatsapp lifecycle reconcile", () => {
     process.env.WHATSAPP_LIFECYCLE_DRY_RUN = "false";
     await setupDatabaseIntegration();
     companyId = await requireDinamicCompanyId();
+
+    const clock = await getPool().request().query(`SELECT SYSUTCDATETIME() AS now_utc`);
+    const raw = clock.recordset[0]?.now_utc as Date | string;
+    nowUtc = raw instanceof Date ? raw : new Date(String(raw));
+    if (Number.isNaN(nowUtc.getTime())) {
+      throw new Error("SYSUTCDATETIME() did not return a usable timestamp");
+    }
 
     const employee = await getPool()
       .request()

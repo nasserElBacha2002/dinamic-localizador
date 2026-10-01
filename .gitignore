@@ -33,6 +33,10 @@ audit-evidence/**/phase-4e-hardening-diff.txt
 *.env.save
 backend/.env.save
 
+# Local SQL Server backup files (host bind-mount); keep directory placeholder.
+/backups/mssql/*
+!/backups/mssql/.gitkeep
+
 # Generated reconciliation artifacts
 .cache/
 reports/
@@ -45,7 +49,13 @@ review/
 /implementation-*-diff.txt
 /implementation-*-diffstat.txt
 /implementation-*-status.txt
+/implementation-*-tests.txt
 /implementation-*-validation.md
+/phase3-4-*.txt
+/phase*-diff.txt
+/phase*-diffstat.txt
+/phase*-status.txt
+/phase*-tests.txt
 /latest-diff.txt
 /latest-diffstat.txt
 /latest-status.txt

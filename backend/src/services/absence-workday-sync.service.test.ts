@@ -117,4 +117,153 @@ describe("absenceWorkdaySyncService", () => {
 
     assert.equal(reconcileCalls, 0);
   });
+
+  it("empty queue: one claim then stop (respects batch limit without N empty claims)", async () => {
+    setupUnitTestEnv();
+    const { absenceWorkdaySyncJobRepository } = await import(
+      "../repositories/absence-workday-sync-job.repository"
+    );
+    const { absenceWorkdaySyncService } = await import("./absence-workday-sync.service");
+
+    let claimCalls = 0;
+    mock.method(absenceWorkdaySyncJobRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(absenceWorkdaySyncJobRepository, "claimNextPending", async () => {
+      claimCalls += 1;
+      return null;
+    });
+
+    const result = await absenceWorkdaySyncService.processPendingJobs(25);
+    assert.equal(claimCalls, 1);
+    assert.equal(result.processed, 0);
+    assert.equal(result.failed, 0);
+  });
+
+  it("queue with work continues until empty and second tick still claims", async () => {
+    setupUnitTestEnv();
+    const { absenceWorkdaySyncJobRepository } = await import(
+      "../repositories/absence-workday-sync-job.repository"
+    );
+    const { absenceOperationalReconciliationService } = await import(
+      "./absence-operational-reconciliation.service"
+    );
+    const { absenceWorkdaySyncService } = await import("./absence-workday-sync.service");
+
+    const jobs = [
+      {
+        id: "job-1",
+        companyId: "c1",
+        absenceRequestId: "a1",
+        absenceStatus: "APPROVED",
+        operation: "APPROVE" as const,
+        status: "PROCESSING" as const,
+        attemptCount: 0,
+        lastError: null,
+        expectedOperationalImpactVersion: 1,
+        supersededAt: null,
+        leaseOwner: "w",
+        leaseExpiresAt: new Date().toISOString(),
+        leaseVersion: 1,
+        enqueueCommandId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "job-2",
+        companyId: "c1",
+        absenceRequestId: "a2",
+        absenceStatus: "APPROVED",
+        operation: "APPROVE" as const,
+        status: "PROCESSING" as const,
+        attemptCount: 0,
+        lastError: null,
+        expectedOperationalImpactVersion: 1,
+        supersededAt: null,
+        leaseOwner: "w",
+        leaseExpiresAt: new Date().toISOString(),
+        leaseVersion: 1,
+        enqueueCommandId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    let claimCalls = 0;
+    mock.method(absenceWorkdaySyncJobRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(absenceWorkdaySyncJobRepository, "claimNextPending", async () => {
+      claimCalls += 1;
+      return jobs.shift() ?? null;
+    });
+    mock.method(absenceWorkdaySyncJobRepository, "toLeaseToken", (job: { id: string }) => ({
+      companyId: "c1",
+      jobId: job.id,
+      leaseOwner: "w",
+      leaseVersion: 1,
+    }));
+    mock.method(absenceWorkdaySyncJobRepository, "markCompletedWithLease", async () => undefined);
+    mock.method(
+      absenceOperationalReconciliationService,
+      "executeClaimedJob",
+      async () => "APPLIED" as const,
+    );
+
+    const first = await absenceWorkdaySyncService.processPendingJobs(10);
+    assert.equal(first.processed, 2);
+    assert.equal(claimCalls, 3); // 2 jobs + 1 empty terminator
+
+    const claimCallsAfterFirst = claimCalls;
+    const second = await absenceWorkdaySyncService.processPendingJobs(10);
+    assert.equal(second.processed, 0);
+    assert.equal(claimCalls, claimCallsAfterFirst + 1);
+  });
+
+  it("respects max batch limit when queue stays full", async () => {
+    setupUnitTestEnv();
+    const { absenceWorkdaySyncJobRepository } = await import(
+      "../repositories/absence-workday-sync-job.repository"
+    );
+    const { absenceOperationalReconciliationService } = await import(
+      "./absence-operational-reconciliation.service"
+    );
+    const { absenceWorkdaySyncService } = await import("./absence-workday-sync.service");
+
+    let claimCalls = 0;
+    mock.method(absenceWorkdaySyncJobRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(absenceWorkdaySyncJobRepository, "claimNextPending", async () => {
+      claimCalls += 1;
+      return {
+        id: `job-${claimCalls}`,
+        companyId: "c1",
+        absenceRequestId: `a-${claimCalls}`,
+        absenceStatus: "APPROVED",
+        operation: "APPROVE" as const,
+        status: "PROCESSING" as const,
+        attemptCount: 0,
+        lastError: null,
+        expectedOperationalImpactVersion: 1,
+        supersededAt: null,
+        leaseOwner: "w",
+        leaseExpiresAt: new Date().toISOString(),
+        leaseVersion: 1,
+        enqueueCommandId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    mock.method(absenceWorkdaySyncJobRepository, "toLeaseToken", (job: { id: string }) => ({
+      companyId: "c1",
+      jobId: job.id,
+      leaseOwner: "w",
+      leaseVersion: 1,
+    }));
+    mock.method(absenceWorkdaySyncJobRepository, "markCompletedWithLease", async () => undefined);
+    mock.method(
+      absenceOperationalReconciliationService,
+      "executeClaimedJob",
+      async () => "APPLIED" as const,
+    );
+
+    const result = await absenceWorkdaySyncService.processPendingJobs(3);
+    assert.equal(result.processed, 3);
+    assert.equal(claimCalls, 3);
+  });
 });

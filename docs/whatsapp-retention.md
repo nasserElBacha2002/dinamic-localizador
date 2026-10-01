@@ -8,6 +8,15 @@ Automatic cleanup of **technical and conversational** WhatsApp data. Core busine
 - Cutoff: `SYSUTCDATETIME() - WHATSAPP_RETENTION_DAYS` (UTC)
 - Only **terminal** rows without active leases/retries are eligible
 - Purge order respects FK `NO ACTION` chains (child → parent)
+- Idle **ACTIVE** conversations are closed to **COMPLETED** by the lifecycle job
+  (`WHATSAPP_CONVERSATION_IDLE_TIMEOUT_HOURS`, default 24h) before retention can purge their messages
+- Abandoned `STARTED` flows and expired-lease `PROCESSING` webhooks are reconciled to
+  terminal `FAILED` by the same lifecycle job (never marked `PROCESSED`)
+- `whatsapp_message_cost_ledger` uses a **separate** TTL (`WHATSAPP_COST_LEDGER_RETENTION_DAYS`,
+  default 365) and stays disabled until `WHATSAPP_COST_LEDGER_RETENTION_ENABLED=true`
+- `replacement_request_notifications` is **not** purged by WhatsApp 30-day retention
+  (functional replacement history / quick-reply correlation; FK NO ACTION debt until a
+  domain retention policy exists)
 
 ## Tables affected
 
@@ -40,6 +49,13 @@ WHATSAPP_RETENTION_BATCH_SIZE=500
 WHATSAPP_RETENTION_MAX_BATCHES_PER_TABLE=100
 WHATSAPP_RETENTION_CLEANUP_JOB_ENABLED=true
 WHATSAPP_RETENTION_CLEANUP_INTERVAL_MS=21600000   # 6 hours
+WHATSAPP_CONVERSATION_IDLE_TIMEOUT_HOURS=24
+WHATSAPP_FLOW_STARTED_TIMEOUT_HOURS=24
+WHATSAPP_LIFECYCLE_JOB_ENABLED=true
+WHATSAPP_LIFECYCLE_DRY_RUN=false
+WHATSAPP_LIFECYCLE_JOB_INTERVAL_MS=3600000
+WHATSAPP_COST_LEDGER_RETENTION_ENABLED=false
+WHATSAPP_COST_LEDGER_RETENTION_DAYS=365
 ```
 
 Manual run (dev/staging):
@@ -58,10 +74,13 @@ WHATSAPP_RETENTION_DRY_RUN=false npm run job:whatsapp-retention
 
 ## Architecture
 
-- Job: `whatsapp-retention-cleanup.job.ts` (replaces legacy `whatsapp-observability-cleanup.job`)
-- Service: `whatsapp-retention.service.ts`
-- Repository: `whatsapp-retention.repository.ts`
-- Distributed lock: SQL Server `sp_getapplock` (Session owner, resource `whatsapp-retention-cleanup`)
+- Lifecycle job: `whatsapp-lifecycle.job.ts` (idle conversations / stuck flows / abandoned webhooks)
+- Retention job: `whatsapp-retention-cleanup.job.ts` (replaces legacy `whatsapp-observability-cleanup.job`)
+- Service: `whatsapp-retention.service.ts` + `whatsapp-lifecycle.service.ts`
+- Repository: `whatsapp-retention.repository.ts` + `whatsapp-lifecycle.repository.ts`
+- Distributed lock: SQL Server `sp_getapplock` (Session owner; separate resources for lifecycle vs retention)
+
+Post-deploy READ-ONLY checks: `scripts/whatsapp-retention/verify-lifecycle-readonly.sql`
 
 ## Troubleshooting
 

@@ -1032,6 +1032,7 @@ export const attendanceReminderService = {
   async runDueReminders(
     companyId: string,
     referenceAt: Date = new Date(),
+    options?: { reconcileRecovery?: boolean },
   ): Promise<AttendanceReminderRunSummary> {
     if (!this.isEnabled()) {
       console.info("[attendance-reminder] job skipped because reminders are disabled or Twilio is not configured");
@@ -1041,7 +1042,9 @@ export const attendanceReminderService = {
     const { windowStart, windowEnd } = buildReminderDueWindow(referenceAt);
     const startDueWindow = buildOperationStartDueWindow(referenceAt);
 
-    await attendanceNotificationRepository.reconcileSentRecoveryRequired(companyId);
+    if (options?.reconcileRecovery !== false) {
+      await attendanceNotificationRepository.reconcileSentRecoveryRequired(companyId);
+    }
 
     const [arrivalCandidates, exitCandidates, noCheckInCandidates, confirmationCandidates] =
       await Promise.all([
@@ -1106,8 +1109,11 @@ export const attendanceReminderService = {
     }
 
     const companies = await companyRepository.listActive();
+    const anyRecovery = await attendanceNotificationRepository.hasAnySentRecoveryRequired();
     const summaries = await Promise.all(
-      companies.map((company) => this.runDueReminders(company.id, referenceAt)),
+      companies.map((company) =>
+        this.runDueReminders(company.id, referenceAt, { reconcileRecovery: anyRecovery }),
+      ),
     );
 
     const merged = mergeSummaries(referenceAt, summaries);

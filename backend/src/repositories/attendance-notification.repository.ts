@@ -938,6 +938,19 @@ export const attendanceNotificationRepository = {
     return result.recordset.length;
   },
 
+  /**
+   * Cheap probe for reminder ticks: avoid per-company recovery UPDATE when
+   * no SENT_RECOVERY_REQUIRED rows exist (supported by IX_wan_company_sent_recovery).
+   */
+  async hasAnySentRecoveryRequired(): Promise<boolean> {
+    const result = await getPool().request().query(`
+      SELECT TOP (1) 1 AS present
+      FROM whatsapp_attendance_notifications
+      WHERE status = N'SENT_RECOVERY_REQUIRED'
+    `);
+    return Boolean(result.recordset[0]);
+  },
+
   async markFailed(
     companyId: string,
     input: {

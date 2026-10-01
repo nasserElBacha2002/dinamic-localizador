@@ -12,6 +12,9 @@ import {
   type WhatsappMessageCostLedgerRow,
 } from "./whatsapp-message-cost-ledger.types";
 
+/** Keep last_run_at fresh within WORKER_STALE_MS (15m) without writing every tick. */
+export const COST_SYNC_HEARTBEAT_TOUCH_MINUTES = 5;
+
 const applyFilters = (request: sql.Request, filters: CostLedgerFilters, alias = "l"): string => {
   const clauses: string[] = [
     `${alias}.sent_at >= @monthStartUtc`,
@@ -254,6 +257,11 @@ export const whatsappMessageCostLedgerQueryRepository = {
     }
   },
 
+  /**
+   * Persist worker liveness + last tick summary.
+   * Skip the singleton UPDATE when the payload is unchanged and last_run_at
+   * was touched recently (still well under the 15-minute UI stale threshold).
+   */
   async recordHeartbeat(input: {
     success: boolean;
     result: Record<string, unknown>;
@@ -265,13 +273,20 @@ export const whatsappMessageCostLedgerQueryRepository = {
         .request()
         .input("success", sql.Bit, input.success ? 1 : 0)
         .input("resultJson", sql.NVarChar(1500), json)
+        .input("touchMinutes", sql.Int, COST_SYNC_HEARTBEAT_TOUCH_MINUTES)
         .query(`
           UPDATE dbo.whatsapp_message_cost_sync_heartbeat
           SET last_run_at = SYSUTCDATETIME(),
               last_success_at = CASE WHEN @success = 1 THEN SYSUTCDATETIME() ELSE last_success_at END,
               last_result_json = @resultJson,
               updated_at = SYSUTCDATETIME()
-          WHERE id = 1;
+          WHERE id = 1
+            AND (
+              last_run_at IS NULL
+              OR last_result_json IS NULL
+              OR last_result_json <> @resultJson
+              OR last_run_at < DATEADD(MINUTE, -@touchMinutes, SYSUTCDATETIME())
+            );
         `);
     } catch (error) {
       console.warn("[whatsapp-message-cost] heartbeat update failed", {

@@ -468,6 +468,18 @@ describeDatabaseIntegration("whatsapp retention outbox terminality (SQL)", () =>
       assert.equal(await countRow("whatsapp_payroll_receipt_notifications", id), 1);
     });
 
+    it("FAILED permanent (next_attempt_at NULL) is deleted when old", async () => {
+      const id = await insertPayrollNotification({
+        status: "FAILED",
+        attemptCount: 1,
+        nextAttemptAt: null,
+        createdAt: daysAgo(31),
+        sentAt: daysAgo(31),
+      });
+      await runRetention();
+      assert.equal(await countRow("whatsapp_payroll_receipt_notifications", id), 0);
+    });
+
     it("FAILED terminal is deleted", async () => {
       const id = await insertPayrollNotification({
         status: "FAILED",

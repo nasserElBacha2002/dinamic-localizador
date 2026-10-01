@@ -251,6 +251,25 @@ export const absenceWorkdaySyncJobRepository = {
     }
   },
 
+  /**
+   * Non-locking probe: claimable PENDING work remains.
+   * Used to short-circuit empty claim retries when the queue is idle
+   * while still allowing retries under UPDLOCK contention.
+   */
+  async hasClaimablePending(maxAttempts: number): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("maxAttempts", sql.Int, maxAttempts)
+      .query(`
+        SELECT TOP (1) 1 AS present
+        FROM absence_workday_sync_jobs WITH (READPAST)
+        WHERE status = N'PENDING'
+          AND attempt_count < @maxAttempts
+          AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
+      `);
+    return Boolean(result.recordset[0]);
+  },
+
   async claimNextPending(
     maxAttempts: number,
     options?: { leaseOwner?: string; leaseSeconds?: number },
@@ -260,7 +279,7 @@ export const absenceWorkdaySyncJobRepository = {
     // Concurrent workers: UPDLOCK+READPAST on the CTE, then UPDATE the CTE itself
     // (not a JOIN back to the base table). Updating via JOIN+WHERE status=PENDING
     // can yield empty OUTPUT under contention even when another PENDING row exists.
-    // Retry a few times when the queue still has claimable work.
+    // Retry only while claimable work still exists — never N empty UPDLOCK scans on idle.
     const maxClaimAttempts = 5;
     const pool = getPool();
 
@@ -291,9 +310,14 @@ export const absenceWorkdaySyncJobRepository = {
       if (claimed.recordset[0]) {
         return mapRow(claimed.recordset[0] as Record<string, unknown>);
       }
-      // Another worker may have taken the only visible row between attempts.
-      if (attempt + 1 < maxClaimAttempts) {
-        continue;
+
+      if (attempt + 1 >= maxClaimAttempts) {
+        break;
+      }
+
+      const stillClaimable = await this.hasClaimablePending(maxAttempts);
+      if (!stillClaimable) {
+        return null;
       }
     }
 

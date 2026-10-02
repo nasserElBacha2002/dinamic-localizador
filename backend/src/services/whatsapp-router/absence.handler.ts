@@ -220,9 +220,17 @@ export const handleAbsenceIntent = async (
 
   const boundRespond = bindAbsenceRespond(ctx, handlers);
 
-  // Keep textual shortcuts (e.g. "vacaciones") when absences module is enabled.
+  // Keep textual shortcuts when absences module is enabled.
   if (!absenceBlocked) {
     const detectedCode = detectAbsenceTypeCode(ctx.body);
+    if (detectedCode === "VACATION") {
+      return absenceBotService.startVacationAbsenceFlow(ctx.companyId, {
+        employeeId: ctx.employeeId!,
+        phoneFrom: ctx.phoneFrom,
+        phoneTo: ctx.phoneTo,
+        respond: boundRespond,
+      });
+    }
     if (detectedCode && detectedCode !== "GENERIC" && detectedCode !== "OTHER") {
       return absenceBotService.startAbsenceFlow(ctx.companyId, {
         employeeId: ctx.employeeId!,

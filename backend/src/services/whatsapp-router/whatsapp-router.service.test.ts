@@ -338,6 +338,117 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
+  it("routes vacaciones to vacation flow when VACATION absence type is active", async () => {
+    await prepareRouterUnitTest();
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let vacationFlowStarted = 0;
+    let absenceTypeSelectionStarted = 0;
+
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+    mock.method(absenceBotService, "startVacationAbsenceFlow", async () => {
+      vacationFlowStarted += 1;
+      return "<Response><Message>VACATION_FLOW</Message></Response>";
+    });
+    mock.method(absenceBotService, "startAbsenceFlow", async () => {
+      absenceTypeSelectionStarted += 1;
+      return "<Response><Message>ABSENCE_TYPE_FLOW</Message></Response>";
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "vacaciones" }),
+      handlers,
+    );
+
+    assert.match(response, /VACATION_FLOW/);
+    assert.equal(vacationFlowStarted, 1);
+    assert.equal(absenceTypeSelectionStarted, 0);
+  });
+
+  it("responds unavailable for vacaciones when VACATION absence type is inactive", async () => {
+    await prepareRouterUnitTest();
+    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let absenceSessionCreated = 0;
+
+    mock.method(absenceTypeRepository, "findByCode", async (_companyId, code) =>
+      code === "VACATION"
+        ? {
+            id: "vacation-type-id",
+            code: "VACATION",
+            isActive: false,
+          }
+        : null,
+    );
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+    mock.method(botSessionService, "createAbsenceSession", async () => {
+      absenceSessionCreated += 1;
+      return buildSession("WAITING_ABSENCE_TYPE", { intent: "ABSENCE" });
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "vacaciones" }),
+      handlers,
+    );
+
+    assert.match(response, /Las vacaciones no están disponibles en este momento/i);
+    assert.equal(absenceSessionCreated, 0);
+  });
+
+  it("responds unavailable for vacaciones when VACATION absence type is missing", async () => {
+    await prepareRouterUnitTest();
+    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let absenceSessionCreated = 0;
+
+    mock.method(absenceTypeRepository, "findByCode", async () => null);
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+    mock.method(botSessionService, "createAbsenceSession", async () => {
+      absenceSessionCreated += 1;
+      return buildSession("WAITING_ABSENCE_TYPE", { intent: "ABSENCE" });
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "vacaciones" }),
+      handlers,
+    );
+
+    assert.match(response, /Las vacaciones no están disponibles en este momento/i);
+    assert.equal(absenceSessionCreated, 0);
+  });
+
+  it("keeps non-vacation absence textual shortcuts on startAbsenceFlow", async () => {
+    await prepareRouterUnitTest();
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let absenceFlowStarted = 0;
+
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+    mock.method(absenceBotService, "startAbsenceFlow", async () => {
+      absenceFlowStarted += 1;
+      return "<Response><Message>ABSENCE_TYPE_FLOW</Message></Response>";
+    });
+    mock.method(absenceBotService, "startVacationAbsenceFlow", async () => {
+      return "<Response><Message>VACATION_FLOW</Message></Response>";
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "necesito ausencia por enfermedad" }),
+      handlers,
+    );
+
+    assert.match(response, /ABSENCE_TYPE_FLOW/);
+    assert.equal(absenceFlowStarted, 1);
+  });
+
   it("blocks Pedir ausencia when absences and operations are disabled", async () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1960,7 +2071,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.equal(options.filter((key) => key === "absence").length, 1);
   });
 
-  it("accepts legacy menu snapshots that still list report_unavailability", async () => {
+  it("accepts pre-unification menu snapshots with report_unavailability at position 7", async () => {
     await prepareRouterUnitTest();
     const { botSessionService } = await import("../bot-session.service");
     const { employeeWorkdayService } = await import("../employee-workday.service");
@@ -1971,15 +2082,51 @@ describe("whatsappRouterService numeric menu selection", () => {
       "check_in",
       "checkout",
       "absence",
-      "report_unavailability",
       "workday",
       "upcoming_assignments",
       "confirm_attendance",
+      "report_unavailability",
       "payroll_receipt",
     ];
 
     mock.method(botSessionService, "cancelSession", async () => true);
     mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => []);
+
+    const unavailabilitySession = buildSession("WAITING_MENU_SELECTION", {
+      intent: "MENU",
+      contextJson: JSON.stringify({ menuOptions: legacyMenuOptions }),
+    });
+
+    const unavailabilityResponse = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "7", session: unavailabilitySession }),
+      handlers,
+    );
+
+    assert.match(unavailabilityResponse, /No tenés trabajos próximos para reportar no disponibilidad/i);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("routes payroll from legacy menu snapshot position 8", async () => {
+    await prepareRouterUnitTest();
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    const legacyMenuOptions = [
+      "check_in",
+      "checkout",
+      "absence",
+      "workday",
+      "upcoming_assignments",
+      "confirm_attendance",
+      "report_unavailability",
+      "payroll_receipt",
+    ];
+
+    mock.method(botSessionService, "cancelSession", async () => true);
+    mock.method(botSessionService, "createPayrollReceiptPeriodSession", async () =>
+      buildSession("WAITING_PAYROLL_RECEIPT_PERIOD", { intent: "PAYROLL_RECEIPT" }),
+    );
 
     const session = buildSession("WAITING_MENU_SELECTION", {
       intent: "MENU",
@@ -1987,12 +2134,11 @@ describe("whatsappRouterService numeric menu selection", () => {
     });
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "4", session }),
+      baseContext({ body: "8", session }),
       handlers,
     );
 
-    assert.match(response, /No tenés trabajos próximos para reportar no disponibilidad/i);
-    assert.equal(calls.startCheckIn, 0);
+    assert.match(response, /recibo|per[ií]odo|mes/i);
   });
 
   it("omits vacation from kind selection when VACATION absence type is inactive", async () => {

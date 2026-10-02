@@ -6,6 +6,7 @@ export const ACTIVE_BOT_SESSION_STATES = [
   "WAITING_OPERATION_SELECTION",
   "WAITING_CHECKOUT_LOCATION",
   "WAITING_CHECKOUT_OPERATION_SELECTION",
+  "WAITING_ABSENCE_KIND_SELECTION",
   "WAITING_ABSENCE_TYPE",
   "WAITING_ABSENCE_START_DATE",
   "WAITING_ABSENCE_END_DATE",
@@ -26,11 +27,15 @@ export const isCheckoutSessionState = (state: BotSessionState): boolean =>
   state === "WAITING_CHECKOUT_LOCATION" || state === "WAITING_CHECKOUT_OPERATION_SELECTION";
 
 export const isAbsenceSessionState = (state: BotSessionState): boolean =>
+  state === "WAITING_ABSENCE_KIND_SELECTION" ||
   state === "WAITING_ABSENCE_TYPE" ||
   state === "WAITING_ABSENCE_START_DATE" ||
   state === "WAITING_ABSENCE_END_DATE" ||
   state === "WAITING_ABSENCE_REASON" ||
   state === "WAITING_ABSENCE_CONFIRMATION";
+
+export const isAbsenceKindSelectionSessionState = (state: BotSessionState): boolean =>
+  state === "WAITING_ABSENCE_KIND_SELECTION";
 
 export const isAssignmentSelectionSessionState = (state: BotSessionState): boolean =>
   state === "WAITING_CONFIRM_ATTENDANCE_SELECTION" ||

@@ -51,7 +51,9 @@ export function useBotSimulatorSession() {
   const resolvedServiceId = serviceManuallySet ? manualServiceId : (operation?.serviceId ?? manualServiceId);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Keep the latest message visible inside the conversation scroll area without
+    // scrolling the whole page (block: nearest respects the nearest scrollport).
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
   }, [sessionState?.messages.length]);
 
   const isBusy =

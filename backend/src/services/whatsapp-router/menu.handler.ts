@@ -3,6 +3,7 @@ import {
   buildAvailableMenuOptions,
   buildGreetingMessageFromSnapshot,
   buildInvalidMenuSelectionMessage,
+  isMenuSnapshotOptionSupported,
   resolveMenuSnapshot,
   resolveMenuSnapshotSelection,
   type BotMenuOptionKey,
@@ -92,7 +93,12 @@ export const handleActiveMenuSelection = async (
   const currentlyAllowed = new Set(
     buildAvailableMenuOptions(ctx.moduleStates).map((option) => option.key),
   );
-  if (!snapshot || snapshot.some((option) => !currentlyAllowed.has(option.key))) {
+  if (
+    !snapshot ||
+    snapshot.some(
+      (option) => !isMenuSnapshotOptionSupported(option.key, currentlyAllowed, ctx.moduleStates),
+    )
+  ) {
     const consumed = await botSessionService.cancelSession(ctx.companyId, session.id, session);
     if (!consumed) {
       return handlers.respond(ctx.companyId, {

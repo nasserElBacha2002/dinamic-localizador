@@ -6,6 +6,7 @@ import {
   buildForwardedLocationDedupKey,
   buildMissingCheckinDedupKey,
   buildUnavailableDedupKey,
+  buildUnavailableWorkdayDedupKey,
 } from "./dedup-keys";
 
 describe("admin alert dedup keys", () => {
@@ -13,6 +14,21 @@ describe("admin alert dedup keys", () => {
     assert.equal(
       buildUnavailableDedupKey("assignment-1", 2),
       "unavailable:assignment-1:2",
+    );
+  });
+
+  it("builds unavailable workday keys independently per employeeWorkdayId", () => {
+    assert.equal(
+      buildUnavailableWorkdayDedupKey("workday-A"),
+      "unavailable-workday:workday-a",
+    );
+    assert.notEqual(
+      buildUnavailableWorkdayDedupKey("workday-A"),
+      buildUnavailableWorkdayDedupKey("workday-B"),
+    );
+    assert.equal(
+      buildUnavailableWorkdayDedupKey("workday-A"),
+      buildUnavailableWorkdayDedupKey("WORKDAY-A"),
     );
   });
 

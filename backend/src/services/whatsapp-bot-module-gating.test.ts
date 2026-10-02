@@ -149,7 +149,7 @@ describe("whatsapp bot module gating", () => {
     assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
   });
 
-  it("blocks absence requests when absences module is disabled", async () => {
+  it("blocks absence requests when absences and operations modules are disabled", async () => {
     setupUnitTestEnv();
     await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
@@ -157,6 +157,7 @@ describe("whatsapp bot module gating", () => {
 
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
 
     mock.method(botSessionService, "getSessionResolutionByPhone", async () => ({
       activeSession: null,
@@ -544,6 +545,53 @@ describe("whatsapp bot session module gating", () => {
       assert.equal(absenceHandled, 0);
     });
   }
+
+  it("blocks WAITING_ABSENCE_KIND_SELECTION only when absences and operations are disabled", async () => {
+    setupUnitTestEnv();
+    await mockQuotaAdmittedOff();
+    const { whatsappBotService } = await import("./whatsapp-bot.service");
+    const { botSessionService } = await import("./bot-session.service");
+    const { absenceBotService } = await import("./absence-bot.service");
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
+    let absenceHandled = 0;
+
+    mock.method(botSessionService, "getSessionResolutionByPhone", async () => ({
+      activeSession: {
+        ...buildBotSession("WAITING_ABSENCE_TYPE"),
+        state: "WAITING_ABSENCE_KIND_SELECTION" as const,
+        contextJson: JSON.stringify({
+          flow: "ABSENCE_REQUEST",
+          absenceKindOptions: ["single_workday", "absence", "vacation"],
+        }),
+      },
+      recentlyExpired: false,
+    }));
+    mock.method(absenceBotService, "handleAbsenceSession", async () => {
+      absenceHandled += 1;
+      return "<?xml version=\"1.0\"?><Response><Message>ok</Message></Response>";
+    });
+
+    const response = await runWithBotRuntimeContext(simulationContext(), async () =>
+      whatsappBotService.handleTextMessage({
+        companyId,
+        payload: {
+          MessageSid: "SM-ABS-KIND",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Body: "1",
+        },
+        phoneFrom: "+5491111111111",
+        phoneTo: "whatsapp:+10000000000",
+        employeeId,
+        moduleStates: states,
+      }),
+    );
+
+    assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
+    assert.equal(absenceHandled, 0);
+  });
 
   it("continues absence session when absences is enabled", async () => {
     setupUnitTestEnv();

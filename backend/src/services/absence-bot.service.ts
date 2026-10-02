@@ -18,6 +18,11 @@ import {
 import { formatAbsenceDateDisplay } from "../utils/absence-date";
 import { absenceCalendarService } from "./absence-calendar.service";
 import { parseSpanishDateInput } from "./bot/bot-date.parser";
+import {
+  buildAbsenceKindSelectionPrompt,
+  resolveAbsenceKindSnapshot,
+  type AbsenceKindOptionKey,
+} from "./bot/absence-kind-options";
 import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../utils/bot-session-states";
 
 type RespondFn = (input: {
@@ -29,6 +34,12 @@ type RespondFn = (input: {
 
 const INVALID_DATE_MESSAGE =
   "No pude interpretar la fecha. Usá el formato DD/MM/AAAA, por ejemplo 05/07/2026.";
+
+const VACATION_UNAVAILABLE_MESSAGE =
+  "Las vacaciones no están disponibles en este momento. Contactá a administración.";
+
+const NO_ABSENCE_TYPES_MESSAGE =
+  "No hay tipos de ausencia configurados. Contactá a administración.";
 
 const buildTypeSelectionPrompt = (types: AbsenceType[]): string => {
   const lines = types.map((type, index) => `${index + 1}. ${type.name}`);
@@ -78,9 +89,47 @@ const buildSummary = (input: {
 const serializeContext = (context: ReturnType<typeof botSessionService.parseContext>) =>
   JSON.stringify(context);
 
+const listSelectableAbsenceTypes = async (
+  companyId: string,
+  excludeVacationType: boolean,
+): Promise<AbsenceType[]> => {
+  const types = await absenceTypeRepository.listActive(companyId);
+  return excludeVacationType ? types.filter((type) => type.code !== "VACATION") : types;
+};
+
 export const absenceBotService = {
   hasActiveAttendanceSession(session: BotSession | null): boolean {
     return Boolean(session && (isCheckInSessionState(session.state) || isCheckoutSessionState(session.state)));
+  },
+
+  async startAbsenceKindSelection(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneFrom: string;
+      phoneTo: string;
+      kindKeys: AbsenceKindOptionKey[];
+      respond: RespondFn;
+    },
+  ): Promise<string> {
+    const options = resolveAbsenceKindSnapshot(input.kindKeys) ?? [];
+    await botSessionService.createAbsenceSession(companyId, {
+      employeeId: input.employeeId,
+      phoneNumber: input.phoneFrom,
+      state: "WAITING_ABSENCE_KIND_SELECTION",
+      contextJson: serializeContext({
+        flow: "ABSENCE_REQUEST",
+        absenceKindOptions: input.kindKeys,
+        absenceDraft: {},
+      }),
+    });
+
+    return input.respond({
+      message: buildAbsenceKindSelectionPrompt(options),
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
   },
 
   async startAbsenceFlow(
@@ -91,16 +140,21 @@ export const absenceBotService = {
     phoneTo: string;
     body: string;
     respond: RespondFn;
+    excludeVacationType?: boolean;
   }): Promise<string> {
-    const types = await absenceTypeRepository.listActive(companyId);
+    const excludeVacationType = Boolean(input.excludeVacationType);
+    const types = await listSelectableAbsenceTypes(companyId, excludeVacationType);
     const detectedCode = detectAbsenceTypeCode(input.body);
     const draft = {
       flow: "ABSENCE_REQUEST" as const,
-      absenceDraft: {} as NonNullable<ReturnType<typeof botSessionService.parseContext>["absenceDraft"]>,
+      absenceDraft: {
+        excludeVacationType: excludeVacationType || undefined,
+      } as NonNullable<ReturnType<typeof botSessionService.parseContext>["absenceDraft"]>,
     };
 
     if (detectedCode && detectedCode !== "GENERIC" && detectedCode !== "OTHER") {
-      const absenceType = types.find((type) => type.code === detectedCode) ?? null;
+      const allTypes = await absenceTypeRepository.listActive(companyId);
+      const absenceType = allTypes.find((type) => type.code === detectedCode) ?? null;
       if (absenceType) {
         draft.absenceDraft.absenceTypeId = absenceType.id;
         draft.absenceDraft.absenceTypeCode = absenceType.code;
@@ -119,6 +173,15 @@ export const absenceBotService = {
       }
     }
 
+    if (types.length === 0) {
+      return input.respond({
+        message: NO_ABSENCE_TYPES_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
     await botSessionService.createAbsenceSession(companyId, {
       employeeId: input.employeeId,
       phoneNumber: input.phoneFrom,
@@ -128,6 +191,130 @@ export const absenceBotService = {
 
     return input.respond({
       message: buildTypeSelectionPrompt(types),
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  },
+
+  async startVacationAbsenceFlow(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneFrom: string;
+      phoneTo: string;
+      respond: RespondFn;
+    },
+  ): Promise<string> {
+    const vacationType = await absenceTypeRepository.findByCode(companyId, "VACATION");
+    if (!vacationType?.isActive) {
+      return input.respond({
+        message: VACATION_UNAVAILABLE_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    await botSessionService.createAbsenceSession(companyId, {
+      employeeId: input.employeeId,
+      phoneNumber: input.phoneFrom,
+      state: "WAITING_ABSENCE_START_DATE",
+      contextJson: serializeContext({
+        flow: "ABSENCE_REQUEST",
+        absenceDraft: {
+          absenceTypeId: vacationType.id,
+          absenceTypeCode: vacationType.code,
+        },
+      }),
+    });
+
+    return input.respond({
+      message:
+        "Perfecto. Ingresá la fecha de inicio de tus vacaciones en formato DD/MM/AAAA.\nPor ejemplo: 05/07/2026.",
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  },
+
+  async continueAbsenceTypeSelection(
+    companyId: string,
+    input: {
+      session: BotSession;
+      employeeId: string;
+      phoneFrom: string;
+      phoneTo: string;
+      respond: RespondFn;
+    },
+  ): Promise<string> {
+    const types = await listSelectableAbsenceTypes(companyId, true);
+    if (types.length === 0) {
+      await botSessionService.cancelSession(companyId, input.session.id, input.session);
+      return input.respond({
+        message: NO_ABSENCE_TYPES_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const context = botSessionService.parseContext(input.session.contextJson);
+    await botSessionService.updateAbsenceSession(companyId, input.session.id, {
+      state: "WAITING_ABSENCE_TYPE",
+      contextJson: serializeContext({
+        ...context,
+        flow: "ABSENCE_REQUEST",
+        absenceKindOptions: undefined,
+        absenceDraft: { excludeVacationType: true },
+      }),
+    });
+
+    return input.respond({
+      message: buildTypeSelectionPrompt(types),
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  },
+
+  async continueVacationFromKindSelection(
+    companyId: string,
+    input: {
+      session: BotSession;
+      employeeId: string;
+      phoneFrom: string;
+      phoneTo: string;
+      respond: RespondFn;
+    },
+  ): Promise<string> {
+    const vacationType = await absenceTypeRepository.findByCode(companyId, "VACATION");
+    if (!vacationType?.isActive) {
+      return input.respond({
+        message: VACATION_UNAVAILABLE_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const context = botSessionService.parseContext(input.session.contextJson);
+    await botSessionService.updateAbsenceSession(companyId, input.session.id, {
+      state: "WAITING_ABSENCE_START_DATE",
+      contextJson: serializeContext({
+        ...context,
+        flow: "ABSENCE_REQUEST",
+        absenceKindOptions: undefined,
+        absenceDraft: {
+          absenceTypeId: vacationType.id,
+          absenceTypeCode: vacationType.code,
+        },
+      }),
+    });
+
+    return input.respond({
+      message:
+        "Perfecto. Ingresá la fecha de inicio de tus vacaciones en formato DD/MM/AAAA.\nPor ejemplo: 05/07/2026.",
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
@@ -156,11 +343,24 @@ export const absenceBotService = {
       });
     }
 
+    if (input.session.state === "WAITING_ABSENCE_KIND_SELECTION") {
+      // Router owns kind selection (may hand off to unavailability).
+      return input.respond({
+        message: "Respondé con el número de la opción para continuar.",
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
     const context = botSessionService.parseContext(input.session.contextJson);
     const draft = context.absenceDraft ?? {};
 
     if (input.session.state === "WAITING_ABSENCE_TYPE") {
-      const types = await absenceTypeRepository.listActive(companyId);
+      const types = await listSelectableAbsenceTypes(
+        companyId,
+        Boolean(draft.excludeVacationType),
+      );
       const selected = parseTypeSelection(input.body, types);
       if (!selected) {
         return input.respond({

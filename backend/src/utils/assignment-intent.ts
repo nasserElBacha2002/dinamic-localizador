@@ -69,6 +69,11 @@ export const isUnavailabilityIntent = (body: string): boolean => {
 
 export const parseOptionalAssignmentSelection = (body: string): number | null => {
   const normalized = normalizeIntentText(body);
+  // Bare digits are menu / session selections, not keyword-scoped assignment picks.
+  // Menu option "7" must not be treated as "assignment #7" inside report-unavailability.
+  if (/^\d+$/.test(normalized)) {
+    return null;
+  }
   const trailingNumber = normalized.match(/(\d+)\s*$/);
   if (trailingNumber) {
     const value = Number.parseInt(trailingNumber[1], 10);

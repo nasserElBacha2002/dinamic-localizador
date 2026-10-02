@@ -25,11 +25,11 @@ describe("buildGreetingMessage", () => {
     const message = buildGreetingMessage(allEnabled());
     assert.match(message, /Marcar llegada — compartí tu ubicación \(o escribí "Llegué"\)/);
     assert.match(message, /Marcar salida — compartí tu ubicación \(o escribí "Me voy"\)/);
-    assert.match(message, /Pedir ausencia o vacaciones — escribí "Pedir ausencia"/);
+    assert.match(message, /Avisar ausencia o vacaciones — escribí "Pedir ausencia"/);
     assert.match(message, /Consultar jornada de hoy — escribí "Mi jornada" o "Hoy"/);
     assert.match(message, /Ver próximos turnos — escribí "Mis turnos" o "Agenda"/);
     assert.match(message, /Confirmar asistencia — escribí "Confirmo asistencia"/);
-    assert.match(message, /Avisar no disponibilidad — escribí "No puedo asistir"/);
+    assert.doesNotMatch(message, /Avisar no disponibilidad/i);
     assert.match(message, /Consultar recibo de sueldo — escribí "Mi recibo"/);
     assert.match(message, /Ayuda/);
     assert.match(message, /Cancelar/);
@@ -42,12 +42,22 @@ describe("buildGreetingMessage", () => {
     assert.match(message, /Cancelar/);
   });
 
-  it("hides absence when absences is disabled", () => {
+  it("keeps unified absence entry when absences is disabled but operations is enabled", () => {
     const states = allEnabled();
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     const message = buildGreetingMessage(states);
-    assert.doesNotMatch(message, /ausencia/i);
+    assert.match(message, /Avisar ausencia o vacaciones/i);
+    assert.doesNotMatch(message, /Avisar no disponibilidad/i);
     assert.match(message, /Marcar llegada/);
+  });
+
+  it("hides unified absence entry when absences and operations are disabled", () => {
+    const states = allEnabled();
+    states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
+    const message = buildGreetingMessage(states);
+    assert.doesNotMatch(message, /ausencia/i);
+    assert.match(message, /Marcar salida/);
   });
 
   it("hides workday when attendance or operations is disabled", () => {
@@ -68,10 +78,11 @@ describe("buildGreetingMessage", () => {
     assert.doesNotMatch(message, /Avisar no disponibilidad/i);
   });
 
-  it("shows confirmation and unavailability when operations is enabled", () => {
+  it("shows confirmation without a separate unavailability menu row when operations is enabled", () => {
     const message = buildGreetingMessage(allEnabled());
     assert.match(message, /Confirmar asistencia — escribí "Confirmo asistencia"/);
-    assert.match(message, /Avisar no disponibilidad — escribí "No puedo asistir"/);
+    assert.doesNotMatch(message, /Avisar no disponibilidad/i);
+    assert.match(message, /Avisar ausencia o vacaciones/);
   });
 
   it("hides check-in when operations is disabled", () => {
@@ -88,7 +99,7 @@ describe("buildGreetingMessage", () => {
     const message = buildGreetingMessage(states);
     assert.doesNotMatch(message, /Marcar llegada/);
     assert.doesNotMatch(message, /Marcar salida/);
-    assert.match(message, /Pedir ausencia o vacaciones/);
+    assert.match(message, /Avisar ausencia o vacaciones/);
   });
 
   it("returns a safe no-options message when all employee-facing modules are disabled", () => {
@@ -115,6 +126,7 @@ describe("buildHelpMessage", () => {
   it("respects disabled modules", () => {
     const states = allEnabled();
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     const message = buildHelpMessage(states);
     assert.doesNotMatch(message, /ausencia/i);
     assert.match(message, /Marcar salida/);

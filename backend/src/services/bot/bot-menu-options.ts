@@ -29,7 +29,7 @@ const MENU_OPTION_DEFINITIONS: Record<BotMenuOptionKey, Omit<BotMenuOption, "key
     hint: 'compartí tu ubicación (o escribí "Me voy")',
   },
   absence: {
-    label: "Pedir ausencia o vacaciones",
+    label: "Avisar ausencia o vacaciones",
     hint: 'escribí "Pedir ausencia"',
   },
   workday: {
@@ -69,6 +69,24 @@ export const resolveMenuSnapshot = (value: unknown): BotMenuOption[] | null => {
   return value.map((key) => ({ key, ...MENU_OPTION_DEFINITIONS[key] }));
 };
 
+/** Pre-unification menu rows still present in persisted WAITING_MENU_SELECTION snapshots. */
+export const isLegacyMenuSnapshotOptionKey = (
+  key: BotMenuOptionKey,
+  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+): boolean => {
+  if (key === "report_unavailability") {
+    return !getAssignmentConfirmationModuleBlockedMessage(moduleStates);
+  }
+  return false;
+};
+
+export const isMenuSnapshotOptionSupported = (
+  key: BotMenuOptionKey,
+  currentlyAllowedKeys: ReadonlySet<BotMenuOptionKey>,
+  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+): boolean =>
+  currentlyAllowedKeys.has(key) || isLegacyMenuSnapshotOptionKey(key, moduleStates);
+
 export const buildAvailableMenuOptions = (
   moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
 ): BotMenuOption[] => {
@@ -82,7 +100,11 @@ export const buildAvailableMenuOptions = (
     options.push({ key: "checkout", ...MENU_OPTION_DEFINITIONS.checkout });
   }
 
-  if (!getAbsenceModuleBlockedMessage(moduleStates)) {
+  // Unified entry for absence requests + punctual unavailability (no separate menu row).
+  if (
+    !getAbsenceModuleBlockedMessage(moduleStates) ||
+    !getAssignmentConfirmationModuleBlockedMessage(moduleStates)
+  ) {
     options.push({ key: "absence", ...MENU_OPTION_DEFINITIONS.absence });
   }
 
@@ -96,7 +118,6 @@ export const buildAvailableMenuOptions = (
 
   if (!getAssignmentConfirmationModuleBlockedMessage(moduleStates)) {
     options.push({ key: "confirm_attendance", ...MENU_OPTION_DEFINITIONS.confirm_attendance });
-    options.push({ key: "report_unavailability", ...MENU_OPTION_DEFINITIONS.report_unavailability });
   }
 
   if (!getPayrollReceiptsModuleBlockedMessage(moduleStates)) {

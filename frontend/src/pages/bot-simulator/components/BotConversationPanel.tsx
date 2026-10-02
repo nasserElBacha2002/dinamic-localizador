@@ -51,14 +51,20 @@ export function BotConversationPanel({
           description='Configurá el contexto y presioná "Iniciar simulación" para comenzar.'
         />
       ) : (
-        <Stack gap="md" style={{ minHeight: 480 }}>
+        <Stack
+          gap="md"
+          style={{
+            height: "min(70vh, 640px)",
+            minHeight: 420,
+            overflow: "hidden",
+          }}
+        >
           <ScrollArea
             type="auto"
             offsetScrollbars
             style={{
               flex: 1,
-              minHeight: 360,
-              maxHeight: 460,
+              minHeight: 0,
               backgroundColor: "var(--mantine-color-gray-0)",
               borderRadius: "var(--mantine-radius-sm)",
             }}

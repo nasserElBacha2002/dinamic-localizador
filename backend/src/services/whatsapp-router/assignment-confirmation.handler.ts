@@ -11,6 +11,7 @@ import {
   parseOperationSelectionIndex,
 } from "../bot/bot-operation.selector";
 import { logModuleBlocked } from "./module-session-gate";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../types/twilio.types";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
@@ -50,7 +51,20 @@ export const handleActiveAssignmentSelectionSession = async (
   const options = resolveOperationOptionsFromSessionContext(botSessionService.parseContext(session.contextJson)) ?? [];
 
   if (!isValidOperationSelection(selection, options.length)) {
-    return respond(ctx, handlers, INVALID_SELECTION_MESSAGE, WHATSAPP_RESULT_CODES.INVALID_SELECTION);
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: INVALID_SELECTION_MESSAGE,
+    });
+    return respond(
+      ctx,
+      handlers,
+      retry.message,
+      retry.kind === "retry"
+        ? WHATSAPP_RESULT_CODES.INVALID_SELECTION
+        : WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW,
+    );
   }
 
   const selected = options[selection - 1];
@@ -60,7 +74,9 @@ export const handleActiveAssignmentSelectionSession = async (
       ctx.employeeId!,
       selected.operationId,
     );
-    await completeSelectionSession(ctx.companyId, session);
+    if (result.kind === "ok") {
+      await completeSelectionSession(ctx.companyId, session);
+    }
     return respond(ctx, handlers, result.message);
   }
 
@@ -70,8 +86,27 @@ export const handleActiveAssignmentSelectionSession = async (
     selected.operationId,
     selected.employeeWorkdayId,
   );
-  await completeSelectionSession(ctx.companyId, session);
-  return respond(ctx, handlers, result.message);
+  if (result.kind === "ok") {
+    await completeSelectionSession(ctx.companyId, session);
+    return respond(ctx, handlers, result.message, WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW);
+  }
+
+  // Stale option (not_found/past): consume a contextual retry like out-of-range input.
+  // Session stays open while retries remain so another listed option can still be chosen.
+  const retry = await recordInvalidContextualInput({
+    companyId: ctx.companyId,
+    session,
+    messageSid: ctx.payload.MessageSid,
+    retryMessage: result.message,
+  });
+  return respond(
+    ctx,
+    handlers,
+    retry.message,
+    retry.kind === "retry"
+      ? WHATSAPP_RESULT_CODES.INVALID_SELECTION
+      : WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW,
+  );
 };
 
 const handleAssignmentSelectionFlow = async (
@@ -84,6 +119,7 @@ const handleAssignmentSelectionFlow = async (
       companyId: string,
       employeeId: string,
       operationId: string,
+      employeeWorkdayId?: string | null,
     ) => Promise<{ message: string }>;
     createSelectionSession: (selectionOptions: ReturnType<typeof employeeWorkdayService.mapToSelectionOptions>) => Promise<void>;
     buildSelectionPrompt: (items: typeof assignments) => string;
@@ -104,6 +140,7 @@ const handleAssignmentSelectionFlow = async (
       ctx.companyId,
       ctx.employeeId!,
       selected.operationId,
+      selected.employeeWorkdayId,
     );
     return respond(ctx, handlers, result.message);
   }
@@ -113,6 +150,7 @@ const handleAssignmentSelectionFlow = async (
       ctx.companyId,
       ctx.employeeId!,
       assignments[0].operationId,
+      assignments[0].employeeWorkdayId,
     );
     return respond(ctx, handlers, result.message);
   }
@@ -172,11 +210,12 @@ export const handleUnavailabilityIntent = async (
 
   return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
     emptyMessage: employeeWorkdayService.noUnavailabilityMessage,
-    applyToAssignment: async (companyId, employeeId, operationId) => {
+    applyToAssignment: async (companyId, employeeId, operationId, employeeWorkdayId) => {
       const result = await employeeWorkdayService.markAssignmentUnavailable(
         companyId,
         employeeId,
         operationId,
+        employeeWorkdayId,
       );
       return { message: result.message };
     },

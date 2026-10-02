@@ -27,6 +27,18 @@ describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
   it("keeps upcoming/confirm flows scoped to ONE_TIME while today uses workdays", () => {
     assert.match(repositorySource, /i\.operation_kind = N'ONE_TIME'/);
   });
+
+  it("lists unavailability with RECURRING end-window and ONE_TIME future-start semantics", () => {
+    const methodSource = repositorySource.slice(
+      repositorySource.indexOf("async listUnavailabilityForEmployee"),
+      repositorySource.indexOf("async findByOperationForEmployee"),
+    );
+    assert.match(methodSource, /i\.operation_kind = N'RECURRING'/);
+    assert.match(methodSource, /COALESCE\(ow\.expected_end_at, ow\.expected_start_at\) >= @at/);
+    assert.match(methodSource, /i\.operation_kind <> N'RECURRING'/);
+    assert.match(methodSource, /ow\.expected_start_at > @at/);
+    assert.match(methodSource, /ew\.id IS NOT NULL/);
+  });
 });
 
 describe("employeeAssignmentQueryRepository.listEmployeeOperations", () => {

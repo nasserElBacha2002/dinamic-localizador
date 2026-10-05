@@ -199,6 +199,28 @@ const envSchema = z
       .int()
       .positive()
       .default(6 * 60 * 60 * 1000),
+    /**
+     * Close ACTIVE WhatsApp conversations idle past this window (last_activity_at).
+     * Default 24h — longer than CONVERSATION_IDLE_WINDOW_HOURS (12) reuse window.
+     */
+    WHATSAPP_CONVERSATION_IDLE_TIMEOUT_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(24),
+    /** STARTED flow executions older than this become FAILED (retention terminal). */
+    WHATSAPP_FLOW_STARTED_TIMEOUT_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(24),
+    WHATSAPP_LIFECYCLE_JOB_ENABLED: z.stringbool().default(true),
+    WHATSAPP_LIFECYCLE_DRY_RUN: z.stringbool().default(false),
+    WHATSAPP_LIFECYCLE_JOB_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60 * 60 * 1000),
+    WHATSAPP_LIFECYCLE_BATCH_SIZE: z.coerce.number().int().min(1).max(5000).default(200),
+    WHATSAPP_LIFECYCLE_MAX_BATCHES: z.coerce.number().int().min(1).max(10_000).default(50),
+    /**
+     * Cost ledger retention is independent of message TTL.
+     * Default OFF — enable only after an explicit cost/audit decision.
+     */
+    WHATSAPP_COST_LEDGER_RETENTION_ENABLED: z.stringbool().default(false),
+    WHATSAPP_COST_LEDGER_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(365),
     WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET: z.string().min(16).optional(),
     /**
      * Phase 1 WhatsApp turn classification (shadow only).

@@ -5,6 +5,8 @@ import {
   buildAvailableMenuOptions,
   buildInvalidMenuSelectionMessage,
   INVALID_MENU_SELECTION_PREFIX,
+  isLegacyMenuSnapshotOptionKey,
+  isMenuSnapshotOptionSupported,
   resolveMenuNumberSelection,
 } from "./bot-menu-options";
 
@@ -17,9 +19,9 @@ const allEnabled = () =>
   ]);
 
 describe("buildAvailableMenuOptions", () => {
-  it("returns 8 options in expected order when all modules are enabled", () => {
+  it("returns 7 options in expected order when all modules are enabled", () => {
     const options = buildAvailableMenuOptions(allEnabled());
-    assert.equal(options.length, 8);
+    assert.equal(options.length, 7);
     assert.deepEqual(
       options.map((option) => option.key),
       [
@@ -29,10 +31,10 @@ describe("buildAvailableMenuOptions", () => {
         "workday",
         "upcoming_assignments",
         "confirm_attendance",
-        "report_unavailability",
         "payroll_receipt",
       ],
     );
+    assert.equal(options.some((option) => option.key === "report_unavailability"), false);
   });
 
   it("hides payroll_receipt when payroll_receipts module is disabled", () => {
@@ -40,24 +42,25 @@ describe("buildAvailableMenuOptions", () => {
     states.set(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, false);
     const options = buildAvailableMenuOptions(states);
     assert.equal(options.some((option) => option.key === "payroll_receipt"), false);
-    assert.equal(options.length, 7);
+    assert.equal(options.length, 6);
   });
 
-  it("removes absence and renumbers when absences is disabled", () => {
+  it("keeps unified absence entry when absences is disabled but operations is enabled", () => {
     const states = allEnabled();
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     const options = buildAvailableMenuOptions(states);
-    assert.equal(options.length, 7);
     assert.deepEqual(options.map((option) => option.key), [
       "check_in",
       "checkout",
+      "absence",
       "workday",
       "upcoming_assignments",
       "confirm_attendance",
-      "report_unavailability",
       "payroll_receipt",
     ]);
-    assert.equal(resolveMenuNumberSelection("3", states), "workday");
+    assert.equal(options.some((option) => option.key === "report_unavailability"), false);
+    assert.equal(resolveMenuNumberSelection("3", states), "absence");
+    assert.equal(resolveMenuNumberSelection("4", states), "workday");
   });
 
   it("removes operation-dependent options when operations is disabled", () => {
@@ -81,7 +84,6 @@ describe("buildAvailableMenuOptions", () => {
       "absence",
       "upcoming_assignments",
       "confirm_attendance",
-      "report_unavailability",
       "payroll_receipt",
     ]);
     assert.equal(resolveMenuNumberSelection("1", states), "absence");
@@ -107,8 +109,8 @@ describe("resolveMenuNumberSelection", () => {
     assert.equal(resolveMenuNumberSelection("4", states), "workday");
     assert.equal(resolveMenuNumberSelection("5", states), "upcoming_assignments");
     assert.equal(resolveMenuNumberSelection("6", states), "confirm_attendance");
-    assert.equal(resolveMenuNumberSelection("7", states), "report_unavailability");
-    assert.equal(resolveMenuNumberSelection("8", states), "payroll_receipt");
+    assert.equal(resolveMenuNumberSelection("7", states), "payroll_receipt");
+    assert.equal(resolveMenuNumberSelection("8", states), null);
   });
 
   it("returns null for non-numeric input", () => {
@@ -122,6 +124,30 @@ describe("resolveMenuNumberSelection", () => {
   });
 });
 
+describe("legacy menu snapshot compatibility", () => {
+  it("treats report_unavailability as supported when operations module allows it", () => {
+    const states = allEnabled();
+    const allowed = new Set(buildAvailableMenuOptions(states).map((option) => option.key));
+    assert.equal(isLegacyMenuSnapshotOptionKey("report_unavailability", states), true);
+    assert.equal(
+      isMenuSnapshotOptionSupported("report_unavailability", allowed, states),
+      true,
+    );
+    assert.equal(allowed.has("report_unavailability"), false);
+  });
+
+  it("does not treat report_unavailability as supported when operations is disabled", () => {
+    const states = allEnabled();
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
+    const allowed = new Set(buildAvailableMenuOptions(states).map((option) => option.key));
+    assert.equal(isLegacyMenuSnapshotOptionKey("report_unavailability", states), false);
+    assert.equal(
+      isMenuSnapshotOptionSupported("report_unavailability", allowed, states),
+      false,
+    );
+  });
+});
+
 describe("buildInvalidMenuSelectionMessage", () => {
   it("includes prefix and dynamic numbered options", () => {
     const message = buildInvalidMenuSelectionMessage(
@@ -129,6 +155,6 @@ describe("buildInvalidMenuSelectionMessage", () => {
     );
     assert.match(message, new RegExp(INVALID_MENU_SELECTION_PREFIX));
     assert.match(message, /1\. Marcar llegada/);
-    assert.match(message, /8\. Consultar recibo de sueldo/);
+    assert.match(message, /7\. Consultar recibo de sueldo/);
   });
 });

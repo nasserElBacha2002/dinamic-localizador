@@ -52,6 +52,12 @@ describe("job lease claim", () => {
     assert.match(source, /lease_expires_at/);
   });
 
+  it("short-circuits empty claim retries via hasClaimablePending", () => {
+    assert.match(source, /hasClaimablePending/);
+    assert.match(source, /stillClaimable/);
+    assert.match(source, /attempt_count < @maxAttempts/);
+  });
+
   it("recovers expired PROCESSING leases", () => {
     assert.match(source, /status = N'PROCESSING'/);
     assert.match(source, /lease_expires_at < SYSUTCDATETIME\(\)/);

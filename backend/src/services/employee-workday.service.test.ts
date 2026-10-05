@@ -18,6 +18,9 @@ const assignment = (
 ): EmployeeAssignedOperation => ({
   assignmentId: "assignment-1",
   operationId,
+  operationKind: "ONE_TIME",
+  operationWorkdayId: "ow-1",
+  employeeWorkdayId: null,
   serviceName: "Carrefour Palermo",
   serviceAddress: "Av. Santa Fe 1234",
   serviceLocality: "Palermo",
@@ -32,6 +35,13 @@ const assignment = (
   punctualityStatus: null,
   ...overrides,
 });
+
+const mockEmptyUnavailabilityList = async () => {
+  const { employeeAssignmentQueryRepository } = await import(
+    "../repositories/employee-assignment-query.repository"
+  );
+  mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => []);
+};
 
 const runWithNow = async <T>(now: string, operation: () => Promise<T>): Promise<T> =>
   runWithBotRuntimeContext(
@@ -210,6 +220,7 @@ describe("employeeWorkdayService", () => {
 
   it("marks assignment unavailable idempotently when already unavailable", async () => {
     setupUnitTestEnv();
+    await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );
@@ -233,6 +244,249 @@ describe("employeeWorkdayService", () => {
     assert.equal(updateCalls, 0);
   });
 
+  it("allows unavailability for a habitual assignment on today's started workday", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
+    const { employeeRepository } = await import("../repositories/employee.repository");
+    const { replacementRequestService } = await import("./replacement-request.service");
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let assignmentUpdates = 0;
+    let markedWorkdayId: string | null = null;
+    const todayOccurrence = assignment({
+      employeeWorkdayId: "workday-today",
+      operationKind: "RECURRING",
+      scheduledStart: "2026-07-08T10:00:00.000Z",
+      scheduledEnd: "2026-07-08T18:00:00.000Z",
+    });
+
+    mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+      todayOccurrence,
+    ]);
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      assignmentUpdates += 1;
+      return true;
+    });
+    mock.method(employeeWorkdayRepository, "markUnavailable", async (_companyId, workdayId) => {
+      markedWorkdayId = workdayId;
+      return true;
+    });
+    mock.method(employeeRepository, "findById", async () => null);
+    mock.method(replacementRequestService, "createForUnavailable", async () => undefined);
+
+    const listed = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.listUnavailabilityAssignments(companyId, employeeId),
+    );
+    assert.equal(listed.length, 1);
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        operationId,
+        "workday-today",
+      ),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.equal(markedWorkdayId, "workday-today");
+    assert.equal(assignmentUpdates, 0);
+  });
+
+  it("keeps ONE_TIME future unavailability allowed and ONE_TIME started rejected", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+    const { PAST_ASSIGNMENT_MESSAGE } = await import("../utils/employee-assignment-format");
+
+    const futureOneTime = assignment({
+      operationKind: "ONE_TIME",
+      employeeWorkdayId: "ew-one-future",
+      scheduledStart: "2026-07-08T23:30:00.000Z",
+      scheduledEnd: "2026-07-09T06:00:00.000Z",
+    });
+    const startedOneTime = assignment({
+      operationKind: "ONE_TIME",
+      employeeWorkdayId: "ew-one-started",
+      scheduledStart: "2026-07-08T10:00:00.000Z",
+      scheduledEnd: "2026-07-08T18:00:00.000Z",
+    });
+
+    mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+      futureOneTime,
+    ]);
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => true);
+
+    const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
+    const { employeeRepository } = await import("../repositories/employee.repository");
+    const { replacementRequestService } = await import("./replacement-request.service");
+    mock.method(employeeWorkdayRepository, "markUnavailable", async () => true);
+    mock.method(employeeRepository, "findById", async () => null);
+    mock.method(replacementRequestService, "createForUnavailable", async () => undefined);
+
+    const futureResult = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        operationId,
+        "ew-one-future",
+      ),
+    );
+    assert.equal(futureResult.kind, "ok");
+
+    mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+      startedOneTime,
+    ]);
+    const startedResult = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        operationId,
+        "ew-one-started",
+      ),
+    );
+    assert.equal(startedResult.kind, "past");
+    assert.equal(startedResult.message, PAST_ASSIGNMENT_MESSAGE);
+  });
+
+  it("emits distinct unavailable-workday dedup keys for distinct recurring occurrences", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
+    const { employeeRepository } = await import("../repositories/employee.repository");
+    const { replacementRequestService } = await import("./replacement-request.service");
+    const { adminAlertService } = await import("./admin-alert.service");
+    const { attendanceThresholdAlertService } = await import("./attendance-threshold-alert.service");
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+    const { buildUnavailableWorkdayDedupKey } = await import("../utils/admin-alert/dedup-keys");
+
+    const dedupKeys: string[] = [];
+    mock.method(adminAlertService, "emit", async (input: { deduplicationKey: string }) => {
+      dedupKeys.push(input.deduplicationKey);
+      return { enqueued: 1, dedupSkipped: 0, recipientSkipped: 0 };
+    });
+    mock.method(attendanceThresholdAlertService, "markEmployeeDirty", async () => undefined);
+    mock.method(employeeWorkdayRepository, "markUnavailable", async () => true);
+    mock.method(employeeRepository, "findById", async () => ({
+      id: employeeId,
+      companyId,
+      name: "Ana",
+      phoneNumber: "+5491111111111",
+      employeeType: "fijo",
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(replacementRequestService, "createForUnavailable", async () => undefined);
+
+    for (const workdayId of ["workday-A", "workday-B"] as const) {
+      mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+        assignment({
+          employeeWorkdayId: workdayId,
+          operationKind: "RECURRING",
+          scheduledStart: "2026-07-10T10:00:00.000Z",
+          scheduledEnd: "2026-07-10T18:00:00.000Z",
+        }),
+      ]);
+      const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+        employeeWorkdayService.markAssignmentUnavailable(
+          companyId,
+          employeeId,
+          operationId,
+          workdayId,
+        ),
+      );
+      assert.equal(result.kind, "ok");
+    }
+
+    assert.deepEqual(dedupKeys, [
+      buildUnavailableWorkdayDedupKey("workday-A"),
+      buildUnavailableWorkdayDedupKey("workday-B"),
+    ]);
+    assert.notEqual(dedupKeys[0], dedupKeys[1]);
+
+    // Retry same occurrence: markUnavailable returns false → no second alert key.
+    mock.method(employeeWorkdayRepository, "markUnavailable", async () => false);
+    mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+      assignment({
+        employeeWorkdayId: "workday-A",
+        operationKind: "RECURRING",
+        scheduledStart: "2026-07-10T10:00:00.000Z",
+        scheduledEnd: "2026-07-10T18:00:00.000Z",
+      }),
+    ]);
+    const retry = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        operationId,
+        "workday-A",
+      ),
+    );
+    assert.equal(retry.kind, "ok");
+    assert.equal(dedupKeys.length, 2);
+  });
+
+  it("allows unavailability for a habitual assignment on a future workday", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
+    const { employeeRepository } = await import("../repositories/employee.repository");
+    const { replacementRequestService } = await import("./replacement-request.service");
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let assignmentUpdates = 0;
+    let markedWorkdayId: string | null = null;
+    const futureOccurrence = assignment({
+      employeeWorkdayId: "workday-future",
+      operationKind: "RECURRING",
+      scheduledStart: "2026-07-10T10:00:00.000Z",
+      scheduledEnd: "2026-07-10T18:00:00.000Z",
+    });
+
+    mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+      futureOccurrence,
+    ]);
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      assignmentUpdates += 1;
+      return true;
+    });
+    mock.method(employeeWorkdayRepository, "markUnavailable", async (_companyId, workdayId) => {
+      markedWorkdayId = workdayId;
+      return true;
+    });
+    mock.method(employeeRepository, "findById", async () => null);
+    mock.method(replacementRequestService, "createForUnavailable", async () => undefined);
+
+    const listed = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.listUnavailabilityAssignments(companyId, employeeId),
+    );
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.employeeWorkdayId, "workday-future");
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        operationId,
+        "workday-future",
+      ),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.equal(markedWorkdayId, "workday-future");
+    assert.equal(assignmentUpdates, 0);
+  });
+
   it("marks only the selected recurring occurrence unavailable without changing its base assignment", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
@@ -246,7 +500,7 @@ describe("employeeWorkdayService", () => {
     let assignmentUpdates = 0;
     let markedWorkdayId: string | null = null;
     let replacementWorkdayId: string | null = null;
-    mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+    mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
       assignment({ employeeWorkdayId: "workday-D", operationKind: "RECURRING" }),
     ]);
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -270,6 +524,30 @@ describe("employeeWorkdayService", () => {
     assert.equal(markedWorkdayId, "workday-D");
     assert.equal(replacementWorkdayId, "workday-D");
     assert.equal(assignmentUpdates, 0);
+  });
+
+  it("rejects unavailability when there is truly no reportable assignment", async () => {
+    setupUnitTestEnv();
+    await mockEmptyUnavailabilityList();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+    const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
+
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => null);
+
+    const listed = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.listUnavailabilityAssignments(companyId, employeeId),
+    );
+    assert.equal(listed.length, 0);
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId),
+    );
+
+    assert.equal(result.kind, "not_found");
+    assert.equal(result.message, INVALID_SELECTION_MESSAGE);
   });
 
   it("does not confirm past assignments", async () => {
@@ -372,6 +650,7 @@ describe("employeeWorkdayService", () => {
 
   it("cannot mark unavailable outside resolved company or employee scope", async () => {
     setupUnitTestEnv();
+    await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );
@@ -421,6 +700,7 @@ describe("employeeWorkdayService", () => {
 
   it("keeps CONFIRMED final when unavailable reply arrives (no flip)", async () => {
     setupUnitTestEnv();
+    await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );
@@ -475,6 +755,7 @@ describe("employeeWorkdayService", () => {
   it("CAS unavailable transitions only from PENDING", async () => {
     setupUnitTestEnv();
     await mockAdminAlertSideEffects();
+    await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );
@@ -529,6 +810,7 @@ describe("employeeWorkdayService", () => {
   it("concurrent 2 vs 1: unavailable CAS loss surfaces CONFIRMED winner", async () => {
     setupUnitTestEnv();
     await mockAdminAlertSideEffects();
+    await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );

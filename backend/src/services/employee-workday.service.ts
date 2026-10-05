@@ -5,7 +5,7 @@ import { employeeWorkdayRepository } from "../repositories/employee-workday.repo
 import { employeeRepository } from "../repositories/employee.repository";
 import { adminAlertContextRepository } from "../repositories/admin-alert-context.repository";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
-import { buildUnavailableDedupKey } from "../utils/admin-alert/dedup-keys";
+import { buildUnavailableDedupKey, buildUnavailableWorkdayDedupKey } from "../utils/admin-alert/dedup-keys";
 import { emitAdminAlertSafely } from "./admin-alert-emit.helpers";
 import type { OperationSelectionOption } from "../types/twilio.types";
 import { getBotNow } from "../utils/bot-runtime-context";
@@ -28,6 +28,20 @@ import type { PunctualityStatus } from "../types/domain";
 
 const isFutureAssignment = (assignment: EmployeeAssignedOperation, at: Date): boolean =>
   new Date(assignment.scheduledStart).getTime() > at.getTime();
+
+/** Unavailability for RECURRING may be reported until the workday ends (includes started-today). */
+const isRecurringUnavailabilityReportable = (
+  assignment: EmployeeAssignedOperation,
+  at: Date,
+): boolean => {
+  const endIso = assignment.scheduledEnd ?? assignment.scheduledStart;
+  return new Date(endIso).getTime() >= at.getTime();
+};
+
+const isUnavailabilityEligible = (assignment: EmployeeAssignedOperation, at: Date): boolean =>
+  assignment.operationKind === "RECURRING"
+    ? isRecurringUnavailabilityReportable(assignment, at)
+    : isFutureAssignment(assignment, at);
 
 const mapToSelectionOptions = (
   assignments: EmployeeAssignedOperation[],
@@ -139,7 +153,12 @@ export const employeeWorkdayService = {
     companyId: string,
     employeeId: string,
   ): Promise<EmployeeAssignedOperation[]> {
-    return this.listConfirmableAssignments(companyId, employeeId);
+    const at = getBotNow();
+    return employeeAssignmentQueryRepository.listUnavailabilityForEmployee(
+      companyId,
+      employeeId,
+      at,
+    );
   },
 
   async getAssignmentForResponseMessage(
@@ -259,16 +278,52 @@ export const employeeWorkdayService = {
     operationId: string,
     employeeWorkdayId?: string | null,
   ): Promise<{ kind: "ok" | "not_found" | "past"; message: string }> {
-    const assignment = employeeWorkdayId
-      ? (await employeeAssignmentQueryRepository.listUpcomingForEmployee(companyId, employeeId, getBotNow()))
-          .find((item) => item.operationId === operationId && item.employeeWorkdayId === employeeWorkdayId) ?? null
-      : await employeeAssignmentQueryRepository.findByOperationForEmployee(companyId, employeeId, operationId);
+    const at = getBotNow();
+    const reportable = await employeeAssignmentQueryRepository.listUnavailabilityForEmployee(
+      companyId,
+      employeeId,
+      at,
+    );
+
+    let assignment: EmployeeAssignedOperation | null = null;
+    if (employeeWorkdayId) {
+      assignment =
+        reportable.find(
+          (item) =>
+            item.operationId === operationId && item.employeeWorkdayId === employeeWorkdayId,
+        ) ?? null;
+      if (!assignment) {
+        // Selection sessions store occurrence identity; resolve by workday when the
+        // temporal listing window no longer includes it (eligibility still applied below).
+        const byWorkday =
+          await employeeAssignmentQueryRepository.findOccurrenceByEmployeeWorkdayForEmployee(
+            companyId,
+            employeeId,
+            employeeWorkdayId,
+          );
+        if (byWorkday && byWorkday.operationId === operationId) {
+          assignment = byWorkday;
+        }
+      }
+    } else {
+      const matches = reportable.filter((item) => item.operationId === operationId);
+      if (matches.length === 1) {
+        assignment = matches[0];
+      } else if (matches.length === 0) {
+        // Legacy ONE_TIME path (assignment-level confirmation) when no workday row is listed.
+        assignment = await employeeAssignmentQueryRepository.findByOperationForEmployee(
+          companyId,
+          employeeId,
+          operationId,
+        );
+      }
+    }
+
     if (!assignment) {
       return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
     }
 
-    const at = getBotNow();
-    if (!isFutureAssignment(assignment, at)) {
+    if (!isUnavailabilityEligible(assignment, at)) {
       return { kind: "past", message: PAST_ASSIGNMENT_MESSAGE };
     }
 
@@ -288,7 +343,7 @@ export const employeeWorkdayService = {
               type: "EMPLOYEE_UNAVAILABLE",
               employeeId,
               operationId,
-              deduplicationKey: buildUnavailableDedupKey(assignment.assignmentId, 1),
+              deduplicationKey: buildUnavailableWorkdayDedupKey(assignment.employeeWorkdayId),
               occurredAt: new Date(),
               payload: {
                 employeeName: employee.name,

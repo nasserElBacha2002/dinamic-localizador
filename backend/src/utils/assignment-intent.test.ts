@@ -46,9 +46,15 @@ describe("isUnavailabilityIntent", () => {
 });
 
 describe("parseOptionalAssignmentSelection", () => {
-  it("parses trailing numbers from commands", () => {
+  it("parses trailing numbers from keyword commands only", () => {
     assert.equal(parseOptionalAssignmentSelection("confirmo turno 2"), 2);
-    assert.equal(parseOptionalAssignmentSelection("2"), 2);
+    assert.equal(parseOptionalAssignmentSelection("no puedo turno 2"), 2);
     assert.equal(parseOptionalAssignmentSelection("confirmar turno"), null);
+  });
+
+  it("ignores bare digits so menu numbers do not become assignment selections", () => {
+    assert.equal(parseOptionalAssignmentSelection("2"), null);
+    assert.equal(parseOptionalAssignmentSelection("7"), null);
+    assert.equal(parseOptionalAssignmentSelection("01"), null);
   });
 });

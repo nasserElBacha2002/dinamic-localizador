@@ -1,6 +1,7 @@
 import type { CompanyModuleKey } from "../../constants/company-modules";
 import type { BotSessionState } from "../../types/twilio.types";
 import {
+  isAbsenceKindSelectionSessionState,
   isAbsenceSessionState,
   isAssignmentSelectionSessionState,
   isCheckInSessionState,
@@ -26,6 +27,8 @@ export {
   buildInvalidMenuSelectionMessage,
   formatMenuOptionsLines,
   INVALID_MENU_SELECTION_PREFIX,
+  isLegacyMenuSnapshotOptionKey,
+  isMenuSnapshotOptionSupported,
   isNumericMenuInput,
   parseMenuNumberInput,
   resolveMenuNumberSelection,
@@ -124,6 +127,15 @@ export function getModuleBlockedMessageForSessionState(
 
   if (isCheckoutSessionState(state)) {
     return getAttendanceModuleBlockedMessage(moduleStates);
+  }
+
+  if (isAbsenceKindSelectionSessionState(state)) {
+    const absenceBlocked = getAbsenceModuleBlockedMessage(moduleStates);
+    const unavailabilityBlocked = getAssignmentConfirmationModuleBlockedMessage(moduleStates);
+    if (absenceBlocked && unavailabilityBlocked) {
+      return absenceBlocked;
+    }
+    return null;
   }
 
   if (isAbsenceSessionState(state)) {

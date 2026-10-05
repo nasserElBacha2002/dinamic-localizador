@@ -227,6 +227,75 @@ export const employeeAssignmentQueryRepository = {
     );
   },
 
+  /**
+   * Workday occurrences still reportable as unavailable.
+   * RECURRING: until expected end (includes today's started habitual occurrence).
+   * ONE_TIME: only before scheduled start (legacy confirm/unavailability semantics).
+   */
+  async listUnavailabilityForEmployee(
+    companyId: string,
+    employeeId: string,
+    at: Date,
+    limit = UPCOMING_ASSIGNMENTS_LIMIT,
+  ): Promise<EmployeeAssignedOperation[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("at", sql.DateTime2, at)
+      .input("limit", sql.Int, limit)
+      .query(`
+        ${EMPLOYEE_WORKDAY_OPERATIONS_SELECT}
+          AND ew.id IS NOT NULL
+          AND (
+            (
+              i.operation_kind = N'RECURRING'
+              AND COALESCE(ow.expected_end_at, ow.expected_start_at) >= @at
+            )
+            OR (
+              i.operation_kind <> N'RECURRING'
+              AND ow.expected_start_at > @at
+            )
+          )
+          AND i.status NOT IN ('COMPLETED', 'CANCELLED')
+        ORDER BY ow.expected_start_at ASC
+        OFFSET 0 ROWS FETCH NEXT @limit ROWS ONLY
+      `);
+
+    return result.recordset.map((row) =>
+      mapEmployeeAssignedOperationRow(row as Record<string, unknown>),
+    );
+  },
+
+  /**
+   * Resolve a concrete occurrence by employee_workday id (selection-session identity).
+   * Does not apply the temporal unavailability window — callers must re-check eligibility.
+   */
+  async findOccurrenceByEmployeeWorkdayForEmployee(
+    companyId: string,
+    employeeId: string,
+    employeeWorkdayId: string,
+  ): Promise<EmployeeAssignedOperation | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .query(`
+        SELECT TOP 1 *
+        FROM (
+          ${EMPLOYEE_WORKDAY_OPERATIONS_SELECT}
+            AND ew.id = @employeeWorkdayId
+            AND i.status NOT IN (N'COMPLETED', N'CANCELLED')
+        ) occurrence
+      `);
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapEmployeeAssignedOperationRow(row) : null;
+  },
+
   async findByOperationForEmployee(
     companyId: string,
     employeeId: string,

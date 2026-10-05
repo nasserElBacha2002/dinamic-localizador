@@ -78,7 +78,6 @@ const main = async (): Promise<void> => {
         m.provider_status
       FROM dbo.whatsapp_messages m
       WHERE m.direction = N'OUTBOUND'
-        AND COALESCE(m.provider_message_sid, m.message_sid) IS NOT NULL
         ${toDate ? "AND COALESCE(m.sent_at, m.created_at) < @toDate" : ""}
         ${
           cursorSentAt && cursorId
@@ -93,10 +92,24 @@ const main = async (): Promise<void> => {
               ? "AND COALESCE(m.sent_at, m.created_at) >= @cursorSentAt"
               : ""
         }
-        AND NOT EXISTS (
-          SELECT 1
-          FROM dbo.whatsapp_message_cost_ledger l
-          WHERE l.provider_message_sid = COALESCE(m.provider_message_sid, m.message_sid)
+        AND (
+          (
+            m.provider_message_sid IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.whatsapp_message_cost_ledger l
+              WHERE l.provider_message_sid = m.provider_message_sid
+            )
+          )
+          OR (
+            m.provider_message_sid IS NULL
+            AND m.message_sid IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.whatsapp_message_cost_ledger l
+              WHERE l.provider_message_sid = m.message_sid
+            )
+          )
         )
       ORDER BY COALESCE(m.sent_at, m.created_at) ASC, m.id ASC;
     `);

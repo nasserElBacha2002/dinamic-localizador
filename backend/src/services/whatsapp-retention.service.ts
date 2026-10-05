@@ -62,14 +62,24 @@ const purgeTable = async (input: {
 const runCleanupBody = async (input: {
   dryRun: boolean;
   cutoff: Date;
+  nowUtc: Date;
   retentionDays: number;
   batchSize: number;
   maxBatchesPerTable: number;
   simulateTableError?: WhatsappRetentionTableKey;
 }): Promise<WhatsappRetentionRunResult["tables"]> => {
   const tables = emptyTableMetrics();
+  const costLedgerCutoff = computeRetentionCutoff(
+    input.nowUtc,
+    env.WHATSAPP_COST_LEDGER_RETENTION_DAYS,
+  );
 
   for (const table of WHATSAPP_RETENTION_TABLE_KEYS) {
+    if (table === "whatsapp_message_cost_ledger" && !env.WHATSAPP_COST_LEDGER_RETENTION_ENABLED) {
+      tables[table] = { candidates: 0, deleted: 0, batches: 0 };
+      continue;
+    }
+
     if (input.simulateTableError === table) {
       tables[table] = {
         candidates: tables[table]?.candidates ?? 0,
@@ -85,10 +95,13 @@ const runCleanupBody = async (input: {
       continue;
     }
 
+    const tableCutoff =
+      table === "whatsapp_message_cost_ledger" ? costLedgerCutoff : input.cutoff;
+
     try {
       tables[table] = await purgeTable({
         table,
-        cutoff: input.cutoff,
+        cutoff: tableCutoff,
         batchSize: input.batchSize,
         maxBatches: input.maxBatchesPerTable,
         dryRun: input.dryRun,
@@ -102,7 +115,7 @@ const runCleanupBody = async (input: {
       };
       console.error("[whatsapp-retention] table cleanup failed", {
         table,
-        cutoff: input.cutoff.toISOString(),
+        cutoff: tableCutoff.toISOString(),
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -151,6 +164,7 @@ export const whatsappRetentionService = {
         runCleanupBody({
           dryRun,
           cutoff,
+          nowUtc,
           retentionDays,
           batchSize,
           maxBatchesPerTable,

@@ -25,6 +25,12 @@ const uniquePhone = (suffix?: string): string =>
 
 const uniqueMessageSid = (): string => `SM${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
 
+const addDaysToIso = (iso: string, days: number): string => {
+  const date = new Date(`${iso}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
 describeDatabaseIntegration("admin alert reconciliation corrections", () => {
   const createdCompanyIds: string[] = [];
 
@@ -130,6 +136,7 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     );
 
     const { companyId, vacation, employee } = await seedCompany(false);
+    const absenceStartIso = await resolveCompanyTodayIso(companyId);
     await companyAlertRecipientRepository.create(companyId, {
       phoneNumber: uniquePhone("11110001"),
       displayName: "Admin",
@@ -142,8 +149,8 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-10-01",
-      endDate: "2026-10-01",
+      startDate: absenceStartIso,
+      endDate: absenceStartIso,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Antes de habilitar",
@@ -166,6 +173,7 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     );
 
     const { companyId, vacation, employee } = await seedCompany(true);
+    const absenceStartIso = await resolveCompanyTodayIso(companyId);
     const early = await companyAlertRecipientRepository.create(companyId, {
       phoneNumber: uniquePhone("11110002"),
       displayName: "Early",
@@ -178,8 +186,8 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-10-02",
-      endDate: "2026-10-02",
+      startDate: absenceStartIso,
+      endDate: absenceStartIso,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Con early",
@@ -274,11 +282,12 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
       return result;
     });
 
+    const absenceStartIso = addDaysToIso(await resolveCompanyTodayIso(companyId), 1);
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-10-03",
-      endDate: "2026-10-03",
+      startDate: absenceStartIso,
+      endDate: absenceStartIso,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Partial",
@@ -399,11 +408,12 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
       throw new Error("force reconciliation path");
     });
 
+    const absenceStartIso = addDaysToIso(await resolveCompanyTodayIso(companyId), 2);
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-10-04",
-      endDate: "2026-10-04",
+      startDate: absenceStartIso,
+      endDate: absenceStartIso,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Concurrent",

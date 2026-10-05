@@ -6,6 +6,10 @@ export const buildUnavailableDedupKey = (
   scheduleVersion: number,
 ): string => `unavailable:${normalizeId(assignmentId)}:${scheduleVersion}`;
 
+/** Occurrence-scoped unavailable alert (RECURRING workdays / materialized employee_workday). */
+export const buildUnavailableWorkdayDedupKey = (employeeWorkdayId: string): string =>
+  `unavailable-workday:${normalizeId(employeeWorkdayId)}`;
+
 export const buildMissingCheckinDedupKey = (employeeWorkdayId: string): string =>
   `missing-checkin:${normalizeId(employeeWorkdayId)}`;
 

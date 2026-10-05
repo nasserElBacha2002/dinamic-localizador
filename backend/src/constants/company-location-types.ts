@@ -5,8 +5,8 @@ export type LegacyCompanyLocationTypeSeed = {
 };
 
 /**
- * Legacy compatibility seeds from the previous global store_format model.
- * Not universal defaults — each company can edit, disable, or replace these types.
+ * Identifiers for rows mass-inserted by migration 026 / legacy ensureLegacyTypesForCompany.
+ * Not auto-seeded for new companies; client-owned formats are managed per client.
  */
 export const LEGACY_COMPANY_LOCATION_TYPE_SEEDS: LegacyCompanyLocationTypeSeed[] = [
   { code: "Express", name: "Express", sortOrder: 1 },

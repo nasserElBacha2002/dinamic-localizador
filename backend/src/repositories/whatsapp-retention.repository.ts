@@ -38,7 +38,10 @@ const WEBHOOK_TERMINAL_WHERE = `
     w.processing_status IN (N'PROCESSED', N'ANOMALY')
     OR (
       w.processing_status = N'FAILED'
-      AND w.attempt_count >= w.max_attempts
+      AND (
+        w.attempt_count >= w.max_attempts
+        OR w.next_attempt_at IS NULL
+      )
     )
   )
   AND (w.processing_expires_at IS NULL OR w.processing_expires_at <= SYSUTCDATETIME())
@@ -51,7 +54,13 @@ const leaseOutboxPurgeWhere = (maxAttemptsParam: string): string => `
       N'SEND_ACCEPTED', N'CANCELLED', N'SKIPPED',
       N'RECONCILIATION_REQUIRED', N'SENT_RECOVERY_REQUIRED'
     )
-    OR (n.status = N'FAILED' AND n.attempt_count >= ${maxAttemptsParam})
+    OR (
+      n.status = N'FAILED'
+      AND (
+        n.attempt_count >= ${maxAttemptsParam}
+        OR n.next_attempt_at IS NULL
+      )
+    )
   )
   AND n.status NOT IN (N'PENDING', N'PROCESSING', N'SEND_STARTED')
   AND (n.lease_expires_at IS NULL OR n.lease_expires_at <= SYSUTCDATETIME())
@@ -60,10 +69,21 @@ const leaseOutboxPurgeWhere = (maxAttemptsParam: string): string => `
 
 const ADMIN_OUTBOX_PURGE_WHERE = leaseOutboxPurgeWhere("@adminAlertMaxAttempts");
 
+/**
+ * Permanent payroll failures set next_attempt_at = NULL and are never reclaimed
+ * by claimNextOne (which requires next_attempt_at IS NOT NULL). Treat those as
+ * terminal for retention even when attempt_count < maxAttempts.
+ */
 const PAYROLL_OUTBOX_PURGE_WHERE = `
   (
     n.status IN (N'SEND_ACCEPTED', N'CANCELLED', N'RECONCILIATION_REQUIRED', N'SENT_RECOVERY_REQUIRED')
-    OR (n.status = N'FAILED' AND n.attempt_count >= @payrollMaxAttempts)
+    OR (
+      n.status = N'FAILED'
+      AND (
+        n.attempt_count >= @payrollMaxAttempts
+        OR n.next_attempt_at IS NULL
+      )
+    )
   )
   AND n.status NOT IN (N'PENDING', N'PROCESSING')
   AND (n.lease_expires_at IS NULL OR n.lease_expires_at <= SYSUTCDATETIME())
@@ -511,6 +531,18 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
             WHERE r.company_period_id = p.id
           )
       )
+    `,
+    },
+    whatsapp_message_cost_ledger: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM dbo.whatsapp_message_cost_ledger l
+      WHERE l.sent_at < @cutoff
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM dbo.whatsapp_message_cost_ledger
+      WHERE sent_at < @cutoff
     `,
     },
   };

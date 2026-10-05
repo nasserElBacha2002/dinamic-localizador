@@ -1,6 +1,6 @@
 import { Button, Group, Select, Stack, Tabs, TextInput } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   DataTable,
   ErrorState,
@@ -33,7 +33,11 @@ import { WorkTeamMemberMultiSelect } from "../../components/work-teams/WorkTeamM
 import type { Employee } from "../../types/employee";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import type { CompanyLocationType } from "../../types/company-location-type";
+import type { Service } from "../../types/service";
+import { terminology } from "../../domain/terminology";
+import { useServices } from "../../hooks/useServices";
 import { getApiErrorMessage } from "../../utils/errors";
+import { activeStatusLabel } from "../../utils/labels";
 
 const TABLE_DEFAULTS = {
   page: 1,
@@ -46,10 +50,23 @@ const TABLE_FIELDS = {
   active: { type: "enum", values: ["all", "true", "false"] },
 } as const;
 
+type ClientDetailTab = "formats" | "employees" | "services";
+
+function resolveClientDetailTab(tabParam: string | null): ClientDetailTab {
+  if (tabParam === "employees") {
+    return "employees";
+  }
+  if (tabParam === "services") {
+    return "services";
+  }
+  return "formats";
+}
+
 export function ClientDetailPage() {
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") === "employees" ? "employees" : "formats";
+  const activeTab = resolveClientDetailTab(searchParams.get("tab"));
   const table = useTableUrlState({ defaults: TABLE_DEFAULTS, fields: TABLE_FIELDS });
   const client = useClient(id);
   const types = useClientLocationTypes(id, {
@@ -79,6 +96,16 @@ export function ClientDetailPage() {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeeActive, setEmployeeActive] = useState<"all" | "true" | "false">("all");
   const [employeeError, setEmployeeError] = useState<string | null>(null);
+  const [servicesPage, setServicesPage] = useState(1);
+  const [servicesPageSize, setServicesPageSize] = useState(10);
+  const clientServices = useServices(
+    {
+      clientId: id,
+      page: servicesPage,
+      limit: servicesPageSize,
+    },
+    activeTab === "services" && Boolean(id),
+  );
 
   const columns = useMemo<DataTableColumn<CompanyLocationType>[]>(
     () => [
@@ -122,6 +149,46 @@ export function ClientDetailPage() {
     { key: "active", header: "Estado", render: (row) => <StatusBadge label={row.active ? "Activo" : "Inactivo"} tone={row.active ? "success" : "neutral"} /> },
     { key: "actions", header: "Acciones", render: (row) => <Button size="compact-sm" color="red" variant="subtle" loading={removeEmployee.isPending} disabled={removeEmployee.isPending} onClick={(event) => { event.stopPropagation(); void removeEmployee.mutateAsync(row.id); }}>Quitar</Button> },
   ], [removeEmployee]);
+  const serviceColumns = useMemo<DataTableColumn<Service>[]>(
+    () => [
+      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      { key: "serviceFormat", header: "Formato", getValue: (row) => row.serviceFormat ?? "—" },
+      { key: "locality", header: "Localidad", getValue: (row) => row.locality ?? "—" },
+      {
+        key: "active",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge
+            label={activeStatusLabel(row.active)}
+            tone={row.active ? "success" : "neutral"}
+          />
+        ),
+      },
+    ],
+    [],
+  );
+  const serviceMobileCard = useMemo<DataTableMobileCardConfig<Service>>(
+    () => ({
+      title: (row) => row.name,
+      subtitle: (row) => row.locality ?? undefined,
+      status: (row) => (
+        <StatusBadge
+          label={activeStatusLabel(row.active)}
+          tone={row.active ? "success" : "neutral"}
+        />
+      ),
+      fields: [
+        {
+          key: "serviceFormat",
+          label: "Formato",
+          render: (row) => row.serviceFormat ?? "—",
+          visibility: "always",
+        },
+      ],
+    }),
+    [],
+  );
+
   const employeeMobileCard = useMemo<DataTableMobileCardConfig<Employee>>(() => ({
     title: (row) => row.name,
     status: (row) => <StatusBadge label={row.active ? "Activo" : "Inactivo"} tone={row.active ? "success" : "neutral"} />,
@@ -173,7 +240,7 @@ export function ClientDetailPage() {
     <Stack>
       <PageHeader
         title={client.data.name}
-        description="Formatos propios del cliente."
+        description="Formatos, colaboradores y ubicaciones asociadas."
         action={
           <Group>
             <Button
@@ -208,13 +275,17 @@ export function ClientDetailPage() {
         value={activeTab}
         onChange={(value) => {
           const next = new URLSearchParams(searchParams);
-          if (value === "employees") next.set("tab", "employees");
-          else next.delete("tab");
+          if (value === "formats") {
+            next.delete("tab");
+          } else if (value === "employees" || value === "services") {
+            next.set("tab", value);
+          }
           setSearchParams(next);
         }}
       >
         <Tabs.List>
           <Tabs.Tab value="formats">Formatos</Tabs.Tab>
+          <Tabs.Tab value="services">{terminology.service.plural}</Tabs.Tab>
           <Tabs.Tab value="employees">Colaboradores</Tabs.Tab>
         </Tabs.List>
       </Tabs>
@@ -282,6 +353,35 @@ export function ClientDetailPage() {
             />
           ) : undefined
         }
+        />
+      </> : activeTab === "services" ? <>
+        <PageHeader title={terminology.service.plural} />
+        <DataTable
+          rows={clientServices.data?.data ?? []}
+          columns={serviceColumns}
+          getRowKey={(row) => row.id}
+          loading={clientServices.isPending}
+          error={clientServices.isError ? getApiErrorMessage(clientServices.error) : undefined}
+          emptyTitle={`No hay ${terminology.service.plural.toLowerCase()} asociados`}
+          emptyDescription={`Las ${terminology.service.plural.toLowerCase()} vinculadas a este cliente aparecerán acá.`}
+          onRowClick={(row) => navigate(`/services/${row.id}`)}
+          aria-label={`${terminology.service.plural} del cliente`}
+          mobileView="cards"
+          mobileCard={serviceMobileCard}
+          pagination={
+            clientServices.data && clientServices.data.data.length > 0 ? (
+              <PaginationControls
+                meta={mapApiPaginationMeta(clientServices.data.meta)}
+                onPageChange={setServicesPage}
+                pageSize={servicesPageSize}
+                onPageSizeChange={(size) => {
+                  setServicesPageSize(size);
+                  setServicesPage(1);
+                }}
+                showPageSizeSelector
+              />
+            ) : undefined
+          }
         />
       </> : <>
         <PageHeader title="Colaboradores" action={<Button disabled={!client.data.isActive} onClick={() => { setSelectedEmployeeIds((employees.data ?? []).map((employee) => employee.id)); setEmployeeError(null); setEmployeesOpened(true); }}>Asignar colaboradores</Button>} />

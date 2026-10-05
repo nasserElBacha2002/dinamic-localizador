@@ -4,6 +4,7 @@ export type BotSessionState =
   | "WAITING_OPERATION_SELECTION"
   | "WAITING_CHECKOUT_LOCATION"
   | "WAITING_CHECKOUT_OPERATION_SELECTION"
+  | "WAITING_ABSENCE_KIND_SELECTION"
   | "WAITING_ABSENCE_TYPE"
   | "WAITING_ABSENCE_START_DATE"
   | "WAITING_ABSENCE_END_DATE"
@@ -113,6 +114,8 @@ export interface BotSessionContext {
   /** WAITING_CHECKOUT_LOCATION without prior check-in attendance. */
   checkoutWithoutArrival?: boolean;
   flow?: "ABSENCE_REQUEST";
+  /** Snapshot for WAITING_ABSENCE_KIND_SELECTION (unified absence/unavailability entry). */
+  absenceKindOptions?: Array<"single_workday" | "absence" | "vacation">;
   attendanceConfirmation?: {
     operationId: string;
     /** @deprecated Read compat for sessions created before Phase 3 rename */
@@ -125,6 +128,8 @@ export interface BotSessionContext {
   absenceDraft?: {
     absenceTypeId?: string;
     absenceTypeCode?: string;
+    /** Unified flow: type list excludes VACATION after "Informar una ausencia". */
+    excludeVacationType?: boolean;
     startDate?: string;
     endDate?: string;
     reason?: string;

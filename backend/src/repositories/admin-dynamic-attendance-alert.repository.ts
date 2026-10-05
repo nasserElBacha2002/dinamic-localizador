@@ -391,12 +391,16 @@ export const adminDynamicAttendanceAlertRepository = {
           AND s.active = 1
           AND ow.work_date >= oa.valid_from
           AND (oa.valid_until IS NULL OR ow.work_date <= oa.valid_until)
-          AND DATEADD(MINUTE, cs.admin_missing_checkout_delay_minutes, ow.expected_end_at)
-            <= @referenceAt
-          AND DATEADD(MINUTE, cs.admin_missing_checkout_delay_minutes, ow.expected_end_at)
-            >= DATEADD(MINUTE, -cs.admin_alert_max_lateness_minutes, @referenceAt)
-          AND DATEADD(MINUTE, cs.admin_missing_checkout_delay_minutes, ow.expected_end_at)
-            >= cs.admin_alerts_enabled_at
+          AND ow.expected_end_at
+            <= DATEADD(MINUTE, -cs.admin_missing_checkout_delay_minutes, @referenceAt)
+          AND ow.expected_end_at
+            >= DATEADD(
+              MINUTE,
+              -(cs.admin_missing_checkout_delay_minutes + cs.admin_alert_max_lateness_minutes),
+              @referenceAt
+            )
+          AND ow.expected_end_at
+            >= DATEADD(MINUTE, -cs.admin_missing_checkout_delay_minutes, cs.admin_alerts_enabled_at)
           AND NOT EXISTS (
             SELECT 1
             FROM whatsapp_admin_alert_notifications n
@@ -745,19 +749,27 @@ export const adminDynamicAttendanceAlertRepository = {
             AND s.active = 1
             AND ow.work_date >= oa.valid_from
             AND (oa.valid_until IS NULL OR ow.work_date <= oa.valid_until)
-            AND DATEADD(MINUTE, cs.admin_missing_checkout_delay_minutes, ow.expected_end_at)
-              < DATEADD(MINUTE, -cs.admin_alert_max_lateness_minutes, @referenceAt)
-            AND DATEADD(MINUTE, cs.admin_missing_checkout_delay_minutes, ow.expected_end_at)
-              >= DATEADD(
+            AND ow.expected_end_at
+              < DATEADD(
                 MINUTE,
-                -(cs.admin_alert_max_lateness_minutes + CASE
-                  WHEN cs.admin_alert_max_lateness_minutes > 120 THEN cs.admin_alert_max_lateness_minutes
-                  ELSE 120
-                END),
+                -(cs.admin_missing_checkout_delay_minutes + cs.admin_alert_max_lateness_minutes),
                 @referenceAt
               )
-            AND DATEADD(MINUTE, cs.admin_missing_checkout_delay_minutes, ow.expected_end_at)
-              >= cs.admin_alerts_enabled_at
+            AND ow.expected_end_at
+              >= DATEADD(
+                MINUTE,
+                -(
+                  cs.admin_missing_checkout_delay_minutes
+                  + cs.admin_alert_max_lateness_minutes
+                  + CASE
+                      WHEN cs.admin_alert_max_lateness_minutes > 120 THEN cs.admin_alert_max_lateness_minutes
+                      ELSE 120
+                    END
+                ),
+                @referenceAt
+              )
+            AND ow.expected_end_at
+              >= DATEADD(MINUTE, -cs.admin_missing_checkout_delay_minutes, cs.admin_alerts_enabled_at)
           ORDER BY due_at ASC, ew.id ASC
         )
         SELECT

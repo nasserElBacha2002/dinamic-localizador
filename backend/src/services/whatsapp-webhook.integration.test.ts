@@ -12,6 +12,7 @@ import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { mockAdminAlertSideEffects } from "../test-helpers/mock-admin-alert-side-effects";
+import { mockActiveVacationAbsenceType } from "../test-helpers/mock-vacation-absence-type";
 import {
   AMBIGUOUS_COMPANY_MESSAGE,
   COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
@@ -282,6 +283,7 @@ const runSimulatedWebhook = async (input: {
   // This suite is mock-driven (no DB pool). Stub admin-alert side effects that
   // otherwise call getPool() after unavailable / missing-checkin / absence emits.
   await mockAdminAlertSideEffects();
+  await mockActiveVacationAbsenceType();
   const { whatsappBotService } = await import("./whatsapp-bot.service");
   await setupCommonWebhookMocks({
     companyId: input.inbound?.companyId ?? companyA,
@@ -448,7 +450,7 @@ describe("whatsapp webhook dynamic menu", () => {
     });
   }
 
-  it("hides absence when absences is disabled", async () => {
+  it("keeps unified absence entry when absences is disabled but operations is enabled", async () => {
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     const message = await runSimulatedWebhook({
@@ -458,7 +460,8 @@ describe("whatsapp webhook dynamic menu", () => {
         mock.method(companyModuleService, "getModuleStates", async () => states);
       },
     });
-    assert.doesNotMatch(message, /ausencia/i);
+    assert.match(message, /Avisar ausencia o vacaciones/i);
+    assert.doesNotMatch(message, /Avisar no disponibilidad/i);
     assert.match(message, /Marcar llegada/);
   });
 
@@ -844,26 +847,27 @@ describe("whatsapp webhook absence regression", () => {
     mock.restoreAll();
   });
 
-  it("starts absence flow when absences is enabled", async () => {
-    let absenceStarted = 0;
+  it("starts unified absence kind selection when absences is enabled", async () => {
+    let kindSelectionStarted = 0;
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Pedir ausencia" }),
       setup: async () => {
         const { absenceBotService } = await import("./absence-bot.service");
         mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
-        mock.method(absenceBotService, "startAbsenceFlow", async () => {
-          absenceStarted += 1;
-          return "<Response><Message>ABSENCE_FLOW</Message></Response>";
+        mock.method(absenceBotService, "startAbsenceKindSelection", async () => {
+          kindSelectionStarted += 1;
+          return "<Response><Message>ABSENCE_KIND</Message></Response>";
         });
       },
     });
-    assert.equal(absenceStarted, 1);
-    assert.match(message, /ABSENCE_FLOW/);
+    assert.equal(kindSelectionStarted, 1);
+    assert.match(message, /ABSENCE_KIND/);
   });
 
-  it("blocks absence when absences is disabled", async () => {
+  it("blocks absence when absences and operations are disabled", async () => {
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let absenceStarted = 0;
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Pedir ausencia" }),
@@ -874,6 +878,10 @@ describe("whatsapp webhook absence regression", () => {
         mock.method(absenceBotService, "startAbsenceFlow", async () => {
           absenceStarted += 1;
           return "<Response><Message>ABSENCE_FLOW</Message></Response>";
+        });
+        mock.method(absenceBotService, "startAbsenceKindSelection", async () => {
+          absenceStarted += 1;
+          return "<Response><Message>ABSENCE_KIND</Message></Response>";
         });
       },
     });
@@ -1172,7 +1180,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
         const { employeeAssignmentQueryRepository } = await import(
           "../repositories/employee-assignment-query.repository"
         );
-        mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+        mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
           sampleAssignment(),
         ]);
         mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
@@ -1188,6 +1196,68 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
     assert.match(message, /no estás disponible/i);
     assert.match(message, /podrá revisar esta respuesta desde el panel/i);
     assert.equal(updateCalls, 1);
+  });
+
+  it("unified absence kind 1 marks today's RECURRING occurrence without invalid selection", async () => {
+    const { buildAvailableMenuOptions } = await import("./bot/bot-menu-options");
+    const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
+    let markedWorkdayId: string | null = null;
+    let assignmentUpdates = 0;
+
+    const recurringToday = {
+      ...sampleAssignment(),
+      operationKind: "RECURRING",
+      operationWorkdayId: "ow-today",
+      employeeWorkdayId: "ew-today-recurring",
+      scheduledStart: "2026-07-08T11:00:00.000Z",
+      scheduledEnd: "2026-07-08T15:00:00.000Z",
+    };
+
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "1" }),
+      simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
+      setup: async () => {
+        const { botSessionService } = await import("./bot-session.service");
+        const { employeeAssignmentQueryRepository } = await import(
+          "../repositories/employee-assignment-query.repository"
+        );
+        const { employeeWorkdayRepository } = await import(
+          "../repositories/employee-workday.repository"
+        );
+        const { replacementRequestService } = await import("./replacement-request.service");
+        const menuOptions = buildAvailableMenuOptions(enabledStates()).map((option) => option.key);
+        assert.equal(menuOptions.includes("report_unavailability"), false);
+        assert.equal(menuOptions.includes("absence"), true);
+
+        mock.method(botSessionService, "getSessionResolutionByPhone", async () => ({
+          activeSession: buildSession(companyA, "WAITING_ABSENCE_KIND_SELECTION", {
+            contextJson: JSON.stringify({
+              flow: "ABSENCE_REQUEST",
+              absenceKindOptions: ["single_workday", "absence", "vacation"],
+            }),
+          }),
+          recentlyExpired: false,
+        }));
+        mock.method(botSessionService, "cancelSession", async () => true);
+        mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
+          recurringToday,
+        ]);
+        mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+          assignmentUpdates += 1;
+          return true;
+        });
+        mock.method(employeeWorkdayRepository, "markUnavailable", async (_companyId, workdayId) => {
+          markedWorkdayId = workdayId;
+          return true;
+        });
+        mock.method(replacementRequestService, "createForUnavailable", async () => undefined);
+      },
+    });
+
+    assert.match(message, /no estás disponible/i);
+    assert.doesNotMatch(message, new RegExp(INVALID_SELECTION_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.equal(markedWorkdayId, "ew-today-recurring");
+    assert.equal(assignmentUpdates, 0);
   });
 
   it("blocks workday when required modules are disabled", async () => {

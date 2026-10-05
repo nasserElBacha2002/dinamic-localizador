@@ -62,7 +62,6 @@ describe("companyLocationTypesService", () => {
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "listByCompanyId", async (_companyId, activeOnly) =>
       activeOnly ? [expressType] : [expressType, { ...warehouseType, isActive: false }],
     );
@@ -279,6 +278,76 @@ describe("companyLocationTypesService", () => {
     assert.equal(disabled.isActive, false);
   });
 
+  it("rejects company-wide format when the service belongs to a client", async () => {
+    setupUnitTestEnv();
+    const { companyLocationTypesRepository } = await import(
+      "../repositories/company-location-types.repository"
+    );
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+
+    mock.method(companyLocationTypesRepository, "findByCode", async () => ({
+      ...expressType,
+      clientId: null,
+      isActive: true,
+    }));
+
+    await assert.rejects(
+      () =>
+        companyLocationTypesService.assertActiveServiceFormat(
+          "company-1",
+          "EXPRESS",
+          "client-1",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "INCOMPATIBLE_LOCATION_TYPE_CLIENT",
+    );
+  });
+
+  it("rejects another client format when the service belongs to a different client", async () => {
+    setupUnitTestEnv();
+    const { companyLocationTypesRepository } = await import(
+      "../repositories/company-location-types.repository"
+    );
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+
+    mock.method(companyLocationTypesRepository, "findByCode", async () => ({
+      ...expressType,
+      clientId: "other-client",
+      isActive: true,
+    }));
+
+    await assert.rejects(
+      () =>
+        companyLocationTypesService.assertActiveServiceFormat(
+          "company-1",
+          "EXPRESS",
+          "client-1",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "INCOMPATIBLE_LOCATION_TYPE_CLIENT",
+    );
+  });
+
+  it("allows a client-owned format for the same client", async () => {
+    setupUnitTestEnv();
+    const { companyLocationTypesRepository } = await import(
+      "../repositories/company-location-types.repository"
+    );
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+
+    mock.method(companyLocationTypesRepository, "findByCode", async () => ({
+      ...expressType,
+      clientId: "client-1",
+      isActive: true,
+    }));
+
+    await companyLocationTypesService.assertActiveServiceFormat(
+      "company-1",
+      "EXPRESS",
+      "client-1",
+    );
+  });
+
   it("rejects inactive location type for service assignment", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
@@ -286,7 +355,6 @@ describe("companyLocationTypesService", () => {
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "findByCode", async () => ({
       ...expressType,
       isActive: false,

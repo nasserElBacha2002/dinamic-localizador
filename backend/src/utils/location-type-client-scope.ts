@@ -5,7 +5,12 @@ export type LocationTypeClientScope = {
 
 /**
  * Whether a catalog format may be assigned to a service (ubicación) for the given client.
- * - Service with client: only formats owned by that client (never company-wide or other clients).
+ *
+ * Company-wide rows (client_id IS NULL) are created via company settings and are only
+ * assignable to services without a client. Client-owned rows are managed per client
+ * (see migration 143/144 and createLocationTypeForClient).
+ *
+ * - Service with client: only formats owned by that client.
  * - Service without client: only company-wide formats (client_id IS NULL).
  */
 export function isLocationTypeAssignableToService(

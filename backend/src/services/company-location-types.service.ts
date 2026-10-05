@@ -54,13 +54,8 @@ const resolveRequestedCode = async (
 };
 
 export const companyLocationTypesService = {
-  async ensureLocationTypesCatalogForCompany(companyId: string, transaction?: import("mssql").Transaction) {
-    await companyLocationTypesRepository.ensureLegacyTypesForCompany(companyId, transaction);
-  },
-
   async listLocationTypes(companyId: string, activeOnly = false): Promise<CompanyLocationType[]> {
     await assertActiveCompany(companyId);
-    await this.ensureLocationTypesCatalogForCompany(companyId);
     return companyLocationTypesRepository.listByCompanyId(companyId, activeOnly);
   },
 
@@ -206,7 +201,6 @@ export const companyLocationTypesService = {
       return;
     }
 
-    await this.ensureLocationTypesCatalogForCompany(companyId);
     const locationType = await companyLocationTypesRepository.findByCode(companyId, serviceFormat.trim());
     if (!locationType) {
       throw new AppError(

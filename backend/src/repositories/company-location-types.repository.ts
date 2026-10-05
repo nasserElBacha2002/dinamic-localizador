@@ -232,11 +232,4 @@ export const companyLocationTypesRepository = {
 
     return mapRow(result.recordset[0] as Record<string, unknown>);
   },
-
-  async ensureLegacyTypesForCompany(
-    _companyId: string,
-    _transaction?: sql.Transaction,
-  ): Promise<void> {
-    // Legacy global seeds were removed in migration 150; catalog rows are company- or client-scoped only.
-  },
 };

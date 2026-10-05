@@ -62,7 +62,6 @@ describe("companyLocationTypesService", () => {
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "listByCompanyId", async (_companyId, activeOnly) =>
       activeOnly ? [expressType] : [expressType, { ...warehouseType, isActive: false }],
     );
@@ -286,7 +285,6 @@ describe("companyLocationTypesService", () => {
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "findByCode", async () => ({
       ...expressType,
       clientId: null,
@@ -312,7 +310,6 @@ describe("companyLocationTypesService", () => {
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "findByCode", async () => ({
       ...expressType,
       clientId: "other-client",
@@ -338,7 +335,6 @@ describe("companyLocationTypesService", () => {
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "findByCode", async () => ({
       ...expressType,
       clientId: "client-1",
@@ -359,7 +355,6 @@ describe("companyLocationTypesService", () => {
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
-    mock.method(companyLocationTypesRepository, "ensureLegacyTypesForCompany", async () => undefined);
     mock.method(companyLocationTypesRepository, "findByCode", async () => ({
       ...expressType,
       isActive: false,

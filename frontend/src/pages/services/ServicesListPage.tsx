@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Button } from "@mantine/core";
 import {
@@ -32,6 +32,7 @@ import { hasPermission } from "../../utils/permissions";
 import { ServicesListFiltersErrorBanner } from "./ServicesListFiltersErrorBanner";
 import {
   buildServicesListApiFilters,
+  shouldClearServiceFormatFilter,
   SERVICE_TABLE_DEFAULTS,
   SERVICE_TABLE_FIELDS,
   SERVICE_TABLE_SORTABLE_COLUMN_KEYS,
@@ -60,28 +61,17 @@ export function ServicesListPage() {
   const listFilters = buildServicesListApiFilters(table.state);
   const { data, isPending, isError, error } = useServices(listFilters);
 
-  const previousClientId = useRef(table.state.clientId);
   useEffect(() => {
-    const clientId = table.state.clientId;
-    if (previousClientId.current === clientId) {
-      return;
-    }
-    previousClientId.current = clientId;
-
-    const serviceFormat = table.state.serviceFormat;
-    if (!serviceFormat) {
-      return;
-    }
-
-    const locationTypes = locationTypesQuery.data ?? [];
-    const assigned = locationTypes.find((type) => type.code === serviceFormat);
     if (
-      assigned &&
-      !isLocationTypeSelectableForServiceClient(assigned, clientId || null)
+      shouldClearServiceFormatFilter(
+        table.state.serviceFormat,
+        table.state.clientId,
+        locationTypesQuery.data,
+      )
     ) {
       table.setField("serviceFormat", "");
     }
-  }, [locationTypesQuery.data, table]);
+  }, [locationTypesQuery.data, table.state.clientId, table.state.serviceFormat, table]);
 
   const formatOptions = useMemo(() => {
     const locationTypes = locationTypesQuery.data ?? [];

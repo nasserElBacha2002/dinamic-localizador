@@ -6,6 +6,7 @@ import {
   SERVICE_TABLE_DEFAULTS,
   SERVICE_TABLE_FIELDS,
   SERVICE_TABLE_SORTABLE_COLUMN_KEYS,
+  shouldClearServiceFormatFilter,
   shouldOmitServiceTableValue,
 } from "./services-list-table-state";
 import { SERVICE_LIST_SORT_FIELDS } from "../../types/service";
@@ -73,6 +74,26 @@ describe("services-list-table-state", () => {
     assert.equal(withoutLocality.neighborhood, undefined);
     assert.equal(withoutLocality.sortDirection, "desc");
     assert.equal("clientId" in withoutLocality, false);
+  });
+
+  it("does not clear the format filter while location types are still loading", () => {
+    assert.equal(
+      shouldClearServiceFormatFilter("CLIENT_FMT", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", undefined),
+      false,
+    );
+  });
+
+  it("clears an incompatible format after the catalog loads (async client change)", () => {
+    const clientA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const clientB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const catalog = [
+      { code: "CLIENT_FMT", clientId: clientA },
+      { code: "GLOBAL_FMT", clientId: null },
+    ];
+
+    assert.equal(shouldClearServiceFormatFilter("CLIENT_FMT", clientB, catalog), true);
+    assert.equal(shouldClearServiceFormatFilter("CLIENT_FMT", clientA, catalog), false);
+    assert.equal(shouldClearServiceFormatFilter("GLOBAL_FMT", clientB, catalog), true);
   });
 
   it("keeps inactive format values representable when already selected", () => {

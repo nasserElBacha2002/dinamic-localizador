@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Button } from "@mantine/core";
 import {
@@ -18,8 +18,10 @@ import {
 } from "../../design-system";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { useListNavigationState } from "../../hooks/useListNavigationState";
+import { ClientSearchAutocomplete } from "../../components/clients/ClientSearchAutocomplete";
 import { useServiceFacets, useServices } from "../../hooks/useServices";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
+import { isLocationTypeSelectableForServiceClient } from "../../utils/location-type-client-scope";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { terminology } from "../../domain/terminology";
 import type { Service } from "../../types/service";
@@ -30,6 +32,7 @@ import { hasPermission } from "../../utils/permissions";
 import { ServicesListFiltersErrorBanner } from "./ServicesListFiltersErrorBanner";
 import {
   buildServicesListApiFilters,
+  shouldClearServiceFormatFilter,
   SERVICE_TABLE_DEFAULTS,
   SERVICE_TABLE_FIELDS,
   SERVICE_TABLE_SORTABLE_COLUMN_KEYS,
@@ -58,19 +61,40 @@ export function ServicesListPage() {
   const listFilters = buildServicesListApiFilters(table.state);
   const { data, isPending, isError, error } = useServices(listFilters);
 
+  useEffect(() => {
+    if (
+      shouldClearServiceFormatFilter(
+        table.state.serviceFormat,
+        table.state.clientId,
+        locationTypesQuery.data,
+      )
+    ) {
+      table.setField("serviceFormat", "");
+    }
+  }, [locationTypesQuery.data, table.state.clientId, table.state.serviceFormat, table]);
+
   const formatOptions = useMemo(() => {
     const locationTypes = locationTypesQuery.data ?? [];
+    const scopedClientId = table.state.clientId || null;
     return [
       { value: "", label: "Todos" },
       ...locationTypes
-        .filter((type) => type.isActive)
+        .filter((type) => {
+          if (!type.isActive) {
+            return false;
+          }
+          if (!scopedClientId) {
+            return true;
+          }
+          return isLocationTypeSelectableForServiceClient(type, scopedClientId);
+        })
         .map((type) => ({ value: type.code, label: type.name })),
       ...(table.state.serviceFormat &&
       !locationTypes.some((type) => type.isActive && type.code === table.state.serviceFormat)
         ? [{ value: table.state.serviceFormat, label: table.state.serviceFormat }]
         : []),
     ];
-  }, [locationTypesQuery.data, table.state.serviceFormat]);
+  }, [locationTypesQuery.data, table.state.clientId, table.state.serviceFormat]);
 
   const localityOptions = useMemo(
     () => [
@@ -263,6 +287,13 @@ export function ServicesListPage() {
         activeFilterCount={table.activeFilterCount}
         onClearFilters={table.resetFilters}
       >
+        <FilterBar.Item>
+          <ClientSearchAutocomplete
+            label="Cliente"
+            value={table.state.clientId || null}
+            onChange={(value) => table.setField("clientId", value ?? "")}
+          />
+        </FilterBar.Item>
         <FilterBar.Item>
           <FilterSelect
             label="Formato"

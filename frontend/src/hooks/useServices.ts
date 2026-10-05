@@ -21,13 +21,13 @@ import { serviceKeys } from "../queryKeys/services";
 import { requireCompanyId } from "./require-company-id";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
-export function useServices(filters: ServiceFilters) {
+export function useServices(filters: ServiceFilters, extraEnabled = true) {
   const { companyId, enabled } = useOperationalQueryEnabled();
 
   return useQuery({
     queryKey: serviceKeys.list(companyId, filters),
     queryFn: () => getServices(filters),
-    enabled,
+    enabled: enabled && extraEnabled,
   });
 }
 

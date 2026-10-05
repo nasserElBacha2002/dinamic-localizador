@@ -14,6 +14,7 @@ import {
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useClients } from "../../hooks/useClients";
 import { serviceFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
+import { isLocationTypeSelectableForServiceClient } from "../../utils/location-type-client-scope";
 import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
 import { ServiceInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
 import { useLocationPickerState } from "./location-picker/hooks/useLocationPickerState";
@@ -81,7 +82,7 @@ export function ServiceForm({
     const format = watchedValues.serviceFormat ?? "";
     if (previousClientId.current !== clientId && format) {
       const assigned = locationTypes.find((type) => type.code === format);
-      if (assigned?.clientId !== null && assigned?.clientId !== clientId) {
+      if (!assigned || !isLocationTypeSelectableForServiceClient(assigned, clientId || null)) {
         setValue("serviceFormat", "", { shouldDirty: true });
       }
     }
@@ -104,8 +105,12 @@ export function ServiceForm({
 
   const serviceFormatOptions = useMemo(() => {
     const currentClientId = watchedValues.clientId ?? defaultValues.clientId ?? "";
+    const scopedClientId = currentClientId || null;
     const activeOptions = locationTypes
-      .filter((type) => type.isActive && (type.clientId === null || type.clientId === currentClientId))
+      .filter(
+        (type) =>
+          type.isActive && isLocationTypeSelectableForServiceClient(type, scopedClientId),
+      )
       .map((type) => ({ value: type.code, label: type.name }));
 
     const currentFormat = watchedValues.serviceFormat ?? defaultValues.serviceFormat ?? "";

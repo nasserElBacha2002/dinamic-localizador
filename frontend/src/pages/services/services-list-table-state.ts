@@ -10,6 +10,7 @@ export const SERVICE_TABLE_DEFAULTS = {
   search: "",
   active: "all" as "all" | "true" | "false",
   serviceFormat: "",
+  clientId: "",
   locality: "",
   neighborhood: "",
   sortBy: "createdAt" as ServiceListSortField,
@@ -47,6 +48,7 @@ export function buildServicesListApiFilters(state: typeof SERVICE_TABLE_DEFAULTS
     search: state.search || undefined,
     active: state.active === "all" ? undefined : state.active === "true",
     serviceFormat: state.serviceFormat || undefined,
+    ...(state.clientId ? { clientId: state.clientId } : {}),
     locality: state.locality || undefined,
     neighborhood:
       state.locality && state.neighborhood ? state.neighborhood : undefined,

@@ -1,5 +1,4 @@
 import sql from "mssql";
-import { LEGACY_COMPANY_LOCATION_TYPE_SEEDS } from "../constants/company-location-types";
 import { getPool } from "../database/connection";
 import type { CompanyLocationType } from "../types/company";
 import type { ListClientLocationTypesQuery } from "../schemas/company-location-type.schema";
@@ -235,27 +234,9 @@ export const companyLocationTypesRepository = {
   },
 
   async ensureLegacyTypesForCompany(
-    companyId: string,
-    transaction?: sql.Transaction,
+    _companyId: string,
+    _transaction?: sql.Transaction,
   ): Promise<void> {
-    for (const seed of LEGACY_COMPANY_LOCATION_TYPE_SEEDS) {
-      const request = transaction ? new sql.Request(transaction) : getPool().request();
-      await request
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("code", sql.NVarChar(80), seed.code)
-        .input("name", sql.NVarChar(200), seed.name)
-        .input("sortOrder", sql.Int, seed.sortOrder)
-        .query(`
-          IF NOT EXISTS (
-            SELECT 1
-            FROM company_location_types
-            WHERE company_id = @companyId AND code = @code
-          )
-          BEGIN
-            INSERT INTO company_location_types (company_id, code, name, sort_order, is_active)
-            VALUES (@companyId, @code, @name, @sortOrder, 1);
-          END
-        `);
-    }
+    // Legacy global seeds were removed in migration 150; catalog rows are company- or client-scoped only.
   },
 };

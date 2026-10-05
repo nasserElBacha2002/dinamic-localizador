@@ -10,6 +10,7 @@ import type {
 } from "../schemas/company-location-type.schema";
 import { buildPaginationMeta } from "../utils/pagination";
 import type { CompanyLocationType, CompanyMembershipSummary } from "../types/company";
+import { isLocationTypeAssignableToService } from "../utils/location-type-client-scope";
 import { normalizeLocationTypeCode } from "../utils/location-type-code";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
@@ -222,7 +223,7 @@ export const companyLocationTypesService = {
         "El tipo de ubicación/servicio está inactivo y no puede asignarse.",
       );
     }
-    if (locationType.clientId !== null && locationType.clientId !== clientId) {
+    if (!isLocationTypeAssignableToService(locationType, clientId)) {
       throw new AppError(400, "INCOMPATIBLE_LOCATION_TYPE_CLIENT", "El formato no es compatible con el cliente de la sucursal.");
     }
   },

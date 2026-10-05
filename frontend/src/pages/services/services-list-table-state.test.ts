@@ -58,6 +58,12 @@ describe("services-list-table-state", () => {
       sortDirection: "asc",
     });
 
+    const withClient = buildServicesListApiFilters({
+      ...SERVICE_TABLE_DEFAULTS,
+      clientId: "11111111-1111-4111-8111-111111111111",
+    });
+    assert.equal(withClient.clientId, "11111111-1111-4111-8111-111111111111");
+
     const withoutLocality = buildServicesListApiFilters({
       ...SERVICE_TABLE_DEFAULTS,
       neighborhood: "Palermo",
@@ -66,6 +72,7 @@ describe("services-list-table-state", () => {
     });
     assert.equal(withoutLocality.neighborhood, undefined);
     assert.equal(withoutLocality.sortDirection, "desc");
+    assert.equal("clientId" in withoutLocality, false);
   });
 
   it("keeps inactive format values representable when already selected", () => {

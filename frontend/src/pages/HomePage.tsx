@@ -1,59 +1,88 @@
-import { Card, SimpleGrid, Stack, Text } from "@mantine/core";
-import type { KeyboardEvent } from "react";
-import { useNavigate } from "react-router";
+import { Anchor, Box, Button, Grid, Group, Stack, Text } from "@mantine/core";
+import type { KeyboardEvent, ReactNode } from "react";
+import { Link, useNavigate } from "react-router";
 import { EntityLink } from "../components/entity-link";
 import {
   EmptyState,
   ErrorState,
   LoadingState,
-  MetricCard,
   PageHeader,
   SectionCard,
   StatusBadge,
 } from "../design-system";
-import { useCompanyPermissions } from "../hooks/useCompanyUsers";
-import { useOperations } from "../hooks/useOperations";
-import type { OperationWithService } from "../types/operation";
 import { terminology } from "../domain/terminology";
-import { hasAnyPermission } from "../utils/permissions";
+import type { OperationWithService } from "../types/operation";
 import { formatDateTime } from "../utils/dates";
+import { getApiErrorMessage } from "../utils/errors";
 import { operationStatusLabels } from "../utils/labels";
+import { buildOperationDetailHref } from "../utils/statistics-deep-links";
+import { HomeAttentionPanel } from "./home/HomeAttentionPanel";
+import { buildHomeAttentionSummary } from "./home/home-dashboard-attention-presentation";
+import { HomeDashboardKpiCards } from "./home/HomeDashboardKpiCards";
+import { HomeOperationalHealth } from "./home/HomeOperationalHealth";
+import { useHomeDashboard } from "./home/useHomeDashboard";
 
-type SummaryStatus = "loading" | "ok" | "error";
+const HOME_COL_MAIN = { base: 12, lg: 7 } as const;
+const HOME_COL_SIDE = { base: 12, lg: 5 } as const;
 
-function summaryStatusLabel(status: SummaryStatus): string {
-  if (status === "loading") {
-    return "Consultando";
-  }
-
-  if (status === "ok") {
-    return "Operativo";
-  }
-
-  return "Con error";
+function DashboardTile({ children }: { children: ReactNode }) {
+  return (
+    <Box
+      h="100%"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        flex: 1,
+      }}
+    >
+      {children}
+    </Box>
+  );
 }
 
-function summaryStatusTone(status: SummaryStatus): "success" | "warning" | "danger" {
-  if (status === "ok") {
-    return "success";
-  }
+const homeGridColStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  minHeight: 0,
+};
 
-  if (status === "loading") {
-    return "warning";
-  }
-
-  return "danger";
+function TodayOperationsHeader() {
+  return (
+    <Group gap="xs" wrap="nowrap" visibleFrom="md" mb={4}>
+      <Text size="xs" c="dimmed" fw={600} style={{ flex: 2.2, minWidth: 0 }}>
+        Operación
+      </Text>
+      <Text size="xs" c="dimmed" fw={600} style={{ flex: 2, minWidth: 0 }}>
+        Ubicación
+      </Text>
+      <Text size="xs" c="dimmed" fw={600} style={{ flex: 1.6, minWidth: 0 }}>
+        Horario
+      </Text>
+      <Text size="xs" c="dimmed" fw={600} style={{ flex: 1.2, minWidth: 0 }} ta="right">
+        Estado
+      </Text>
+    </Group>
+  );
 }
 
-function UpcomingOperationCard({ operation }: { operation: OperationWithService }) {
+function TodayOperationRow({
+  operation,
+  lowCoverage,
+}: {
+  operation: OperationWithService;
+  lowCoverage: boolean;
+}) {
   const navigate = useNavigate();
-  const destination = `/operations/${operation.id}`;
-  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${operation.service.name}`;
+  const destination = buildOperationDetailHref(operation.id);
 
-  const handleNavigate = () => {
-    navigate(destination);
-  };
+  const scheduleText = operation.scheduledEnd
+    ? `${formatDateTime(operation.scheduledStart)} – ${formatDateTime(operation.scheduledEnd)}`
+    : formatDateTime(operation.scheduledStart);
 
+  const address = operation.service.address?.trim() ?? "—";
+
+  const handleNavigate = () => navigate(destination);
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -61,24 +90,20 @@ function UpcomingOperationCard({ operation }: { operation: OperationWithService 
     }
   };
 
-  const scheduleText = operation.scheduledEnd
-    ? `${formatDateTime(operation.scheduledStart)} – ${formatDateTime(operation.scheduledEnd)}`
-    : formatDateTime(operation.scheduledStart);
-
   return (
-    <Card
-      withBorder
-      padding="md"
-      radius="md"
+    <Box
       role="link"
       tabIndex={0}
-      aria-label={ariaLabel}
       onClick={handleNavigate}
       onKeyDown={handleKeyDown}
-      style={{ cursor: "pointer" }}
+      py={6}
+      style={{
+        cursor: "pointer",
+        borderBottom: "1px solid var(--mantine-color-gray-2)",
+      }}
     >
-      <Stack gap={4}>
-        <Text fw={600}>
+      <Group gap="xs" wrap="nowrap" align="center">
+        <Text size="sm" fw={600} style={{ flex: 2.2, minWidth: 0 }} truncate>
           <EntityLink
             entityType="service"
             entityId={operation.serviceId ?? operation.service?.id}
@@ -86,99 +111,202 @@ function UpcomingOperationCard({ operation }: { operation: OperationWithService 
             stopPropagation
           />
         </Text>
-        <Text size="sm" c="dimmed">
-          {operation.service.address ?? "—"} · {scheduleText}
+        <Text size="xs" c="dimmed" style={{ flex: 2, minWidth: 0 }} truncate>
+          {address}
         </Text>
-        <StatusBadge
-          label={operationStatusLabels[operation.status] ?? operation.status}
-          tone="info"
-          variant="light"
-        />
-      </Stack>
-    </Card>
+        <Text size="xs" c="dimmed" style={{ flex: 1.6, minWidth: 0 }} truncate>
+          {scheduleText}
+        </Text>
+        <Group gap={4} wrap="nowrap" justify="flex-end" style={{ flex: 1.2, minWidth: 0 }}>
+          {lowCoverage ? (
+            <StatusBadge label="Cobertura" tone="warning" variant="light" />
+          ) : null}
+          <StatusBadge
+            label={operationStatusLabels[operation.status] ?? operation.status}
+            tone="info"
+            variant="light"
+          />
+        </Group>
+      </Group>
+    </Box>
   );
 }
 
+function attentionPanelDescription(
+  panelState: ReturnType<typeof useHomeDashboard>["attentionPanelState"],
+): string | undefined {
+  if (panelState.status === "ready" || panelState.status === "partial") {
+    return buildHomeAttentionSummary(panelState.model);
+  }
+  return undefined;
+}
+
 export function HomePage() {
-  const permissionsQuery = useCompanyPermissions();
-
-  const canReadOperations = hasAnyPermission(permissionsQuery.data?.permissions, [
-    "operations:read",
-    "operations:manage",
-  ]);
-
-  const upcomingOperationsQuery = useOperations(
-    { status: "SCHEDULED", page: 1, limit: 5 },
-    canReadOperations,
-  );
-
-  const upcomingSummaryStatus: SummaryStatus = upcomingOperationsQuery.isLoading
-    ? "loading"
-    : upcomingOperationsQuery.isError
-      ? "error"
-      : "ok";
+  const dashboard = useHomeDashboard();
+  const attentionDescription = attentionPanelDescription(dashboard.attentionPanelState);
 
   return (
     <>
-      <PageHeader
-        title="Dinamic Attendance"
-        description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
-      />
+      <PageHeader title="Inicio" description={dashboard.todayLabel} />
 
-      {canReadOperations ? (
-        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" mb="xl">
-          <MetricCard
-            title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
-            value={
-              <StatusBadge
-                label={summaryStatusLabel(upcomingSummaryStatus)}
-                tone={summaryStatusTone(upcomingSummaryStatus)}
-              />
-            }
-            description={
-              upcomingOperationsQuery.data
-                ? `${upcomingOperationsQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
-                : "No disponible"
-            }
-            loading={upcomingSummaryStatus === "loading"}
-          />
-        </SimpleGrid>
-      ) : null}
-
-      {canReadOperations ? (
-        <SectionCard
-          title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
-          description={`${terminology.operation.plural} programadas a continuación.`}
-        >
-          {upcomingOperationsQuery.isLoading ? <LoadingState height={160} /> : null}
-          {upcomingOperationsQuery.isError ? (
-            <ErrorState
-              message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`}
-            />
-          ) : null}
-          {!upcomingOperationsQuery.isLoading &&
-          !upcomingOperationsQuery.isError &&
-          upcomingOperationsQuery.data?.data.length === 0 ? (
-            <EmptyState
-              title={`No hay ${terminology.operation.plural.toLowerCase()} programadas`}
-              description={`Cuando programes ${terminology.operation.plural.toLowerCase()}, aparecerán aquí.`}
-            />
-          ) : null}
-          {upcomingOperationsQuery.data && upcomingOperationsQuery.data.data.length > 0 ? (
-            <Stack gap="sm">
-              {upcomingOperationsQuery.data.data.map((operation) => (
-                <UpcomingOperationCard key={operation.id} operation={operation} />
-              ))}
-            </Stack>
-          ) : null}
-        </SectionCard>
-      ) : (
+      {!dashboard.showOperationalContent ? (
         <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
           <Text size="sm" c="dimmed">
             Seleccioná una empresa y revisá los módulos habilitados para ver información operativa
             en el panel.
           </Text>
         </SectionCard>
+      ) : (
+        <Stack gap="sm">
+          {dashboard.canAccessReports ? (
+            <Grid gap="sm" align="stretch">
+              <Grid.Col span={HOME_COL_MAIN} style={homeGridColStyle}>
+                <DashboardTile>
+                  <SectionCard
+                    fillHeight
+                    title="Requieren atención"
+                    description={attentionDescription}
+                    action={
+                      <Button
+                        component={Link}
+                        to={dashboard.statisticsPageHref}
+                        variant="light"
+                        size="xs"
+                      >
+                        Estadísticas
+                      </Button>
+                    }
+                  >
+                    <HomeAttentionPanel
+                      panelState={dashboard.attentionPanelState}
+                      linkContext={dashboard.linkContext}
+                      dateRange={dashboard.today?.dateRange}
+                    />
+                  </SectionCard>
+                </DashboardTile>
+              </Grid.Col>
+              <Grid.Col span={HOME_COL_SIDE} style={homeGridColStyle}>
+                <DashboardTile>
+                  <SectionCard
+                    fillHeight
+                    title={`Estado de ${dashboard.todayLabel.toLowerCase()}`}
+                    action={
+                      <Button
+                        component={Link}
+                        to={dashboard.statisticsPageHref}
+                        variant="light"
+                        size="xs"
+                      >
+                        Ver más
+                      </Button>
+                    }
+                  >
+                    {dashboard.summaryQuery.isError ? (
+                      <ErrorState message={getApiErrorMessage(dashboard.summaryQuery.error)} />
+                    ) : (
+                      <HomeDashboardKpiCards
+                        summary={dashboard.summary}
+                        unavailableWorkdays={dashboard.unavailableWorkdays}
+                        isLoading={dashboard.summaryQuery.isLoading}
+                        unavailableLoading={dashboard.unavailableWorkdaysQuery.isLoading}
+                        linkContext={dashboard.linkContext}
+                      />
+                    )}
+                  </SectionCard>
+                </DashboardTile>
+              </Grid.Col>
+            </Grid>
+          ) : null}
+
+          <Grid gap="sm" align="stretch">
+            {dashboard.canReadOperations ? (
+              <Grid.Col
+                span={dashboard.canAccessReports ? HOME_COL_MAIN : { base: 12, lg: 12 }}
+                style={homeGridColStyle}
+              >
+                <DashboardTile>
+                  <SectionCard
+                    fillHeight
+                    title={`${terminology.operation.plural} de ${dashboard.todayLabel.toLowerCase()}`}
+                    description={`${dashboard.operationsTotal ?? 0} en el día`}
+                    action={
+                      <Button
+                        component={Link}
+                        to={dashboard.operationsListHref}
+                        variant="light"
+                        size="xs"
+                      >
+                        Ver listado
+                      </Button>
+                    }
+                  >
+                    {dashboard.todayOperationsQuery.isLoading ? <LoadingState height={72} /> : null}
+                    {dashboard.todayOperationsQuery.isError ? (
+                      <ErrorState
+                        message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} de hoy.`}
+                      />
+                    ) : null}
+                    {!dashboard.todayOperationsQuery.isLoading &&
+                    !dashboard.todayOperationsQuery.isError &&
+                    dashboard.todayOperationsQuery.data?.data.length === 0 ? (
+                      <EmptyState
+                        title={`No hay ${terminology.operation.plural.toLowerCase()} para hoy`}
+                        description={`Cuando programes ${terminology.operation.plural.toLowerCase()} para esta fecha, aparecerán aquí.`}
+                      />
+                    ) : null}
+                    {dashboard.todayOperationsQuery.data &&
+                    dashboard.todayOperationsQuery.data.data.length > 0 ? (
+                      <Stack gap={0}>
+                        <TodayOperationsHeader />
+                        {dashboard.todayOperationsQuery.data.data.map((operation) => (
+                          <TodayOperationRow
+                            key={operation.id}
+                            operation={operation}
+                            lowCoverage={dashboard.lowCoverageOperationIds.has(operation.id)}
+                          />
+                        ))}
+                        {(dashboard.operationsTotal ?? 0) >
+                        dashboard.todayOperationsQuery.data.data.length ? (
+                          <Anchor
+                            component={Link}
+                            to={dashboard.operationsListHref}
+                            size="sm"
+                            mt="xs"
+                          >
+                            Ver todas ({dashboard.operationsTotal})
+                          </Anchor>
+                        ) : null}
+                      </Stack>
+                    ) : null}
+                  </SectionCard>
+                </DashboardTile>
+              </Grid.Col>
+            ) : null}
+
+            {dashboard.canAccessReports ? (
+              <Grid.Col
+                span={
+                  dashboard.canReadOperations ? HOME_COL_SIDE : { base: 12, lg: 12 }
+                }
+                style={homeGridColStyle}
+              >
+                <DashboardTile>
+                  <SectionCard fillHeight title="Salud operativa">
+                    {dashboard.summaryQuery.isError ? (
+                      <ErrorState message={getApiErrorMessage(dashboard.summaryQuery.error)} />
+                    ) : (
+                      <HomeOperationalHealth
+                        summary={dashboard.summary}
+                        isLoading={dashboard.summaryQuery.isLoading}
+                        linkContext={dashboard.linkContext}
+                      />
+                    )}
+                  </SectionCard>
+                </DashboardTile>
+              </Grid.Col>
+            ) : null}
+          </Grid>
+        </Stack>
       )}
     </>
   );

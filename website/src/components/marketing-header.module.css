@@ -19,6 +19,20 @@
   gap: 1rem;
 }
 
+.logoLink {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 0.25rem;
+  text-decoration: none;
+}
+
+.logoLink:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 4px;
+  border-radius: var(--m-radius-sm);
+}
+
 .nav {
   display: none;
   gap: 1.25rem;

@@ -75,12 +75,11 @@ describe("LandingPage", () => {
     assert.equal(queryByRole("button", { name: "Siguiente" }), null);
   });
 
-  it("whatsapp expone identidad y estado inicial de confirmaciones", async () => {
-    const { getByTestId, getByLabelText } = renderPage(<LandingPage />);
+  it("whatsapp expone identidad y estado inicial del fichaje", async () => {
+    const { getByTestId } = renderPage(<LandingPage />);
 
     assert.ok(getByTestId("whatsapp-section"));
     assert.ok(getByTestId("whatsapp-phone"));
-    assert.ok(getByLabelText("WhatsApp"));
     assert.equal(getByTestId("whatsapp-device-stage").getAttribute("data-synced"), "false");
     await waitFor(
       () => {
@@ -90,20 +89,24 @@ describe("LandingPage", () => {
     );
   });
 
-  it("confirma asistencia en el flujo WhatsApp simple", async () => {
+  it("registra llegada con ubicación en el flujo WhatsApp simple", async () => {
     const { getByRole, getByTestId } = renderPage(<LandingPage />);
 
     await waitFor(
       () => {
-        assert.ok(getByRole("button", { name: "Confirmar" }));
+        assert.ok(getByRole("button", { name: "Compartir ubicación" }));
       },
       { timeout: 5000 },
     );
-    fireEvent.click(getByRole("button", { name: "Confirmar" }));
-    await waitFor(() => {
-      assert.equal(getByTestId("whatsapp-device-stage").getAttribute("data-synced"), "true");
-      assert.match(getByTestId("whatsapp-phone").textContent ?? "", /Confirmo/i);
-    });
+    fireEvent.click(getByRole("button", { name: "Compartir ubicación" }));
+    await waitFor(
+      () => {
+        assert.equal(getByTestId("whatsapp-device-stage").getAttribute("data-synced"), "true");
+        assert.ok(getByTestId("whatsapp-location-share"));
+        assert.match(getByTestId("whatsapp-phone").textContent ?? "", /llegada fue registrada/i);
+      },
+      { timeout: 5000 },
+    );
   });
 
   it("hero expone roadmap de caos operativo", () => {
@@ -205,7 +208,7 @@ describe("LandingPage", () => {
     assert.ok(getByTestId("whatsapp-phone"));
     await waitFor(
       () => {
-        assert.ok(getByRole("button", { name: "Confirmar" }));
+        assert.ok(getByRole("button", { name: "Compartir ubicación" }));
       },
       { timeout: 5000 },
     );
@@ -236,6 +239,12 @@ describe("LandingPage", () => {
 
     const postAnalytics = getByTestId("cta-post-analytics");
     assert.ok(postAnalytics.querySelector('a[href="#como-funciona"]'));
+  });
+
+  it("navbar muestra lockup de marca final", () => {
+    const { getByLabelText } = renderPage(<LandingPage />);
+    const logo = getByLabelText("Dinamic Operations");
+    assert.ok(logo.querySelector('img[src="/brand/dinamic-operations-logo.svg"]'));
   });
 
   it("navbar y footer mantienen Ingresar y solicitar demo", () => {

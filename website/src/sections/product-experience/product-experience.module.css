@@ -1,0 +1,299 @@
+.section {
+  background: linear-gradient(180deg, #fff 0%, var(--m-surface-muted) 100%);
+}
+
+.experience {
+  margin-top: 1.75rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border-radius: var(--m-radius-lg);
+  border: 1px solid var(--m-border);
+  background: #fff;
+  box-shadow: var(--m-shadow-soft);
+  outline: none;
+}
+
+.experience:focus-visible {
+  box-shadow: var(--m-shadow-soft), 0 0 0 3px rgba(255, 106, 0, 0.3);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  border: 1px solid var(--m-border);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.tab[data-active="true"] {
+  border-color: rgba(255, 106, 0, 0.45);
+  background: var(--m-brand-soft);
+  color: var(--m-brand);
+}
+
+.copyBlock {
+  min-height: 4.5rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.phaseLabel {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--m-brand);
+}
+
+.phaseLine {
+  margin: 0;
+  font-size: clamp(1.25rem, 3vw, 1.85rem);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.panel {
+  --pe-canvas-h: 300px;
+  height: var(--pe-canvas-h);
+  min-height: var(--pe-canvas-h);
+  max-height: var(--pe-canvas-h);
+  border-radius: var(--m-radius-md);
+  border: 1px solid var(--m-border);
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+}
+
+@media (max-width: 640px) {
+  .panel {
+    --pe-canvas-h: 280px;
+  }
+
+  .tabs {
+    gap: 0.25rem;
+  }
+
+  .tab {
+    font-size: 0.5625rem;
+    padding: 0.3rem 0.5rem;
+  }
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  background: var(--m-ink);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.panelLive {
+  font-size: 0.5625rem;
+  opacity: 0.75;
+}
+
+.panelCanvas {
+  position: relative;
+  height: calc(var(--pe-canvas-h) - 2rem);
+  padding: 0.75rem;
+}
+
+.serviceTable {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.serviceRow {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr auto;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--m-radius-sm);
+  border: 1px solid var(--m-border);
+  background: #fff;
+  font-size: 0.625rem;
+  transition:
+    border-color 0.4s ease,
+    background 0.4s ease,
+    opacity 0.4s ease;
+}
+
+.serviceRow[data-tone="ok"] {
+  border-color: rgba(22, 163, 74, 0.25);
+}
+
+.serviceRow[data-tone="warn"] {
+  border-color: rgba(255, 106, 0, 0.45);
+  background: rgba(255, 106, 0, 0.06);
+}
+
+.serviceRow[data-tone="pending"] {
+  border-color: rgba(18, 117, 242, 0.35);
+}
+
+.serviceRow[data-focus="true"] {
+  box-shadow: 0 0 0 1px rgba(255, 106, 0, 0.2);
+}
+
+.serviceName {
+  font-weight: 600;
+}
+
+.serviceClient {
+  color: var(--m-ink-muted);
+}
+
+.serviceStatus {
+  font-weight: 700;
+  text-align: right;
+}
+
+.phaseLayer {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.5rem;
+  padding: 0.65rem;
+  border-radius: var(--m-radius-sm);
+  border: 1px dashed rgba(255, 106, 0, 0.35);
+  background: rgba(255, 255, 255, 0.94);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+}
+
+.phaseLayer[data-active="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.layerTitle {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.teamList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.teamList li {
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--m-border);
+  font-size: 0.5625rem;
+}
+
+.coverage,
+.coverageWarn {
+  margin: 0.35rem 0 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.coverageWarn {
+  color: var(--m-brand);
+}
+
+.alertLine {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--m-brand);
+}
+
+.altList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.altList li {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.5625rem;
+}
+
+.altList strong {
+  font-size: 0.625rem;
+}
+
+.checkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.625rem;
+}
+
+.controlStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+}
+
+.controlStats span[data-tone="ok"] {
+  color: #16a34a;
+}
+
+.controlStats span[data-tone="warn"] {
+  color: var(--m-brand);
+}
+
+.controlStats span[data-tone="pending"] {
+  color: #1275f2;
+}
+
+.nav {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.navBtn {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--m-border);
+  background: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phaseLayer,
+  .serviceRow {
+    transition: none;
+  }
+}

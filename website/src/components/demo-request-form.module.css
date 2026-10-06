@@ -1,0 +1,127 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.pendingBanner {
+  padding: 1rem 1.25rem;
+  border-radius: var(--m-radius-md);
+  border: 1px solid var(--m-border);
+  background: var(--m-surface-muted);
+}
+
+.pendingTitle {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+
+.pendingText {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--m-ink-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--m-ink);
+}
+
+.field span {
+  font-weight: 500;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius-sm);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  background: var(--m-surface);
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 1px;
+}
+
+.error {
+  color: var(--m-danger);
+  font-size: 0.8125rem;
+}
+
+.errorBanner {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--m-radius-sm);
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--m-danger);
+  font-size: 0.875rem;
+}
+
+.submit {
+  align-self: flex-start;
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 1.5rem;
+  background: var(--m-brand);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit:hover {
+  background: var(--m-brand-hover);
+}
+
+.submit:focus-visible {
+  outline: 2px solid var(--m-ink);
+  outline-offset: 2px;
+}
+
+.submit:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--m-ink-muted);
+}
+
+.success {
+  padding: 1.5rem;
+  border-radius: var(--m-radius-md);
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.2);
+}
+
+.successTitle {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+
+.successText {
+  margin: 0;
+  color: var(--m-ink-muted);
+  font-size: 0.9375rem;
+}

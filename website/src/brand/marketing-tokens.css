@@ -1,0 +1,49 @@
+/**
+ * Dinamic Operations — marketing brand tokens (Etapa 1).
+ * Scoped under .marketing-root; no impact on operational Mantine theme.
+ */
+.marketing-root {
+  --m-brand: #ff6a00;
+  --m-brand-hover: #e55f00;
+  --m-brand-soft: rgba(255, 106, 0, 0.12);
+  --m-ink: #0f1e2b;
+  --m-ink-muted: #6b7785;
+  --m-surface: #ffffff;
+  --m-surface-muted: #f6f8fa;
+  --m-border: #e9ecef;
+  --m-success: #16a34a;
+  --m-warning: #d97706;
+  --m-danger: #dc2626;
+  --m-info: #1275f2;
+  --m-radius-sm: 8px;
+  --m-radius-md: 12px;
+  --m-radius-lg: 20px;
+  --m-shadow-soft: 0 8px 32px rgba(15, 30, 43, 0.08);
+  --m-shadow-strong: 0 20px 60px rgba(15, 30, 43, 0.12);
+  --m-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --m-max-width: 72rem;
+  --m-section-y: clamp(3.5rem, 8vw, 6.5rem);
+  --m-header-h: 4.25rem;
+
+  font-family: var(--m-font);
+  color: var(--m-ink);
+  background: var(--m-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+.marketing-root *,
+.marketing-root *::before,
+.marketing-root *::after {
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-root {
+    scroll-behavior: auto;
+  }
+
+  .marketing-root [data-animate] {
+    animation: none !important;
+    transition: none !important;
+  }
+}

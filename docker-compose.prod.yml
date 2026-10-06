@@ -186,3 +186,18 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  website:
+    image: ${WEBSITE_IMAGE:?WEBSITE_IMAGE is required}
+    build: !reset null
+    restart: unless-stopped
+    depends_on: !override []
+    ports: !override
+      - "127.0.0.1:${WEBSITE_HOST_PORT:?WEBSITE_HOST_PORT is required}:80"
+    volumes: !override []
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

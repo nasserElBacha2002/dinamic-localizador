@@ -1,0 +1,95 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--m-ink);
+}
+
+.field span {
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  border: 1px solid rgba(15, 30, 43, 0.12);
+  border-radius: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  font: inherit;
+  background: #fff;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: none;
+  border-color: var(--m-brand);
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.15);
+}
+
+.error {
+  color: var(--m-danger);
+  font-size: 0.8125rem;
+}
+
+.pendingNote {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--m-ink-muted);
+}
+
+.submit {
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  padding: 0.95rem 1.5rem;
+  background: var(--m-brand);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--m-brand-hover);
+}
+
+.submit:focus-visible {
+  outline: 2px solid var(--m-ink);
+  outline-offset: 2px;
+}
+
+.submit:disabled {
+  background: rgba(15, 30, 43, 0.12);
+  color: rgba(15, 30, 43, 0.45);
+  cursor: not-allowed;
+}
+
+.note {
+  margin: 0.65rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--m-ink-muted);
+  text-align: center;
+}

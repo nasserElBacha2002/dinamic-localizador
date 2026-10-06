@@ -6,7 +6,6 @@ import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
 import { EntityLinkAccessProvider } from "../components/entity-link/EntityLinkAccessProvider";
 import { AppLayout } from "../design-system";
 import { LoadingState } from "../design-system";
-import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
 import { LoginTwoFactorPage } from "../pages/LoginTwoFactorPage";
 import { TwoFactorRecoveryCodesPage } from "../pages/TwoFactorRecoveryCodesPage";
@@ -51,6 +50,7 @@ import {
   workTeamManage,
 } from "./entity-route-access";
 import { LegacyOperationRedirect, LegacyServiceRedirect } from "./legacy-redirects";
+import { HomePage } from "../pages/HomePage";
 
 function lazyNamed<T extends Record<string, ComponentType>>(
   importer: () => Promise<T>,

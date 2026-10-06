@@ -1,0 +1,80 @@
+.mobileCarousel {
+  margin-top: 0.5rem;
+}
+
+.mobileCarouselViewport {
+  min-height: 22rem;
+}
+
+.mobileCarouselSlide {
+  min-height: 22rem;
+}
+
+.mobileCarouselSlide[hidden] {
+  display: none;
+}
+
+.mobileCarouselNav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.mobileCarouselBtn {
+  border: 1px solid var(--m-border);
+  background: #fff;
+  border-radius: 999px;
+  width: 2.5rem;
+  height: 2.5rem;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--m-ink);
+}
+
+.mobileCarouselBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.mobileCarouselBtn:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 2px;
+}
+
+.mobileCarouselCounter {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--m-ink-muted);
+  min-width: 2.5rem;
+  text-align: center;
+}
+
+.mobileCarouselDots {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.mobileCarouselDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--m-border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.mobileCarouselDot[data-active="true"] {
+  background: var(--m-brand);
+  width: 1.15rem;
+}
+
+.mobileCarouselDot:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 2px;
+}

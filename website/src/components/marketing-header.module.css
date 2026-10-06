@@ -1,0 +1,59 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--m-header-h);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--m-border);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.inner {
+  width: min(100% - 2rem, var(--m-max-width));
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.nav {
+  display: none;
+  gap: 1.25rem;
+  font-size: 0.9375rem;
+}
+
+.nav a {
+  color: var(--m-ink-muted);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  color: var(--m-ink);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.loginLink {
+  font-size: 0.9375rem;
+  color: var(--m-ink);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.loginLink:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .nav {
+    display: flex;
+  }
+}

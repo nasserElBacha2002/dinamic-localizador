@@ -273,7 +273,7 @@ describe("filter reset screen contracts", () => {
     });
   });
 
-  it("Attendance: resets multiselects and keeps recordType default", async () => {
+  it("Attendance: resets multiselect filters", async () => {
     function Harness() {
       const table = useTableUrlState({
         defaults: ATTENDANCE_TABLE_DEFAULTS,
@@ -281,8 +281,8 @@ describe("filter reset screen contracts", () => {
       });
       return (
         <div>
-          <span data-testid="record-type">{table.state.recordType}</span>
           <span data-testid="employee-ids">{table.state.employeeIds.join(",")}</span>
+          <span data-testid="checkout-status">{table.state.checkoutStatus}</span>
           <span data-testid="active-count">{String(table.activeFilterCount)}</span>
           <button
             type="button"
@@ -290,8 +290,8 @@ describe("filter reset screen contracts", () => {
           >
             employees
           </button>
-          <button type="button" onClick={() => table.setField("recordType", "simulation")}>
-            simulation
+          <button type="button" onClick={() => table.setField("checkoutStatus", "NOT_RECORDED")}>
+            sin-cierre
           </button>
           <button type="button" onClick={() => table.resetFilters()}>
             clear
@@ -309,15 +309,15 @@ describe("filter reset screen contracts", () => {
     );
 
     fireEvent.click(view.getByRole("button", { name: "employees" }));
-    fireEvent.click(view.getByRole("button", { name: "simulation" }));
+    fireEvent.click(view.getByRole("button", { name: "sin-cierre" }));
     await waitFor(() => {
       assert.equal(view.getByTestId("active-count").textContent, "2");
     });
 
     fireEvent.click(view.getByRole("button", { name: "clear" }));
     await waitFor(() => {
-      assert.equal(view.getByTestId("record-type").textContent, "real");
       assert.equal(view.getByTestId("employee-ids").textContent, "");
+      assert.equal(view.getByTestId("checkout-status").textContent, "");
       assert.equal(view.getByTestId("active-count").textContent, "0");
     });
   });

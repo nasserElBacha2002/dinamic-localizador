@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildAttendanceListRowKey,
+  buildExpectedAttendanceListFilters,
+  checkoutStatusFilterClause,
+  locationStatusFilterClause,
   mapAttendanceListRow,
   normalizeAttendanceListIdFilters,
+  punctualityStatusFilterClause,
+  STARTED_WORKDAY_SQL,
 } from "./attendance-list-projection";
 import { EFFECTIVE_STATE_SQL } from "./employee-workday-statistics-projection";
 
@@ -251,5 +256,96 @@ describe("attendance list effective state SQL", () => {
     assert.match(EFFECTIVE_STATE_SQL, /THEN N'EXPECTED'/);
     assert.match(EFFECTIVE_STATE_SQL, /ELSE N'ABSENT'/);
     assert.match(EFFECTIVE_STATE_SQL, /late_tolerance_minutes/);
+  });
+});
+
+describe("attendance list occurred / location / checkout filters", () => {
+  const emptyQuery = {
+    page: 1,
+    limit: 10,
+    operationIds: [] as string[],
+    employeeIds: [] as string[],
+    serviceIds: [] as string[],
+  };
+
+  it("excludes future workdays by expected_start_at only", () => {
+    const without = buildExpectedAttendanceListFilters(ID_A, emptyQuery);
+    const withExclusion = buildExpectedAttendanceListFilters(ID_A, emptyQuery, {
+      excludeFutureWorkdays: true,
+    });
+    assert.equal(without.some((filter) => filter.clause === STARTED_WORKDAY_SQL), false);
+    assert.equal(withExclusion.some((filter) => filter.clause === STARTED_WORKDAY_SQL), true);
+    assert.equal(STARTED_WORKDAY_SQL, "ow.expected_start_at <= @referenceAt");
+    assert.doesNotMatch(STARTED_WORKDAY_SQL, /ar\.id IS NOT NULL/);
+  });
+
+  it("matches location filter against arrival or checkout geofence representation", () => {
+    assert.match(
+      locationStatusFilterClause("INSIDE_GEOFENCE"),
+      /ar\.location_status = N'INSIDE_GEOFENCE'/,
+    );
+    assert.match(
+      locationStatusFilterClause("INSIDE_GEOFENCE"),
+      /CHECKOUT_LOCATION_REVIEW/,
+    );
+    assert.match(
+      locationStatusFilterClause("OUTSIDE_GEOFENCE"),
+      /ar\.location_status = N'OUTSIDE_GEOFENCE'/,
+    );
+    assert.match(
+      locationStatusFilterClause("OUTSIDE_GEOFENCE"),
+      /CHECKOUT_REJECTED/,
+    );
+    assert.match(
+      locationStatusFilterClause("NOT_RECORDED", { allowNullAttendanceForNotRecorded: true }),
+      /ar\.id IS NULL OR ar\.location_status = N'NOT_RECORDED'/,
+    );
+    assert.match(
+      locationStatusFilterClause("NOT_RECORDED", { allowNullAttendanceForNotRecorded: true }),
+      /checkout_at IS NOT NULL/,
+    );
+    assert.equal(
+      locationStatusFilterClause("INVALID_LOCATION"),
+      "ar.location_status = @locationStatus",
+    );
+  });
+
+  it("treats checkout NOT_RECORDED as attendance without checkout", () => {
+    assert.equal(
+      checkoutStatusFilterClause("NOT_RECORDED"),
+      "ar.id IS NOT NULL AND ar.checkout_at IS NULL",
+    );
+    assert.equal(
+      checkoutStatusFilterClause("NOT_RECORDED", { requireAttendanceRow: false }),
+      "ar.checkout_at IS NULL",
+    );
+    assert.equal(
+      checkoutStatusFilterClause("CHECKOUT_VALID"),
+      "ar.checkout_status = @checkoutStatus",
+    );
+
+    const filters = buildExpectedAttendanceListFilters(ID_A, {
+      ...emptyQuery,
+      checkoutStatus: "NOT_RECORDED",
+    });
+    assert.equal(
+      filters.some((filter) => filter.clause === "ar.id IS NOT NULL AND ar.checkout_at IS NULL"),
+      true,
+    );
+  });
+
+  it("matches punctuality filter against arrival status or checkout time outcomes", () => {
+    assert.match(punctualityStatusFilterClause("LATE"), /ar\.punctuality_status = N'LATE'/);
+    assert.match(punctualityStatusFilterClause("LATE"), /CHECKOUT_LATE_EXTRA_TIME/);
+    assert.match(punctualityStatusFilterClause("EARLY"), /CHECKOUT_EARLY_REVIEW/);
+    assert.match(punctualityStatusFilterClause("ON_TIME"), /CHECKOUT_VALID/);
+    assert.equal(
+      punctualityStatusFilterClause("OUTSIDE_TIME_WINDOW"),
+      "ar.punctuality_status = @punctualityStatus",
+    );
+    assert.match(
+      punctualityStatusFilterClause("NOT_RECORDED", { allowNullAttendanceForNotRecorded: true }),
+      /ar\.id IS NULL/,
+    );
   });
 });

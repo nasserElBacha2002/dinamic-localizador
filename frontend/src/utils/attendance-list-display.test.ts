@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { AttendanceRecordWithRelations } from "../types/attendance";
 import {
+  attendanceListCheckoutLocationStatus,
   attendanceListDetailPath,
+  attendanceListEventStatusesLabel,
+  attendanceListLocationEvents,
   attendanceListLocationTone,
+  attendanceListPunctualityEvents,
   attendanceListPunctualityLabel,
   attendanceListPunctualityTone,
   attendanceListRowKey,
@@ -142,5 +146,73 @@ describe("attendance-list-display", () => {
     };
     assert.equal(attendanceListValidationLabel(absent), "Ausente");
     assert.notEqual(attendanceListValidationLabel(absent), "Pendiente");
+  });
+
+  it("shows arrival and checkout location without dropping either event", () => {
+    const both = {
+      ...baseRow,
+      checkoutAt: "2026-09-30T19:00:00.000Z",
+      checkoutLatitude: -34.6,
+      checkoutLongitude: -58.4,
+      checkoutDistanceMeters: 8,
+      checkoutStatus: "CHECKOUT_VALID" as const,
+    };
+    const outsideCheckout = {
+      ...both,
+      checkoutStatus: "CHECKOUT_LOCATION_REVIEW" as const,
+    };
+    const exitOnly = {
+      ...baseRow,
+      receivedAt: null,
+      locationStatus: "NOT_RECORDED" as const,
+      punctualityStatus: "NOT_RECORDED" as const,
+      checkoutAt: "2026-09-30T19:00:00.000Z",
+      checkoutLatitude: -34.6,
+      checkoutLongitude: -58.4,
+      checkoutDistanceMeters: 400,
+      checkoutStatus: "CHECKOUT_REJECTED" as const,
+    };
+    const checkoutWithoutCoords = {
+      ...both,
+      checkoutLatitude: null,
+      checkoutLongitude: null,
+      checkoutDistanceMeters: null,
+      checkoutStatus: "CHECKOUT_EARLY_REVIEW" as const,
+    };
+
+    const bothEvents = attendanceListLocationEvents(both);
+    assert.equal(bothEvents.length, 2);
+    assert.equal(bothEvents[0]?.event, "arrival");
+    assert.equal(bothEvents[0]?.label, "Dentro del radio");
+    assert.equal(bothEvents[1]?.event, "checkout");
+    assert.equal(bothEvents[1]?.label, "Dentro del radio");
+    assert.match(attendanceListEventStatusesLabel(bothEvents), /Entrada: Dentro del radio/);
+    assert.match(attendanceListEventStatusesLabel(bothEvents), /Salida: Dentro del radio/);
+
+    assert.equal(attendanceListCheckoutLocationStatus(outsideCheckout), "OUTSIDE_GEOFENCE");
+    assert.equal(attendanceListLocationEvents(outsideCheckout)[1]?.label, "Fuera del radio");
+    assert.equal(attendanceListLocationEvents(exitOnly)[0]?.event, "checkout");
+    assert.equal(attendanceListLocationEvents(exitOnly)[0]?.label, "Fuera del radio");
+    assert.equal(attendanceListCheckoutLocationStatus(checkoutWithoutCoords), "NOT_RECORDED");
+    assert.equal(attendanceListLocationEvents(checkoutWithoutCoords)[1]?.label, "Sin registrar");
+  });
+
+  it("shows arrival punctuality and checkout status when both events exist", () => {
+    const both = {
+      ...baseRow,
+      punctualityStatus: "LATE" as const,
+      checkoutAt: "2026-09-30T18:00:00.000Z",
+      checkoutStatus: "CHECKOUT_EARLY_REVIEW" as const,
+    };
+    const events = attendanceListPunctualityEvents(both);
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.label, "Tarde");
+    assert.equal(events[1]?.label, "Salida anticipada (revisión)");
+    assert.equal(events[0]?.event, "arrival");
+    assert.equal(events[1]?.event, "checkout");
+
+    const arrivalOnly = attendanceListPunctualityEvents(baseRow);
+    assert.equal(arrivalOnly.length, 1);
+    assert.equal(arrivalOnly[0]?.label, "A tiempo");
   });
 });

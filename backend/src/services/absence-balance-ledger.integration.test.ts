@@ -239,6 +239,9 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
 
   it("adjusts reservation when NEEDS_INFO edit reduces days", async () => {
     const companyId = await seed();
+    const rangeStart = futureAbsenceDateIso(14);
+    const rangeEnd = addDaysToDateIso(rangeStart, 2);
+    const balanceYear = Number(rangeStart.slice(0, 4));
     const types = await absenceTypeRepository.listAll(companyId, true);
     const vacation = types.find((type) => type.code === "VACATION");
     assert.ok(vacation);
@@ -263,16 +266,17 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employee.id)
       .input("typeId", sql.UniqueIdentifier, vacation.id)
+      .input("balanceYear", sql.Int, balanceYear)
       .query(`
         MERGE employee_absence_balances AS t
-        USING (SELECT @companyId AS company_id, @employeeId AS employee_id, @typeId AS absence_type_id, 2026 AS year) AS s
+        USING (SELECT @companyId AS company_id, @employeeId AS employee_id, @typeId AS absence_type_id, @balanceYear AS year) AS s
         ON t.company_id = s.company_id AND t.employee_id = s.employee_id AND t.absence_type_id = s.absence_type_id AND t.year = s.year
         WHEN MATCHED THEN UPDATE SET
           total_days = 10, granted_days = 10, reserved_days = 0, consumed_days = 0, available_days = 10, version = 1
         WHEN NOT MATCHED THEN INSERT (
           company_id, employee_id, absence_type_id, year, total_days, notes,
           granted_days, reserved_days, consumed_days, available_days, version
-        ) VALUES (@companyId, @employeeId, @typeId, 2026, 10, NULL, 10, 0, 0, 10, 1);
+        ) VALUES (@companyId, @employeeId, @typeId, @balanceYear, 10, NULL, 10, 0, 0, 10, 1);
       `);
 
     const created = await absenceRequestService.createFromAdmin(
@@ -280,8 +284,8 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
       {
         employeeId: employee.id,
         absenceTypeId: vacation.id,
-        startDate: "2026-10-05",
-        endDate: "2026-10-07",
+        startDate: rangeStart,
+        endDate: rangeEnd,
         startPeriod: "FULL_DAY",
         endPeriod: "FULL_DAY",
         reason: "Three days pending",
@@ -299,10 +303,11 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employee.id)
       .input("typeId", sql.UniqueIdentifier, vacation.id)
+      .input("balanceYear", sql.Int, balanceYear)
       .query(`
         SELECT reserved_days, available_days
         FROM employee_absence_balances
-        WHERE company_id = @companyId AND employee_id = @employeeId AND absence_type_id = @typeId AND year = 2026
+        WHERE company_id = @companyId AND employee_id = @employeeId AND absence_type_id = @typeId AND year = @balanceYear
       `);
     assert.equal(Number(before.recordset[0].reserved_days), created.totalDays);
 
@@ -310,8 +315,8 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
       companyId,
       created.id,
       {
-        startDate: "2026-10-05",
-        endDate: "2026-10-05",
+        startDate: rangeStart,
+        endDate: rangeStart,
         startPeriod: "FULL_DAY",
         endPeriod: "FULL_DAY",
         reason: "Only one day",
@@ -324,10 +329,11 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employee.id)
       .input("typeId", sql.UniqueIdentifier, vacation.id)
+      .input("balanceYear", sql.Int, balanceYear)
       .query(`
         SELECT reserved_days, available_days
         FROM employee_absence_balances
-        WHERE company_id = @companyId AND employee_id = @employeeId AND absence_type_id = @typeId AND year = 2026
+        WHERE company_id = @companyId AND employee_id = @employeeId AND absence_type_id = @typeId AND year = @balanceYear
       `);
     assert.equal(Number(after.recordset[0].reserved_days), 1);
     assert.equal(Number(after.recordset[0].available_days), 9);

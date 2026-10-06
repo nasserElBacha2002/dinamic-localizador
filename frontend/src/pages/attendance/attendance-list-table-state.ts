@@ -13,8 +13,6 @@ export const ATTENDANCE_TABLE_DEFAULTS = {
   locationStatus: "",
   punctualityStatus: "",
   checkoutStatus: "",
-  openAttendance: false,
-  recordType: "real" as "real" | "simulation" | "all",
   ...dateRangeToUrlFields(EMPTY_DATE_RANGE_VALUE),
 };
 
@@ -23,23 +21,23 @@ export const ATTENDANCE_TABLE_FIELDS = {
   employeeIds: { type: "stringList" as const },
   serviceIds: { type: "stringList" as const },
   operationShiftId: { type: "string" as const },
-  recordType: { type: "enum", values: ["real", "simulation", "all"] },
   validationStatus: {
     type: "enum",
     values: ["", "VALID", "PENDING_REVIEW", "REJECTED"],
   },
   locationStatus: {
     type: "enum",
-    values: ["", "INSIDE_GEOFENCE", "OUTSIDE_GEOFENCE", "INVALID_LOCATION"],
+    values: ["", "INSIDE_GEOFENCE", "OUTSIDE_GEOFENCE", "INVALID_LOCATION", "NOT_RECORDED"],
   },
   punctualityStatus: {
     type: "enum",
-    values: ["", "EARLY", "ON_TIME", "LATE", "OUTSIDE_TIME_WINDOW"],
+    values: ["", "EARLY", "ON_TIME", "LATE", "OUTSIDE_TIME_WINDOW", "NOT_RECORDED"],
   },
   checkoutStatus: {
     type: "enum",
     values: [
       "",
+      "NOT_RECORDED",
       "CHECKOUT_VALID",
       "CHECKOUT_EARLY_WITHIN_TOLERANCE",
       "CHECKOUT_EARLY_REVIEW",
@@ -48,7 +46,6 @@ export const ATTENDANCE_TABLE_FIELDS = {
       "CHECKOUT_REJECTED",
     ],
   },
-  openAttendance: { type: "boolean" as const },
 } satisfies TableUrlFieldMap<typeof ATTENDANCE_TABLE_DEFAULTS>;
 
 export const shouldOmitAttendanceTableValue = (

@@ -19,6 +19,7 @@ export type CheckoutStatus =
   | "CHECKOUT_LATE_EXTRA_TIME"
   | "CHECKOUT_LOCATION_REVIEW"
   | "CHECKOUT_REJECTED";
+export type CheckoutStatusFilter = CheckoutStatus | "NOT_RECORDED";
 
 export type OperationalStatus = "NO_CHECK_IN" | "VALID" | "PENDING_REVIEW" | "REJECTED";
 
@@ -222,7 +223,7 @@ export interface AttendanceFilters {
   validationStatus?: ValidationStatus;
   locationStatus?: LocationStatus;
   punctualityStatus?: PunctualityStatus;
-  checkoutStatus?: CheckoutStatus;
+  checkoutStatus?: CheckoutStatusFilter;
   openAttendance?: boolean;
   dateFrom?: string;
   dateTo?: string;

@@ -147,6 +147,103 @@ const pushIdFilters = (
   }
 };
 
+/** Work period has started (authoritative expected start on operation_workdays). */
+export const STARTED_WORKDAY_SQL = "ow.expected_start_at <= @referenceAt";
+
+const CHECKOUT_WITHOUT_LOCATION_SQL = `(
+  ar.checkout_at IS NOT NULL
+  AND ar.checkout_latitude IS NULL
+  AND ar.checkout_longitude IS NULL
+  AND ar.checkout_distance_meters IS NULL
+)`;
+
+const CHECKOUT_INSIDE_GEOFENCE_SQL = `(
+  ar.checkout_at IS NOT NULL
+  AND (
+    ar.checkout_latitude IS NOT NULL
+    OR ar.checkout_longitude IS NOT NULL
+    OR ar.checkout_distance_meters IS NOT NULL
+  )
+  AND ar.checkout_status NOT IN (N'CHECKOUT_LOCATION_REVIEW', N'CHECKOUT_REJECTED')
+)`;
+
+const CHECKOUT_OUTSIDE_GEOFENCE_SQL = `(
+  ar.checkout_status IN (N'CHECKOUT_LOCATION_REVIEW', N'CHECKOUT_REJECTED')
+  AND (
+    ar.checkout_latitude IS NOT NULL
+    OR ar.checkout_longitude IS NOT NULL
+    OR ar.checkout_distance_meters IS NOT NULL
+  )
+)`;
+
+export const locationStatusFilterClause = (
+  locationStatus: NonNullable<ListAttendanceQuery["locationStatus"]>,
+  options?: { allowNullAttendanceForNotRecorded?: boolean },
+): string => {
+  const allowNull = options?.allowNullAttendanceForNotRecorded ?? false;
+
+  if (locationStatus === "NOT_RECORDED") {
+    const arrival = allowNull
+      ? "(ar.id IS NULL OR ar.location_status = N'NOT_RECORDED')"
+      : "ar.location_status = N'NOT_RECORDED'";
+    return `(${arrival} OR ${CHECKOUT_WITHOUT_LOCATION_SQL})`;
+  }
+
+  if (locationStatus === "INSIDE_GEOFENCE") {
+    return `(ar.location_status = N'INSIDE_GEOFENCE' OR ${CHECKOUT_INSIDE_GEOFENCE_SQL})`;
+  }
+
+  if (locationStatus === "OUTSIDE_GEOFENCE") {
+    return `(ar.location_status = N'OUTSIDE_GEOFENCE' OR ${CHECKOUT_OUTSIDE_GEOFENCE_SQL})`;
+  }
+
+  return "ar.location_status = @locationStatus";
+};
+
+export const checkoutStatusFilterClause = (
+  checkoutStatus: NonNullable<ListAttendanceQuery["checkoutStatus"]>,
+  options?: { requireAttendanceRow?: boolean },
+): string | null => {
+  if (checkoutStatus === "NOT_RECORDED") {
+    return options?.requireAttendanceRow === false
+      ? "ar.checkout_at IS NULL"
+      : "ar.id IS NOT NULL AND ar.checkout_at IS NULL";
+  }
+  return "ar.checkout_status = @checkoutStatus";
+};
+
+/** Align list punctuality filter with arrival punctuality_status + checkout time outcomes. */
+export const punctualityStatusFilterClause = (
+  punctualityStatus: NonNullable<ListAttendanceQuery["punctualityStatus"]>,
+  options?: { allowNullAttendanceForNotRecorded?: boolean },
+): string => {
+  const allowNull = options?.allowNullAttendanceForNotRecorded ?? false;
+
+  if (punctualityStatus === "NOT_RECORDED") {
+    if (allowNull) {
+      return "(ar.id IS NULL OR ar.punctuality_status = N'NOT_RECORDED')";
+    }
+    return "ar.punctuality_status = N'NOT_RECORDED'";
+  }
+
+  if (punctualityStatus === "EARLY") {
+    return `(ar.punctuality_status = N'EARLY' OR ar.checkout_status IN (
+      N'CHECKOUT_EARLY_WITHIN_TOLERANCE',
+      N'CHECKOUT_EARLY_REVIEW'
+    ))`;
+  }
+
+  if (punctualityStatus === "LATE") {
+    return `(ar.punctuality_status = N'LATE' OR ar.checkout_status = N'CHECKOUT_LATE_EXTRA_TIME')`;
+  }
+
+  if (punctualityStatus === "ON_TIME") {
+    return `(ar.punctuality_status = N'ON_TIME' OR ar.checkout_status = N'CHECKOUT_VALID')`;
+  }
+
+  return "ar.punctuality_status = @punctualityStatus";
+};
+
 const pushAttendanceStatusFilters = (
   filters: SqlFilter[],
   query: ListAttendanceQuery,
@@ -162,46 +259,52 @@ const pushAttendanceStatusFilters = (
   }
 
   if (query.locationStatus) {
-    if (allowNull && query.locationStatus === "NOT_RECORDED") {
-      filters.push({
-        clause: "(ar.id IS NULL OR ar.location_status = N'NOT_RECORDED')",
-        apply: () => undefined,
-      });
-    } else {
-      filters.push({
-        clause: "ar.location_status = @locationStatus",
-        apply: (request) => request.input("locationStatus", sql.NVarChar(30), query.locationStatus),
-      });
-    }
+    const clause = locationStatusFilterClause(query.locationStatus, {
+      allowNullAttendanceForNotRecorded: allowNull,
+    });
+    const bindsLocationParam = clause.includes("@locationStatus");
+    filters.push({
+      clause,
+      apply: bindsLocationParam
+        ? (request) => request.input("locationStatus", sql.NVarChar(30), query.locationStatus)
+        : () => undefined,
+    });
   }
 
   if (query.punctualityStatus) {
-    if (allowNull && query.punctualityStatus === "NOT_RECORDED") {
-      filters.push({
-        clause: "(ar.id IS NULL OR ar.punctuality_status = N'NOT_RECORDED')",
-        apply: () => undefined,
-      });
-    } else {
-      filters.push({
-        clause: "ar.punctuality_status = @punctualityStatus",
-        apply: (request) =>
-          request.input("punctualityStatus", sql.NVarChar(30), query.punctualityStatus),
-      });
-    }
+    const clause = punctualityStatusFilterClause(query.punctualityStatus, {
+      allowNullAttendanceForNotRecorded: allowNull,
+    });
+    const bindsPunctualityParam = clause.includes("@punctualityStatus");
+    filters.push({
+      clause,
+      apply: bindsPunctualityParam
+        ? (request) =>
+            request.input("punctualityStatus", sql.NVarChar(30), query.punctualityStatus)
+        : () => undefined,
+    });
   }
 
   if (query.checkoutStatus) {
-    filters.push({
-      clause: "ar.checkout_status = @checkoutStatus",
-      apply: (request) =>
-        request.input("checkoutStatus", sql.NVarChar(40), query.checkoutStatus),
+    const clause = checkoutStatusFilterClause(query.checkoutStatus, {
+      requireAttendanceRow: allowNull,
     });
+    if (clause) {
+      const bindsCheckoutParam = clause.includes("@checkoutStatus");
+      filters.push({
+        clause,
+        apply: bindsCheckoutParam
+          ? (request) => request.input("checkoutStatus", sql.NVarChar(40), query.checkoutStatus)
+          : () => undefined,
+      });
+    }
   }
 };
 
 export const buildExpectedAttendanceListFilters = (
   companyId: string,
   query: ListAttendanceQuery,
+  options?: { excludeFutureWorkdays?: boolean },
 ): SqlFilter[] => {
   const ids = normalizeAttendanceListIdFilters(query);
   const filters: SqlFilter[] = [
@@ -214,6 +317,13 @@ export const buildExpectedAttendanceListFilters = (
       apply: () => undefined,
     },
   ];
+
+  if (options?.excludeFutureWorkdays) {
+    filters.push({
+      clause: STARTED_WORKDAY_SQL,
+      apply: () => undefined,
+    });
+  }
 
   pushIdFilters(filters, ids, {
     operation: "i.id",

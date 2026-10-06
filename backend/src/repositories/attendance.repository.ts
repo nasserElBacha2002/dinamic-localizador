@@ -13,6 +13,9 @@ import {
   buildExpectedAttendanceListFromClause,
   buildLegacyOrphanAttendanceFilterClauses,
   buildSimulationAttendanceListFilterClauses,
+  checkoutStatusFilterClause,
+  locationStatusFilterClause,
+  punctualityStatusFilterClause,
   expectedAttendanceListSelectSql,
   legacyOrphanAttendanceListSelectSql,
   mapAttendanceListRow,
@@ -84,26 +87,41 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   }
 
   if (query.locationStatus) {
+    const clause = locationStatusFilterClause(query.locationStatus);
+    const bindsLocationParam = clause.includes("@locationStatus");
     filters.push({
-      clause: "ar.location_status = @locationStatus",
-      apply: (request) => request.input("locationStatus", sql.NVarChar(30), query.locationStatus),
+      clause,
+      apply: bindsLocationParam
+        ? (request) => request.input("locationStatus", sql.NVarChar(30), query.locationStatus)
+        : () => undefined,
     });
   }
 
   if (query.punctualityStatus) {
+    const clause = punctualityStatusFilterClause(query.punctualityStatus);
+    const bindsPunctualityParam = clause.includes("@punctualityStatus");
     filters.push({
-      clause: "ar.punctuality_status = @punctualityStatus",
-      apply: (request) =>
-        request.input("punctualityStatus", sql.NVarChar(30), query.punctualityStatus),
+      clause,
+      apply: bindsPunctualityParam
+        ? (request) =>
+            request.input("punctualityStatus", sql.NVarChar(30), query.punctualityStatus)
+        : () => undefined,
     });
   }
 
   if (query.checkoutStatus) {
-    filters.push({
-      clause: "ar.checkout_status = @checkoutStatus",
-      apply: (request) =>
-        request.input("checkoutStatus", sql.NVarChar(40), query.checkoutStatus),
+    const clause = checkoutStatusFilterClause(query.checkoutStatus, {
+      requireAttendanceRow: false,
     });
+    if (clause) {
+      const bindsCheckoutParam = clause.includes("@checkoutStatus");
+      filters.push({
+        clause,
+        apply: bindsCheckoutParam
+          ? (request) => request.input("checkoutStatus", sql.NVarChar(40), query.checkoutStatus)
+          : () => undefined,
+      });
+    }
   }
 
   if (query.openAttendance) {
@@ -366,7 +384,9 @@ export const attendanceRepository = {
   ): Promise<{ items: AttendanceListItem[]; total: number }> {
     const pool = getPool();
     const referenceAt = attendanceAuthoritativeClock.now();
-    const expectedFilters = buildExpectedAttendanceListFilters(companyId, query);
+    const expectedFilters = buildExpectedAttendanceListFilters(companyId, query, {
+      excludeFutureWorkdays: true,
+    });
     const expectedWhere = buildWhereClause(expectedFilters);
     const simulation = options.includeSimulations
       ? buildSimulationAttendanceListFilterClauses(query)

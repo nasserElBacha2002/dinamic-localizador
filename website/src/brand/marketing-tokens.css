@@ -3,11 +3,12 @@
  * Scoped under .marketing-root; no impact on operational Mantine theme.
  */
 .marketing-root {
-  --m-brand: #ff6a00;
-  --m-brand-hover: #e55f00;
-  --m-brand-soft: rgba(255, 106, 0, 0.12);
-  --m-ink: #0f1e2b;
-  --m-ink-muted: #6b7785;
+  /* Paleta alineada al logo final (SVG maestro) */
+  --m-brand: #ff5a00;
+  --m-brand-hover: #e55100;
+  --m-brand-soft: rgba(255, 90, 0, 0.12);
+  --m-ink: #082433;
+  --m-ink-muted: #6f7c88;
   --m-surface: #ffffff;
   --m-surface-muted: #f6f8fa;
   --m-border: #e9ecef;
@@ -23,7 +24,8 @@
   --m-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --m-max-width: 72rem;
   --m-section-y: clamp(3.5rem, 8vw, 6.5rem);
-  --m-header-h: 4.25rem;
+  --m-header-h: 4.5rem;
+  --m-header-logo-h: 3rem;
 
   font-family: var(--m-font);
   color: var(--m-ink);

@@ -10,8 +10,8 @@ export function MarketingHeader() {
   return (
     <header className={classes.header}>
       <div className={classes.inner}>
-        <a href="/" aria-label="Inicio Dinamic Operations">
-          <BrandLogo />
+        <a href="/" className={classes.logoLink} aria-label="Inicio Dinamic Operations">
+          <BrandLogo variant="horizontal" />
         </a>
         <nav className={classes.nav} aria-label="Secciones">
           <a href="#como-funciona">Cómo funciona</a>

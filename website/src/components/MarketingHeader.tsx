@@ -27,7 +27,7 @@ export function MarketingHeader() {
             href="#solicitar-demo"
             onClick={() => trackMarketingEvent("cta_demo_click", { location: "header" })}
           >
-            Solicitar demo
+            Solicitar una demo
           </a>
         </div>
       </div>

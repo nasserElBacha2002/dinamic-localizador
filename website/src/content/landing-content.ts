@@ -37,11 +37,12 @@ export const SITUATIONS = [
   },
 ] as const;
 
+export const SITUATIONS_SUPPORTING_TEXT =
+  "Lo que pasa en la operación, lo ves y lo resolvés sin desarmar todo por chat.";
+
 export const AUDIENCE_ITEMS = [
   "Empresas de limpieza",
   "Facility services",
   "Servicios tercerizados",
   "Múltiples clientes y ubicaciones",
 ] as const;
-
-export const PILLARS = ["PLANIFICÁ", "DETECTÁ", "RESOLVÉ"] as const;

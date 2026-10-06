@@ -14,7 +14,12 @@ import {
 } from "./chaos-data";
 import classes from "../sections.module.css";
 
-export function ProblemChaosRoadmap() {
+type ProblemChaosRoadmapProps = {
+  showMicrocopy?: boolean;
+  className?: string;
+};
+
+export function ProblemChaosRoadmap({ showMicrocopy = true, className }: ProblemChaosRoadmapProps) {
   const { ref, inView } = useInView<HTMLDivElement>({ threshold: 0.25 });
   const reducedMotion = usePrefersReducedMotion();
   const isMobileLayout = useMediaQuery("(max-width: 767px)");
@@ -25,14 +30,16 @@ export function ProblemChaosRoadmap() {
   return (
     <div
       ref={ref}
-      className={classes.chaosRoadmap}
+      className={[classes.chaosRoadmap, className].filter(Boolean).join(" ")}
       data-testid="chaos-roadmap"
       data-animate={animate ? "true" : "false"}
       data-reduced={reducedMotion ? "true" : "false"}
       data-in-view={inView ? "true" : "false"}
       data-highlight={highlightId ?? undefined}
     >
-      <p className={classes.chaosMicrocopy}>Chats. Llamadas. Planillas. Cambios de último momento.</p>
+      {showMicrocopy ? (
+        <p className={classes.chaosMicrocopy}>Chats. Llamadas. Planillas. Cambios de último momento.</p>
+      ) : null}
       <div className={classes.chaosRoadmapScene}>
         <div className={classes.chaosSceneGlow} aria-hidden="true" />
         <ChaosPath

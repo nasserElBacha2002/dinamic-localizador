@@ -42,13 +42,6 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
 
   return (
     <div className={classes.form}>
-      <div className={classes.pendingBanner} role="status">
-        <p className={classes.pendingTitle}>Formulario en preparación</p>
-        <p className={classes.pendingText}>
-          Podés completar los campos para ver el flujo, pero el envío estará disponible cuando conectemos el
-          endpoint público de solicitudes de demo.
-        </p>
-      </div>
       <form
         id={id}
         noValidate
@@ -102,10 +95,11 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
             <input {...register("serviceLocations")} />
           </label>
         </div>
+        <p className={classes.pendingNote}>Solicitudes online próximamente.</p>
         <button type="submit" className={classes.submit} disabled={!isDemoSubmitEnabled}>
           Solicitar una demo
         </button>
-        <p className={classes.note}>El botón de envío se habilitará cuando el backend esté disponible.</p>
+        <p className={classes.note}>Disponible próximamente.</p>
       </form>
     </div>
   );

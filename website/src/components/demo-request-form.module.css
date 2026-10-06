@@ -1,25 +1,7 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-}
-
-.pendingBanner {
-  padding: 1rem 1.25rem;
-  border-radius: var(--m-radius-md);
-  border: 1px solid var(--m-border);
-  background: var(--m-surface-muted);
-}
-
-.pendingTitle {
-  margin: 0 0 0.35rem;
-  font-weight: 600;
-}
-
-.pendingText {
-  margin: 0;
-  font-size: 0.9375rem;
-  color: var(--m-ink-muted);
+  gap: 0;
 }
 
 .grid {
@@ -37,29 +19,33 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
   font-size: 0.875rem;
   color: var(--m-ink);
 }
 
 .field span {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .field input,
 .field select {
   width: 100%;
-  border: 1px solid var(--m-border);
-  border-radius: var(--m-radius-sm);
-  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(15, 30, 43, 0.12);
+  border-radius: 0.65rem;
+  padding: 0.75rem 0.85rem;
   font: inherit;
-  background: var(--m-surface);
+  background: #fff;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .field input:focus-visible,
 .field select:focus-visible {
-  outline: 2px solid var(--m-brand);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--m-brand);
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.15);
 }
 
 .error {
@@ -67,28 +53,26 @@
   font-size: 0.8125rem;
 }
 
-.errorBanner {
-  margin: 0;
-  padding: 0.75rem 1rem;
-  border-radius: var(--m-radius-sm);
-  background: rgba(220, 38, 38, 0.08);
-  color: var(--m-danger);
-  font-size: 0.875rem;
+.pendingNote {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--m-ink-muted);
 }
 
 .submit {
-  align-self: flex-start;
+  width: 100%;
   border: none;
   border-radius: 999px;
-  padding: 0.85rem 1.5rem;
+  padding: 0.95rem 1.5rem;
   background: var(--m-brand);
   color: #fff;
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.submit:hover {
+.submit:hover:not(:disabled) {
   background: var(--m-brand-hover);
 }
 
@@ -98,30 +82,14 @@
 }
 
 .submit:disabled {
-  opacity: 0.7;
-  cursor: wait;
+  background: rgba(15, 30, 43, 0.12);
+  color: rgba(15, 30, 43, 0.45);
+  cursor: not-allowed;
 }
 
 .note {
-  margin: 0;
+  margin: 0.65rem 0 0;
   font-size: 0.8125rem;
   color: var(--m-ink-muted);
-}
-
-.success {
-  padding: 1.5rem;
-  border-radius: var(--m-radius-md);
-  background: rgba(22, 163, 74, 0.08);
-  border: 1px solid rgba(22, 163, 74, 0.2);
-}
-
-.successTitle {
-  margin: 0 0 0.35rem;
-  font-weight: 600;
-}
-
-.successText {
-  margin: 0;
-  color: var(--m-ink-muted);
-  font-size: 0.9375rem;
+  text-align: center;
 }

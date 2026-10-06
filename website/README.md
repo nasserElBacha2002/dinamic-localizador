@@ -4,8 +4,11 @@ Sitio comercial (landing) independiente del frontend operativo (`../frontend`).
 
 ## Dominios objetivo (referencia)
 
-- `dinamicoperations.com` → website (este proyecto)
-- `app.dinamicoperations.com` → Operations App (`../frontend`)
+- `https://dinamicoperations.com/` → website (este proyecto)
+- `https://dinamicoperations.com/login` (y resto de rutas app) → `../frontend`
+- `https://api.dinamicoperations.com` → `../backend`
+
+Cutover operativo: [docs/production-domain-cutover.md](../docs/production-domain-cutover.md)
 
 ## Desarrollo
 
@@ -18,7 +21,7 @@ Puerto por defecto: **8085**.
 
 ## Variables
 
-Ver `.env.example`. `VITE_OPERATIONS_APP_URL` define el enlace “Ingresar” / “Acceso clientes” hacia la app operativa.
+Ver `.env.example`. Por defecto el CTA **Ingresar** apunta a `/login` (mismo dominio). `VITE_OPERATIONS_APP_URL` es opcional para desarrollo con app en otro puerto.
 
 ## SEO
 

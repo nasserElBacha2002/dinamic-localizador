@@ -10,7 +10,6 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { getOperationsLoginUrl } from "../config/operations-app-url";
 import { installMobileMatchMedia } from "../test/match-media-mobile";
 
 let renderPage: typeof import("../test/render-page").renderPage;
@@ -47,11 +46,11 @@ describe("LandingPage", () => {
     assert.equal(heroCopy.querySelector('a[href="#solicitar-demo"]'), null);
   });
 
-  it("enlaza Ingresar hacia OPERATIONS_APP_URL/login", () => {
+  it("enlaza Ingresar hacia /login (mismo dominio)", () => {
     const { getAllByRole } = renderPage(<LandingPage />);
     const logins = getAllByRole("link", { name: "Ingresar" });
     assert.ok(logins.length >= 1);
-    assert.ok(logins.every((link) => link.getAttribute("href") === getOperationsLoginUrl()));
+    assert.ok(logins.every((link) => link.getAttribute("href") === "/login"));
   });
 
   it("video usa id unico como-funciona en la seccion", () => {
@@ -242,7 +241,7 @@ describe("LandingPage", () => {
   it("navbar y footer mantienen Ingresar y solicitar demo", () => {
     const { getAllByRole } = renderPage(<LandingPage />);
     const logins = getAllByRole("link", { name: "Ingresar" });
-    assert.ok(logins.every((link) => link.getAttribute("href") === getOperationsLoginUrl()));
+    assert.ok(logins.every((link) => link.getAttribute("href") === "/login"));
     const demoLinks = getAllByRole("link", { name: /Solicitar una demo/i });
     assert.ok(demoLinks.length >= 2);
     assert.ok(demoLinks.some((link) => link.getAttribute("href") === "#solicitar-demo"));

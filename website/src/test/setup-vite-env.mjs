@@ -1,1 +1,1 @@
-globalThis.__VITE_OPERATIONS_APP_URL__ = "http://localhost:8084";
+/** Preload hook for website tests (CSS/env). App URL de test se define por suite si hace falta. */

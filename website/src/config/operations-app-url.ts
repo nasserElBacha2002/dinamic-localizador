@@ -1,4 +1,4 @@
-/** URL base de la app operativa (sin barra final). */
+/** URL base de la app operativa (sin barra final). Vacío = mismo origen (producción unificada). */
 export function getOperationsAppUrl(): string {
   const fromEnv = import.meta.env?.VITE_OPERATIONS_APP_URL?.trim();
   if (fromEnv) {
@@ -8,9 +8,14 @@ export function getOperationsAppUrl(): string {
   if (fromTest?.trim()) {
     return fromTest.trim().replace(/\/$/, "");
   }
-  return "http://localhost:8084";
+  return "";
 }
 
+/** Enlace a login: relativo `/login` en mismo dominio; absoluto solo si VITE_OPERATIONS_APP_URL está definida (dev). */
 export function getOperationsLoginUrl(): string {
-  return `${getOperationsAppUrl()}/login`;
+  const base = getOperationsAppUrl();
+  if (!base) {
+    return "/login";
+  }
+  return `${base}/login`;
 }

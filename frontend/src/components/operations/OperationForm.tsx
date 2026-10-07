@@ -72,7 +72,7 @@ function ShiftOvernightBadge({ startTime, endTime }: { startTime?: string; endTi
     return null;
   }
   return (
-    <Badge color="violet" variant="light" w="fit-content">
+    <Badge color="brand" variant="light" w="fit-content">
       Turno nocturno (cruza medianoche)
     </Badge>
   );

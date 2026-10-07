@@ -1,0 +1,12 @@
+.recommendationItem {
+  background: var(--mantine-color-ai-0);
+  border: 1px solid var(--mantine-color-gray-3);
+  border-left: 3px solid var(--mantine-color-ai-6);
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-sm);
+}
+
+.recommendationItem:hover {
+  border-color: var(--mantine-color-gray-4);
+  background: var(--mantine-color-gray-1);
+}

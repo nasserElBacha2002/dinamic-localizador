@@ -341,7 +341,7 @@ export function AttendanceListPage() {
     <>
       <PageHeader
         title="Asistencias"
-        description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
+        description={`Seguimiento de cumplimiento, incidencias y registros incompletos en ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canExport || canUseBotSimulator ? (
             <ActionMenu
@@ -451,7 +451,7 @@ export function AttendanceListPage() {
 
         <FilterBar.Item>
           <FilterSelect
-            label="Validación"
+            label="Estado de validación"
             value={table.state.validationStatus}
             onChange={(nextValue) => {
               table.setField("validationStatus", nextValue);
@@ -513,8 +513,8 @@ export function AttendanceListPage() {
         getRowKey={(row) => attendanceListRowKey(row)}
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
-        emptyTitle="No hay asistencias esperadas"
-        emptyDescription="Ajustá los filtros o esperá nuevas jornadas / registros de asistencia."
+        emptyTitle="Sin registros en este período"
+        emptyDescription="Ajustá los filtros o esperá nuevas jornadas con actividad de asistencia."
         onRowClick={(row) =>
           navigateWithListContext(
             navigate,

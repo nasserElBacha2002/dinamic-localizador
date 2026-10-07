@@ -1,6 +1,6 @@
-import { Badge, Group, Paper, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import { Badge, Group, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
 import { useNavigate } from "react-router";
-import { MetricCard } from "../../design-system";
+import { MetricCard, SectionCard } from "../../design-system";
 import type { AttendanceStatisticsSummary } from "../../types/statistics";
 import { formatPercent } from "../../utils/export";
 import {
@@ -37,28 +37,20 @@ export function OperationalIncidentsPanel({
 
   if (!isLoading && incidentsUnavailable) {
     return (
-      <Paper withBorder p="md" radius="md">
-        <Stack gap="sm">
-          <Text fw={600}>Operaciones con incidencias</Text>
-          <Text size="sm" c="dimmed">
-            Datos no disponibles
-          </Text>
-        </Stack>
-      </Paper>
+      <SectionCard title="Incidencias en operaciones">
+        <Text size="sm" c="dimmed">
+          Datos no disponibles para el período seleccionado.
+        </Text>
+      </SectionCard>
     );
   }
 
   return (
-    <Paper withBorder p="md" radius="md">
-      <Stack gap="md">
-        <Group justify="space-between" align="flex-start">
-          <div>
-            <Text fw={600}>Operaciones con incidencias</Text>
-            <Text size="sm" c="dimmed">
-              Los subtotales pueden superponerse: una misma operación puede tener más de un tipo
-              de incidencia. El total cuenta operaciones únicas.
-            </Text>
-          </div>
+    <SectionCard
+      title="Incidencias en operaciones"
+      description="Los subtotales pueden superponerse: una misma operación puede tener más de un tipo de incidencia. El total cuenta operaciones únicas."
+      action={
+        <Group gap="xs" wrap="wrap" justify="flex-end">
           {incidents?.coverageReliableFrom && !incidents.coverageEventsReliableHistorically ? (
             <Tooltip label="Los eventos de cobertura son confiables desde esta fecha">
               <Badge variant="light" color="gray">
@@ -78,11 +70,14 @@ export function OperationalIncidentsPanel({
             </Badge>
           )}
         </Group>
-
+      }
+    >
+      <Stack gap="md">
         <MetricCard
           title="Operaciones afectadas"
           loading={isLoading}
           value={isLoading ? "…" : affected}
+          valueColor={affected > 0 ? "warning.7" : undefined}
           description={
             evaluable > 0
               ? `${formatPercent(rate)} sobre ${evaluable} operaciones evaluables`
@@ -113,6 +108,9 @@ export function OperationalIncidentsPanel({
             title="Sin confirmar"
             loading={isLoading}
             value={incidents?.operationsWithUnconfirmedAssignments ?? 0}
+            valueColor={
+              (incidents?.operationsWithUnconfirmedAssignments ?? 0) > 0 ? "warning.7" : undefined
+            }
             description={`${incidents?.notConfirmedBeforeStart ?? 0} asignaciones · ${incidents?.notConfirmedAndAbsent ?? 0} también ausentes`}
             onClick={() => go("not_confirmed")}
             aria-label="Ver asignaciones sin confirmar"
@@ -121,6 +119,9 @@ export function OperationalIncidentsPanel({
             title="Fichaje incompleto"
             loading={isLoading}
             value={incidents?.operationsWithIncompletePunches ?? 0}
+            valueColor={
+              (incidents?.operationsWithIncompletePunches ?? 0) > 0 ? "warning.7" : undefined
+            }
             description={`${incidents?.incompleteWorkdays ?? 0} jornadas · sin llegada ${incidents?.missingCheckIn ?? 0} · sin salida ${incidents?.missingCheckOut ?? 0} · sin fichaje ${incidents?.noPunch ?? 0}`}
             onClick={() => go("incomplete_punches")}
             aria-label="Ver fichajes incompletos"
@@ -132,6 +133,6 @@ export function OperationalIncidentsPanel({
           cuentan reemplazos explícitos (ausencia con ASSIGN_REPLACEMENT o cobertura manual marcada).
         </Text>
       </Stack>
-    </Paper>
+    </SectionCard>
   );
 }

@@ -29,6 +29,7 @@ import {
 } from "../../utils/work-team-assignment-ui";
 import type { AssignEmployeesResult } from "./OperationIndividualAssignmentPanel";
 import { OperationAiTeamRecommendationPanel } from "./OperationAiTeamRecommendationPanel";
+import recommendationClasses from "./operation-ai-recommendation.module.css";
 
 const DEFAULT_VISIBLE = 5;
 const FETCH_LIMIT = 10;
@@ -160,7 +161,6 @@ export function OperationAiRecommendationsPanel({
         <Stack gap="sm">
           <Button
             variant="subtle"
-            color="ai"
             size="xs"
             w="fit-content"
             onClick={() => setAiMode("people")}
@@ -185,7 +185,7 @@ export function OperationAiRecommendationsPanel({
               Ranking de personas según el equipo actual. Elegí a quién agregar, o pedí un equipo
               completo.
             </Text>
-            <Button size="xs" variant="light" color="ai" onClick={() => setAiMode("team")}>
+            <Button size="xs" variant="light" onClick={() => setAiMode("team")}>
               Sugerir equipo completo
             </Button>
           </Group>
@@ -240,7 +240,7 @@ export function OperationAiRecommendationsPanel({
           />
 
           {recommendationsQuery.isPending ? (
-            <Alert color="ai" title="✨ Buscando sugerencias" withCloseButton={false}>
+            <Alert color="gray" title="Buscando sugerencias" withCloseButton={false}>
               Analizando historial y contexto de la operación…
             </Alert>
           ) : null}
@@ -296,19 +296,14 @@ export function OperationAiRecommendationsPanel({
                   <Stack
                     key={item.employee.id}
                     gap="xs"
-                    p="sm"
+                    className={recommendationClasses.recommendationItem}
                     role="listitem"
-                    style={{
-                      background: "var(--mantine-color-ai-0)",
-                      border: "1px solid var(--mantine-color-ai-2)",
-                      borderRadius: "var(--mantine-radius-md)",
-                    }}
                   >
                     <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
                       <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
                         <Group gap="xs" wrap="wrap">
                           <Text fw={600}>{item.employee.name}</Text>
-                          <Badge color="ai" variant="light" size="sm">
+                          <Badge color="gray" variant="light" size="sm">
                             IA
                           </Badge>
                         </Group>
@@ -324,7 +319,6 @@ export function OperationAiRecommendationsPanel({
                       </Stack>
                       <Button
                         size="sm"
-                        color="ai"
                         loading={isAssigning || (assignLoading && assigningId === item.employee.id)}
                         disabled={
                           Boolean(assigningId) ||
@@ -368,7 +362,7 @@ export function OperationAiRecommendationsPanel({
           ) : null}
 
           {!showAll && filtered.length > DEFAULT_VISIBLE ? (
-            <Button variant="subtle" color="ai" onClick={() => setShowAll(true)}>
+            <Button variant="subtle" onClick={() => setShowAll(true)}>
               Ver más ({filtered.length})
             </Button>
           ) : null}

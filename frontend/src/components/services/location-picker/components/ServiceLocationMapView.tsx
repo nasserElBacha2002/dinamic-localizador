@@ -45,7 +45,7 @@ export function ServiceLocationMapView({
           <Badge variant="light" color="red">
             Centro del servicio
           </Badge>
-          <Badge variant="light" color="blue">
+          <Badge variant="light" color="brand">
             Área validada
           </Badge>
         </Group>

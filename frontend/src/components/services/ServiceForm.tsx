@@ -152,8 +152,8 @@ export function ServiceForm({
       <Box className={classes.serviceFormLayout} mt="md">
         <Box className={classes.infoSection}>
           <FormSection
-            title="Información general"
-            description="Datos principales de la ubicación."
+            title="Identidad operativa"
+            description="Nombre, cliente, formato y estado del servicio."
           >
             <FormGrid>
               <RHFTextInput
@@ -194,8 +194,8 @@ export function ServiceForm({
 
         <Box className={classes.geoSection}>
           <FormSection
-            title="Geolocalización"
-            description="Coordenadas y radio usados para validar la asistencia por WhatsApp."
+            title="Ubicación y cobertura"
+            description="Dirección, coordenadas y radio de validación para asistencia."
           >
             <ManualCoordinatesFields
               address={picker.address}

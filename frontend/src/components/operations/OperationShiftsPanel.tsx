@@ -338,7 +338,7 @@ export function OperationShiftsPanel({
                                 {shift.code}
                               </Badge>
                               {current && isOvernightShift(current.startTime, current.endTime) ? (
-                                <Badge size="xs" color="violet" variant="light">
+                                <Badge size="xs" color="brand" variant="light">
                                   Nocturno
                                 </Badge>
                               ) : null}
@@ -570,7 +570,7 @@ export function OperationShiftsPanel({
             </Stack>
           </SimpleGrid>
           {isOvernightShift(versionStart, versionEnd) ? (
-            <Badge color="violet" variant="light" w="fit-content">
+            <Badge color="brand" variant="light" w="fit-content">
               Turno nocturno
             </Badge>
           ) : null}

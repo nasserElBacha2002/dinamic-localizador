@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
   DataTable,
+  EntityIdentity,
   FilterBar,
   mapApiPaginationMeta,
   PageHeader,
@@ -68,7 +69,18 @@ export function WorkTeamsListPage() {
 
   const columns = useMemo<DataTableColumn<WorkTeam>[]>(
     () => [
-      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      {
+        key: "name",
+        header: "Nombre",
+        getValue: (row) => row.name,
+        render: (row) => (
+          <EntityIdentity
+            name={row.name}
+            entityType="collaborator"
+            subtitle={row.description?.trim() || undefined}
+          />
+        ),
+      },
       {
         key: "description",
         header: "Descripción",

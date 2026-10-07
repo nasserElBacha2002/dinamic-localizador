@@ -14,9 +14,9 @@ import {
   LoadingState,
   MetricCard,
   PageHeader,
+  SectionCard,
   StatusBadge,
   type ActionMenuItem,
-  type StatusBadgeTone,
 } from "../../design-system";
 import { EntityLink } from "../../components/entity-link";
 import { OperationTeamSection } from "../../components/operations/OperationTeamSection";
@@ -27,7 +27,6 @@ import {
   useOperationWorkdays,
   useReactivateOperation,
 } from "../../hooks/useOperations";
-import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -51,23 +50,9 @@ import {
 import { operationStatusLabels } from "../../utils/labels";
 import { canAccessModuleRoute } from "../../utils/company-modules";
 import { buildOperationAttendanceHref } from "../../utils/statistics-deep-links";
+import { operationStatusTone } from "../../utils/operation-status-display";
 
 const DEFAULT_OPERATION_TIMEZONE = "America/Argentina/Buenos_Aires";
-
-function operationStatusTone(status: OperationStatus): StatusBadgeTone {
-  switch (status) {
-    case "SCHEDULED":
-      return "info";
-    case "IN_PROGRESS":
-      return "warning";
-    case "COMPLETED":
-      return "success";
-    case "CANCELLED":
-      return "danger";
-    default:
-      return "neutral";
-  }
-}
 
 export function OperationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -234,7 +219,7 @@ export function OperationDetailPage() {
     <>
       <PageHeader
         title={<EntityPageTitle name={serviceDisplayName} entityType="operation" />}
-        description={`${`Detalle de la ${terminology.operation.singular.toLowerCase()}`} · ${formatOperationDetailScheduleTitle(operation)}`}
+        description={`Centro operativo · ${formatOperationDetailScheduleTitle(operation)}`}
         action={
           <ActionMenu
             primary={
@@ -260,54 +245,59 @@ export function OperationDetailPage() {
       />
 
       <Stack gap="lg">
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 6 }} spacing="md">
-          <MetricCard
-            title="Estado"
-            value={
-              <StatusBadge
-                label={operationStatusLabels[operation.status]}
-                tone={operationStatusTone(operation.status)}
-              />
-            }
-            description={operationKindLabel}
-          />
-          <MetricCard
-            title="Modo de horario"
-            value={
-              <StatusBadge
-                label={
-                  (operation.scheduleMode ?? "SINGLE") === "MULTI_SHIFT"
-                    ? "Multi-turno"
-                    : "Horario único"
-                }
-                tone={
-                  (operation.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" ? "info" : "neutral"
-                }
-              />
-            }
-            description="Cómo se organizan los horarios"
-          />
-          <MetricCard
-            title={scheduleMetric.title}
-            value={scheduleMetric.value}
-            description={scheduleMetric.description}
-          />
-          <MetricCard
-            title={terminology.service.singular}
-            value={serviceFieldValue}
-            description={operation.service?.address ?? "Sin dirección"}
-          />
-          <MetricCard
-            title="Colaboradores asignados"
-            value={operation.assignedEmployees.length}
-            description="Dotación actual de la operación"
-          />
-          <MetricCard
-            title="Asistencias registradas"
-            value={operation.attendanceRecordsCount}
-            description={geofenceSummary}
-          />
-        </SimpleGrid>
+        <SectionCard
+          title="Resumen operativo"
+          description="Estado, programación, servicio y dotación de la operación."
+        >
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 6 }} spacing="md">
+            <MetricCard
+              title="Estado de la operación"
+              value={
+                <StatusBadge
+                  label={operationStatusLabels[operation.status]}
+                  tone={operationStatusTone(operation.status)}
+                />
+              }
+              description={operationKindLabel}
+            />
+            <MetricCard
+              title={scheduleMetric.title}
+              value={scheduleMetric.value}
+              description={scheduleMetric.description}
+            />
+            <MetricCard
+              title={terminology.service.singular}
+              value={serviceFieldValue}
+              description={operation.service?.address ?? "Sin dirección"}
+            />
+            <MetricCard
+              title="Modo de horario"
+              value={
+                <StatusBadge
+                  label={
+                    (operation.scheduleMode ?? "SINGLE") === "MULTI_SHIFT"
+                      ? "Multi-turno"
+                      : "Horario único"
+                  }
+                  tone={
+                    (operation.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" ? "info" : "neutral"
+                  }
+                />
+              }
+              description="Organización de turnos"
+            />
+            <MetricCard
+              title="Dotación asignada"
+              value={operation.assignedEmployees.length}
+              description="Colaboradores asignados a la operación"
+            />
+            <MetricCard
+              title="Asistencias"
+              value={operation.attendanceRecordsCount}
+              description={geofenceSummary}
+            />
+          </SimpleGrid>
+        </SectionCard>
 
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>

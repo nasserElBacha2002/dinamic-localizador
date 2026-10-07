@@ -1,0 +1,101 @@
+/**
+ * Configuración — superficies y jerarquía (Dinamic Operations).
+ * Usa escalas Mantine (brand = ink, accent = naranja, gray = neutros).
+ */
+
+.page {
+  --settings-ink: var(--mantine-color-brand-7);
+  --settings-muted: var(--mantine-color-gray-6);
+  --settings-border: var(--mantine-color-gray-3);
+  --settings-surface-soft: var(--mantine-color-gray-0);
+}
+
+.tabList {
+  border-bottom: 1px solid var(--settings-border, var(--mantine-color-gray-3));
+  gap: var(--mantine-spacing-xs);
+}
+
+.tab {
+  color: var(--settings-muted, var(--mantine-color-gray-6));
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--settings-ink, var(--mantine-color-brand-7));
+  background: var(--settings-surface-soft, var(--mantine-color-gray-0));
+}
+
+.tab[data-active] {
+  color: var(--settings-ink, var(--mantine-color-brand-7));
+  border-bottom-color: var(--mantine-color-accent-6);
+  font-weight: 600;
+}
+
+.readOnlyAlert {
+  border-color: var(--mantine-color-gray-3);
+  background: var(--mantine-color-gray-0);
+}
+
+.summaryCard {
+  background: var(--settings-surface-soft, var(--mantine-color-gray-0));
+  border-color: var(--settings-border, var(--mantine-color-gray-3));
+  border-left: 3px solid var(--settings-ink, var(--mantine-color-brand-7));
+  height: 100%;
+}
+
+.summaryTitle {
+  color: var(--settings-ink, var(--mantine-color-brand-7));
+  font-weight: 600;
+}
+
+.summaryDescription {
+  color: var(--settings-muted, var(--mantine-color-gray-6));
+}
+
+.summaryLabel {
+  min-width: 120px;
+  color: var(--settings-muted, var(--mantine-color-gray-6));
+}
+
+.summaryValue {
+  flex: 1;
+  color: var(--settings-ink, var(--mantine-color-brand-7));
+  font-weight: 500;
+}
+
+.chip {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 500;
+  background: var(--mantine-color-surface, #fff);
+  color: var(--settings-ink, var(--mantine-color-brand-7));
+  border: 1px solid var(--settings-border, var(--mantine-color-gray-3));
+}
+
+.dialogSubtitle {
+  color: var(--settings-muted, var(--mantine-color-gray-6));
+  line-height: 1.45;
+}
+
+.dialogSection {
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--settings-border, var(--mantine-color-gray-3));
+  border-radius: var(--mantine-radius-md);
+  background: var(--settings-surface-soft, var(--mantine-color-gray-0));
+}
+
+.sectionTitle {
+  color: var(--settings-ink, var(--mantine-color-brand-7));
+  font-weight: 600;
+}
+
+.sectionDescription {
+  color: var(--settings-muted, var(--mantine-color-gray-6));
+}
+
+.sectionDivider {
+  border-color: var(--settings-border, var(--mantine-color-gray-3));
+}

@@ -190,7 +190,7 @@ export function FilterDateRangeInput({
                 style={{
                   borderRadius: "var(--mantine-radius-sm)",
                   backgroundColor:
-                    value.preset === preset ? "var(--mantine-color-brand-light)" : undefined,
+                    value.preset === preset ? "var(--mantine-color-accent-0)" : undefined,
                 }}
               >
                 <Text size="sm">{getDateRangePresetLabel(preset)}</Text>
@@ -208,7 +208,7 @@ export function FilterDateRangeInput({
                     borderRadius: "var(--mantine-radius-sm)",
                     backgroundColor:
                       customPanelOpen || value.preset === "custom"
-                        ? "var(--mantine-color-brand-light)"
+                        ? "var(--mantine-color-accent-0)"
                         : undefined,
                   }}
                 >

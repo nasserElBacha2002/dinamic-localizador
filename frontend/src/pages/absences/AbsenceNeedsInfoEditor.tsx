@@ -126,7 +126,7 @@ export function AbsenceNeedsInfoEditor({
   return (
     <SectionCard title="Corrección administrativa (requiere información)">
       <Stack gap="md">
-        <Alert color="blue">
+        <Alert color="info" variant="light">
           Corregí los datos como administrador y usá Reenviar para volver a dejar la solicitud
           pendiente de revisión.
         </Alert>

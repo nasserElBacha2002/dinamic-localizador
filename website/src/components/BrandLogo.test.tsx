@@ -16,14 +16,14 @@ describe("BrandLogo", () => {
     cleanup();
   });
 
-  it("renderiza lockup horizontal SVG final", async () => {
+  it("renderiza lockup horizontal PNG final", async () => {
     ({ renderPage } = await import("../test/render-page"));
     const { getByLabelText } = renderPage(<BrandLogo variant="horizontal" />);
     const logo = getByLabelText("Dinamic Operations");
     assert.ok(logo.querySelector(`img[src="${BRAND_LOGO_HORIZONTAL_SRC}"]`));
   });
 
-  it("renderiza isotipo SVG final", async () => {
+  it("renderiza isotipo PNG final", async () => {
     ({ renderPage } = await import("../test/render-page"));
     const { getByLabelText } = renderPage(<BrandLogo variant="isotype" />);
     assert.ok(

@@ -2,43 +2,45 @@ import { createTheme, type MantineColorsTuple } from "@mantine/core";
 import { BREAKPOINTS } from "./breakpoints";
 import { designTokens } from "./tokens";
 
+/** Dark ink — structure, trust, default links on light surfaces. */
 const brand: MantineColorsTuple = [
-  designTokens.colors.primaryLight,
-  "#D4E6FD",
-  "#A8CDFB",
-  "#7BB3F8",
-  "#4F9AF6",
-  "#2680F4",
-  designTokens.colors.primary,
-  designTokens.colors.primaryHover,
-  "#0C52B0",
-  "#0A418E",
+  designTokens.colors.inkLight,
+  "#E3E7EB",
+  "#CDD4DA",
+  "#B4BEC7",
+  "#8B98A5",
+  designTokens.colors.secondary,
+  "#3D5160",
+  designTokens.colors.ink,
+  designTokens.colors.inkHover,
+  "#081018",
 ];
 
 const secondary: MantineColorsTuple = [
   designTokens.colors.secondaryLight,
-  "#DDE5F0",
-  "#C5D1E3",
-  "#AEBDD6",
-  "#96A9C9",
-  "#7E95BC",
+  "#E9ECEF",
+  "#DDE2E6",
+  "#C5CDD4",
+  "#A8B2BC",
+  "#8B98A5",
   designTokens.colors.secondary,
-  "#4F6585",
-  "#3F516A",
-  "#2F3D50",
+  "#5A6570",
+  "#4A5560",
+  "#3A424A",
 ];
 
+/** Orange accent — primary actions and active nav emphasis. */
 const accent: MantineColorsTuple = [
-  designTokens.colors.tertiaryLight,
-  "#FFE4CC",
-  "#FFD1A8",
-  "#FFBE85",
-  "#FFAB61",
-  "#E87400",
-  designTokens.colors.tertiary,
-  "#A44A00",
-  "#833900",
-  "#622B00",
+  designTokens.colors.accentLight,
+  "#FFE8D6",
+  "#FFD4B3",
+  "#FFBB85",
+  "#FF9A4D",
+  "#FF7F1F",
+  designTokens.colors.accent,
+  designTokens.colors.accentHover,
+  "#CC5500",
+  "#993F00",
 ];
 
 const success: MantineColorsTuple = [
@@ -68,48 +70,61 @@ const danger: MantineColorsTuple = [
 ];
 
 const warning: MantineColorsTuple = [
-  designTokens.colors.tertiaryLight,
-  "#FFE4CC",
-  "#FFD1A8",
-  "#FFBE85",
-  "#FFAB61",
-  "#E87400",
-  designTokens.colors.tertiary,
-  "#A44A00",
-  "#833900",
-  "#622B00",
+  "#fffbeb",
+  "#fef3c7",
+  "#fde68a",
+  "#fcd34d",
+  "#fbbf24",
+  "#f59e0b",
+  designTokens.colors.warning,
+  "#b45309",
+  "#92400e",
+  "#78350f",
 ];
 
 const gray: MantineColorsTuple = [
-  "#F6F8FC",
-  "#EEF1F6",
-  "#E2E6EE",
-  "#D7DDE8",
-  "#C5CBD6",
-  "#A8AEB8",
+  designTokens.colors.background,
+  designTokens.colors.inkLight,
+  "#E3E7EB",
+  designTokens.colors.border,
+  "#C5CDD4",
+  "#A8B2BC",
   designTokens.colors.neutral,
-  "#5C6068",
-  "#43464D",
-  "#2B2D32",
+  "#5A6570",
+  "#3D4F5F",
+  designTokens.colors.ink,
 ];
 
-/** Violet / lavender — AI suggestions only; brand blue stays primary. */
+const info: MantineColorsTuple = [
+  "#f0f9ff",
+  "#e0f2fe",
+  "#bae6fd",
+  "#7dd3fc",
+  "#38bdf8",
+  "#0ea5e9",
+  designTokens.colors.info,
+  "#0369a1",
+  "#075985",
+  "#0c4a6e",
+];
+
+/** Integrated slate for suggestions (not a separate violet product identity). */
 const ai: MantineColorsTuple = [
   designTokens.colors.aiLight,
-  "#EDE9FE",
-  "#DDD6FE",
-  "#C4B5FD",
-  "#A78BFA",
+  "#E9ECEF",
+  "#DDE2E6",
+  "#C5CDD4",
+  "#A8B2BC",
   designTokens.colors.aiMuted,
   designTokens.colors.ai,
   designTokens.colors.aiHover,
-  "#5B21B6",
-  "#4C1D95",
+  "#1F2D38",
+  designTokens.colors.ink,
 ];
 
 export const mantineTheme = createTheme({
   breakpoints: { ...BREAKPOINTS },
-  primaryColor: "brand",
+  primaryColor: "accent",
   colors: {
     brand,
     secondary,
@@ -118,6 +133,7 @@ export const mantineTheme = createTheme({
     danger,
     warning,
     gray,
+    info,
     ai,
   },
   fontFamily: designTokens.fontFamily,
@@ -193,11 +209,13 @@ export const mantineTheme = createTheme({
           backgroundColor: designTokens.colors.background,
         },
         navbar: {
-          borderRight: `1px solid ${designTokens.colors.border}`,
+          borderRight: `1px solid ${designTokens.colors.inkLight}`,
+          backgroundColor: designTokens.colors.surface,
         },
         header: {
-          borderBottom: `1px solid ${designTokens.colors.border}`,
+          borderBottom: `1px solid ${designTokens.colors.inkLight}`,
           backgroundColor: designTokens.colors.surface,
+          color: designTokens.colors.ink,
         },
       },
     },

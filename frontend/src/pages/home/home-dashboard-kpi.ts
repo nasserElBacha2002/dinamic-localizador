@@ -36,9 +36,9 @@ export function resolveSecondaryKpiTone(key: string, numericValue: number): Home
 }
 
 export const homeKpiToneColor: Record<HomeKpiVisualTone, string | undefined> = {
-  neutral: "dimmed",
-  info: "blue",
-  success: "green",
-  warning: "orange",
-  danger: "red",
+  neutral: "brand.7",
+  info: "info.7",
+  success: "success.7",
+  warning: "warning.7",
+  danger: "danger.7",
 };

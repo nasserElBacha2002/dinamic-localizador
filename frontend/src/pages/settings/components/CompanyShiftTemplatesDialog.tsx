@@ -12,7 +12,9 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert, ResponsiveModal } from "../../../design-system";
+import { FormErrorAlert, StatusBadge } from "../../../design-system";
+import classes from "../settings-visual.module.css";
+import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
 import {
   useCreateShiftTemplate,
   useDeactivateShiftTemplate,
@@ -154,7 +156,7 @@ export function CompanyShiftTemplatesDialog({
   };
 
   return (
-    <ResponsiveModal
+    <SettingsResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Plantillas de turnos"
@@ -169,13 +171,15 @@ export function CompanyShiftTemplatesDialog({
       }
     >
       <Stack gap="md">
-        <Text size="sm" c="dimmed">
+        <Text size="sm" className={classes.dialogSubtitle}>
           Definí turnos reutilizables (código, nombre y horario). Editar una plantilla no
           reescribe turnos históricos ya creados en operaciones.
         </Text>
 
         {!canUpdate ? (
-          <Alert color="blue">No tenés permisos para gestionar plantillas de turnos.</Alert>
+          <Alert color="gray" variant="light">
+            No tenés permisos para gestionar plantillas de turnos.
+          </Alert>
         ) : null}
 
         <FormErrorAlert message={submitError} />
@@ -272,7 +276,7 @@ export function CompanyShiftTemplatesDialog({
               </SimpleGrid>
             </Stack>
             {isOvernightShift(form.startTime, form.endTime) ? (
-              <Badge color="violet" variant="light" w="fit-content">
+              <Badge color="brand" variant="light" w="fit-content">
                 Turno nocturno (cruza medianoche)
               </Badge>
             ) : null}
@@ -333,19 +337,17 @@ export function CompanyShiftTemplatesDialog({
                             {formatTimeRange(template.startTime, template.endTime)}
                           </Text>
                           {isOvernightShift(template.startTime, template.endTime) ? (
-                            <Badge size="xs" color="violet" variant="light">
+                            <Badge size="xs" color="brand" variant="light">
                               Nocturno
                             </Badge>
                           ) : null}
                         </Group>
                       </Table.Td>
                       <Table.Td>
-                        <Badge
-                          color={template.isActive ? "green" : "gray"}
-                          variant="light"
-                        >
-                          {template.isActive ? "Activa" : "Inactiva"}
-                        </Badge>
+                        <StatusBadge
+                          label={template.isActive ? "Activa" : "Inactiva"}
+                          tone={template.isActive ? "success" : "neutral"}
+                        />
                       </Table.Td>
                       <Table.Td>
                         {canUpdate ? (
@@ -394,6 +396,6 @@ export function CompanyShiftTemplatesDialog({
           )}
         </Stack>
       </Stack>
-    </ResponsiveModal>
+    </SettingsResponsiveModal>
   );
 }

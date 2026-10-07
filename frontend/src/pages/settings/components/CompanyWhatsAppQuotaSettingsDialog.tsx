@@ -9,7 +9,6 @@ import {
   Stack,
   Switch,
   Text,
-  Title,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { FormGrid } from "../../../design-system";
@@ -27,6 +26,7 @@ import {
   whatsappQuotaFormEqual,
 } from "../../../utils/whatsapp-quota-settings";
 import { SettingsDialog } from "./SettingsDialog";
+import { SettingsDialogSection } from "./SettingsDialogSection";
 import { SettingsFormField } from "./SettingsFormField";
 
 const MODE_OPTIONS = [
@@ -139,9 +139,8 @@ export function CompanyWhatsAppQuotaSettingsDialog({
         size="xl"
       >
         <Stack gap="lg">
-          <Stack gap="sm">
-            <Title order={5}>Estado del control</Title>
-            <Alert color="blue" variant="light">
+          <SettingsDialogSection title="Estado del control">
+            <Alert color="info" variant="light">
               <Text size="sm">
                 <strong>Modo global:</strong> {settings.globalMode}
                 {" · "}
@@ -202,18 +201,19 @@ export function CompanyWhatsAppQuotaSettingsDialog({
             </FormGrid>
 
             <Group gap="xs">
-              <Badge variant="light">Actualizado: {new Date(settings.updatedAt).toLocaleString()}</Badge>
+              <Badge color="gray" variant="light">
+                Actualizado: {new Date(settings.updatedAt).toLocaleString()}
+              </Badge>
               {settings.updatedBy ? (
-                <Badge variant="outline">Por: {settings.updatedBy}</Badge>
+                <Badge color="gray" variant="outline">Por: {settings.updatedBy}</Badge>
               ) : null}
             </Group>
-          </Stack>
+          </SettingsDialogSection>
 
-          <Stack gap="sm">
-            <Title order={5}>Límites por empleado</Title>
-            <Text size="xs" c="dimmed">
-              Cero bloquea por completo ese control. Para desactivar todas las cuotas usá modo OFF.
-            </Text>
+          <SettingsDialogSection
+            title="Límites por empleado"
+            description="Cero bloquea por completo ese control. Para desactivar todas las cuotas usá modo OFF."
+          >
             <FormGrid columns={{ base: 1, md: 2 }}>
               <SettingsFormField
                 label="Turnos diarios"
@@ -312,10 +312,9 @@ export function CompanyWhatsAppQuotaSettingsDialog({
                 />
               </SettingsFormField>
             </FormGrid>
-          </Stack>
+          </SettingsDialogSection>
 
-          <Stack gap="sm">
-            <Title order={5}>Límite general de la empresa</Title>
+          <SettingsDialogSection title="Límite general de la empresa">
             <SettingsFormField
               label="Respuestas salientes diarias (empresa)"
               description={`Tope compartido entre todos los empleados. Máx. ${settings.limits.maxCompanyDailyOutbounds}.`}
@@ -332,7 +331,7 @@ export function CompanyWhatsAppQuotaSettingsDialog({
                 aria-label="Respuestas salientes diarias de la empresa"
               />
             </SettingsFormField>
-          </Stack>
+          </SettingsDialogSection>
 
           {validationErrors.length > 0 ? (
             <Alert color="red" title="Revisá los valores">
@@ -347,8 +346,7 @@ export function CompanyWhatsAppQuotaSettingsDialog({
           ) : null}
 
           {shadow ? (
-            <Stack gap="xs">
-              <Title order={5}>Resumen SHADOW ({shadow.windowDays} días)</Title>
+            <SettingsDialogSection title={`Resumen SHADOW (${shadow.windowDays} días)`}>
               <Text size="sm">
                 Evaluados: {shadow.turnsEvaluated} · Would admit: {shadow.wouldAdmit} · Would
                 reject: {shadow.wouldReject} · Empleados: {shadow.employeesAffected} · Outbounds
@@ -363,7 +361,7 @@ export function CompanyWhatsAppQuotaSettingsDialog({
                   Sin eventos SHADOW en la ventana.
                 </Text>
               )}
-            </Stack>
+            </SettingsDialogSection>
           ) : null}
         </Stack>
       </SettingsDialog>

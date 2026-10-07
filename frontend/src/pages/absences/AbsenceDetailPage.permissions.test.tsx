@@ -143,7 +143,7 @@ describe("AbsenceDetailPage permissions", () => {
     );
 
     await waitFor(() => {
-      assert.ok(view.getByText("Detalle de solicitud de ausencia"));
+      assert.ok(view.getByText("Detalle de ausencia"));
     });
     assert.equal(view.queryByRole("button", { name: /^Aprobar$/i }), null);
     assert.equal(view.queryByRole("button", { name: /Más acciones/i }), null);

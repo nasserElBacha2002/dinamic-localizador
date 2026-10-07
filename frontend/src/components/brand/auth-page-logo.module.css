@@ -1,0 +1,17 @@
+.root {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.rootReverso img {
+  height: 5rem;
+  max-height: 5rem;
+  width: auto;
+}
+
+.rootHorizontal img {
+  height: 3rem;
+  max-height: 3rem;
+  width: auto;
+}

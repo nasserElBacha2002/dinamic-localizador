@@ -92,7 +92,7 @@ export function ServiceDetailPage() {
     <Stack gap="md">
       <PageHeader
         title={<EntityPageTitle name={service.name} entityType="service" />}
-        description={`Detalle de ${terminology.service.singular.toLowerCase()}`}
+        description={`Unidad operativa · ubicación y perímetro de validación`}
         action={
           <ActionMenu
             primary={primaryAction}
@@ -102,7 +102,10 @@ export function ServiceDetailPage() {
         }
       />
 
-      <SectionCard title="Información general">
+      <SectionCard
+        title="Identidad operativa"
+        description="Nombre, formato y estado del servicio."
+      >
         <DetailFieldGrid
           fields={[
             { label: "Nombre", value: service.name },
@@ -116,31 +119,47 @@ export function ServiceDetailPage() {
                 />
               ),
             },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="Ubicación" description="Dirección y referencia territorial.">
+        <DetailFieldGrid
+          fields={[
             {
               label: "Dirección",
               value: safeText(service.address),
-              span: { base: 12, sm: 6, lg: 8 },
+              span: { base: 12, sm: 8 },
             },
             { label: "Barrio", value: safeText(service.neighborhood) },
             { label: "Localidad", value: safeText(service.locality) },
             {
               label: "Coordenadas",
               value: `${service.latitude}, ${service.longitude}`,
-              span: { base: 12, sm: 6, lg: 4 },
+              span: { base: 12, sm: 6 },
             },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Perímetro de validación"
+        description="Geocerca y radio usados para validar asistencia."
+      >
+        <DetailFieldGrid
+          fields={[
             {
               label: "Radio permitido",
               value: `${service.allowedRadiusMeters} m`,
             },
           ]}
         />
+        <ServiceLocationMapView
+          latitude={service.latitude}
+          longitude={service.longitude}
+          allowedRadiusMeters={service.allowedRadiusMeters}
+        />
       </SectionCard>
-
-      <ServiceLocationMapView
-        latitude={service.latitude}
-        longitude={service.longitude}
-        allowedRadiusMeters={service.allowedRadiusMeters}
-      />
     </Stack>
   );
 }

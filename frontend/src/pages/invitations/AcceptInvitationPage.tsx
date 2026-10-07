@@ -18,6 +18,7 @@ import { Controller, useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
 import { acceptInvitation, declineInvitation, previewInvitation } from "../../api/invitations.api";
+import { AuthPageLogo } from "../../components/brand/AuthPageLogo";
 import { FormErrorAlert, LoadingState } from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompany } from "../../hooks/useCompany";
@@ -359,7 +360,7 @@ export function AcceptInvitationPage() {
         ) : null}
 
         {preview.userExists && !isAuthenticated ? (
-          <Alert color="blue" title="Ya tenés cuenta">
+          <Alert color="info" variant="light" title="Ya tenés cuenta">
             <Stack gap="xs">
               <Text size="sm">
                 Iniciá sesión con {preview.email} para aceptar o rechazar el acceso a{" "}
@@ -413,7 +414,7 @@ export function AcceptInvitationPage() {
         <Box className={classes.brandPanel}>
           <Stack gap="lg" className={classes.brandContent}>
             <div>
-              <Text className={classes.brandEyebrow}>Dinamic Attendance</Text>
+              <AuthPageLogo onDark />
               <Title order={2} className={classes.brandTitle}>
                 Sumate al equipo operativo de tu empresa.
               </Title>
@@ -424,11 +425,9 @@ export function AcceptInvitationPage() {
         <Box className={classes.formPanel}>
           <Stack w="100%" maw={420} gap="md">
             <div className={classes.mobileBrand}>
-              <Text className={classes.brandEyebrow} c="brand" fw={600}>
-                Dinamic Attendance
-              </Text>
+              <AuthPageLogo />
             </div>
-            <Paper className={classes.formCard} radius="lg" withBorder shadow="md" p="xl">
+            <Paper className={classes.formCard} radius="lg" withBorder p="xl">
               {renderBody()}
             </Paper>
           </Stack>

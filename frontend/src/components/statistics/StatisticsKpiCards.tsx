@@ -36,6 +36,27 @@ function formatDelta(delta: PeriodMetricDelta | undefined, higherIsWorse = false
   return `vs período ant.: ${sign}${delta.absoluteDelta}${pct} · ${sense}`;
 }
 
+function kpiValueColor(key: string, numericValue: number): string | undefined {
+  if (numericValue === 0 && key !== "attendanceRate" && key !== "punctualityRate" && key !== "coverageRate") {
+    return "dimmed";
+  }
+  switch (key) {
+    case "absent":
+    case "geofence":
+      return numericValue > 0 ? "danger.7" : undefined;
+    case "late":
+    case "early":
+    case "open":
+    case "pending":
+    case "incompleteCoverage":
+      return numericValue > 0 ? "warning.7" : undefined;
+    case "present":
+      return numericValue > 0 ? "success.7" : undefined;
+    default:
+      return undefined;
+  }
+}
+
 function formatRateWithVolume(rate: number, numerator: number, denominator: number): string {
   if (denominator <= 0) {
     return "—";
@@ -57,24 +78,28 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     key: string;
     label: string;
     value: string | number;
+    numericValue: number;
     description?: string;
     onClick?: () => void;
     ariaLabel?: string;
   }> = [
     {
       key: "scheduled",
-      label: "Jornadas consolidadas / programadas",
+      label: "Jornadas programadas",
+      numericValue: summary?.scheduledWorkdays ?? 0,
       value: summary?.scheduledWorkdays ?? 0,
       description: `Requeridas: ${summary?.attendanceRequiredWorkdays ?? 0} · Canceladas: ${summary?.cancelledWorkdays ?? 0}`,
     },
     {
       key: "present",
       label: "Presentes",
+      numericValue: summary?.presentWorkdays ?? 0,
       value: summary?.presentWorkdays ?? 0,
     },
     {
       key: "absent",
       label: "Ausencias no justificadas",
+      numericValue: summary?.absentWorkdays ?? 0,
       value: summary?.absentWorkdays ?? 0,
       description: formatDelta(summary?.comparison?.absenceRate, true),
       onClick: () => go("unjustified_absence"),
@@ -83,17 +108,20 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "justified",
       label: "Justificadas",
+      numericValue: summary?.justifiedWorkdays ?? 0,
       value: summary?.justifiedWorkdays ?? 0,
     },
     {
       key: "expected",
       label: "Pendientes / esperadas",
+      numericValue: summary?.expectedOpenWorkdays ?? 0,
       value: summary?.expectedOpenWorkdays ?? 0,
       description: "No cuentan como ausencias ni en presentismo",
     },
     {
       key: "attendanceRate",
       label: "Presentismo",
+      numericValue: presentismoDenom > 0 ? summary?.attendanceRate ?? 0 : 0,
       value: formatRateWithVolume(
         summary?.attendanceRate ?? 0,
         summary?.presentWorkdays ?? 0,
@@ -104,6 +132,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "punctualityRate",
       label: "Puntualidad",
+      numericValue: punctualityDenom > 0 ? summary?.punctualityRate ?? 0 : 0,
       value: formatRateWithVolume(
         summary?.punctualityRate ?? 0,
         summary?.onTimeWorkdays ?? 0,
@@ -114,6 +143,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "coverageRate",
       label: "Cobertura consolidada",
+      numericValue: presentismoDenom > 0 ? summary?.coverageRate ?? 0 : 0,
       value: formatRateWithVolume(
         summary?.coverageRate ?? 0,
         summary?.presentWorkdays ?? 0,
@@ -122,7 +152,8 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     },
     {
       key: "incompleteCoverage",
-      label: "Operaciones con cobertura de plantilla incompleta",
+      label: "Cobertura de plantilla incompleta",
+      numericValue: summary?.incompleteCoverageOperations ?? 0,
       value: summary?.incompleteCoverageOperations ?? 0,
       onClick: () => go("incomplete_coverage"),
       ariaLabel: "Ver operaciones con cobertura de plantilla incompleta",
@@ -131,6 +162,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "open",
       label: "Jornadas sin cierre",
+      numericValue: summary?.openAttendanceWorkdays ?? 0,
       value: summary?.openAttendanceWorkdays ?? 0,
       description: formatDelta(summary?.comparison?.openAttendanceRate, true),
       onClick: () => go("open_attendance"),
@@ -139,6 +171,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "geofence",
       label: "Fuera de geocerca",
+      numericValue: summary?.outsideGeofenceCount ?? 0,
       value: summary?.outsideGeofenceCount ?? 0,
       description: formatDelta(summary?.comparison?.outsideGeofenceRate, true),
       onClick: () => go("outside_geofence"),
@@ -147,6 +180,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "pending",
       label: "Pendiente de revisión",
+      numericValue: summary?.pendingReviewCount ?? 0,
       value: summary?.pendingReviewCount ?? 0,
       onClick: () => go("pending_review"),
       ariaLabel: "Ver pendientes de revisión",
@@ -154,6 +188,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "late",
       label: "Llegadas tarde",
+      numericValue: summary?.lateWorkdays ?? 0,
       value: summary?.lateWorkdays ?? 0,
       onClick: () => go("late_arrival"),
       ariaLabel: "Ver llegadas tarde",
@@ -161,6 +196,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "early",
       label: "Salidas tempranas",
+      numericValue: summary?.earlyDepartureWorkdays ?? 0,
       value: summary?.earlyDepartureWorkdays ?? 0,
       onClick: () => go("early_departure"),
       ariaLabel: "Ver salidas tempranas",
@@ -168,6 +204,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     {
       key: "hours",
       label: "Horas trabajadas",
+      numericValue: summary?.workedMinutes ?? 0,
       value: formatDurationFromMinutes(summary?.workedMinutes ?? 0),
       description: summary?.hoursDataIncomplete
         ? "Dato parcial: hay jornadas sin cierre"
@@ -185,6 +222,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
           title={item.label}
           loading={isLoading}
           value={item.value}
+          valueColor={kpiValueColor(item.key, item.numericValue)}
           description={item.description}
           onClick={item.onClick}
           aria-label={item.ariaLabel}

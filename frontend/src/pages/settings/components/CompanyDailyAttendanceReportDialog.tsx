@@ -200,7 +200,7 @@ export function CompanyDailyAttendanceReportDialog({
       }
     >
       <Stack gap="md">
-        <Alert color="blue">
+        <Alert color="gray" variant="light">
           Resume las jornadas del día anterior (D-1) en la zona horaria de la empresa. No reemplaza
           las alertas WhatsApp urgentes; ambas pueden convivir.
         </Alert>

@@ -48,7 +48,7 @@ export function ServiceCreatePage() {
     <>
       <PageHeader
         title={`Nueva ${terminology.service.singular.toLowerCase()}`}
-        description="Definí la ubicación y el perímetro de validación."
+        description="Alta de unidad operativa con ubicación y perímetro de validación."
         action={
           <Group gap="sm" visibleFrom="lg">
             <Button variant="default" onClick={goBackToList}>

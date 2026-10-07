@@ -162,7 +162,8 @@ describe("OperationDetailPage entity identity", () => {
     assert.equal(view.queryByRole("button", { name: /Editar operación/i }), null);
     assert.equal(view.queryByText("Turnos de la operación"), null);
     assert.equal(view.queryByText("Cambiar a multi-turno"), null);
-    assert.match(view.container.textContent ?? "", /Detalle de la operación/i);
+    assert.match(view.container.textContent ?? "", /Centro operativo/i);
+    assert.ok(view.getByText("Dotación asignada"));
     assert.equal(view.queryByText("Configuración"), null);
   });
 });

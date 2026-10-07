@@ -159,7 +159,7 @@ export function EmployeeAbsenceBalanceCard({
                   El empleado no tiene saldo suficiente para aprobar esta solicitud.
                 </Alert>
                 {showEdit ? (
-                  <Alert color="brand" variant="light">
+                  <Alert color="warning" variant="light">
                     Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
                   </Alert>
                 ) : null}
@@ -178,7 +178,7 @@ export function EmployeeAbsenceBalanceCard({
             />
           </Stack>
         ) : (
-          <Alert color="brand" variant="light">
+          <Alert color="gray" variant="light">
             {balanceImpact.message ?? "Este tipo de ausencia no descuenta saldo."}
           </Alert>
         )

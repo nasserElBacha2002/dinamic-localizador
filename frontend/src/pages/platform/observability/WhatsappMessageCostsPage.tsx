@@ -419,7 +419,7 @@ export function WhatsappMessageCostsPage() {
       ) : null}
 
       {summary?.partiallySynced ? (
-        <Alert color="brand" variant="light" title="Sincronización parcial">
+        <Alert color="info" variant="light" title="Sincronización parcial">
           Hay {summary.totals.pendingCount} mensajes pendientes de costo definitivo.
         </Alert>
       ) : null}

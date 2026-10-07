@@ -32,8 +32,8 @@ export function BrandLogo({ className, variant = "horizontal" }: BrandLogoProps)
         className={classes.horizontalLockup}
         src={BRAND_LOGO_HORIZONTAL_SRC}
         alt=""
-        width={240}
-        height={72}
+        width={480}
+        height={150}
         decoding="async"
       />
     </span>

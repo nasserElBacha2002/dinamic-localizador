@@ -12,7 +12,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert } from "../../../design-system";
+import { FormErrorAlert, StatusBadge } from "../../../design-system";
 import classes from "../settings-visual.module.css";
 import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
 import {
@@ -344,12 +344,10 @@ export function CompanyShiftTemplatesDialog({
                         </Group>
                       </Table.Td>
                       <Table.Td>
-                        <Badge
-                          color={template.isActive ? "success" : "gray"}
-                          variant="light"
-                        >
-                          {template.isActive ? "Activa" : "Inactiva"}
-                        </Badge>
+                        <StatusBadge
+                          label={template.isActive ? "Activa" : "Inactiva"}
+                          tone={template.isActive ? "success" : "neutral"}
+                        />
                       </Table.Td>
                       <Table.Td>
                         {canUpdate ? (

@@ -422,7 +422,7 @@ export function LocationZonesDialogContent({
                   );
                 })
               ) : !searchQuery.isFetching ? (
-                <Alert color="brand" variant="light" title="No encontramos esta locación">
+                <Alert color="info" variant="light" title="No encontramos esta locación">
                   <Stack gap="sm">
                     <Text size="sm">
                       Podés crear &quot;{deferredQ}

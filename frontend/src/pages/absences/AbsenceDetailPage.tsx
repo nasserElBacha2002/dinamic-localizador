@@ -298,7 +298,7 @@ export function AbsenceDetailPage() {
         }
       />
       {canReview && insufficientBalance ? (
-        <Alert color="brand" variant="light">
+        <Alert color="warning" variant="light">
           Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
         </Alert>
       ) : null}

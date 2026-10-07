@@ -360,7 +360,7 @@ export function AcceptInvitationPage() {
         ) : null}
 
         {preview.userExists && !isAuthenticated ? (
-          <Alert color="brand" variant="light" title="Ya tenés cuenta">
+          <Alert color="info" variant="light" title="Ya tenés cuenta">
             <Stack gap="xs">
               <Text size="sm">
                 Iniciá sesión con {preview.email} para aceptar o rechazar el acceso a{" "}

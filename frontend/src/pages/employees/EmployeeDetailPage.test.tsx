@@ -358,8 +358,8 @@ describe("EmployeeDetailPage", () => {
     await waitFor(() => {
       assert.ok(view.getAllByText("Ana López").length >= 1);
     });
-    assert.ok(view.getByText("Información general"));
-    assert.ok(view.getByText(/Detalle de colaborador/i));
+    assert.ok(view.getByText("Datos del colaborador"));
+    assert.ok(view.getByText(/seguimiento operativo del colaborador/i));
     assert.ok(view.getByRole("tab", { name: /^Resumen$/i }));
     assert.equal(view.queryByRole("link", { name: /^Editar$/i }), null);
     assert.equal(view.queryByRole("button", { name: /Ver asistencias/i }), null);
@@ -467,7 +467,7 @@ describe("EmployeeDetailPage", () => {
       assert.ok(view.getByRole("link", { name: /^Editar$/i }));
     });
     assert.ok(view.getByRole("button", { name: /Volver al listado/i }));
-    assert.ok(view.getByText("Información general"));
+    assert.ok(view.getByText("Datos del colaborador"));
     assert.equal(view.queryByRole("textbox"), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
 

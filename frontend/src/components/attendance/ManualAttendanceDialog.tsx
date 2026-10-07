@@ -202,7 +202,7 @@ function ManualAttendanceDialogBody({
           </Text>
         ) : null}
 
-        <Alert color="blue" variant="light">
+        <Alert color="brand" variant="light">
           Validación manual: el registro queda auditado y el motivo es obligatorio. Si al guardar el
           registro ya fue modificado por otra persona, se te avisará y deberás volver a intentarlo.
         </Alert>

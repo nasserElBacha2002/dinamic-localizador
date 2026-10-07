@@ -419,7 +419,7 @@ export function WhatsappMessageCostsPage() {
       ) : null}
 
       {summary?.partiallySynced ? (
-        <Alert color="blue" title="Sincronización parcial">
+        <Alert color="brand" variant="light" title="Sincronización parcial">
           Hay {summary.totals.pendingCount} mensajes pendientes de costo definitivo.
         </Alert>
       ) : null}
@@ -572,7 +572,7 @@ export function WhatsappMessageCostsPage() {
       </SectionCard>
 
       {resyncMutation.isSuccess ? (
-        <Alert color="green" title="Re-sincronización solicitada">
+        <Alert color="success" title="Re-sincronización solicitada">
           Se marcaron {resyncMutation.data.updated} registros para nueva sincronización.
         </Alert>
       ) : null}

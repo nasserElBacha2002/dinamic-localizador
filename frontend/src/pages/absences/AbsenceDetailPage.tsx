@@ -298,7 +298,7 @@ export function AbsenceDetailPage() {
         }
       />
       {canReview && insufficientBalance ? (
-        <Alert color="blue">
+        <Alert color="brand" variant="light">
           Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
         </Alert>
       ) : null}
@@ -514,7 +514,7 @@ export function AbsenceDetailPage() {
               Cancelar
             </Button>
             <Button
-              color="green"
+              color="success"
               onClick={() => void handleApprove()}
               loading={approveMutation.isPending}
             >

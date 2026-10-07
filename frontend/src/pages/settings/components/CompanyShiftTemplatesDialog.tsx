@@ -177,7 +177,9 @@ export function CompanyShiftTemplatesDialog({
         </Text>
 
         {!canUpdate ? (
-          <Alert color="blue">No tenés permisos para gestionar plantillas de turnos.</Alert>
+          <Alert color="gray" variant="light">
+            No tenés permisos para gestionar plantillas de turnos.
+          </Alert>
         ) : null}
 
         <FormErrorAlert message={submitError} />
@@ -274,7 +276,7 @@ export function CompanyShiftTemplatesDialog({
               </SimpleGrid>
             </Stack>
             {isOvernightShift(form.startTime, form.endTime) ? (
-              <Badge color="violet" variant="light" w="fit-content">
+              <Badge color="brand" variant="light" w="fit-content">
                 Turno nocturno (cruza medianoche)
               </Badge>
             ) : null}
@@ -335,7 +337,7 @@ export function CompanyShiftTemplatesDialog({
                             {formatTimeRange(template.startTime, template.endTime)}
                           </Text>
                           {isOvernightShift(template.startTime, template.endTime) ? (
-                            <Badge size="xs" color="violet" variant="light">
+                            <Badge size="xs" color="brand" variant="light">
                               Nocturno
                             </Badge>
                           ) : null}
@@ -343,7 +345,7 @@ export function CompanyShiftTemplatesDialog({
                       </Table.Td>
                       <Table.Td>
                         <Badge
-                          color={template.isActive ? "green" : "gray"}
+                          color={template.isActive ? "success" : "gray"}
                           variant="light"
                         >
                           {template.isActive ? "Activa" : "Inactiva"}

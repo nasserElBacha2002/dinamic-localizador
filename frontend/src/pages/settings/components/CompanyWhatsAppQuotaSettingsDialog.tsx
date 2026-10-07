@@ -140,7 +140,7 @@ export function CompanyWhatsAppQuotaSettingsDialog({
       >
         <Stack gap="lg">
           <SettingsDialogSection title="Estado del control">
-            <Alert color="blue" variant="light">
+            <Alert color="brand" variant="light">
               <Text size="sm">
                 <strong>Modo global:</strong> {settings.globalMode}
                 {" · "}

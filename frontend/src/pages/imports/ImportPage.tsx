@@ -296,7 +296,7 @@ export function ImportPage() {
         />
       </SectionCard>
 
-      <Alert color="blue" variant="light">
+      <Alert color="brand" variant="light">
         {strategy.help}
       </Alert>
 

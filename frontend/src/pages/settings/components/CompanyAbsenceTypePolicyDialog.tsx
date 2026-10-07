@@ -121,7 +121,7 @@ export function CompanyAbsenceTypePolicyDialog({
       size="xl"
     >
       <Stack gap="md">
-        <Alert color="blue">
+        <Alert color="brand" variant="light">
           Los feriados y fines de semana solo afectan tipos configurados como días hábiles, y
           únicamente cuando el calendario avanzado está activo en la empresa.
         </Alert>

@@ -169,7 +169,7 @@ export function CompanySettingsPage() {
       />
 
       {!canUpdate ? (
-        <Alert color="blue" variant="light" className={pageClasses.readOnlyAlert}>
+        <Alert color="gray" variant="light" className={pageClasses.readOnlyAlert}>
           No tenés permisos para editar esta configuración.
         </Alert>
       ) : null}

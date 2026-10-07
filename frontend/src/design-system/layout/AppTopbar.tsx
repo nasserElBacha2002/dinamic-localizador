@@ -96,7 +96,7 @@ export function AppTopbar({ mobileOpened, onToggleMobile }: AppTopbarProps) {
         <Box className={topbarClasses.brandSlot} visibleFrom={NAVBAR_BREAKPOINT}>
           <BrandLogo variant="horizontal" className={topbarClasses.brandHorizontal} />
         </Box>
-        <Box className={`${topbarClasses.brandSlot} ${topbarClasses.brandIsotype}`} hiddenFrom={NAVBAR_BREAKPOINT}>
+        <Box className={topbarClasses.brandSlot} hiddenFrom={NAVBAR_BREAKPOINT}>
           <BrandLogo variant="isotype" className={topbarClasses.brandIsotypeLogo} />
         </Box>
       </Group>

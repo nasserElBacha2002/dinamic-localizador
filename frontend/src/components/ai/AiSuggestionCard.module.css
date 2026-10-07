@@ -3,60 +3,60 @@
  * Soft IA surface (aiLight) — readable on white modals without harsh contrast.
  */
 .aiCard {
-  background: #f4f6f8;
-  border: 1px solid #e9ecef;
-  border-left: 3px solid #3d5160;
+  background: var(--mantine-color-ai-0);
+  border: 1px solid var(--mantine-color-gray-3);
+  border-left: 3px solid var(--mantine-color-ai-6);
   border-radius: var(--mantine-radius-md);
   padding: var(--mantine-spacing-md);
-  --mantine-color-text: #0f1e2b;
-  --mantine-color-dimmed: #6b7785;
+  --mantine-color-text: var(--mantine-color-brand-7);
+  --mantine-color-dimmed: var(--mantine-color-gray-7);
 }
 
 .aiTitle {
-  color: #3d5160;
+  color: var(--mantine-color-ai-6);
   font-weight: 600;
 }
 
 .aiScore {
-  color: #6b7785;
+  color: var(--mantine-color-gray-7);
 }
 
 .aiMuted {
-  color: #6b7785;
+  color: var(--mantine-color-gray-7);
 }
 
 .aiRetry {
-  color: #6b7785;
+  color: var(--mantine-color-gray-7);
 }
 
 .aiCardBody {
-  color: #0f1e2b;
+  color: var(--mantine-color-brand-7);
 }
 
 .aiCardPrimary {
-  color: #0f1e2b;
+  color: var(--mantine-color-brand-7);
   font-weight: 600;
   font-size: var(--mantine-font-size-sm);
   line-height: 1.4;
 }
 
 .aiCardSecondary {
-  color: #6b7785;
+  color: var(--mantine-color-gray-7);
   font-size: var(--mantine-font-size-sm);
   line-height: 1.45;
 }
 
 .aiBadgeIa {
-  background: #e9ecef;
-  color: #3d5160;
+  background: var(--mantine-color-gray-2);
+  color: var(--mantine-color-ai-6);
   border: none;
   font-weight: 600;
 }
 
 .aiBadgeScore {
-  background: #ffffff;
-  color: #0f1e2b;
-  border-color: #d1d5db;
+  background: var(--mantine-color-white);
+  color: var(--mantine-color-brand-7);
+  border-color: var(--mantine-color-gray-4);
   text-transform: uppercase;
   font-weight: 600;
 }

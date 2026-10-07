@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link } from "react-router";
 import { z } from "zod";
 import { requestPasswordReset } from "../api/auth.api";
+import { AuthPageLogo } from "../components/brand/AuthPageLogo";
 import { FormErrorAlert } from "../design-system";
 import { getApiErrorMessage } from "../utils/errors";
 import classes from "./login-page.module.css";
@@ -46,7 +47,10 @@ export function ForgotPasswordPage() {
       <Box className={classes.centeredLayout}>
         <Box className={classes.formPanel}>
           <Stack w="100%" maw={420} gap="md">
-            <Paper className={classes.formCard} radius="lg" withBorder shadow="md" p="xl">
+            <div className={classes.mobileBrand}>
+              <AuthPageLogo />
+            </div>
+            <Paper className={classes.formCard} radius="lg" withBorder p="xl">
               <Stack gap="lg">
                 <div>
                   <Title order={2}>Restablecer contraseña</Title>

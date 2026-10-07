@@ -65,7 +65,7 @@ export function LocationMapCanvas({
         style={{ visibility: mapsLoadState === "ready" ? "visible" : "hidden" }}
       />
       {locationState === "SEARCHING" ? (
-        <Alert color="blue" m="sm" mt={0}>
+        <Alert color="warning" variant="light" m="sm" mt={0}>
           Seleccioná una sugerencia de la lista para confirmar la ubicación. Escribir texto no alcanza.
         </Alert>
       ) : null}
@@ -100,7 +100,7 @@ export function ServiceInteractiveMapPanel({
           <Badge variant="light" color="red">
             Centro del servicio
           </Badge>
-          <Badge variant="light" color="blue">
+          <Badge variant="light" color="brand">
             Área validada
           </Badge>
         </Group>

@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
 import type { EmployeeCategory } from "../../../types/employee-category";
-import { ResponsiveModal } from "../../../design-system";
+import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
 import { EmployeeCategoriesDialogContent } from "./EmployeeCategoriesDialogContent";
 
 interface EmployeeCategoriesDialogProps {
@@ -17,7 +17,7 @@ export function EmployeeCategoriesDialog({
   canUpdate,
 }: EmployeeCategoriesDialogProps) {
   return (
-    <ResponsiveModal
+    <SettingsResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Categorías de colaboradores"
@@ -32,6 +32,6 @@ export function EmployeeCategoriesDialog({
       }
     >
       <EmployeeCategoriesDialogContent categories={categories} canUpdate={canUpdate} />
-    </ResponsiveModal>
+    </SettingsResponsiveModal>
   );
 }

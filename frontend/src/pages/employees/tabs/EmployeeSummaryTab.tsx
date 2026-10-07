@@ -111,7 +111,7 @@ export function EmployeeSummaryTab({
 
   return (
     <Stack gap="md">
-      <SectionCard title="Información general">
+      <SectionCard title="Datos del colaborador">
         <DetailFieldGrid
           fields={[
             { label: "Nombre", value: employee.name },

@@ -160,4 +160,24 @@ describe("AttendanceListPage status badges", () => {
 
     assert.ok(view.getAllByText("Sin registrar").length >= 1);
   });
+
+  it("omits Tipo and includes Sin cierre in the checkout filter", async () => {
+    const view = renderPage(
+      <Routes>
+        <Route path="/attendance" element={<AttendanceListPage />} />
+      </Routes>,
+      { initialEntries: ["/attendance"] },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Ana Esperada"));
+    });
+
+    assert.equal(view.queryByRole("columnheader", { name: "Tipo" }), null);
+    assert.equal(view.queryByRole("combobox", { name: "Tipo de registro" }), null);
+    assert.ok(view.getByRole("combobox", { name: "Salida" }));
+    assert.equal(view.queryByRole("combobox", { name: "Sin cierre" }), null);
+    assert.ok(view.getByText("Salida válida", { hidden: true }));
+    assert.ok(view.getAllByText("Sin cierre", { hidden: true }).length >= 1);
+  });
 });

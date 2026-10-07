@@ -488,6 +488,73 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
     assert.match(csv, /ABSENT/);
   });
 
+  it("excludes future workdays even with an early punch; lists started workdays", async () => {
+    clockNow = new Date("2026-10-06T15:00:00.000Z");
+
+    const futureNoPunch = await seedWorkday({
+      employeeName: "FutureNoPunch",
+      expectedStart: new Date("2026-10-20T12:00:00.000Z"),
+      expectedEnd: new Date("2026-10-20T20:00:00.000Z"),
+    });
+    const futureWithPunch = await seedWorkday({
+      employeeName: "FutureWithPunch",
+      expectedStart: new Date("2026-10-20T12:00:00.000Z"),
+      expectedEnd: new Date("2026-10-20T20:00:00.000Z"),
+    });
+    await insertAttendance({
+      ...futureWithPunch,
+      receivedAt: new Date("2026-10-06T14:30:00.000Z"),
+      punctualityStatus: "EARLY",
+    });
+    const startedNoPunch = await seedWorkday({
+      employeeName: "StartedNoPunch",
+      expectedStart: new Date("2026-10-06T12:00:00.000Z"),
+      expectedEnd: new Date("2026-10-06T20:00:00.000Z"),
+    });
+    const startedOpenCheckout = await seedWorkday({
+      employeeName: "StartedOpenCheckout",
+      expectedStart: new Date("2026-10-06T08:00:00.000Z"),
+      expectedEnd: new Date("2026-10-06T12:00:00.000Z"),
+    });
+    await insertAttendance({
+      ...startedOpenCheckout,
+      receivedAt: new Date("2026-10-06T08:05:00.000Z"),
+      checkoutAt: null,
+      punctualityStatus: "ON_TIME",
+    });
+
+    const listed = await attendanceRepository.list(companyId, {
+      page: 1,
+      limit: 50,
+      operationIds: [],
+      employeeIds: [
+        futureNoPunch.employeeId,
+        futureWithPunch.employeeId,
+        startedNoPunch.employeeId,
+        startedOpenCheckout.employeeId,
+      ],
+      serviceIds: [],
+      openAttendance: false,
+    });
+    const workdayIds = new Set(listed.items.map((row) => row.employeeWorkdayId));
+    assert.equal(workdayIds.has(futureNoPunch.employeeWorkdayId), false);
+    assert.equal(workdayIds.has(futureWithPunch.employeeWorkdayId), false);
+    assert.equal(workdayIds.has(startedNoPunch.employeeWorkdayId), true);
+    assert.equal(workdayIds.has(startedOpenCheckout.employeeWorkdayId), true);
+
+    const missingCheckout = await attendanceRepository.list(companyId, {
+      page: 1,
+      limit: 50,
+      operationIds: [],
+      employeeIds: [startedOpenCheckout.employeeId],
+      serviceIds: [],
+      openAttendance: false,
+      checkoutStatus: "NOT_RECORDED",
+    });
+    assert.equal(missingCheckout.items.length, 1);
+    assert.equal(missingCheckout.items[0]?.employeeWorkdayId, startedOpenCheckout.employeeWorkdayId);
+  });
+
   it("reports production attendances without employee_workday_id (preflight)", async () => {
     const pool = getPool();
     const result = await pool.request().query(`

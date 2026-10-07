@@ -1,3 +1,5 @@
+import type { OperationStatus } from "./operation";
+
 export type AbsenceRequestStatus =
   | "PENDING"
   | "APPROVED"
@@ -126,7 +128,7 @@ export interface AffectedOperationWarning {
   serviceName: string;
   scheduledStart: string;
   scheduledEnd: string | null;
-  status: string;
+  status: OperationStatus;
 }
 
 export interface AbsenceRequestDetail extends AbsenceRequestListItem {

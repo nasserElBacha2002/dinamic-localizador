@@ -1,6 +1,6 @@
-import { Badge, Divider, ScrollArea, Select, Stack, Tabs, Text } from "@mantine/core";
+import { Divider, Group, ScrollArea, Select, Stack, Tabs, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { ResponsiveModal } from "../../design-system";
+import { ResponsiveModal, StatusBadge } from "../../design-system";
 import type { OperationKind } from "../../types/operation";
 import type { ScheduleMode } from "../../types/operation-shift";
 import { OperationAiRecommendationsPanel } from "./OperationAiRecommendationsPanel";
@@ -109,7 +109,7 @@ export function OperationTeamManageDialog({
     <ResponsiveModal
       opened={opened}
       onClose={handleClose}
-      title="Administrar equipo"
+      title="Asignaciones y cobertura"
       size="lg"
       bodyMode="scroll"
     >
@@ -120,16 +120,18 @@ export function OperationTeamManageDialog({
               ? `${assignedCount} colaborador${assignedCount === 1 ? "" : "es"} ya asignado${assignedCount === 1 ? "" : "s"}. La IA se adapta a ese contexto.`
               : "Todavía no hay colaboradores asignados. La IA puede sugerir por dónde empezar."}
           </Text>
-          {assignedCount > 0 ? (
-            <Badge color="gray" variant="light" w="fit-content">
-              {assignedCount} en el equipo
-            </Badge>
-          ) : null}
-          {isMultiShift ? (
-            <Badge color="blue" variant="light" w="fit-content">
-              Multi-turno · elegí el turno al asignar
-            </Badge>
-          ) : null}
+          <Group gap="xs">
+            {assignedCount > 0 ? (
+              <StatusBadge
+                label={`${assignedCount} asignado${assignedCount === 1 ? "" : "s"}`}
+                tone="neutral"
+                variant="light"
+              />
+            ) : null}
+            {isMultiShift ? (
+              <StatusBadge label="Multi-turno" tone="info" variant="light" />
+            ) : null}
+          </Group>
         </Stack>
 
         {isMultiShift ? (

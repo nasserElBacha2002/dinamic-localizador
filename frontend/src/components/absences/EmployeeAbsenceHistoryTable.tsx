@@ -11,6 +11,7 @@ import {
 import { useAbsenceRequests } from "../../hooks/useAbsences";
 import type { AbsenceRequestListItem } from "../../types/absence";
 import { absenceStatusLabels, formatAbsenceDate } from "../../utils/absence-labels";
+import { absenceStatusTone } from "../../utils/absence-status-display";
 import { safeText } from "../../utils/display-safe";
 import { serializeIdList } from "../../utils/multi-value-filter";
 
@@ -53,7 +54,11 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
         key: "status",
         header: "Estado",
         render: (row) => (
-          <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+          <StatusBadge
+            label={absenceStatusLabels[row.status]}
+            tone={absenceStatusTone(row.status)}
+            variant="light"
+          />
         ),
       },
     ],
@@ -64,7 +69,11 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
     () => ({
       title: (row) => safeText(row.absenceType?.name ?? null),
       status: (row) => (
-        <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+        <StatusBadge
+          label={absenceStatusLabels[row.status]}
+          tone={absenceStatusTone(row.status)}
+          variant="light"
+        />
       ),
       fields: [
         {

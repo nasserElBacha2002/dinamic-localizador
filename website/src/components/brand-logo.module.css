@@ -1,0 +1,40 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  line-height: 1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.isotype {
+  width: 1.65rem;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.isotypeLg {
+  width: 3.25rem;
+}
+
+.horizontalLockup {
+  display: block;
+  width: auto;
+  height: var(--m-header-logo-h);
+  max-width: min(18rem, 72vw);
+  object-fit: contain;
+  object-position: left center;
+}
+
+@media (min-width: 768px) {
+  .horizontalLockup {
+    height: 3.75rem;
+    max-width: min(20rem, 42vw);
+  }
+}
+
+.reversoMark {
+  width: 2.75rem;
+  height: auto;
+  display: block;
+}

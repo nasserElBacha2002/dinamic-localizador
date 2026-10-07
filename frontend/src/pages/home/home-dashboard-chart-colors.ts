@@ -5,10 +5,11 @@ export const HOME_ATTENDANCE_MANTINE_COLORS: Record<
   HomeAttendanceDistributionItem["key"],
   string
 > = {
-  present: "green",
-  expected: "blue",
-  absent: "red",
-  justified: "grape",
+  present: "success",
+  expected: "info",
+  absent: "danger",
+  justified: "gray",
 };
 
-export const HOME_INCIDENT_BAR_COLOR = "orange";
+/** Structural bar color — not accent orange (reserved for actions). */
+export const HOME_INCIDENT_BAR_COLOR = "brand";

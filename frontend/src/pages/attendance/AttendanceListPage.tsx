@@ -20,6 +20,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import { AttendanceStatusBadge } from "../../components/attendance/AttendanceStatusBadge";
+import { AttendanceListEventStatusCell } from "../../components/attendance/AttendanceListEventStatusCell";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
@@ -30,7 +31,7 @@ import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { operationShiftKeys } from "../../queryKeys/operation-shifts";
 import type {
   AttendanceRecordWithRelations,
-  CheckoutStatus,
+  CheckoutStatusFilter,
   LocationStatus,
   PunctualityStatus,
   ValidationStatus,
@@ -43,10 +44,9 @@ import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../ut
 import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
 import {
   attendanceListDetailPath,
-  attendanceListLocationLabel,
-  attendanceListLocationTone,
-  attendanceListPunctualityLabel,
-  attendanceListPunctualityTone,
+  attendanceListEventStatusesLabel,
+  attendanceListLocationEvents,
+  attendanceListPunctualityEvents,
   attendanceListRowKey,
   attendanceListValidationLabel,
   attendanceListValidationTone,
@@ -155,12 +155,9 @@ export function AttendanceListPage() {
     validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
-    checkoutStatus: (table.state.checkoutStatus as CheckoutStatus) || undefined,
-    openAttendance: table.state.openAttendance || undefined,
+    checkoutStatus: (table.state.checkoutStatus as CheckoutStatusFilter) || undefined,
     dateFrom: dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined,
     dateTo: dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined,
-    includeSimulation: table.state.recordType === "all" ? true : undefined,
-    simulationOnly: table.state.recordType === "simulation" ? true : undefined,
   };
 
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
@@ -241,32 +238,16 @@ export function AttendanceListPage() {
       {
         key: "locationStatus",
         header: "Ubicación",
-        render: (row) => (
-          <AttendanceStatusBadge
-            label={attendanceListLocationLabel(row)}
-            tone={attendanceListLocationTone(row)}
-          />
-        ),
+        getValue: (row) => attendanceListEventStatusesLabel(attendanceListLocationEvents(row)),
+        render: (row) => <AttendanceListEventStatusCell events={attendanceListLocationEvents(row)} />,
       },
       {
         key: "punctualityStatus",
         header: "Puntualidad",
+        getValue: (row) => attendanceListEventStatusesLabel(attendanceListPunctualityEvents(row)),
         render: (row) => (
-          <AttendanceStatusBadge
-            label={attendanceListPunctualityLabel(row)}
-            tone={attendanceListPunctualityTone(row)}
-          />
+          <AttendanceListEventStatusCell events={attendanceListPunctualityEvents(row)} />
         ),
-      },
-      {
-        key: "recordType",
-        header: "Tipo",
-        render: (row) =>
-          row.isSimulation ? (
-            <AttendanceStatusBadge label="Simulación" tone="info" variant="light" />
-          ) : (
-            "Real"
-          ),
       },
     ],
     [],
@@ -336,34 +317,19 @@ export function AttendanceListPage() {
         {
           key: "locationStatus",
           label: "Ubicación",
+          getValue: (row) => attendanceListEventStatusesLabel(attendanceListLocationEvents(row)),
           render: (row) => (
-            <AttendanceStatusBadge
-              label={attendanceListLocationLabel(row)}
-              tone={attendanceListLocationTone(row)}
-            />
+            <AttendanceListEventStatusCell events={attendanceListLocationEvents(row)} />
           ),
           visibility: "expanded",
         },
         {
           key: "punctualityStatus",
           label: "Puntualidad",
+          getValue: (row) => attendanceListEventStatusesLabel(attendanceListPunctualityEvents(row)),
           render: (row) => (
-            <AttendanceStatusBadge
-              label={attendanceListPunctualityLabel(row)}
-              tone={attendanceListPunctualityTone(row)}
-            />
+            <AttendanceListEventStatusCell events={attendanceListPunctualityEvents(row)} />
           ),
-          visibility: "expanded",
-        },
-        {
-          key: "recordType",
-          label: "Tipo",
-          render: (row) =>
-            row.isSimulation ? (
-              <AttendanceStatusBadge label="Simulación" tone="info" />
-            ) : (
-              "Real"
-            ),
           visibility: "expanded",
         },
       ],
@@ -375,7 +341,7 @@ export function AttendanceListPage() {
     <>
       <PageHeader
         title="Asistencias"
-        description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
+        description={`Seguimiento de cumplimiento, incidencias y registros incompletos en ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canExport || canUseBotSimulator ? (
             <ActionMenu
@@ -485,7 +451,7 @@ export function AttendanceListPage() {
 
         <FilterBar.Item>
           <FilterSelect
-            label="Validación"
+            label="Estado de validación"
             value={table.state.validationStatus}
             onChange={(nextValue) => {
               table.setField("validationStatus", nextValue);
@@ -534,36 +500,8 @@ export function AttendanceListPage() {
             }}
             data={[
               { value: "", label: "Todas" },
+              { value: "NOT_RECORDED", label: "Sin cierre" },
               ...Object.entries(checkoutStatusLabels).map(([value, label]) => ({ value, label })),
-            ]}
-          />
-        </FilterBar.Item>
-
-        <FilterBar.Item>
-          <FilterSelect
-            label="Sin cierre"
-            value={table.state.openAttendance ? "true" : ""}
-            onChange={(nextValue) => {
-              table.setField("openAttendance", nextValue === "true");
-            }}
-            data={[
-              { value: "", label: "Todas" },
-              { value: "true", label: "Solo jornadas sin cierre vencidas" },
-            ]}
-          />
-        </FilterBar.Item>
-
-        <FilterBar.Item>
-          <FilterSelect
-            label="Tipo de registro"
-            value={table.state.recordType}
-            onChange={(nextValue) => {
-              table.setField("recordType", (nextValue || "real") as "real" | "simulation" | "all");
-            }}
-            data={[
-              { value: "real", label: "Registros reales" },
-              { value: "simulation", label: "Registros simulados" },
-              { value: "all", label: "Todos los registros" },
             ]}
           />
         </FilterBar.Item>
@@ -575,8 +513,8 @@ export function AttendanceListPage() {
         getRowKey={(row) => attendanceListRowKey(row)}
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
-        emptyTitle="No hay asistencias esperadas"
-        emptyDescription="Ajustá los filtros o esperá nuevas jornadas / registros de asistencia."
+        emptyTitle="Sin registros en este período"
+        emptyDescription="Ajustá los filtros o esperá nuevas jornadas con actividad de asistencia."
         onRowClick={(row) =>
           navigateWithListContext(
             navigate,

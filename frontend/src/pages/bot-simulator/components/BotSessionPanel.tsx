@@ -127,7 +127,7 @@ export function BotSessionPanel({
             Iniciar simulación
           </Button>
         ) : (
-          <Alert color="blue" title="Sesión activa">
+          <Alert color="info" variant="light" title="Sesión activa">
             <Text size="sm">
               ID: <strong>{sessionId}</strong>. Reiniciá para limpiar mensajes y estado.
             </Text>

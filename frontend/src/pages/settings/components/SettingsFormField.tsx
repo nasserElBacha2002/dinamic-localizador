@@ -14,7 +14,12 @@ export function SettingsFormField({ label, description, children }: SettingsForm
       description={description}
       withAsterisk={false}
       styles={{
+        label: {
+          color: "var(--mantine-color-brand-7)",
+          fontWeight: 500,
+        },
         description: {
+          color: "var(--mantine-color-gray-6)",
           minHeight: "2.5rem",
         },
       }}

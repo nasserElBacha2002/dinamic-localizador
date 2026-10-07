@@ -351,12 +351,12 @@ export function OperationAiTeamRecommendationPanel({
       />
 
       {isLoadingSuggestion ? (
-        <AiSuggestionCard title="✨ Sugerencia de equipo" loading />
+        <AiSuggestionCard title="Sugerencia de equipo" loading />
       ) : null}
 
       {(errorMessage || queryError) && !isLoadingSuggestion ? (
         <AiSuggestionCard
-          title="✨ Sugerencia de equipo"
+          title="Sugerencia de equipo"
           errorMessage={errorMessage ?? queryError}
           onRetry={() => {
             setErrorMessage(null);
@@ -369,7 +369,7 @@ export function OperationAiTeamRecommendationPanel({
 
       {!isLoadingSuggestion && displayMembers.length > 0 ? (
         <AiSuggestionCard
-          title="✨ Sugerencia de equipo"
+          title="Sugerencia de equipo"
           scoreLabel={
             !draftDirty && selectedAlternative
               ? formatAffinityLabel(selectedAlternative.score)
@@ -379,7 +379,6 @@ export function OperationAiTeamRecommendationPanel({
             <>
               <Button
                 size="xs"
-                color="ai"
                 onClick={() => void handleUseTeam()}
                 loading={assigning || assignLoading}
                 disabled={busy || !canUseCompleteRecommendation}
@@ -390,7 +389,6 @@ export function OperationAiTeamRecommendationPanel({
                 <Button
                   size="xs"
                   variant="light"
-                  color="ai"
                   onClick={handleNextAlternative}
                   aria-label="Generar otra opción"
                 >
@@ -400,7 +398,6 @@ export function OperationAiTeamRecommendationPanel({
               <Button
                 size="xs"
                 variant="subtle"
-                color="ai"
                 onClick={() => void handleGenerate(lockedIds)}
                 loading={recommendMutation.isPending}
                 disabled={busy && !recommendMutation.isPending}
@@ -428,7 +425,6 @@ export function OperationAiTeamRecommendationPanel({
                     key={option.rank}
                     size="compact-xs"
                     variant={option.rank === (selectedAlternative?.rank ?? selectedRank) ? "filled" : "light"}
-                    color="ai"
                     onClick={() => {
                       setPauseAutoQuery(true);
                       setRecommendationSnapshot(sourceSnapshot);
@@ -466,7 +462,6 @@ export function OperationAiTeamRecommendationPanel({
                         <Button
                           size="compact-xs"
                           variant={lockedIds.includes(member.employee.id) ? "filled" : "subtle"}
-                          color="ai"
                           onClick={() => handleToggleLock(member.employee.id)}
                           aria-label={
                             lockedIds.includes(member.employee.id)

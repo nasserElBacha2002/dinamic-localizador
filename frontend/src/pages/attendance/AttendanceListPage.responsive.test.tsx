@@ -183,7 +183,7 @@ describe("AttendanceListPage responsive (real page)", () => {
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));
     await waitFor(() => {
-      assert.ok(within(document.body).getByRole("combobox", { name: "Validación" }));
+      assert.ok(within(document.body).getByRole("combobox", { name: "Estado de validación" }));
     });
     fireEvent.click(within(document.body).getByRole("button", { name: "Listo" }));
   });

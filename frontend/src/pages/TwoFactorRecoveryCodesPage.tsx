@@ -4,6 +4,7 @@ import {
   clearRecoveryCodesOnce,
   readRecoveryCodesOnce,
 } from "../utils/two-factor-recovery-display";
+import { AuthPageLogo } from "../components/brand/AuthPageLogo";
 import { RecoveryCodesPanel } from "./settings/RecoveryCodesPanel";
 import classes from "./login-page.module.css";
 
@@ -20,7 +21,10 @@ export function TwoFactorRecoveryCodesPage() {
       <Box className={classes.centeredLayout}>
         <Box className={classes.formPanel}>
           <Stack w="100%" maw={480} gap="md">
-            <Paper className={classes.formCard} radius="lg" withBorder shadow="md" p="xl">
+            <div className={classes.mobileBrand}>
+              <AuthPageLogo />
+            </div>
+            <Paper className={classes.formCard} radius="lg" withBorder p="xl">
               <Stack gap="lg">
                 <Title order={2}>Códigos de recuperación</Title>
                 <RecoveryCodesPanel

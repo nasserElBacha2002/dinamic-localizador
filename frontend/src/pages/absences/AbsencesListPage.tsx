@@ -33,6 +33,7 @@ import {
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
+import { absenceStatusTone } from "../../utils/absence-status-display";
 import {
   ABSENCES_TABLE_DEFAULTS,
   ABSENCES_TABLE_FIELDS,
@@ -150,7 +151,11 @@ export function AbsencesListPage() {
         key: "status",
         header: "Estado",
         render: (row) => (
-          <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+          <StatusBadge
+            label={absenceStatusLabels[row.status]}
+            tone={absenceStatusTone(row.status)}
+            variant="light"
+          />
         ),
       },
       {
@@ -179,7 +184,11 @@ export function AbsencesListPage() {
           />
       ),
       status: (row) => (
-        <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+        <StatusBadge
+          label={absenceStatusLabels[row.status]}
+          tone={absenceStatusTone(row.status)}
+          variant="light"
+        />
       ),
       fields: [
         {
@@ -229,8 +238,8 @@ export function AbsencesListPage() {
   return (
     <>
       <PageHeader
-        title="Solicitudes de ausencia"
-        description="Revisá y gestioná las solicitudes enviadas por WhatsApp o administración."
+        title="Ausencias"
+        description="Excepciones operativas que pueden requerir cobertura o resolución en planificación."
         action={
           canCreate ? (
             <Button onClick={() => setCreateOpen(true)}>Nueva solicitud</Button>
@@ -301,8 +310,8 @@ export function AbsencesListPage() {
         getRowKey={(row) => row.id}
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
-        emptyTitle="No hay solicitudes de ausencia para los filtros seleccionados."
-        emptyDescription="Ajustá los filtros o esperá nuevas solicitudes."
+        emptyTitle="Sin ausencias en este período"
+        emptyDescription="Ajustá los filtros o esperá nuevas solicitudes de excepción."
         onRowClick={(row) =>
           navigateWithListContext(navigate, `/absences/${row.id}`, ABSENCES_LIST_PATH, location)
         }

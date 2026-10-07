@@ -1,6 +1,7 @@
 import { Accordion, Button, Stack, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { AiSuggestionCard } from "../ai/AiSuggestionCard";
+import aiCardClasses from "../ai/AiSuggestionCard.module.css";
 import { useOperationEmployeeRecommendations } from "../../hooks/useOperationRecommendations";
 import type { OperationKind } from "../../types/operation";
 import type { ScheduleMode } from "../../types/operation-shift";
@@ -115,13 +116,13 @@ export function OperationInlineAiSuggestion({
   }
 
   if (query.isLoading || query.isFetching) {
-    return <AiSuggestionCard title="✨ Sugerencia de IA" loading />;
+    return <AiSuggestionCard title="Sugerencia de IA" loading />;
   }
 
   if (query.isError) {
     return (
       <AiSuggestionCard
-        title="✨ Sugerencia de IA"
+        title="Sugerencia de IA"
         errorMessage="No pudimos cargar una sugerencia. Podés seguir asignando manualmente."
         onRetry={() => void query.refetch()}
       />
@@ -135,13 +136,12 @@ export function OperationInlineAiSuggestion({
   return (
     <Stack gap="xs">
       <AiSuggestionCard
-        title="✨ Sugerencia de IA"
+        title="Sugerencia de IA"
         scoreLabel={formatAffinityLabel(top.score)}
         actions={
           <>
             <Button
               size="xs"
-              color="ai"
               loading={assigning || assignLoading}
               disabled={missingShift || assigning || assignLoading}
               onClick={() => void handleAdd()}
@@ -152,13 +152,12 @@ export function OperationInlineAiSuggestion({
             <Button
               size="xs"
               variant="subtle"
-              color="ai"
               onClick={() => setWhyOpen((value) => !value)}
               aria-expanded={whyOpen}
             >
               Ver por qué
             </Button>
-            <Button size="xs" variant="light" color="ai" onClick={onSeeMore}>
+            <Button size="xs" variant="light" onClick={onSeeMore}>
               Ver más recomendaciones
             </Button>
           </>
@@ -174,18 +173,12 @@ export function OperationInlineAiSuggestion({
         }
       >
         <Stack gap={4}>
-          <Text size="sm" fw={600}>
-            {top.employee.name}
-          </Text>
+          <p className={aiCardClasses.aiCardPrimary}>{top.employee.name}</p>
           {headline || reasonLines[0] ? (
-            <Text size="sm" c="dimmed">
-              {headline ?? reasonLines[0]}
-            </Text>
+            <p className={aiCardClasses.aiCardSecondary}>{headline ?? reasonLines[0]}</p>
           ) : null}
           {reasonLines[1] && reasonLines[1] !== headline ? (
-            <Text size="sm" c="dimmed">
-              {reasonLines[1]}
-            </Text>
+            <p className={aiCardClasses.aiCardSecondary}>{reasonLines[1]}</p>
           ) : null}
           {localError ? (
             <Text size="sm" c="red">
@@ -196,7 +189,7 @@ export function OperationInlineAiSuggestion({
       </AiSuggestionCard>
 
       {whyOpen ? (
-        <Accordion variant="contained" defaultValue="why" color="ai">
+        <Accordion variant="contained" defaultValue="why">
           <Accordion.Item value="why">
             <Accordion.Control>¿Por qué la IA lo recomienda?</Accordion.Control>
             <Accordion.Panel>

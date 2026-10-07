@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import classes from "./AiSuggestionCard.module.css";
 
 export interface AiSuggestionCardProps {
-  /** Main heading, e.g. "✨ Sugerencia de IA" */
+  /** Main heading, e.g. "Sugerencia de IA" */
   title: string;
   /** Affinity label such as "82% de afinidad"; omit when stale/unavailable */
   scoreLabel?: string | null;
@@ -19,7 +19,7 @@ export interface AiSuggestionCardProps {
 }
 
 /**
- * Presentational AI suggestion shell (violet identity).
+ * Presentational AI suggestion shell aligned with Operations design tokens.
  * No recommendation/assignment logic.
  */
 export function AiSuggestionCard({
@@ -28,7 +28,7 @@ export function AiSuggestionCard({
   children,
   actions,
   loading = false,
-  loadingMessage = "✨ Buscando una sugerencia...",
+  loadingMessage = "Buscando una sugerencia...",
   errorMessage,
   onRetry,
   emptyMessage,
@@ -51,11 +51,11 @@ export function AiSuggestionCard({
           <Text size="sm" className={classes.aiTitle}>
             {title}
           </Text>
-          <Text size="sm" c="dimmed">
+          <Text size="sm" className={classes.aiMuted}>
             {errorMessage}
           </Text>
           {onRetry ? (
-            <Button size="xs" variant="subtle" color="ai" onClick={onRetry} className={classes.aiRetry}>
+            <Button size="xs" variant="subtle" onClick={onRetry} className={classes.aiRetry}>
               Reintentar
             </Button>
           ) : null}
@@ -80,18 +80,23 @@ export function AiSuggestionCard({
             <Text size="sm" className={classes.aiTitle}>
               {title}
             </Text>
-            <Badge color="ai" variant="light" size="sm">
+            <Badge className={classes.aiBadgeIa} variant="light" size="sm">
               IA
             </Badge>
           </Group>
           {scoreLabel ? (
-            <Badge color="ai" variant="light" size="lg" aria-label={scoreLabel}>
+            <Badge
+              className={classes.aiBadgeScore}
+              variant="outline"
+              size="lg"
+              aria-label={scoreLabel}
+            >
               {scoreLabel}
             </Badge>
           ) : null}
         </Group>
 
-        {children}
+        {children ? <div className={classes.aiCardBody}>{children}</div> : null}
 
         {actions ? (
           <Group gap="xs" wrap="wrap">
@@ -108,11 +113,11 @@ export function AiSuggestionCard({
 /** Compact notice when the applied team matches the last suggestion. */
 export function AiSuggestionAppliedNotice({ onOtherOption }: { onOtherOption?: () => void }) {
   return (
-    <Alert color="ai" variant="light" title="✨ Equipo aplicado" role="status">
+    <Alert color="gray" variant="light" title="Equipo aplicado" role="status">
       <Group justify="space-between" align="center" wrap="wrap" gap="xs">
         <Text size="sm">Podés ajustar el formulario o pedir otra opción.</Text>
         {onOtherOption ? (
-          <Button size="xs" variant="light" color="ai" onClick={onOtherOption}>
+          <Button size="xs" variant="light" onClick={onOtherOption}>
             Otra opción
           </Button>
         ) : null}

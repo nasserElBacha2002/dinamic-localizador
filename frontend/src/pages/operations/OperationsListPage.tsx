@@ -39,6 +39,7 @@ import { formatOperationScheduleListLabel, operationKindLabels } from "../../uti
 import { getOperationServiceAddress } from "./operations-list-columns";
 import { getOperationDisplayName } from "../../utils/operation-display";
 import { operationStatusLabels } from "../../utils/labels";
+import { operationStatusTone } from "../../utils/operation-status-display";
 import { hasPermission } from "../../utils/permissions";
 import {
   buildOperationTableDefaults,
@@ -151,9 +152,25 @@ export function OperationsListPage() {
       },
       {
         key: "serviceAddress",
-        header: "Dirección",
+        header: "Ubicación",
         sortable: true,
         getValue: (row) => getOperationServiceAddress(row),
+      },
+      {
+        key: "operationKind",
+        header: "Tipo",
+        sortable: false,
+        render: (row) => {
+          const kind = row.operationKind ?? "ONE_TIME";
+          const label = operationKindLabels[kind as keyof typeof operationKindLabels] ?? kind;
+          return (
+            <StatusBadge
+              label={label}
+              tone={kind === "RECURRING" ? "info" : "neutral"}
+              variant="light"
+            />
+          );
+        },
       },
       {
         key: "scheduledStart",
@@ -172,20 +189,18 @@ export function OperationsListPage() {
         header: "Estado",
         sortable: true,
         render: (row) => (
-          <StatusBadge label={operationStatusLabels[row.status]} tone="info" variant="light" />
+          <StatusBadge
+            label={operationStatusLabels[row.status]}
+            tone={operationStatusTone(row.status)}
+            variant="light"
+          />
         ),
       },
       {
         key: "earlyToleranceMinutes",
-        header: "Tolerancia temprana",
-        sortable: true,
-        getValue: (row) => `${row.earlyToleranceMinutes} min`,
-      },
-      {
-        key: "lateToleranceMinutes",
-        header: "Tolerancia tardía",
-        sortable: true,
-        getValue: (row) => `${row.lateToleranceMinutes} min`,
+        header: "Tolerancias",
+        sortable: false,
+        getValue: (row) => `${row.earlyToleranceMinutes} / ${row.lateToleranceMinutes} min`,
       },
     ],
     [],
@@ -206,7 +221,11 @@ export function OperationsListPage() {
       },
       subtitle: (row) => getOperationServiceAddress(row),
       status: (row) => (
-        <StatusBadge label={operationStatusLabels[row.status]} tone="info" variant="light" />
+        <StatusBadge
+          label={operationStatusLabels[row.status]}
+          tone={operationStatusTone(row.status)}
+          variant="light"
+        />
       ),
       fields: [
         {
@@ -231,14 +250,8 @@ export function OperationsListPage() {
         },
         {
           key: "earlyToleranceMinutes",
-          label: "Tol. temprana",
-          render: (row) => `${row.earlyToleranceMinutes} min`,
-          visibility: "expanded",
-        },
-        {
-          key: "lateToleranceMinutes",
-          label: "Tol. tardía",
-          render: (row) => `${row.lateToleranceMinutes} min`,
+          label: "Tolerancias",
+          render: (row) => `${row.earlyToleranceMinutes} / ${row.lateToleranceMinutes} min`,
           visibility: "expanded",
         },
       ],
@@ -250,7 +263,7 @@ export function OperationsListPage() {
     <>
       <PageHeader
         title={terminology.operation.plural}
-        description={`Planificá ${terminology.operation.plural.toLowerCase()} y asigná ${terminology.worker.plural.toLowerCase()}.`}
+        description={`Planificación, cobertura y estado de tus ${terminology.operation.plural.toLowerCase()} operativas.`}
         action={
           canManageOperations ? (
             <ActionMenu
@@ -284,32 +297,12 @@ export function OperationsListPage() {
       >
         <FilterBar.Item>
           <FilterSelect
-            label="Tipo de operación"
-            value={table.state.operationKind}
-            onChange={(nextValue) => {
-              table.setField("operationKind", nextValue);
-            }}
-            data={operationKindOptions}
-          />
-        </FilterBar.Item>
-
-        <FilterBar.Item>
-          <FilterSelect
             label="Estado"
             value={table.state.status}
             onChange={(nextValue) => {
               table.setField("status", nextValue);
             }}
             data={statusOptions}
-          />
-        </FilterBar.Item>
-
-        <FilterBar.Item>
-          <ServiceLookupAutocomplete
-            value={table.state.serviceId || null}
-            onChange={(id) => {
-              table.setField("serviceId", id ?? "");
-            }}
           />
         </FilterBar.Item>
 
@@ -323,6 +316,26 @@ export function OperationsListPage() {
             allowCustomRange
           />
         </FilterBar.Item>
+
+        <FilterBar.Item>
+          <FilterSelect
+            label="Tipo de operación"
+            value={table.state.operationKind}
+            onChange={(nextValue) => {
+              table.setField("operationKind", nextValue);
+            }}
+            data={operationKindOptions}
+          />
+        </FilterBar.Item>
+
+        <FilterBar.Item>
+          <ServiceLookupAutocomplete
+            value={table.state.serviceId || null}
+            onChange={(id) => {
+              table.setField("serviceId", id ?? "");
+            }}
+          />
+        </FilterBar.Item>
       </FilterBar>
 
       <DataTable
@@ -331,8 +344,8 @@ export function OperationsListPage() {
         getRowKey={(row) => row.id}
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
-        emptyTitle={`No hay ${terminology.operation.plural.toLowerCase()}`}
-        emptyDescription={`Creá la primera ${terminology.operation.singular.toLowerCase()} para comenzar.`}
+        emptyTitle={`Sin ${terminology.operation.plural.toLowerCase()} en este período`}
+        emptyDescription={`Ajustá los filtros o creá una ${terminology.operation.singular.toLowerCase()} para planificar cobertura.`}
         onRowClick={(row) =>
           navigateWithListContext(navigate, `/operations/${row.id}`, OPERATIONS_LIST_PATH, location)
         }

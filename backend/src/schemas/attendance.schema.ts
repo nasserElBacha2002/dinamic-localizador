@@ -113,6 +113,8 @@ export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSc
       "CHECKOUT_LATE_EXTRA_TIME",
       "CHECKOUT_LOCATION_REVIEW",
       "CHECKOUT_REJECTED",
+      /** Filter-only: attendance recorded without checkout (not a persisted status). */
+      "NOT_RECORDED",
     ])
     .optional(),
   openAttendance: z

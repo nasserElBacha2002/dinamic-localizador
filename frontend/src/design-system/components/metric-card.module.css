@@ -1,0 +1,30 @@
+.card {
+  border-color: var(--mantine-color-gray-2);
+  background-color: var(--mantine-color-white);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.cardInteractive:hover {
+  border-color: var(--mantine-color-gray-3);
+  box-shadow: var(--mantine-shadow-xs);
+}
+
+.title {
+  color: var(--mantine-color-dimmed);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.value {
+  color: var(--mantine-color-brand-7);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.description {
+  color: var(--mantine-color-dimmed);
+  line-height: 1.4;
+}

@@ -53,6 +53,7 @@ import {
   locationStatusTone,
 } from "../../utils/attendance-status-tones";
 import { terminology } from "../../domain/terminology";
+import { getRelatedName } from "../../utils/display-safe";
 import { getApiErrorCode, getApiErrorMessage, parseApiError } from "../../utils/errors";
 import {
   checkoutStatusLabels,
@@ -349,8 +350,8 @@ export function AttendanceDetailPage() {
   return (
     <Stack gap="md">
       <PageHeader
-        title="Detalle de asistencia"
-        description={`${record.employee.name} · Llegada ${formatAttendanceArrivalLabel(record.receivedAt, formatDateTime)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
+        title="Jornada e incidencias"
+        description={`${record.employee.name} · ${getRelatedName(record.service)} · ${formatDateTime(record.operation.scheduledStart)}`}
         action={
           <ActionMenu
             primary={
@@ -391,7 +392,7 @@ export function AttendanceDetailPage() {
         }
       />
 
-      <SectionCard title="Información general">
+      <SectionCard title="Contexto operativo">
         <DetailFieldGrid
           fields={[
             {
@@ -441,7 +442,7 @@ export function AttendanceDetailPage() {
                   : "—",
             },
             {
-              label: "Estado",
+              label: "Situación general",
               value: record.effectiveState ? (
                 <AttendanceStatusBadge
                   label={
@@ -457,6 +458,13 @@ export function AttendanceDetailPage() {
                 />
               ),
             },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="Llegada y salida">
+        <DetailFieldGrid
+          fields={[
             {
               label: "Llegada",
               value: formatAttendanceArrivalLabel(record.receivedAt, formatDateTime),
@@ -470,7 +478,7 @@ export function AttendanceDetailPage() {
                     tone={attendanceListPunctualityTone(record)}
                   />
                   {record.arrivalSource === "MANUAL" ? (
-                    <AttendanceStatusBadge label="Manual" tone="info" />
+                    <AttendanceStatusBadge label="Validación manual" tone="info" />
                   ) : null}
                 </Group>
               ) : (
@@ -510,7 +518,7 @@ export function AttendanceDetailPage() {
                     tone={checkoutStatusTone(record.checkoutStatus)}
                   />
                   {record.checkoutSource === "MANUAL" ? (
-                    <AttendanceStatusBadge label="Manual" tone="info" />
+                    <AttendanceStatusBadge label="Validación manual" tone="info" />
                   ) : null}
                 </Group>
               ) : hasAttendanceRecord ? (
@@ -537,6 +545,13 @@ export function AttendanceDetailPage() {
               label: "Registrado el (salida)",
               value: hasAttendanceRecord ? formatDateTime(record.checkoutRegisteredAt) : "—",
             },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="Ubicación y geocerca">
+        <DetailFieldGrid
+          fields={[
             {
               label: "Coordenadas llegada",
               value: hasAttendanceRecord
@@ -564,8 +579,15 @@ export function AttendanceDetailPage() {
                   ? `${record.service.allowedRadiusMeters} m`
                   : "—",
             },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="Validación e incidencias">
+        <DetailFieldGrid
+          fields={[
             {
-              label: "Validación detallada",
+              label: "Estados",
               value: (
                 <Group gap="xs" wrap="wrap">
                   {hasAttendanceRecord ? (

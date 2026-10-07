@@ -16,7 +16,7 @@ export function StatisticsPage() {
     <Stack gap="md">
       <PageHeader
         title="Estadísticas"
-        description="Panel analítico de asistencias por colaborador, operación y ubicación."
+        description="Análisis de la operación: cobertura, incidencias y desempeño por servicio, operación y colaborador."
       />
 
       <StatisticsFiltersBar

@@ -1,8 +1,8 @@
-import { Alert, Badge, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { ErrorState, LoadingState, PageHeader } from "../../design-system";
+import { ErrorState, LoadingState, PageHeader, StatusBadge } from "../../design-system";
 import { useAbsenceAttachmentStorageHealth } from "../../hooks/useAbsenceAttachments";
 import { useCompanyAbsenceSettings } from "../../hooks/useCompanyAbsenceSettings";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
@@ -37,6 +37,7 @@ import { CompanyShiftTemplatesDialog } from "./components/CompanyShiftTemplatesD
 import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
 import { LocationZonesDialog } from "./components/LocationZonesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
+import pageClasses from "./settings-visual.module.css";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import { useShiftTemplates } from "../../hooks/useShiftTemplates";
@@ -149,28 +150,38 @@ export function CompanySettingsPage() {
   }
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" className={pageClasses.page}>
       <PageHeader
         title="Configuración"
         description="Parámetros operativos de la empresa y políticas de ausencias."
         action={
           permissionsQuery.data ? (
             <Group gap="xs">
-              <Badge variant="light">{permissionsQuery.data.companyName}</Badge>
-              <Badge variant="outline">{companyRoleLabels[permissionsQuery.data.role]}</Badge>
+              <StatusBadge label={permissionsQuery.data.companyName} tone="neutral" variant="light" />
+              <StatusBadge
+                label={companyRoleLabels[permissionsQuery.data.role]}
+                tone="info"
+                variant="outline"
+              />
             </Group>
           ) : null
         }
       />
 
       {!canUpdate ? (
-        <Alert color="blue">No tenés permisos para editar esta configuración.</Alert>
+        <Alert color="gray" variant="light" className={pageClasses.readOnlyAlert}>
+          No tenés permisos para editar esta configuración.
+        </Alert>
       ) : null}
 
       <Tabs
         value={activeTab}
         onChange={(value) => setTab(parseTab(value))}
         keepMounted={false}
+        classNames={{
+          list: pageClasses.tabList,
+          tab: pageClasses.tab,
+        }}
       >
         <Tabs.List>
           <Tabs.Tab value="company" aria-selected={activeTab === "company"}>
@@ -532,7 +543,7 @@ export function CompanySettingsPage() {
               />
             ) : null}
 
-            <Alert color="gray">
+            <Alert color="gray" variant="light" className={pageClasses.readOnlyAlert}>
               Los saldos individuales de colaboradores se gestionan en la ficha del empleado, no
               en configuración. El ledger de saldos se activa por empresa con un proceso administrativo
               explícito.

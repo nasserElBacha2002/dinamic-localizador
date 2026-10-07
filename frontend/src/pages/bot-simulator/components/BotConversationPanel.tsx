@@ -1,5 +1,5 @@
-import { Badge, Button, Group, ScrollArea, Stack, Textarea } from "@mantine/core";
-import { EmptyState, SectionCard } from "../../../design-system";
+import { Button, Group, ScrollArea, Stack, Textarea } from "@mantine/core";
+import { EmptyState, SectionCard, StatusBadge } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 import { BADGE_LABELS } from "../types";
 import { BotQuickActions } from "./BotQuickActions";
@@ -37,9 +37,12 @@ export function BotConversationPanel({
         sessionState ? (
           <Group gap="xs">
             {sessionState.statusBadges.map((badge) => (
-              <Badge key={badge} variant="light" size="sm">
-                {BADGE_LABELS[badge] ?? badge}
-              </Badge>
+              <StatusBadge
+                key={badge}
+                label={BADGE_LABELS[badge] ?? badge}
+                tone="info"
+                variant="light"
+              />
             ))}
           </Group>
         ) : undefined

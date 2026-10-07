@@ -9,6 +9,7 @@ import {
   buildOperationalIncidentHref,
   type StatisticsDeepLinkContext,
 } from "../../utils/statistics-deep-links";
+import { HOME_INCIDENT_BAR_COLOR } from "./home-dashboard-chart-colors";
 import {
   buildHomeAttendanceBarChartRow,
   buildHomeAttendanceBarChartSeries,
@@ -71,8 +72,8 @@ export function HomeOperationalHealth({
   return (
     <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
       <Stack gap={6}>
-        <Text size="xs" fw={600}>
-          Estado de jornadas
+        <Text size="xs" fw={600} c="brand.7">
+          Cobertura de jornadas
         </Text>
         {attendanceEmpty || !stack ? (
           <Text size="xs" c="dimmed">
@@ -103,8 +104,8 @@ export function HomeOperationalHealth({
       </Stack>
 
       <Stack gap={6} style={{ flex: 1, minHeight: 0 }}>
-        <Text size="xs" fw={600}>
-          Incidencias operativas
+        <Text size="xs" fw={600} c="brand.7">
+          Incidencias en operaciones
         </Text>
         {incidentChartData.length === 0 ? (
           <Text size="xs" c="dimmed">
@@ -116,7 +117,9 @@ export function HomeOperationalHealth({
             data={incidentChartData}
             dataKey="category"
             orientation="horizontal"
-            series={[{ name: "operations", label: "Operaciones", color: "orange.6" }]}
+            series={[
+              { name: "operations", label: "Operaciones", color: `${HOME_INCIDENT_BAR_COLOR}.6` },
+            ]}
             withLegend={false}
             withTooltip
             gridAxis="y"

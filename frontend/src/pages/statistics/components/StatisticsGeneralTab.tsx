@@ -138,7 +138,7 @@ export function StatisticsGeneralTab({
 
       <SectionCard
         title="Detalle de jornadas"
-        description="Grano por jornada (incluye Turno en operaciones multi-turno; horario único se muestra vacío)."
+        description="Vista operativa por jornada (incluye turno en operaciones multi-turno; horario único se muestra vacío)."
       >
         <StatisticsWorkdayDetailsTable
           rows={workdayDetailsQuery.data?.data ?? []}
@@ -156,7 +156,7 @@ export function StatisticsGeneralTab({
       <Grid gap="md">
         <Grid.Col span={{ base: 12, lg: 8 }}>
           <ChartCard
-            title="Asistencia en el tiempo"
+            title="Evolución de cobertura"
             description="Presentismo y puntualidad con volumen de jornadas. El día actual se marca como parcial."
             isLoading={timelineQuery.isPending}
             isEmpty={timeline.length === 0}
@@ -182,7 +182,7 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, lg: 4 }}>
           <ChartCard
-            title="Excepciones que requieren atención"
+            title="Problemas que requieren atención"
             description="Categorías no excluyentes: una jornada puede aparecer en más de una."
             isLoading={summaryQuery.isPending}
             isEmpty={actionExceptions.length === 0}
@@ -255,7 +255,7 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Colaboradores que requieren atención"
+            title="Colaboradores con incidencias"
             description="Ordenados por incidencias (elegibilidad aplicada en servidor)."
             isLoading={attentionEmployeesQuery.isPending}
             isEmpty={attentionEmployees.length === 0}

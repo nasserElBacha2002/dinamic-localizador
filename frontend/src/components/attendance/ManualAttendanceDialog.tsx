@@ -1,4 +1,4 @@
-import { Button, Group, Radio, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Radio, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { ResponsiveModal } from "../../design-system";
 import type {
@@ -12,6 +12,8 @@ import {
 } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { previewManualAttendance } from "../../api/attendance.api";
+import { AttendanceStatusBadge } from "./AttendanceStatusBadge";
+import { manualAttendanceUiStatusTone } from "../../utils/attendance-status-tones";
 
 export interface ManualAttendanceDialogTarget {
   kind: ManualAttendanceKind;
@@ -195,10 +197,15 @@ function ManualAttendanceDialogBody({
     >
       <Stack gap="sm">
         {target.employeeName ? (
-          <Text size="sm" c="dimmed">
-            Colaborador: {target.employeeName}
+          <Text size="sm" fw={500}>
+            {target.employeeName}
           </Text>
         ) : null}
+
+        <Alert color="info" variant="light">
+          Validación manual: el registro queda auditado y el motivo es obligatorio. Si al guardar el
+          registro ya fue modificado por otra persona, se te avisará y deberás volver a intentarlo.
+        </Alert>
 
         <Radio.Group
           label="Fecha y hora"
@@ -244,7 +251,7 @@ function ManualAttendanceDialogBody({
 
         <Stack gap={4}>
           <Text size="sm" fw={500}>
-            Estado calculado
+            Vista previa del estado
           </Text>
           {previewLoading ? (
             <Text size="sm" c="dimmed">
@@ -255,7 +262,10 @@ function ManualAttendanceDialogBody({
               {previewError}
             </Text>
           ) : preview ? (
-            <Text size="sm">Estado calculado: {preview.uiStatusLabel}</Text>
+            <AttendanceStatusBadge
+              label={preview.uiStatusLabel}
+              tone={manualAttendanceUiStatusTone(preview.uiStatus)}
+            />
           ) : (
             <Text size="sm" c="dimmed">
               —

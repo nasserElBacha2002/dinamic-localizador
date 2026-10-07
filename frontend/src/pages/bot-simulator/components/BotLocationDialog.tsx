@@ -69,7 +69,7 @@ export function BotLocationDialog({
     >
       <Stack gap="md">
         {locationPresets ? (
-          <Alert color="blue">
+          <Alert color="info" variant="light">
             Radio permitido: {locationPresets.allowedRadiusMeters ?? "—"} m · Margen de revisión:{" "}
             {locationPresets.reviewMarginMeters} m
           </Alert>

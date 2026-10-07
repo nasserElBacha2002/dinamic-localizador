@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -296,7 +296,7 @@ export function ImportPage() {
         />
       </SectionCard>
 
-      <Alert color="blue" variant="light">
+      <Alert color="gray" variant="light">
         {strategy.help}
       </Alert>
 
@@ -355,25 +355,31 @@ export function ImportPage() {
           <Stack gap="sm">
             <Group gap="xs" wrap="wrap">
               {activeExecuteResult.status ? (
-                <Badge
-                  color={
-                    resultTone === "success" ? "green" : resultTone === "warning" ? "yellow" : "red"
-                  }
+                <StatusBadge
+                  label={`Estado: ${activeExecuteResult.status}`}
+                  tone={resultTone ?? "neutral"}
                   variant="light"
-                >
-                  Estado: {activeExecuteResult.status}
-                </Badge>
+                />
               ) : null}
-              <Badge>Total: {activeExecuteResult.summary.totalRows}</Badge>
-              <Badge color="green" variant="light">
-                Creadas: {activeExecuteResult.summary.created}
-              </Badge>
-              <Badge color="blue" variant="light">
-                Actualizadas: {activeExecuteResult.summary.updated}
-              </Badge>
-              <Badge color={activeExecuteResult.summary.rejected > 0 ? "red" : "gray"} variant="light">
-                Rechazadas: {activeExecuteResult.summary.rejected}
-              </Badge>
+              <StatusBadge
+                label={`Total: ${activeExecuteResult.summary.totalRows}`}
+                tone="neutral"
+              />
+              <StatusBadge
+                label={`Creadas: ${activeExecuteResult.summary.created}`}
+                tone="success"
+                variant="light"
+              />
+              <StatusBadge
+                label={`Actualizadas: ${activeExecuteResult.summary.updated}`}
+                tone="info"
+                variant="light"
+              />
+              <StatusBadge
+                label={`Rechazadas: ${activeExecuteResult.summary.rejected}`}
+                tone={activeExecuteResult.summary.rejected > 0 ? "danger" : "neutral"}
+                variant="light"
+              />
             </Group>
             <Button
               variant="default"
@@ -414,21 +420,33 @@ export function ImportPage() {
                 <Stack gap="md">
                   <Group gap="xs" wrap="wrap">
                     {activePreview.format ? (
-                      <Badge variant="light">Formato: {activePreview.format}</Badge>
+                      <StatusBadge
+                        label={`Formato: ${activePreview.format}`}
+                        tone="neutral"
+                        variant="light"
+                      />
                     ) : null}
                     {activePreview.fileType ? (
-                      <Badge variant="light">Archivo: {activePreview.fileType.toUpperCase()}</Badge>
+                      <StatusBadge
+                        label={`Archivo: ${activePreview.fileType.toUpperCase()}`}
+                        tone="neutral"
+                        variant="light"
+                      />
                     ) : null}
-                    <Badge>Total: {activePreview.summary.totalRows}</Badge>
-                    <Badge color="green" variant="light">
-                      Válidas: {activePreview.summary.validRows}
-                    </Badge>
-                    <Badge
-                      color={activePreview.summary.invalidRows > 0 ? "red" : "gray"}
+                    <StatusBadge
+                      label={`Total: ${activePreview.summary.totalRows}`}
+                      tone="neutral"
+                    />
+                    <StatusBadge
+                      label={`Válidas: ${activePreview.summary.validRows}`}
+                      tone="success"
                       variant="light"
-                    >
-                      Inválidas: {activePreview.summary.invalidRows}
-                    </Badge>
+                    />
+                    <StatusBadge
+                      label={`Inválidas: ${activePreview.summary.invalidRows}`}
+                      tone={activePreview.summary.invalidRows > 0 ? "danger" : "neutral"}
+                      variant="light"
+                    />
                   </Group>
 
                   <SegmentedControl

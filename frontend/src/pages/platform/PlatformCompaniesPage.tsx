@@ -3,9 +3,11 @@ import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
 import {
   DataTable,
+  EntityIdentity,
   ErrorState,
   LoadingState,
   PageHeader,
+  SectionCard,
   StatusBadge,
   type DataTableColumn,
   type DataTableMobileCardConfig,
@@ -129,7 +131,11 @@ export function PlatformCompaniesPage() {
 
   const columns = useMemo<DataTableColumn<PlatformCompany>[]>(
     () => [
-      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      {
+        key: "name",
+        header: "Empresa",
+        render: (row) => <EntityIdentity name={row.name} entityType="company" />,
+      },
       {
         key: "owner",
         header: "Dueño",
@@ -310,6 +316,10 @@ export function PlatformCompaniesPage() {
       {companiesQuery.isPending ? <LoadingState /> : null}
 
       {!companiesQuery.isPending ? (
+        <SectionCard
+          title="Empresas registradas"
+          description="Administración de tenants de la plataforma. No afecta la operación diaria de cada empresa."
+        >
         <DataTable
           rows={companiesQuery.data ?? []}
           columns={columns}
@@ -321,6 +331,7 @@ export function PlatformCompaniesPage() {
           mobileView="cards"
           mobileCard={mobileCard}
         />
+        </SectionCard>
       ) : null}
 
       <CreatePlatformCompanyDialog

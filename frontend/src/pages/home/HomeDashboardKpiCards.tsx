@@ -17,6 +17,7 @@ import {
   resolvePrimaryKpiTone,
   resolveSecondaryKpiTone,
 } from "./home-dashboard-kpi";
+import classes from "./home-page.module.css";
 
 interface HomeDashboardKpiCardsProps {
   summary?: AttendanceStatisticsSummary;
@@ -47,14 +48,15 @@ function CompactKpi({ item }: { item: KpiItem }) {
   }
 
   const tone = item.toneResolver(item.key, item.numericValue);
-  const valueColor = homeKpiToneColor[tone];
+  const mutedZero = item.numericValue === 0 && typeof item.value === "number";
+  const valueColor = mutedZero ? "dimmed" : homeKpiToneColor[tone];
 
   const body = (
-    <Stack gap={0}>
-      <Text size="xs" c="dimmed" lineClamp={2}>
+    <Stack gap={2}>
+      <Text size="xs" c="dimmed" lineClamp={2} lh={1.35}>
         {item.label}
       </Text>
-      <Text size="lg" fw={tone === "neutral" ? 600 : 700} lh={1.2} c={valueColor}>
+      <Text size="xl" fw={700} lh={1.15} c={valueColor} style={{ letterSpacing: "-0.02em" }}>
         {item.value}
       </Text>
     </Stack>
@@ -247,12 +249,16 @@ export function HomeDashboardKpiCards({
 
   return (
     <Stack gap="sm">
-      <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs">
+      <Text className={classes.kpiSectionLabel}>Cobertura del día</Text>
+      <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="sm">
         {primary.map((item) => (
           <CompactKpi key={item.key} item={item} />
         ))}
       </SimpleGrid>
-      <Box pt={4} style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}>
+      <Box pt="sm" className={classes.kpiDivider}>
+        <Text className={classes.kpiSectionLabel} mb="xs">
+          Señales operativas
+        </Text>
         <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs">
           {secondary.map((item) => (
             <SecondaryKpi key={item.key} item={item} />

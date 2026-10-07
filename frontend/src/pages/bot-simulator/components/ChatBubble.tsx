@@ -1,6 +1,7 @@
-import { Box, Paper, Stack, Text } from "@mantine/core";
+import { Box, Stack, Text } from "@mantine/core";
 import type { BotSimulatorMessage } from "../../../api/bot-simulator.api";
 import { formatDateTime } from "../../../utils/dates";
+import classes from "./chat-bubble.module.css";
 
 export function ChatBubble({ message }: { message: BotSimulatorMessage }) {
   const isUser = message.direction === "INBOUND";
@@ -14,13 +15,8 @@ export function ChatBubble({ message }: { message: BotSimulatorMessage }) {
         justifyContent: isUser ? "flex-end" : "flex-start",
       }}
     >
-      <Paper
-        shadow="xs"
-        radius="md"
-        p="sm"
-        maw="85%"
-        bg={isUser ? "blue.6" : "gray.1"}
-        c={isUser ? "white" : "dark"}
+      <div
+        className={`${classes.bubble} ${isUser ? classes.outbound : classes.inbound}`}
       >
         {isLocation ? (
           <Stack gap={4}>
@@ -35,16 +31,14 @@ export function ChatBubble({ message }: { message: BotSimulatorMessage }) {
             {message.body}
           </Text>
         )}
-        <Text
-          size="xs"
-          mt={6}
-          opacity={0.75}
-          ta={isUser ? "right" : "left"}
-          c={isUser ? "white" : "dimmed"}
+        <div
+          className={`${classes.timestamp} ${
+            isUser ? classes.timestampOutbound : classes.timestampInbound
+          }`}
         >
           {formatDateTime(message.createdAt)}
-        </Text>
-      </Paper>
+        </div>
+      </div>
     </Box>
   );
 }

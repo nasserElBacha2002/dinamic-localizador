@@ -49,7 +49,7 @@ export function EmployeeCreatePage() {
     <>
       <PageHeader
         title={`Nuevo ${terminology.worker.singular.toLowerCase()}`}
-        description={`Registrá un ${terminology.worker.singular.toLowerCase()} habilitado para ${terminology.operation.plural.toLowerCase()}.`}
+        description={`Alta operativa: datos de contacto y clasificación para asignaciones.`}
       />
       <EmployeeForm
         defaultValues={{

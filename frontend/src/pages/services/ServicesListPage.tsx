@@ -38,6 +38,7 @@ import {
   SERVICE_TABLE_SORTABLE_COLUMN_KEYS,
   shouldOmitServiceTableValue,
 } from "./services-list-table-state";
+import { formatServiceLocationSummary } from "../../utils/service-list-display";
 
 const SERVICES_LIST_PATH = "/services";
 
@@ -131,16 +132,16 @@ export function ServicesListPage() {
         render: (row) => <EntityIdentity name={row.name} entityType="service" />,
       },
       {
-        key: "neighborhood",
-        header: "Barrio",
+        key: "locality",
+        header: "Ubicación",
         sortable: true,
-        getValue: (row) => row.neighborhood ?? "—",
+        getValue: (row) => formatServiceLocationSummary(row),
       },
       {
-        key: "locality",
-        header: "Localidad",
+        key: "address",
+        header: "Dirección",
         sortable: true,
-        getValue: (row) => row.locality ?? "—",
+        getValue: (row) => row.address ?? "—",
       },
       {
         key: "serviceFormat",
@@ -149,16 +150,8 @@ export function ServicesListPage() {
         getValue: (row) => row.serviceFormat ?? "—",
       },
       {
-        key: "address",
-        header: "Dirección",
-        sortable: true,
-        getValue: (row) => row.address ?? "—",
-      },
-      { key: "latitude", header: "Latitud", getValue: (row) => row.latitude },
-      { key: "longitude", header: "Longitud", getValue: (row) => row.longitude },
-      {
         key: "allowedRadiusMeters",
-        header: "Radio permitido",
+        header: "Cobertura",
         getValue: (row) => `${row.allowedRadiusMeters} m`,
       },
       {
@@ -179,7 +172,7 @@ export function ServicesListPage() {
   const mobileCard = useMemo<DataTableMobileCardConfig<Service>>(
     () => ({
       title: (row) => <EntityIdentity name={row.name} entityType="service" />,
-      subtitle: (row) => row.address ?? undefined,
+      subtitle: (row) => formatServiceLocationSummary(row),
       status: (row) => (
         <StatusBadge
           label={activeStatusLabel(row.active)}
@@ -188,15 +181,9 @@ export function ServicesListPage() {
       ),
       fields: [
         {
-          key: "locality",
-          label: "Localidad",
-          render: (row) => row.locality ?? "—",
-          visibility: "always",
-        },
-        {
-          key: "neighborhood",
-          label: "Barrio",
-          render: (row) => row.neighborhood ?? "—",
+          key: "address",
+          label: "Dirección",
+          render: (row) => row.address ?? "—",
           visibility: "always",
         },
         {
@@ -235,7 +222,7 @@ export function ServicesListPage() {
     <>
       <PageHeader
         title={terminology.service.plural}
-        description="Configurá ubicaciones y radios permitidos."
+        description="Unidades operativas con ubicación, formato y perímetro de validación."
         action={
           canManageServices ? (
             <ActionMenu
@@ -346,8 +333,8 @@ export function ServicesListPage() {
         getRowKey={(row) => row.id}
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
-        emptyTitle={`No hay ${terminology.service.plural.toLowerCase()}`}
-        emptyDescription={`Creá la primera ${terminology.service.singular.toLowerCase()} para comenzar.`}
+        emptyTitle={`Sin ${terminology.service.plural.toLowerCase()} registrados`}
+        emptyDescription={`Creá un ${terminology.service.singular.toLowerCase()} para vincular operaciones y cobertura.`}
         onRowClick={(row) =>
           navigateWithListContext(navigate, `/services/${row.id}`, SERVICES_LIST_PATH, location)
         }

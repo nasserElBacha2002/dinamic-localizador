@@ -35,6 +35,7 @@ import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { AffectedOperationWarning } from "../../types/absence";
+import { terminology } from "../../domain/terminology";
 import {
   absenceEventTypeLabels,
   absenceRequestedViaLabels,
@@ -45,6 +46,8 @@ import {
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
 import { operationStatusLabels } from "../../utils/labels";
+import { absenceStatusTone } from "../../utils/absence-status-display";
+import { operationStatusTone } from "../../utils/operation-status-display";
 import { hasPermission } from "../../utils/permissions";
 import { AbsenceNeedsInfoEditor } from "./AbsenceNeedsInfoEditor";
 import { AbsenceReviewActions } from "./AbsenceReviewActions";
@@ -82,8 +85,7 @@ const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
   {
     key: "status",
     header: "Estado",
-    getValue: (row) =>
-      operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status,
+    getValue: (row) => operationStatusLabels[row.status] ?? row.status,
   },
 ];
 
@@ -93,10 +95,8 @@ const affectedOperationMobileCard: DataTableMobileCardConfig<AffectedOperationWa
   ),
   status: (row) => (
     <StatusBadge
-      label={
-        operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status
-      }
-      tone="neutral"
+      label={operationStatusLabels[row.status] ?? row.status}
+      tone={operationStatusTone(row.status)}
       variant="light"
     />
   ),
@@ -273,8 +273,8 @@ export function AbsenceDetailPage() {
   return (
     <Stack gap="md">
       <PageHeader
-        title="Detalle de solicitud de ausencia"
-        description={`${detail.employee.name} · ${formatAbsenceDate(detail.startDate)} - ${formatAbsenceDate(detail.endDate)}`}
+        title="Detalle de ausencia"
+        description={`${detail.employee.name} · ${formatAbsenceDate(detail.startDate)} – ${formatAbsenceDate(detail.endDate)} · excepción operativa`}
         action={
           <AbsenceReviewActions
             canReview={canReview}
@@ -303,11 +303,11 @@ export function AbsenceDetailPage() {
         </Alert>
       ) : null}
 
-      <SectionCard title="Datos generales">
+      <SectionCard title="Resumen">
         <DetailFieldGrid
           fields={[
             {
-              label: "Empleado",
+              label: terminology.worker.singular,
               value: (
                 <EntityLink
                   entityType="employee"
@@ -328,10 +328,23 @@ export function AbsenceDetailPage() {
             { label: "Motivo", value: detail.reason },
             {
               label: "Estado",
-              value: <StatusBadge label={absenceStatusLabels[detail.status]} tone="neutral" />,
+              value: (
+                <StatusBadge
+                  label={absenceStatusLabels[detail.status]}
+                  tone={absenceStatusTone(detail.status)}
+                  variant="light"
+                />
+              ),
             },
             { label: "Origen", value: absenceRequestedViaLabels[detail.requestedVia] },
             { label: "Creada", value: formatDateTime(detail.createdAt) },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="Revisión">
+        <DetailFieldGrid
+          fields={[
             { label: "Revisada por", value: detail.reviewerName ?? "—" },
             { label: "Revisada el", value: detail.reviewedAt ? formatDateTime(detail.reviewedAt) : "—" },
             { label: "Comentario de revisión", value: detail.reviewComment ?? "—" },
@@ -383,7 +396,7 @@ export function AbsenceDetailPage() {
 
       <AbsenceOperationalImpactSection requestId={detail.id} />
 
-      <SectionCard title="Operaciones afectadas">
+      <SectionCard title={`Impacto en ${terminology.operation.plural.toLowerCase()}`}>
         {detail.affectedOperations.length === 0 ? (
           <Text c="dimmed">
             No se detectaron operaciones asignadas que se superpongan con esta ausencia.

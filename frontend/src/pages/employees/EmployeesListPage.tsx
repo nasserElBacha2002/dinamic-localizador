@@ -196,7 +196,7 @@ export function EmployeesListPage() {
     <>
       <PageHeader
         title={terminology.worker.plural}
-        description={`Administrá el personal habilitado para ${terminology.operation.plural.toLowerCase()}.`}
+        description={`Personas y recursos disponibles para cubrir ${terminology.operation.plural.toLowerCase()} y servicios.`}
         action={
           canManageEmployees ? (
             <ActionMenu
@@ -281,7 +281,7 @@ export function EmployeesListPage() {
         loading={isPending}
         error={isError ? getApiErrorMessage(error) : undefined}
         emptyTitle={`No hay ${terminology.worker.plural.toLowerCase()}`}
-        emptyDescription={`Creá el primer ${terminology.worker.singular.toLowerCase()} para comenzar.`}
+        emptyDescription={`Agregá un ${terminology.worker.singular.toLowerCase()} para asignarlo a operaciones.`}
         onRowClick={(row) =>
           navigateWithListContext(navigate, `/employees/${row.id}`, EMPLOYEES_LIST_PATH, location)
         }

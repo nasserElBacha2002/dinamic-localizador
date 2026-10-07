@@ -1,0 +1,12 @@
+.recommendationItem {
+  background: #f4f6f8;
+  border: 1px solid #e9ecef;
+  border-left: 3px solid #3d5160;
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-sm);
+}
+
+.recommendationItem:hover {
+  border-color: #d1d5db;
+  background: #eef1f4;
+}

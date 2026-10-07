@@ -101,22 +101,34 @@ export function EmployeeForm({
   return (
     <Box w="100%">
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <FormSection>
-          <Stack gap="md">
-            <FormErrorAlert message={errorMessage} />
+        <Stack gap="lg">
+          <FormSection
+            title="Identificación y contacto"
+            description="Datos para comunicación y fichaje por WhatsApp."
+          >
+            <Stack gap="md">
+              <FormErrorAlert message={errorMessage} />
+              <FormGrid align="start">
+                <RHFTextInput control={control} name="name" label="Nombre" required />
+                <RHFTextInput control={control} name="documentNumber" label="Documento" />
+                <RHFPhoneInput
+                  control={control}
+                  name="phoneNumber"
+                  label="Teléfono"
+                  placeholder="+5491112345678"
+                  description="Formato internacional E.164"
+                  inputWrapperOrder={["label", "input", "description", "error"]}
+                  required
+                />
+              </FormGrid>
+            </Stack>
+          </FormSection>
 
+          <FormSection
+            title="Clasificación operativa"
+            description="Tipo, categoría y asignaciones para planificación."
+          >
             <FormGrid align="start">
-              <RHFTextInput control={control} name="name" label="Nombre" required />
-              <RHFTextInput control={control} name="documentNumber" label="Documento" />
-              <RHFPhoneInput
-                control={control}
-                name="phoneNumber"
-                label="Teléfono"
-                placeholder="+5491112345678"
-                description="Formato internacional E.164"
-                inputWrapperOrder={["label", "input", "description", "error"]}
-                required
-              />
               <RHFSelect
                 control={control}
                 name="employeeType"
@@ -139,11 +151,8 @@ export function EmployeeForm({
                 disabled={loading}
                 retainedZone={retainedLocationZone}
               />
-              <Input.Wrapper label="Estado activo" inputWrapperOrder={["label", "input", "error"]}>
-                <Box
-                  mih={36}
-                  style={{ display: "flex", alignItems: "center" }}
-                >
+              <Input.Wrapper label="Estado" inputWrapperOrder={["label", "input", "error"]}>
+                <Box mih={36} style={{ display: "flex", alignItems: "center" }}>
                   <RHFSwitch control={control} name="active" label="Activo" />
                 </Box>
               </Input.Wrapper>
@@ -153,7 +162,9 @@ export function EmployeeForm({
                 render={({ field, fieldState }) => (
                   <MultiSelect
                     label="Clientes"
-                    placeholder={clientsQuery.isLoading ? "Cargando clientes..." : "Seleccioná uno o más clientes"}
+                    placeholder={
+                      clientsQuery.isLoading ? "Cargando clientes..." : "Seleccioná uno o más clientes"
+                    }
                     data={clientOptions.map(({ value, label }) => ({ value, label }))}
                     value={field.value ?? []}
                     onChange={(nextValue) => {
@@ -172,10 +183,10 @@ export function EmployeeForm({
                 )}
               />
             </FormGrid>
+          </FormSection>
 
-            <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
-          </Stack>
-        </FormSection>
+          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
+        </Stack>
       </form>
     </Box>
   );

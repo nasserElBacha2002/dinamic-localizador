@@ -7,21 +7,23 @@
 }
 
 .brandHorizontal {
-  max-width: min(17.5rem, 44vw);
+  display: block;
+  max-width: min(18rem, 42vw);
 }
 
 .brandHorizontal img {
-  height: 2.375rem;
-  max-height: 2.375rem;
+  display: block;
+  height: 3.75rem;
+  max-height: 3.75rem;
   width: auto;
   max-width: 100%;
   object-fit: contain;
   object-position: left center;
 }
 
-.brandIsotype img {
-  height: 2.25rem;
-  max-height: 2.25rem;
+.brandIsotypeLogo img {
+  height: 2.75rem;
+  max-height: 2.75rem;
   width: auto;
   object-fit: contain;
 }

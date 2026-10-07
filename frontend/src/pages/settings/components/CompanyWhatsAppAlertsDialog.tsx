@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
 import type { CompanySettings } from "../../../types/company-settings";
-import { ResponsiveModal } from "../../../design-system";
+import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
 import { CompanyWhatsAppAlertsDialogContent } from "./CompanyWhatsAppAlertsDialogContent";
 
 interface CompanyWhatsAppAlertsDialogProps {
@@ -19,7 +19,7 @@ export function CompanyWhatsAppAlertsDialog({
   onSaved,
 }: CompanyWhatsAppAlertsDialogProps) {
   return (
-    <ResponsiveModal
+    <SettingsResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Alertas y reporte diario"
@@ -38,6 +38,6 @@ export function CompanyWhatsAppAlertsDialog({
         canUpdate={canUpdate}
         onSaved={onSaved}
       />
-    </ResponsiveModal>
+    </SettingsResponsiveModal>
   );
 }

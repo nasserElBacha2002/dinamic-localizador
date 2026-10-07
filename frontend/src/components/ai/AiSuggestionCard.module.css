@@ -1,27 +1,62 @@
 /**
  * Shared shell for proactive AI suggestion cards.
- * Business logic (fetch, assign, locks) stays in callers.
+ * Soft IA surface (aiLight) — readable on white modals without harsh contrast.
  */
 .aiCard {
-  background: var(--mantine-color-ai-0);
-  border: 1px solid var(--mantine-color-ai-2);
+  background: #f4f6f8;
+  border: 1px solid #e9ecef;
+  border-left: 3px solid #3d5160;
   border-radius: var(--mantine-radius-md);
   padding: var(--mantine-spacing-md);
+  --mantine-color-text: #0f1e2b;
+  --mantine-color-dimmed: #6b7785;
 }
 
 .aiTitle {
-  color: var(--mantine-color-ai-7);
+  color: #3d5160;
   font-weight: 600;
 }
 
 .aiScore {
-  color: var(--mantine-color-ai-7);
+  color: #6b7785;
 }
 
 .aiMuted {
-  color: var(--mantine-color-dimmed);
+  color: #6b7785;
 }
 
 .aiRetry {
-  color: var(--mantine-color-ai-6);
+  color: #6b7785;
+}
+
+.aiCardBody {
+  color: #0f1e2b;
+}
+
+.aiCardPrimary {
+  color: #0f1e2b;
+  font-weight: 600;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.4;
+}
+
+.aiCardSecondary {
+  color: #6b7785;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.45;
+}
+
+.aiBadgeIa {
+  background: #e9ecef;
+  color: #3d5160;
+  border: none;
+  font-weight: 600;
+}
+
+.aiBadgeScore {
+  background: #ffffff;
+  color: #0f1e2b;
+  border-color: #d1d5db;
+  text-transform: uppercase;
+  font-weight: 600;
 }

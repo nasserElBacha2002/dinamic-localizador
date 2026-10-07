@@ -5,6 +5,7 @@ import { EntityLink } from "../../components/entity-link";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
+  EntityIdentity,
   FilterBar,
   FilterSelect,
   mapApiPaginationMeta,
@@ -107,17 +108,20 @@ export function PayrollReceiptsListPage() {
       {
         key: "employee",
         header: terminology.worker.singular,
-        render: (row) =>
-          row.employeeId ? (
-            <EntityLink
-              entityType="employee"
-              entityId={row.employeeId}
-              label={safeText(row.employeeName ?? null)}
-            stopPropagation
-          />
-          ) : (
-            safeText(row.employeeName ?? null)
-          ),
+        render: (row) => {
+          const label = safeText(row.employeeName ?? null);
+          if (row.employeeId) {
+            return (
+              <EntityLink
+                entityType="employee"
+                entityId={row.employeeId}
+                label={label}
+                stopPropagation
+              />
+            );
+          }
+          return <EntityIdentity name={label} entityType="collaborator" />;
+        },
       },
       {
         key: "document",

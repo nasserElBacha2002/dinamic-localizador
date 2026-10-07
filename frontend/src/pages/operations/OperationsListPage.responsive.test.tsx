@@ -124,7 +124,7 @@ describe("OperationsListPage responsive (real page)", () => {
     await waitFor(() => assert.ok(view.getByText("Sucursal Centro")));
     assert.ok(view.getByRole("table"));
     assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
-    assert.match(view.container.textContent ?? "", /15 min/);
+    assert.match(view.container.textContent ?? "", /15 \/ 10 min/);
     assert.ok(view.getByRole("button", { name: /Importar operaciones/i }));
     assert.equal(view.queryByRole("button", { name: "Más acciones de operaciones" }), null);
     const serviceReference = view.getByText("Sucursal Centro");

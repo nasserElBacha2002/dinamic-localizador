@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import {
   DataTable,
+  EntityIdentity,
   FilterBar,
   FormErrorAlert,
   mapApiPaginationMeta,
@@ -52,7 +53,12 @@ export function ClientsListPage() {
 
   const columns = useMemo<DataTableColumn<Client>[]>(
     () => [
-      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      {
+        key: "name",
+        header: "Nombre",
+        getValue: (row) => row.name,
+        render: (row) => <EntityIdentity name={row.name} entityType="company" />,
+      },
       {
         key: "isActive",
         header: "Estado",
@@ -110,7 +116,7 @@ export function ClientsListPage() {
     <>
       <PageHeader
         title="Clientes"
-        description="Administrá clientes y sus formatos."
+        description="Clientes operativos, formatos y ubicaciones asociadas."
         action={<Button onClick={() => setOpened(true)}>Nuevo cliente</Button>}
       />
 

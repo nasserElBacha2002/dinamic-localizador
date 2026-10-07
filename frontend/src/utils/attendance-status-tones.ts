@@ -3,6 +3,7 @@ import type {
   AttendanceEffectiveState,
   CheckoutStatus,
   LocationStatus,
+  ManualAttendanceUiStatus,
   OperationalStatus,
   PunctualityStatus,
   ValidationStatus,
@@ -57,6 +58,12 @@ export function attendanceEffectiveStateTone(
   if (state === "ABSENT") return "danger";
   if (state === "JUSTIFIED") return "info";
   if (state === "CANCELLED") return "neutral";
+  return "neutral";
+}
+
+export function manualAttendanceUiStatusTone(status: ManualAttendanceUiStatus): StatusBadgeTone {
+  if (status === "ON_TIME" || status === "ON_SCHEDULE") return "success";
+  if (status === "LATE" || status === "EARLY_LEAVE") return "warning";
   return "neutral";
 }
 

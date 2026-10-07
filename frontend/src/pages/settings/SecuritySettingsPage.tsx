@@ -1,7 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Alert,
-  Badge,
   Button,
   Group,
   Image,
@@ -26,7 +25,14 @@ import {
   startTwoFactorReconfigure,
   type TwoFactorStatus,
 } from "../../api/auth.api";
-import { FormErrorAlert, FormGrid, LoadingState, PageHeader, SectionCard } from "../../design-system";
+import {
+  FormErrorAlert,
+  FormGrid,
+  LoadingState,
+  PageHeader,
+  SectionCard,
+  StatusBadge,
+} from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
 import { getApiErrorCode, getApiErrorMessage } from "../../utils/errors";
 import { persistRecoveryCodesOnce } from "../../utils/two-factor-recovery-display";
@@ -165,9 +171,10 @@ export function SecuritySettingsPage() {
       <SectionCard
         title="Autenticación en dos pasos"
         action={
-          <Badge color={status.enabled ? "green" : "gray"}>
-            Estado: {status.enabled ? "Activada" : "Desactivada"}
-          </Badge>
+          <StatusBadge
+            label={status.enabled ? "Activada" : "Desactivada"}
+            tone={status.enabled ? "success" : "neutral"}
+          />
         }
       >
         <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">

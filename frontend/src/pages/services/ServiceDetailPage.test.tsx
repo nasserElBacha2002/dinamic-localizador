@@ -130,7 +130,7 @@ describe("ServiceDetailPage", () => {
     await waitFor(() => {
       assert.ok(view.getAllByText("Sucursal Centro").length >= 1);
     });
-    assert.ok(view.getByText("Información general"));
+    assert.ok(view.getByText("Identidad operativa"));
     assert.ok(view.getByTestId("service-location-map-view"));
     assert.equal(mapViewMounted, true);
     assert.equal(view.queryByRole("button", { name: /^Editar$/i }), null);
@@ -152,7 +152,7 @@ describe("ServiceDetailPage", () => {
     await waitFor(() => {
       assert.ok(view.getByRole("link", { name: /^Editar$/i }));
     });
-    assert.ok(view.getByText("Información general"));
+    assert.ok(view.getByText("Identidad operativa"));
     assert.ok(view.getByTestId("service-location-map-view"));
     assert.equal(view.queryByRole("textbox"), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);

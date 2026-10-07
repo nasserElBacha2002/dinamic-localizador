@@ -492,11 +492,11 @@ export function OperationTeamSection({
 
   return (
     <SectionCard
-      title="Equipo y asistencia"
+      title="Cobertura y asignaciones"
       description={
         isRecurring
-          ? "Colaboradores, confirmación y asistencia de la jornada seleccionada."
-          : "Colaboradores asignados, confirmación y asistencia."
+          ? "Dotación, incidencias y asistencia de la jornada seleccionada."
+          : "Dotación asignada, incidencias y seguimiento de asistencia."
       }
       action={
         canAssign ? (

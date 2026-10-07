@@ -1,13 +1,14 @@
 import { Stack } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { EntityLink } from "../../../components/entity-link";
+import { AttendanceStatusBadge } from "../../../components/attendance/AttendanceStatusBadge";
+import { AttendanceListEventStatusCell } from "../../../components/attendance/AttendanceListEventStatusCell";
 import {
   DataTable,
   FilterBar,
   FilterDateRangeInput,
   FilterSelect,
   PaginationControls,
-  StatusBadge,
   mapApiPaginationMeta,
   type DataTableColumn,
   type DataTableMobileCardConfig,
@@ -15,7 +16,6 @@ import {
 import { useAttendanceRecords } from "../../../hooks/useAttendance";
 import type {
   AttendanceRecordWithRelations,
-  CheckoutStatus,
   LocationStatus,
   PunctualityStatus,
   ValidationStatus,
@@ -27,7 +27,13 @@ import { formatAttendanceArrivalLabel } from "../../../utils/attendance-display"
 import { formatDistanceMeters, getRelatedName } from "../../../utils/display-safe";
 import { getApiErrorMessage } from "../../../utils/errors";
 import {
-  checkoutStatusLabels,
+  attendanceListEventStatusesLabel,
+  attendanceListLocationEvents,
+  attendanceListPunctualityEvents,
+  attendanceListValidationLabel,
+  attendanceListValidationTone,
+} from "../../../utils/attendance-list-display";
+import {
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
@@ -99,35 +105,25 @@ export function EmployeeAttendanceTab({ employeeId }: EmployeeAttendanceTabProps
         key: "validationStatus",
         header: "Validación",
         render: (row) => (
-          <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
+          <AttendanceStatusBadge
+            label={attendanceListValidationLabel(row)}
+            tone={attendanceListValidationTone(row)}
+          />
         ),
       },
       {
         key: "locationStatus",
         header: "Ubicación",
-        render: (row) => (
-          <StatusBadge label={locationStatusLabels[row.locationStatus]} tone="neutral" />
-        ),
+        getValue: (row) => attendanceListEventStatusesLabel(attendanceListLocationEvents(row)),
+        render: (row) => <AttendanceListEventStatusCell events={attendanceListLocationEvents(row)} />,
       },
       {
         key: "punctualityStatus",
         header: "Puntualidad",
+        getValue: (row) => attendanceListEventStatusesLabel(attendanceListPunctualityEvents(row)),
         render: (row) => (
-          <StatusBadge label={punctualityStatusLabels[row.punctualityStatus]} tone="neutral" />
+          <AttendanceListEventStatusCell events={attendanceListPunctualityEvents(row)} />
         ),
-      },
-      {
-        key: "checkoutStatus",
-        header: "Estado de salida",
-        render: (row) =>
-          row.checkoutStatus ? (
-            <StatusBadge
-              label={checkoutStatusLabels[row.checkoutStatus as CheckoutStatus]}
-              tone="neutral"
-            />
-          ) : (
-            "—"
-          ),
       },
     ],
     [],
@@ -137,7 +133,10 @@ export function EmployeeAttendanceTab({ employeeId }: EmployeeAttendanceTabProps
     () => ({
       title: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime),
       status: (row) => (
-        <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
+        <AttendanceStatusBadge
+          label={attendanceListValidationLabel(row)}
+          tone={attendanceListValidationTone(row)}
+        />
       ),
       fields: [
         {
@@ -187,7 +186,7 @@ export function EmployeeAttendanceTab({ employeeId }: EmployeeAttendanceTabProps
       >
         <FilterBar.Item>
           <FilterSelect
-            label="Validación"
+            label="Estado de validación"
             value={validationStatus}
             onChange={setValidationStatus}
             data={[
@@ -232,8 +231,8 @@ export function EmployeeAttendanceTab({ employeeId }: EmployeeAttendanceTabProps
             ? getApiErrorMessage(query.error, "No se pudieron cargar las asistencias.")
             : undefined
         }
-        emptyTitle="Sin asistencias"
-        emptyDescription={`No hay registros de asistencia para este ${terminology.worker.singular.toLowerCase()} en el período seleccionado.`}
+        emptyTitle="Sin registros en el período"
+        emptyDescription={`No hay jornadas con asistencia registrada para este ${terminology.worker.singular.toLowerCase()}.`}
         pagination={
           rows.length > 0 ? (
             <PaginationControls meta={meta} onPageChange={setPage} />

@@ -1,6 +1,7 @@
 import { Button, Card, Group, Skeleton, Stack, Text, Title } from "@mantine/core";
 import type { ReactNode } from "react";
 import { ErrorState } from "../../../design-system";
+import classes from "../settings-visual.module.css";
 
 export interface SettingsSummaryItem {
   label: string;
@@ -36,7 +37,7 @@ export function SettingsSummaryCard({
 }: SettingsSummaryCardProps) {
   if (loading) {
     return (
-      <Card withBorder padding="lg" radius="md" h="100%">
+      <Card withBorder padding="lg" radius="md" h="100%" className={classes.summaryCard}>
         <Stack gap="sm">
           <Skeleton height={20} width="60%" />
           <Skeleton height={14} width="90%" />
@@ -49,12 +50,14 @@ export function SettingsSummaryCard({
 
   if (error) {
     return (
-      <Card withBorder padding="lg" radius="md" h="100%">
+      <Card withBorder padding="lg" radius="md" h="100%" className={classes.summaryCard}>
         <Stack gap="sm">
-          <Title order={4}>{title}</Title>
+          <Title order={4} className={classes.summaryTitle}>
+            {title}
+          </Title>
           <ErrorState message={error} />
           {onRetry ? (
-            <Button variant="light" size="xs" onClick={onRetry}>
+            <Button variant="light" color="accent" size="xs" onClick={onRetry}>
               Reintentar
             </Button>
           ) : null}
@@ -64,13 +67,15 @@ export function SettingsSummaryCard({
   }
 
   return (
-    <Card withBorder padding="lg" radius="md" h="100%">
+    <Card withBorder padding="lg" radius="md" h="100%" className={classes.summaryCard}>
       <Stack gap="md" justify="space-between" h="100%">
         <Stack gap="sm">
           <Stack gap={4}>
-            <Title order={4}>{title}</Title>
+            <Title order={4} className={classes.summaryTitle}>
+              {title}
+            </Title>
             {description ? (
-              <Text size="sm" c="dimmed">
+              <Text size="sm" className={classes.summaryDescription}>
                 {description}
               </Text>
             ) : null}
@@ -79,10 +84,10 @@ export function SettingsSummaryCard({
           <Stack gap={6}>
             {summaryItems.map((item) => (
               <Group key={item.label} gap="xs" wrap="nowrap" align="flex-start">
-                <Text size="sm" c="dimmed" style={{ minWidth: 120 }}>
+                <Text size="sm" className={classes.summaryLabel}>
                   {item.label}
                 </Text>
-                <Text size="sm" fw={500} style={{ flex: 1 }}>
+                <Text size="sm" className={classes.summaryValue}>
                   {item.value}
                 </Text>
               </Group>
@@ -92,18 +97,9 @@ export function SettingsSummaryCard({
           {chips.length > 0 ? (
             <Group gap={6}>
               {chips.map((chip) => (
-                <Text
-                  key={chip}
-                  size="xs"
-                  px={8}
-                  py={4}
-                  style={{
-                    borderRadius: 999,
-                    background: "var(--mantine-color-gray-1)",
-                  }}
-                >
+                <span key={chip} className={classes.chip}>
                   {chip}
-                </Text>
+                </span>
               ))}
             </Group>
           ) : null}
@@ -113,7 +109,7 @@ export function SettingsSummaryCard({
 
         {canEdit && onAction ? (
           <Group>
-            <Button variant="light" onClick={onAction}>
+            <Button variant="light" color="accent" onClick={onAction}>
               {actionLabel}
             </Button>
           </Group>

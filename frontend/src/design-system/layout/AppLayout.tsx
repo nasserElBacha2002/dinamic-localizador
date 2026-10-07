@@ -5,7 +5,8 @@ import { AppSidebar } from "./AppSidebar";
 import { AppTopbar } from "./AppTopbar";
 
 const NAVBAR_WIDTH = 260;
-const HEADER_HEIGHT = 56;
+/** Altura extra para el lockup de marca en la barra superior. */
+const HEADER_HEIGHT = 76;
 const NAVBAR_BREAKPOINT = "md";
 
 export function AppLayout({ children }: PropsWithChildren) {

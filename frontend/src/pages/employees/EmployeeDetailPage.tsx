@@ -125,7 +125,7 @@ export function EmployeeDetailPage() {
     <Stack gap="md">
       <PageHeader
         title={<EntityPageTitle name={employee.name} entityType="collaborator" />}
-        description={`Detalle de ${terminology.worker.singular.toLowerCase()}`}
+        description={`Disponibilidad, asignaciones y seguimiento operativo del ${terminology.worker.singular.toLowerCase()}.`}
         action={
           <Group gap="sm">
             {canManage ? <EntityEditAction entity="employees" id={employee.id} /> : null}

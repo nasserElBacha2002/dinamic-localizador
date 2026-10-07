@@ -1,9 +1,10 @@
-import { Button, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
+import { Button, Group, Select, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
 import {
   ConfirmDialog,
   DataTable,
+  EntityIdentity,
   ErrorState,
   FilterBar,
   LoadingState,
@@ -11,6 +12,7 @@ import {
   PageHeader,
   PaginationControls,
   SearchInput,
+  SectionCard,
   StatusBadge,
   type DataTableColumn,
   type DataTableMobileCardConfig,
@@ -255,7 +257,13 @@ export function CompanyUsersPage() {
 
   const columns = useMemo<DataTableColumn<CompanyUser>[]>(
     () => [
-      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      {
+        key: "name",
+        header: "Nombre",
+        render: (row) => (
+          <EntityIdentity name={row.name} entityType="collaborator" subtitle={row.email} />
+        ),
+      },
       { key: "email", header: "Email", getValue: (row) => row.email },
       {
         key: "phoneNumber",
@@ -354,19 +362,25 @@ export function CompanyUsersPage() {
       />
 
       {(pendingInvitationsQuery.data?.data.length ?? 0) > 0 ? (
-        <Paper withBorder p="md" mb="md">
+        <SectionCard
+          title="Invitaciones pendientes"
+          description="Usuarios invitados que aún no activaron su acceso."
+        >
           <Stack gap="sm">
-            <Title order={5}>Invitaciones pendientes</Title>
             {pendingInvitationsQuery.data?.data.map((invitation) => (
               <Group key={invitation.id} justify="space-between" wrap="wrap">
-                <Text size="sm">
-                  {invitation.inviteeName ?? invitation.email} —{" "}
-                  {companyRoleLabels[invitation.role] ?? invitation.role}
-                </Text>
+                <Stack gap={2}>
+                  <Text size="sm" fw={500}>
+                    {invitation.inviteeName ?? invitation.email}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {invitation.email} · {companyRoleLabels[invitation.role] ?? invitation.role}
+                  </Text>
+                </Stack>
                 <Group gap="xs">
                   <Button
                     size="compact-sm"
-                    variant="light"
+                    variant="default"
                     loading={resendInvitationMutation.isPending}
                     onClick={() => void handleResendInvitation(invitation)}
                   >
@@ -385,7 +399,7 @@ export function CompanyUsersPage() {
               </Group>
             ))}
           </Stack>
-        </Paper>
+        </SectionCard>
       ) : null}
 
       <FilterBar

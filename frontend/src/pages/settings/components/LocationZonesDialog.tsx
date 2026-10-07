@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
 import type { LocationZone } from "../../../types/location-zone";
-import { ResponsiveModal } from "../../../design-system";
+import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
 import { LocationZonesDialogContent } from "./LocationZonesDialogContent";
 
 interface LocationZonesDialogProps {
@@ -19,7 +19,7 @@ export function LocationZonesDialog({
   canEditGlobal = false,
 }: LocationZonesDialogProps) {
   return (
-    <ResponsiveModal
+    <SettingsResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Barrios y localidades"
@@ -38,6 +38,6 @@ export function LocationZonesDialog({
         canUpdate={canUpdate}
         canEditGlobal={canEditGlobal}
       />
-    </ResponsiveModal>
+    </SettingsResponsiveModal>
   );
 }

@@ -165,7 +165,7 @@ export function HomePage() {
                 <DashboardTile>
                   <SectionCard
                     fillHeight
-                    title="Servicios que requieren atención"
+                    title="Situaciones que requieren atención"
                     description={attentionDescription}
                     action={
                       <Button

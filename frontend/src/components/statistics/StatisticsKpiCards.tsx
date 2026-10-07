@@ -120,7 +120,7 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     },
     {
       key: "attendanceRate",
-      label: "Presentismo (cobertura)",
+      label: "Presentismo",
       numericValue: presentismoDenom > 0 ? summary?.attendanceRate ?? 0 : 0,
       value: formatRateWithVolume(
         summary?.attendanceRate ?? 0,

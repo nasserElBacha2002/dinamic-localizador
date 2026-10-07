@@ -1,0 +1,32 @@
+.bubble {
+  max-width: 85%;
+  padding: var(--mantine-spacing-sm);
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid var(--mantine-color-gray-3);
+}
+
+.inbound {
+  background: var(--mantine-color-gray-1);
+  color: var(--mantine-color-dark);
+}
+
+.outbound {
+  background: var(--mantine-color-brand-6);
+  color: var(--mantine-color-white);
+  border-color: transparent;
+}
+
+.timestamp {
+  margin-top: 6px;
+  font-size: var(--mantine-font-size-xs);
+  opacity: 0.8;
+}
+
+.timestampOutbound {
+  text-align: right;
+  color: var(--mantine-color-white);
+}
+
+.timestampInbound {
+  color: var(--mantine-color-dimmed);
+}

@@ -12,7 +12,9 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert, ResponsiveModal } from "../../../design-system";
+import { FormErrorAlert } from "../../../design-system";
+import classes from "../settings-visual.module.css";
+import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
 import {
   useCreateShiftTemplate,
   useDeactivateShiftTemplate,
@@ -154,7 +156,7 @@ export function CompanyShiftTemplatesDialog({
   };
 
   return (
-    <ResponsiveModal
+    <SettingsResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Plantillas de turnos"
@@ -169,7 +171,7 @@ export function CompanyShiftTemplatesDialog({
       }
     >
       <Stack gap="md">
-        <Text size="sm" c="dimmed">
+        <Text size="sm" className={classes.dialogSubtitle}>
           Definí turnos reutilizables (código, nombre y horario). Editar una plantilla no
           reescribe turnos históricos ya creados en operaciones.
         </Text>
@@ -394,6 +396,6 @@ export function CompanyShiftTemplatesDialog({
           )}
         </Stack>
       </Stack>
-    </ResponsiveModal>
+    </SettingsResponsiveModal>
   );
 }

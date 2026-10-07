@@ -27,8 +27,8 @@ export function BrandLogo({ className, variant = "horizontal" }: BrandLogoProps)
           }
           src={BRAND_ISOTIPO_SRC}
           alt=""
-          width={32}
-          height={32}
+          width={40}
+          height={40}
           decoding="async"
         />
       </span>
@@ -42,8 +42,8 @@ export function BrandLogo({ className, variant = "horizontal" }: BrandLogoProps)
           className={classes.reverso}
           src={BRAND_REVERSO_SRC}
           alt=""
-          width={200}
-          height={48}
+          width={52}
+          height={52}
           decoding="async"
         />
       </span>
@@ -61,8 +61,8 @@ export function BrandLogo({ className, variant = "horizontal" }: BrandLogoProps)
         className={horizontalClass}
         src={BRAND_LOGO_HORIZONTAL_SRC}
         alt=""
-        width={220}
-        height={64}
+        width={240}
+        height={72}
         decoding="async"
       />
     </span>

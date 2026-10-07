@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Navigate, Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
+import { AuthPageLogo } from "../components/brand/AuthPageLogo";
 import { FormErrorAlert } from "../design-system";
 import { useAuth } from "../hooks/useAuth";
 import { getApiErrorMessage } from "../utils/errors";
@@ -29,9 +30,9 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 const highlights = [
-  "Validación de llegada por ubicación",
-  "Operaciones multiempresa",
-  "Seguimiento de asistencias en tiempo real",
+  "Servicios y operaciones en un solo panel",
+  "Planificación y cobertura por empresa",
+  "Seguimiento operativo y resolución de incidencias",
 ] as const;
 
 export function LoginPage() {
@@ -93,10 +94,13 @@ export function LoginPage() {
         <Box className={classes.brandPanel}>
           <Stack gap="lg" className={classes.brandContent}>
             <div>
-              <Text className={classes.brandEyebrow}>Dinamic Attendance</Text>
+              <AuthPageLogo onDark />
               <Title order={2} className={classes.brandTitle}>
-                Control operativo de asistencias por WhatsApp y geocerca.
+                Planificá, detectá y resolvé en el día a día operativo.
               </Title>
+              <Text size="sm" className={classes.brandTagline}>
+                Una plataforma para coordinar servicios, equipos y situaciones que requieren atención.
+              </Text>
             </div>
 
             <Stack gap="sm">
@@ -112,16 +116,14 @@ export function LoginPage() {
         <Box className={classes.formPanel}>
           <Stack w="100%" maw={420} gap="md">
             <div className={classes.mobileBrand}>
-              <Text className={classes.brandEyebrow} c="brand" fw={600}>
-                Dinamic Attendance
-              </Text>
+              <AuthPageLogo />
             </div>
-            <Paper className={classes.formCard} radius="lg" withBorder shadow="md" p="xl">
+            <Paper className={classes.formCard} radius="lg" withBorder p="xl">
             <Stack gap="lg">
               <div>
                 <Title order={2}>Iniciar sesión</Title>
                 <Text c="dimmed" size="sm" mt={4}>
-                  Accedé al panel operativo de Dinamic Attendance.
+                  Accedé al panel operativo de Dinamic Operations.
                 </Text>
               </div>
 

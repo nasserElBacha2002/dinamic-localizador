@@ -1,0 +1,26 @@
+.operationRow {
+  cursor: pointer;
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+  transition: background-color 100ms ease;
+}
+
+.operationRow:hover {
+  background-color: var(--mantine-color-gray-0);
+}
+
+.operationRow:focus-visible {
+  outline: 2px solid var(--mantine-color-accent-6);
+  outline-offset: -2px;
+}
+
+.kpiDivider {
+  border-top: 1px solid var(--mantine-color-gray-2);
+}
+
+.kpiSectionLabel {
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

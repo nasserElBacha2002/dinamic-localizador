@@ -1,9 +1,11 @@
-import { ActionIcon, Badge, Box, Burger, Group, Menu, Text, Title } from "@mantine/core";
+import { ActionIcon, Badge, Box, Burger, Group, Menu, Text } from "@mantine/core";
+import { BrandLogo } from "../../components/brand/BrandLogo";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompany } from "../../hooks/useCompany";
 import { companyRoleLabels } from "../../utils/labels";
 import type { CompanyRole } from "../../types/company-user";
 import { CompanySwitcher } from "./CompanySwitcher";
+import topbarClasses from "./app-topbar.module.css";
 
 const NAVBAR_BREAKPOINT = "md";
 
@@ -32,7 +34,7 @@ function UserMenu({
   mobile?: boolean;
 }) {
   const trigger = mobile ? (
-    <ActionIcon variant="light" color="brand" size="lg" aria-label="Menú de usuario">
+    <ActionIcon variant="light" color="accent" size="lg" aria-label="Menú de usuario">
       <Text size="sm" fw={700}>
         {userName.charAt(0).toUpperCase()}
       </Text>
@@ -43,6 +45,7 @@ function UserMenu({
         <Text
           size="sm"
           fw={600}
+          c="brand.7"
           style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}
         >
           {userName}
@@ -53,7 +56,7 @@ function UserMenu({
           </Text>
         ) : null}
       </div>
-      <Badge variant="light" color="secondary" size="sm">
+      <Badge variant="light" color="gray" size="sm">
         ▾
       </Badge>
     </Group>
@@ -80,35 +83,29 @@ export function AppTopbar({ mobileOpened, onToggleMobile }: AppTopbarProps) {
   const roleLabel = getRoleLabel(activeCompany?.role);
 
   return (
-    <Group h="100%" px="md" justify="space-between" wrap="nowrap" gap="sm">
-      <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+    <Group h="100%" px="md" justify="space-between" wrap="nowrap" gap="md" align="center">
+      <Group gap="sm" wrap="nowrap" align="center" style={{ flex: 1, minWidth: 0 }}>
         <Burger
           opened={mobileOpened}
           onClick={onToggleMobile}
           hiddenFrom={NAVBAR_BREAKPOINT}
           size="sm"
           aria-label="Abrir menú"
+          color="brand.7"
         />
-        <Title
-          order={4}
-          c="brand.7"
-          visibleFrom="xs"
-          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        <Box className={topbarClasses.brandSlot} visibleFrom={NAVBAR_BREAKPOINT}>
+          <BrandLogo variant="horizontal" className={topbarClasses.brandHorizontal} />
+        </Box>
+        <Box
+          className={`${topbarClasses.brandSlot} ${topbarClasses.brandIsotype}`}
+          hiddenFrom={NAVBAR_BREAKPOINT}
         >
-          Dinamic Attendance
-        </Title>
-        <Title
-          order={5}
-          c="brand.7"
-          hiddenFrom="xs"
-          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-        >
-          Dinamic
-        </Title>
+          <BrandLogo variant="isotype" />
+        </Box>
       </Group>
 
       {user ? (
-        <Group gap="sm" wrap="nowrap" style={{ flexShrink: 1, minWidth: 0, justifyContent: "flex-end" }}>
+        <Group gap="sm" wrap="nowrap" align="center" style={{ flexShrink: 0, minWidth: 0 }}>
           <Group gap="xs" wrap="nowrap" visibleFrom="sm">
             <CompanySwitcher />
           </Group>

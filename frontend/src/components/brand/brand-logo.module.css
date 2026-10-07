@@ -1,0 +1,41 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.horizontal,
+.horizontalCompact {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 2rem;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.horizontalCompact {
+  height: 1.875rem;
+}
+
+.isotype,
+.isotypeCompact {
+  display: block;
+  width: auto;
+  height: 2rem;
+  object-fit: contain;
+}
+
+.isotypeCompact {
+  height: 1.75rem;
+}
+
+.reverso {
+  display: block;
+  height: 2.5rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
+}

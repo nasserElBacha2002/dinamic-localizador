@@ -21,6 +21,7 @@ import { buildHomeAttentionSummary } from "./home/home-dashboard-attention-prese
 import { HomeDashboardKpiCards } from "./home/HomeDashboardKpiCards";
 import { HomeOperationalHealth } from "./home/HomeOperationalHealth";
 import { useHomeDashboard } from "./home/useHomeDashboard";
+import classes from "./home/home-page.module.css";
 
 const HOME_COL_MAIN = { base: 12, lg: 7 } as const;
 const HOME_COL_SIDE = { base: 12, lg: 5 } as const;
@@ -50,8 +51,8 @@ const homeGridColStyle = {
 function TodayOperationsHeader() {
   return (
     <Group gap="xs" wrap="nowrap" visibleFrom="md" mb={4}>
-      <Text size="xs" c="dimmed" fw={600} style={{ flex: 2.2, minWidth: 0 }}>
-        Operación
+      <Text size="xs" c="dimmed" fw={600} tt="uppercase" style={{ flex: 2.2, minWidth: 0, letterSpacing: "0.02em" }}>
+        Servicio / operación
       </Text>
       <Text size="xs" c="dimmed" fw={600} style={{ flex: 2, minWidth: 0 }}>
         Ubicación
@@ -97,10 +98,7 @@ function TodayOperationRow({
       onClick={handleNavigate}
       onKeyDown={handleKeyDown}
       py={6}
-      style={{
-        cursor: "pointer",
-        borderBottom: "1px solid var(--mantine-color-gray-2)",
-      }}
+      className={classes.operationRow}
     >
       <Group gap="xs" wrap="nowrap" align="center">
         <Text size="sm" fw={600} style={{ flex: 2.2, minWidth: 0 }} truncate>
@@ -147,33 +145,37 @@ export function HomePage() {
 
   return (
     <>
-      <PageHeader title="Inicio" description={dashboard.todayLabel} />
+      <PageHeader
+        title="Inicio"
+        description={`${dashboard.todayLabel} · Planificá · Detectá · Resolvé`}
+      />
 
       {!dashboard.showOperationalContent ? (
-        <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
+        <SectionCard title="Estado de la operación" description="Resumen del entorno de la plataforma.">
           <Text size="sm" c="dimmed">
             Seleccioná una empresa y revisá los módulos habilitados para ver información operativa
             en el panel.
           </Text>
         </SectionCard>
       ) : (
-        <Stack gap="sm">
+        <Stack gap="md">
           {dashboard.canAccessReports ? (
-            <Grid gap="sm" align="stretch">
+            <Grid gap="md" align="stretch">
               <Grid.Col span={HOME_COL_MAIN} style={homeGridColStyle}>
                 <DashboardTile>
                   <SectionCard
                     fillHeight
-                    title="Requieren atención"
+                    title="Servicios que requieren atención"
                     description={attentionDescription}
                     action={
                       <Button
                         component={Link}
                         to={dashboard.statisticsPageHref}
                         variant="light"
+                        color="accent"
                         size="xs"
                       >
-                        Estadísticas
+                        Ver análisis
                       </Button>
                     }
                   >
@@ -189,7 +191,8 @@ export function HomePage() {
                 <DashboardTile>
                   <SectionCard
                     fillHeight
-                    title={`Estado de ${dashboard.todayLabel.toLowerCase()}`}
+                    title="Estado de la operación"
+                    description={`Cobertura y señales del día · ${dashboard.todayLabel}`}
                     action={
                       <Button
                         component={Link}
@@ -197,7 +200,7 @@ export function HomePage() {
                         variant="light"
                         size="xs"
                       >
-                        Ver más
+                        Ver detalle
                       </Button>
                     }
                   >
@@ -218,7 +221,7 @@ export function HomePage() {
             </Grid>
           ) : null}
 
-          <Grid gap="sm" align="stretch">
+          <Grid gap="md" align="stretch">
             {dashboard.canReadOperations ? (
               <Grid.Col
                 span={dashboard.canAccessReports ? HOME_COL_MAIN : { base: 12, lg: 12 }}
@@ -228,7 +231,7 @@ export function HomePage() {
                   <SectionCard
                     fillHeight
                     title={`${terminology.operation.plural} de ${dashboard.todayLabel.toLowerCase()}`}
-                    description={`${dashboard.operationsTotal ?? 0} en el día`}
+                    description={`${dashboard.operationsTotal ?? 0} programada${(dashboard.operationsTotal ?? 0) === 1 ? "" : "s"} en el día`}
                     action={
                       <Button
                         component={Link}
@@ -291,7 +294,11 @@ export function HomePage() {
                 style={homeGridColStyle}
               >
                 <DashboardTile>
-                  <SectionCard fillHeight title="Salud operativa">
+                  <SectionCard
+                    fillHeight
+                    title="Cobertura e incidencias"
+                    description="Distribución de jornadas e incidencias operativas del día"
+                  >
                     {dashboard.summaryQuery.isError ? (
                       <ErrorState message={getApiErrorMessage(dashboard.summaryQuery.error)} />
                     ) : (

@@ -1,17 +1,5 @@
 import type { EChartsOption } from "echarts";
-
-const CHART_COLORS = {
-  present: "#2e7d32",
-  absent: "#d32f2f",
-  justified: "#7b1fa2",
-  expected: "#0288d1",
-  late: "#ed6c02",
-  outsideGeofence: "#6d4c41",
-  pendingReview: "#455a64",
-  rejected: "#5d4037",
-  primary: "#1565c0",
-  volume: "#90a4ae",
-};
+import { chartColors } from "../../design-system/theme/chart-colors";
 
 const baseToolbox = {
   right: 12,
@@ -31,6 +19,9 @@ const lineToolbox = {
   },
 };
 
+const axisLabelStyle = { color: chartColors.axis, fontSize: 11 };
+const splitLineStyle = { lineStyle: { color: chartColors.grid, type: "dashed" as const } };
+
 export function buildTimelineChartOption(
   dates: string[],
   series: {
@@ -46,9 +37,13 @@ export function buildTimelineChartOption(
   );
 
   return {
-    color: [CHART_COLORS.present, CHART_COLORS.late, CHART_COLORS.volume],
+    color: [chartColors.present, chartColors.late, chartColors.volume],
+    textStyle: { fontFamily: "Inter, system-ui, sans-serif", color: chartColors.ink },
     tooltip: {
       trigger: "axis",
+      backgroundColor: chartColors.ink,
+      borderColor: chartColors.ink,
+      textStyle: { color: "#fff", fontSize: 12 },
       formatter: (params: unknown) => {
         const items = Array.isArray(params) ? params : [params];
         return (items as Array<{ seriesName: string; value: number; axisValue: string; marker: string }>)
@@ -59,7 +54,7 @@ export function buildTimelineChartOption(
           .join("<br/>");
       },
     },
-    legend: { top: 0 },
+    legend: { top: 0, textStyle: { color: chartColors.axis } },
     grid: { left: 48, right: 48, top: 48, bottom: enableDataZoom ? 72 : 32 },
     toolbox: lineToolbox,
     dataZoom: enableDataZoom
@@ -68,10 +63,32 @@ export function buildTimelineChartOption(
           { type: "slider", start: 0, end: 100, bottom: 8 },
         ]
       : undefined,
-    xAxis: { type: "category", data: labels, boundaryGap: false },
+    xAxis: {
+      type: "category",
+      data: labels,
+      boundaryGap: false,
+      axisLabel: axisLabelStyle,
+      axisLine: { lineStyle: { color: chartColors.grid } },
+    },
     yAxis: [
-      { type: "value", name: "%", min: 0, max: 100, minInterval: 1 },
-      { type: "value", name: "Vol.", minInterval: 1, splitLine: { show: false } },
+      {
+        type: "value",
+        name: "%",
+        min: 0,
+        max: 100,
+        minInterval: 1,
+        nameTextStyle: axisLabelStyle,
+        axisLabel: axisLabelStyle,
+        splitLine: splitLineStyle,
+      },
+      {
+        type: "value",
+        name: "Vol.",
+        minInterval: 1,
+        splitLine: { show: false },
+        nameTextStyle: axisLabelStyle,
+        axisLabel: axisLabelStyle,
+      },
     ],
     series: [
       {
@@ -80,6 +97,7 @@ export function buildTimelineChartOption(
         smooth: true,
         data: series.attendanceRate,
         yAxisIndex: 0,
+        lineStyle: { width: 2 },
       },
       {
         name: "Puntualidad",
@@ -87,6 +105,7 @@ export function buildTimelineChartOption(
         smooth: true,
         data: series.punctualityRate,
         yAxisIndex: 0,
+        lineStyle: { width: 2 },
       },
       {
         name: "Jornadas",
@@ -94,7 +113,7 @@ export function buildTimelineChartOption(
         data: series.scheduled,
         yAxisIndex: 1,
         barMaxWidth: 18,
-        itemStyle: { opacity: 0.35 },
+        itemStyle: { opacity: 0.35, color: chartColors.volume },
       },
     ],
   };
@@ -105,10 +124,14 @@ export function buildActionExceptionsOption(
   items: Array<{ label: string; count: number; rate?: number | null }>,
 ): EChartsOption {
   return {
-    color: [CHART_COLORS.late],
+    color: [chartColors.warning],
+    textStyle: { fontFamily: "Inter, system-ui, sans-serif", color: chartColors.ink },
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
+      backgroundColor: chartColors.ink,
+      borderColor: chartColors.ink,
+      textStyle: { color: "#fff", fontSize: 12 },
       formatter: (params: unknown) => {
         const itemsArr = Array.isArray(params) ? params : [params];
         const first = itemsArr[0] as { name: string; value: number; dataIndex: number };
@@ -119,12 +142,18 @@ export function buildActionExceptionsOption(
     },
     grid: { left: 140, right: 40, top: 16, bottom: 24 },
     toolbox: baseToolbox,
-    xAxis: { type: "value", minInterval: 1 },
+    xAxis: {
+      type: "value",
+      minInterval: 1,
+      axisLabel: axisLabelStyle,
+      splitLine: splitLineStyle,
+    },
     yAxis: {
       type: "category",
       data: items.map((item) => item.label),
       inverse: true,
-      axisLabel: { width: 130, overflow: "truncate" },
+      axisLabel: { width: 130, overflow: "truncate", ...axisLabelStyle },
+      axisLine: { lineStyle: { color: chartColors.grid } },
     },
     series: [
       {
@@ -133,6 +162,7 @@ export function buildActionExceptionsOption(
         label: {
           show: true,
           position: "right",
+          color: chartColors.ink,
           formatter: (params: unknown) => {
             const p = params as { dataIndex: number; value: number };
             const rate = items[p.dataIndex]?.rate;
@@ -151,11 +181,17 @@ export function buildHorizontalBarOption(
   valueSuffix = "%",
 ): EChartsOption {
   return {
-    color: [CHART_COLORS.primary],
-    title: title ? { text: title, left: "center", textStyle: { fontSize: 13, fontWeight: 500 } } : undefined,
+    color: [chartColors.primary],
+    textStyle: { fontFamily: "Inter, system-ui, sans-serif", color: chartColors.ink },
+    title: title
+      ? { text: title, left: "center", textStyle: { fontSize: 13, fontWeight: 500, color: chartColors.ink } }
+      : undefined,
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
+      backgroundColor: chartColors.ink,
+      borderColor: chartColors.ink,
+      textStyle: { color: "#fff", fontSize: 12 },
       formatter: (params: unknown) => {
         const items = Array.isArray(params) ? params : [params];
         const first = items[0] as { name: string; value: number };
@@ -168,18 +204,26 @@ export function buildHorizontalBarOption(
       type: "value",
       max: valueSuffix === "%" ? 100 : undefined,
       minInterval: valueSuffix === "" ? 1 : undefined,
+      axisLabel: axisLabelStyle,
+      splitLine: splitLineStyle,
     },
     yAxis: {
       type: "category",
       data: categories,
       inverse: true,
-      axisLabel: { width: 130, overflow: "truncate" },
+      axisLabel: { width: 130, overflow: "truncate", ...axisLabelStyle },
+      axisLine: { lineStyle: { color: chartColors.grid } },
     },
     series: [
       {
         type: "bar",
         data: values,
-        label: { show: true, position: "right", formatter: `{c}${valueSuffix}` },
+        label: {
+          show: true,
+          position: "right",
+          color: chartColors.ink,
+          formatter: `{c}${valueSuffix}`,
+        },
       },
     ],
   };
@@ -192,22 +236,41 @@ export function buildVerticalBarOption(
   valueSuffix = "",
 ): EChartsOption {
   return {
-    color: [CHART_COLORS.late],
-    title: title ? { text: title, left: "center", textStyle: { fontSize: 13, fontWeight: 500 } } : undefined,
-    tooltip: { trigger: "axis" },
+    color: [chartColors.primary],
+    textStyle: { fontFamily: "Inter, system-ui, sans-serif", color: chartColors.ink },
+    title: title
+      ? { text: title, left: "center", textStyle: { fontSize: 13, fontWeight: 500, color: chartColors.ink } }
+      : undefined,
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: chartColors.ink,
+      borderColor: chartColors.ink,
+      textStyle: { color: "#fff", fontSize: 12 },
+    },
     grid: { left: 48, right: 24, top: title ? 40 : 16, bottom: 64 },
     toolbox: baseToolbox,
     xAxis: {
       type: "category",
       data: categories,
-      axisLabel: { rotate: categories.some((c) => c.length > 12) ? 30 : 0, width: 90, overflow: "truncate" },
+      axisLabel: {
+        rotate: categories.some((c) => c.length > 12) ? 30 : 0,
+        width: 90,
+        overflow: "truncate",
+        ...axisLabelStyle,
+      },
+      axisLine: { lineStyle: { color: chartColors.grid } },
     },
-    yAxis: { type: "value", minInterval: 1 },
+    yAxis: {
+      type: "value",
+      minInterval: 1,
+      axisLabel: axisLabelStyle,
+      splitLine: splitLineStyle,
+    },
     series: [
       {
         type: "bar",
         data: values,
-        label: { show: true, position: "top", formatter: `{c}${valueSuffix}` },
+        label: { show: true, position: "top", color: chartColors.ink, formatter: `{c}${valueSuffix}` },
       },
     ],
   };

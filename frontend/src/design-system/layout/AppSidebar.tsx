@@ -69,7 +69,7 @@ export function AppSidebar({ onNavigate }: AppSidebarProps) {
 
         {modulesLoading ? (
           <Stack gap={4} align="center" className={classes.loading}>
-            <Loader size="sm" color="brand" />
+            <Loader size="sm" color="accent" />
             <Text size="xs" c="dimmed">
               Cargando menú...
             </Text>

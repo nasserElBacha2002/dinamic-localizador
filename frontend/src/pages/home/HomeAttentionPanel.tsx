@@ -48,7 +48,7 @@ function AttentionActionRow({
           ) : null}
         </Stack>
       </Group>
-      <Button component={Link} to={href} variant="subtle" size="compact-xs">
+      <Button component={Link} to={href} variant="subtle" color="accent" size="compact-xs">
         Ver
       </Button>
     </Group>

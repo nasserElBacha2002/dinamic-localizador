@@ -1,29 +1,38 @@
-/** Modern Professional palette — source of truth for Mantine theme. */
+/** Dinamic Operations — source of truth for Mantine theme. */
 export const designTokens = {
   colors: {
-    primary: "#1275F2",
-    primaryHover: "#0F63D1",
-    primaryLight: "#EAF2FF",
-    secondary: "#5F78A3",
-    secondaryLight: "#EEF3FA",
-    tertiary: "#C55B00",
-    tertiaryLight: "#FFF3E8",
-    neutral: "#74777F",
-    background: "#F6F8FC",
+    /** Structural ink / trust (nav, headings). */
+    ink: "#0F1E2B",
+    inkHover: "#0C1721",
+    inkLight: "#E9ECEF",
+    /** CTA, focus, accent (not large surfaces). */
+    accent: "#FF6A00",
+    accentHover: "#E55F00",
+    accentLight: "#FFF4EB",
+    secondary: "#6B7785",
+    secondaryLight: "#F4F6F8",
+    neutral: "#6B7785",
+    background: "#F7F8F9",
     surface: "#FFFFFF",
-    border: "#D7DDE8",
-    textPrimary: "#101828",
-    textSecondary: "#667085",
+    border: "#E9ECEF",
+    textPrimary: "#0F1E2B",
+    textSecondary: "#6B7785",
     success: "#16A34A",
-    warning: "#C55B00",
+    warning: "#D97706",
     danger: "#DC2626",
-    info: "#1275F2",
-    /** IA / recommendations — distinct from brand blue. */
-    ai: "#7C3AED",
-    aiHover: "#6D28D9",
-    aiLight: "#F5F3FF",
-    aiBorder: "#DDD6FE",
-    aiMuted: "#8B5CF6",
+    info: "#0284C7",
+    /** Recommendations / IA — integrated slate (Mantine `ai` scale). */
+    ai: "#3D5160",
+    aiHover: "#2A3A47",
+    aiLight: "#F4F6F8",
+    aiBorder: "#E9ECEF",
+    aiMuted: "#6B7785",
+    /** @deprecated Use `accent` — kept for gradual migration of direct token reads. */
+    primary: "#FF6A00",
+    primaryHover: "#E55F00",
+    primaryLight: "#FFF4EB",
+    tertiary: "#FF6A00",
+    tertiaryLight: "#FFF4EB",
   },
   fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
   radius: {
@@ -39,7 +48,7 @@ export const designTokens = {
     xl: "2rem",
   },
   shadows: {
-    sm: "0 1px 2px rgba(16, 24, 40, 0.06)",
-    md: "0 4px 16px rgba(16, 24, 40, 0.08)",
+    sm: "0 1px 2px rgba(15, 30, 43, 0.06)",
+    md: "0 4px 12px rgba(15, 30, 43, 0.08)",
   },
 } as const;

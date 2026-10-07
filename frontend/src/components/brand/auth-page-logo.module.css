@@ -1,0 +1,5 @@
+.root {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 0.25rem;
+}

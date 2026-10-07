@@ -244,7 +244,7 @@ describe("LandingPage", () => {
   it("navbar muestra lockup de marca final", () => {
     const { getByLabelText } = renderPage(<LandingPage />);
     const logo = getByLabelText("Dinamic Operations");
-    assert.ok(logo.querySelector('img[src="/brand/dinamic-operations-logo.svg"]'));
+    assert.ok(logo.querySelector('img[src="/brand/dinamic-operations-logo.png"]'));
   });
 
   it("navbar y footer mantienen Ingresar y solicitar demo", () => {

@@ -21,15 +21,15 @@
   display: block;
   width: auto;
   height: var(--m-header-logo-h);
-  max-width: min(280px, 70vw);
+  max-width: min(18rem, 72vw);
   object-fit: contain;
   object-position: left center;
 }
 
 @media (min-width: 768px) {
   .horizontalLockup {
-    height: 3.25rem;
-    max-width: min(360px, 38vw);
+    height: 3.75rem;
+    max-width: min(20rem, 42vw);
   }
 }
 

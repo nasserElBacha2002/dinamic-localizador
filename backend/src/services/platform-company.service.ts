@@ -9,6 +9,7 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { userRepository } from "../repositories/user.repository";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+import { companyLocationZoneDefaultsService } from "./company-location-zone-defaults.service";
 import { companyWorkScheduleService } from "./company-work-schedule.service";
 import {
   invitationExpiresAt,
@@ -105,6 +106,10 @@ export const platformCompanyService = {
         settingsInput.operationTimezone,
         transaction,
       );
+      await companyLocationZoneDefaultsService.ensureDefaultGenericZonesForCompany(
+        company.id,
+        transaction,
+      );
       const { absenceCalendarService } = await import("./absence-calendar.service");
       await absenceCalendarService.bootstrapDefaultCalendar(company.id, {
         timezone: settingsInput.operationTimezone,
@@ -144,6 +149,9 @@ export const platformCompanyService = {
       }
       throw error;
     }
+
+    // Post-commit: best-effort geocoding for default zones (shared global catalog).
+    companyLocationZoneDefaultsService.scheduleGeocodingBackfillForCompany(company.id);
 
     // Post-commit delivery: never roll back company creation on email/lookup failures.
     const emailResult = await userInvitationService.deliverEmail(invitation.id, rawToken);

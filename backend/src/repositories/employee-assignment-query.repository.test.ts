@@ -31,7 +31,7 @@ describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
   it("lists unavailability with RECURRING end-window and ONE_TIME future-start semantics", () => {
     const methodSource = repositorySource.slice(
       repositorySource.indexOf("async listUnavailabilityForEmployee"),
-      repositorySource.indexOf("async findByOperationForEmployee"),
+      repositorySource.indexOf("async findOccurrenceByEmployeeWorkdayForEmployee"),
     );
     assert.match(methodSource, /i\.operation_kind = N'RECURRING'/);
     assert.match(methodSource, /COALESCE\(ow\.expected_end_at, ow\.expected_start_at\) >= @at/);

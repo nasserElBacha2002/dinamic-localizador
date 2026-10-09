@@ -420,8 +420,8 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
       requireAttachment: true,
     });
     const today = await resolveCompanyTodayIso(companyId);
-    const start = addDays(today, 85);
-    const end = addDays(today, 86);
+    const start = addDays(today, 73);
+    const end = addDays(today, 74);
 
     const request = await absenceRequestService.createFromAdmin(
       companyId,

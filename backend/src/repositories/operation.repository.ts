@@ -16,6 +16,7 @@ import { companySettingsRepository } from "./company-settings.repository";
 import { getDateIsoInTimezone } from "../utils/absence-date";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { shouldExcludeCancelledOperationsFromList } from "../utils/operation-list-filters";
 import { resolveSqlSort } from "../utils/sql-sort";
 import type {
   CreateOneTimeOperationInput,
@@ -484,6 +485,13 @@ export const operationRepository = {
       filters.push({
         clause: "i.status = @status",
         apply: (request) => request.input("status", sql.NVarChar(30), query.status),
+      });
+    }
+
+    if (shouldExcludeCancelledOperationsFromList(query)) {
+      filters.push({
+        clause: "i.status <> N'CANCELLED'",
+        apply: () => undefined,
       });
     }
 

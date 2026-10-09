@@ -27,6 +27,21 @@
   text-decoration: none;
 }
 
+.logoDesktop {
+  display: none;
+}
+
+.logoMobile {
+  display: inline-flex;
+  align-items: center;
+}
+
+.logoMobile img {
+  width: auto;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
 .logoLink:focus-visible {
   outline: 2px solid var(--m-brand);
   outline-offset: 4px;
@@ -69,5 +84,13 @@
 @media (min-width: 768px) {
   .nav {
     display: flex;
+  }
+
+  .logoDesktop {
+    display: inline-flex;
+  }
+
+  .logoMobile {
+    display: none;
   }
 }

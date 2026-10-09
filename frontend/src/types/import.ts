@@ -1,4 +1,4 @@
-export type ImportEntityType = "operations" | "services" | "employees";
+export type ImportEntityType = "operations" | "services" | "employees" | "clients";
 
 export type ImportRowStatus = "valid" | "invalid" | "warning";
 export type ImportExecuteRowStatus = "created" | "updated" | "rejected";

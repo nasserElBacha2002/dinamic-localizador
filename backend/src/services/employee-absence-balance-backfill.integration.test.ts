@@ -59,6 +59,7 @@ describeDatabaseIntegration("employee absence balance backfill integration", () 
         DELETE FROM company_work_schedules WHERE company_id = @companyId;
         DELETE FROM user_invitations WHERE company_id = @companyId;
         DELETE FROM audit_logs WHERE company_id = @companyId;
+        DELETE FROM company_location_zones WHERE company_id = @companyId;
         DELETE FROM companies WHERE id = @companyId;
       `);
     }

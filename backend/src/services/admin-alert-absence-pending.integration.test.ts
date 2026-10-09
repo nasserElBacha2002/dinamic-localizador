@@ -61,6 +61,7 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
         DELETE FROM company_work_calendars WHERE company_id = @companyId;
         DELETE FROM user_invitations WHERE company_id = @companyId;
         DELETE FROM audit_logs WHERE company_id = @companyId;
+        DELETE FROM company_location_zones WHERE company_id = @companyId;
         DELETE FROM companies WHERE id = @companyId;
       `);
     }

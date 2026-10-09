@@ -5,6 +5,11 @@ import type { ServiceWriteInput } from "../../repositories/service.repository";
 import { createServiceSchema, type CreateServiceInput } from "../../schemas/service.schema";
 import { auditService } from "../../services/audit.service";
 import { companyLocationTypesService } from "../../services/company-location-types.service";
+import {
+  buildImportClientLookup,
+  importClientRowErrors,
+  loadImportClientsByIds,
+} from "../resolve-import-client";
 import { locationZoneService } from "../../services/location-zone.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import {
@@ -52,6 +57,12 @@ export const SERVICE_IMPORT_COLUMNS: ImportColumnDefinition[] = [
   { key: "address", header: "Dirección", required: false, aliases: ["direccion", "address"] },
   { key: "neighborhood", header: "Barrio", required: false, aliases: ["neighborhood"] },
   { key: "locality", header: "Localidad", required: false, aliases: ["locality", "ciudad"] },
+  {
+    key: "client",
+    header: "Cliente",
+    required: false,
+    aliases: ["cliente", "client", "client_id", "client_name"],
+  },
   {
     key: "serviceFormat",
     header: "Formato",
@@ -149,8 +160,13 @@ const buildServicePrepared = async (
   const locationTypes = await companyLocationTypesService.listLocationTypes(companyId, false);
   const names = mapped.dataRows.map((row) => row.values.name?.trim() ?? "").filter(Boolean);
   const existingNames = await serviceRepository.findExistingNames(companyId, names);
+  const clientLookup = await buildImportClientLookup(
+    companyId,
+    mapped.dataRows.map((row) => row.values.client ?? ""),
+  );
 
-  const rows: PreparedImportRow[] = mapped.dataRows.map((row) => {
+  const rows: PreparedImportRow[] = [];
+  for (const row of mapped.dataRows) {
     const values = row.values;
     const errors = [];
     const name = values.name?.trim() ?? "";
@@ -191,6 +207,40 @@ const buildServicePrepared = async (
       );
     }
 
+    let clientId: string | null = null;
+    const clientRaw = values.client?.trim() ?? "";
+    if (clientRaw) {
+      const resolved = clientLookup.get(clientRaw);
+      if (!resolved || resolved.error) {
+        errors.push(
+          rowError(
+            resolved?.error?.code ?? "CLIENT_NOT_FOUND",
+            resolved?.error?.message ?? "Cliente no encontrado.",
+            "client",
+            values.client,
+          ),
+        );
+      } else {
+        clientId = resolved.clientId;
+      }
+    }
+
+    if (errors.length === 0 && format.code && clientId !== null) {
+      try {
+        await companyLocationTypesService.assertActiveServiceFormat(
+          companyId,
+          format.code,
+          clientId,
+        );
+      } catch (error) {
+        if (error instanceof AppError) {
+          errors.push(rowError(error.code, error.message, "serviceFormat", values.serviceFormat));
+        } else {
+          throw error;
+        }
+      }
+    }
+
     const uniqueKey = name ? name.toLowerCase() : null;
     if (uniqueKey && existingNames.has(uniqueKey)) {
       errors.push(
@@ -215,6 +265,7 @@ const buildServicePrepared = async (
         longitude: lng.value,
         allowedRadiusMeters: radius,
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
+        clientId,
       };
       const parsed = createServiceSchema.safeParse(candidate);
       if (!parsed.success) {
@@ -239,17 +290,18 @@ const buildServicePrepared = async (
           longitude: parsed.data.longitude,
           allowedRadiusMeters: parsed.data.allowedRadiusMeters,
           googlePlaceId: parsed.data.googlePlaceId ?? null,
+          clientId: parsed.data.clientId ?? null,
         };
       }
     }
 
-    return {
+    rows.push({
       rowNumber: row.rowNumber,
       values,
       errors,
       payload,
-    };
-  });
+    });
+  }
 
   const duplicateErrors = markInFileDuplicates(
     rows.map((row) => ({
@@ -316,6 +368,7 @@ export const servicesImportStrategy: ImportStrategy = {
             "Centro",
             "CABA",
             "",
+            "",
             "-34.6037",
             "-58.3816",
             "150",
@@ -362,18 +415,54 @@ export const servicesImportStrategy: ImportStrategy = {
           .map((row) => (row.payload as CreateServiceInput | null)?.name ?? "")
           .filter(Boolean);
         const existing = await serviceRepository.findExistingNames(cid, names);
+        const clientIds = rows
+          .map((row) => (row.payload as CreateServiceInput | null)?.clientId ?? "")
+          .filter(Boolean);
+        const clientById = await loadImportClientsByIds(cid, clientIds);
         const map = new Map<number, ReturnType<typeof rowError>[]>();
         for (const row of rows) {
-          const name = (row.payload as CreateServiceInput | null)?.name ?? "";
+          const payload = row.payload as CreateServiceInput | null;
+          const rowErrors: ReturnType<typeof rowError>[] = [];
+          const name = payload?.name ?? "";
           if (name && existing.has(name.toLowerCase())) {
-            map.set(row.rowNumber, [
+            rowErrors.push(
               rowError(
                 "SERVICE_NAME_ALREADY_EXISTS",
                 "Ya existe un servicio con este nombre en la compañía.",
                 "name",
                 name,
               ),
-            ]);
+            );
+          }
+          if (payload?.clientId) {
+            rowErrors.push(
+              ...importClientRowErrors(
+                [payload.clientId],
+                clientById,
+                "client",
+                row.values.client ?? null,
+              ),
+            );
+            if (rowErrors.length === 0 && payload.serviceFormat) {
+              try {
+                await companyLocationTypesService.assertActiveServiceFormat(
+                  cid,
+                  payload.serviceFormat,
+                  payload.clientId,
+                );
+              } catch (error) {
+                if (error instanceof AppError) {
+                  rowErrors.push(
+                    rowError(error.code, error.message, "serviceFormat", row.values.serviceFormat),
+                  );
+                } else {
+                  throw error;
+                }
+              }
+            }
+          }
+          if (rowErrors.length > 0) {
+            map.set(row.rowNumber, rowErrors);
           }
         }
         return map;

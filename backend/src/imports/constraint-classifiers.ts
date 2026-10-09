@@ -44,6 +44,30 @@ export const classifyEmployeeUniqueViolation = (
   };
 };
 
+export const CLIENT_COMPANY_NORMALIZED_NAME_UNIQUE_INDEX = "UQ_clients_company_normalized_name";
+
+export const classifyClientUniqueViolation = (
+  error: unknown,
+): ClassifiedConstraintError | null => {
+  if (!isDuplicateKeyError(error)) {
+    return null;
+  }
+
+  if (includesIndex(error, CLIENT_COMPANY_NORMALIZED_NAME_UNIQUE_INDEX)) {
+    return {
+      code: "CLIENT_NAME_ALREADY_EXISTS",
+      field: "name",
+      message: "Ya existe un cliente con ese nombre",
+    };
+  }
+
+  return {
+    code: "CLIENT_UNIQUE_CONSTRAINT_CONFLICT",
+    field: "unknown",
+    message: "Conflicto de unicidad al crear el cliente.",
+  };
+};
+
 export const classifyServiceUniqueViolation = (
   error: unknown,
 ): ClassifiedConstraintError | null => {

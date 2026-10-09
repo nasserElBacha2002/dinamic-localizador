@@ -1,6 +1,7 @@
 import { AppError } from "../errors/app-error";
 import type { ImportEntityType } from "./constants";
 import { isImportEntityType } from "./constants";
+import { clientsImportStrategy } from "./strategies/clients.strategy";
 import { employeesImportStrategy } from "./strategies/employees.strategy";
 import { operationsImportStrategy } from "./strategies/operations.strategy";
 import { servicesImportStrategy } from "./strategies/services.strategy";
@@ -10,6 +11,7 @@ const strategies: ImportStrategy[] = [
   operationsImportStrategy,
   servicesImportStrategy,
   employeesImportStrategy,
+  clientsImportStrategy,
 ];
 
 const byType = new Map<ImportEntityType, ImportStrategy>(

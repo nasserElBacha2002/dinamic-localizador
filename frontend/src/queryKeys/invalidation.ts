@@ -95,7 +95,7 @@ export async function invalidateAttendanceReviewQueries(
   ]);
 }
 
-export type ImportEntityTypeForInvalidation = "operations" | "services" | "employees";
+export type ImportEntityTypeForInvalidation = "operations" | "services" | "employees" | "clients";
 
 export async function invalidateAfterImport(
   queryClient: QueryClient,
@@ -121,6 +121,9 @@ export async function invalidateAfterImport(
         await queryClient.invalidateQueries({ queryKey: employeeKeys.details(id) });
         await queryClient.invalidateQueries({ queryKey: employeeCategoryKeys.lists(id) });
         await queryClient.invalidateQueries({ queryKey: locationZoneKeys.lists(id) });
+        break;
+      case "clients":
+        await queryClient.invalidateQueries({ queryKey: ["clients", id] });
         break;
       case "operations":
         await Promise.all([

@@ -5,7 +5,15 @@ import { employeeCategoryRepository } from "../../repositories/employee-category
 import { employeeRepository } from "../../repositories/employee.repository";
 import { createEmployeeSchema, type CreateEmployeeInput } from "../../schemas/employee.schema";
 import { auditService } from "../../services/audit.service";
-import { employeeService } from "../../services/employee.service";
+import {
+  employeeService,
+  type CreateEmployeeForImportInput,
+} from "../../services/employee.service";
+import {
+  buildImportClientLookup,
+  importClientRowErrors,
+  loadImportClientsByIds,
+} from "../resolve-import-client";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { normalizeCategoryName } from "../../utils/normalize-category-name";
 import { normalizePhoneNumber } from "../../utils/phone";
@@ -58,7 +66,15 @@ export const EMPLOYEE_IMPORT_COLUMNS: ImportColumnDefinition[] = [
     required: false,
     aliases: ["categoria", "category", "category_name"],
   },
+  {
+    key: "client",
+    header: "Cliente",
+    required: false,
+    aliases: ["cliente", "client", "client_id", "client_name"],
+  },
 ];
+
+export type EmployeeImportPayload = CreateEmployeeForImportInput;
 
 const parseEmployeeType = (
   raw: string,
@@ -113,6 +129,10 @@ const buildEmployeePrepared = async (
       .filter((category) => category.isActive)
       .map((category) => [category.normalizedName, category]),
   );
+  const clientLookup = await buildImportClientLookup(
+    companyId,
+    mapped.dataRows.map((row) => row.values.client ?? ""),
+  );
 
   const normalizedPhones: string[] = [];
   const rows: PreparedImportRow[] = mapped.dataRows.map((row) => {
@@ -162,11 +182,29 @@ const buildEmployeePrepared = async (
       }
     }
 
+    let clientIds: string[] | undefined;
+    const clientRaw = values.client?.trim() ?? "";
+    if (clientRaw) {
+      const resolved = clientLookup.get(clientRaw);
+      if (!resolved || resolved.error) {
+        errors.push(
+          rowError(
+            resolved?.error?.code ?? "CLIENT_NOT_FOUND",
+            resolved?.error?.message ?? "Cliente no encontrado.",
+            "client",
+            values.client,
+          ),
+        );
+      } else if (resolved.clientId) {
+        clientIds = [resolved.clientId];
+      }
+    }
+
     if (phoneNumber) {
       normalizedPhones.push(phoneNumber);
     }
 
-    let payload: CreateEmployeeInput | null = null;
+    let payload: EmployeeImportPayload | null = null;
     if (errors.length === 0 && phoneNumber && type.value) {
       const candidate = {
         name,
@@ -194,6 +232,7 @@ const buildEmployeePrepared = async (
           phoneNumber: parsed.data.phoneNumber,
           employeeType: parsed.data.employeeType,
           categoryId: parsed.data.categoryId ?? null,
+          clientIds,
         };
       }
     }
@@ -284,7 +323,7 @@ export const employeesImportStrategy: ImportStrategy = {
       contentType: "text/csv; charset=utf-8",
       body: buildCsvTemplate(
         EMPLOYEE_IMPORT_COLUMNS.map((column) => column.header),
-        [["Ada Lovelace", "30111222", "+5491112345678", "Fijo", ""]],
+        [["Ada Lovelace", "30111222", "+5491112345678", "Fijo", "", ""]],
       ),
     };
   },
@@ -336,26 +375,45 @@ export const employeesImportStrategy: ImportStrategy = {
           .map((row) => (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? "")
           .filter(Boolean);
         const existing = await employeeRepository.findExistingPhones(cid, phones);
+        const clientIds = candidateRows.flatMap(
+          (row) => (row.payload as EmployeeImportPayload | null)?.clientIds ?? [],
+        );
+        const clientById = await loadImportClientsByIds(cid, clientIds);
         const map = new Map<number, ReturnType<typeof rowError>[]>();
         for (const row of candidateRows) {
+          const rowErrors: ReturnType<typeof rowError>[] = [];
           const phone = (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? "";
           if (phone && existing.has(phone)) {
-            map.set(row.rowNumber, [
+            rowErrors.push(
               rowError(
                 "EMPLOYEE_PHONE_ALREADY_EXISTS",
                 "El teléfono ya está registrado",
                 "phoneNumber",
                 row.values.phoneNumber,
               ),
-            ]);
+            );
+          }
+          const payload = row.payload as EmployeeImportPayload | null;
+          if (payload?.clientIds?.length) {
+            rowErrors.push(
+              ...importClientRowErrors(
+                payload.clientIds,
+                clientById,
+                "client",
+                row.values.client ?? null,
+              ),
+            );
+          }
+          if (rowErrors.length > 0) {
+            map.set(row.rowNumber, rowErrors);
           }
         }
         return map;
       },
       persistBatch: async (cid, items): Promise<CreateOnlyPersistBatchResult> => {
-        const payloads = items.map((item) => item.payload as CreateEmployeeInput);
+        const payloads = items.map((item) => item.payload as EmployeeImportPayload);
         try {
-          await employeeService.createManyForImport(cid, payloads);
+          await employeeService.createManyForImport(cid, payloads, context.userId ?? null);
           return {
             created: items.map((item) => ({ rowNumber: item.row.rowNumber })),
             rejected: [],
@@ -367,8 +425,11 @@ export const employeesImportStrategy: ImportStrategy = {
             const rejected: CreateOnlyPersistBatchResult["rejected"] = [];
             for (const item of items) {
               try {
-                await employeeService.create(cid, item.payload as CreateEmployeeInput, {
+                const payload = item.payload as EmployeeImportPayload;
+                await employeeService.create(cid, payload, {
                   creationMode: "import",
+                  clientIds: payload.clientIds,
+                  createdByUserId: context.userId ?? null,
                 });
                 created.push({ rowNumber: item.row.rowNumber });
               } catch (rowErrorValue) {

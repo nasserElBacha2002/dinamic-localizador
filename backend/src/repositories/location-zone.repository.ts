@@ -1,5 +1,7 @@
 import sql from "mssql";
+import { resolveDefaultGenericLocationZoneNormalizedKeys } from "../constants/default-location-zones";
 import { getPool } from "../database/connection";
+import { AppError } from "../errors/app-error";
 import type { UpdateLocationZoneInput } from "../schemas/location-zone.schema";
 import type {
   CompanyLocationZoneView,
@@ -949,5 +951,94 @@ export const locationZoneRepository = {
     );
 
     return { ...coverage, ...canonical };
+  },
+
+  /**
+   * Link company to every default generic zone in the global catalog (migration 110).
+   * Fails if any required zone is missing or inactive. Idempotent via UQ_company_location_zones_company_zone.
+   */
+  async ensureGenericDefaultAssociationsForCompany(
+    companyId: string,
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    const requiredKeys = resolveDefaultGenericLocationZoneNormalizedKeys();
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+
+    const valuesTuples: string[] = [];
+    requiredKeys.forEach((key, index) => {
+      request.input(`dgNz${index}`, sql.NVarChar(120), key.normalizedName);
+      request.input(`dgLz${index}`, sql.NVarChar(120), key.normalizedLocality);
+      valuesTuples.push(`(@dgNz${index}, @dgLz${index})`);
+    });
+    const requiredValuesSql = valuesTuples.join(", ");
+
+    const missingResult = await request.query(`
+      WITH required (normalized_name, normalized_locality) AS (
+        SELECT v.normalized_name, v.normalized_locality
+        FROM (VALUES ${requiredValuesSql}) AS v (normalized_name, normalized_locality)
+      )
+      SELECT r.normalized_name, r.normalized_locality
+      FROM required r
+      LEFT JOIN location_zones lz
+        ON lz.normalized_name = r.normalized_name
+       AND lz.normalized_locality = r.normalized_locality
+       AND lz.is_active = 1
+      WHERE lz.id IS NULL
+    `);
+
+    if (missingResult.recordset.length > 0) {
+      throw new AppError(
+        503,
+        "DEFAULT_GENERIC_LOCATION_ZONES_CATALOG_INCOMPLETE",
+        "El catálogo global de zonas no está completo. Aplicá las migraciones de base de datos antes de crear empresas.",
+      );
+    }
+
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+
+    const insertSql = `
+      INSERT INTO company_location_zones (company_id, location_zone_id, is_active)
+      SELECT @companyId, lz.id, 1
+      FROM location_zones lz
+      INNER JOIN (VALUES ${requiredValuesSql}) AS r (normalized_name, normalized_locality)
+        ON lz.normalized_name = r.normalized_name
+       AND lz.normalized_locality = r.normalized_locality
+      WHERE lz.is_active = 1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM company_location_zones clz
+          WHERE clz.company_id = @companyId
+            AND clz.location_zone_id = lz.id
+        )
+    `;
+
+    try {
+      await request.query(insertSql);
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+    }
+
+    const countResult = await request.query(`
+      SELECT COUNT(*) AS c
+      FROM company_location_zones clz
+      INNER JOIN location_zones lz ON lz.id = clz.location_zone_id
+      INNER JOIN (VALUES ${requiredValuesSql}) AS r (normalized_name, normalized_locality)
+        ON lz.normalized_name = r.normalized_name
+       AND lz.normalized_locality = r.normalized_locality
+      WHERE clz.company_id = @companyId
+        AND clz.is_active = 1
+        AND lz.is_active = 1
+    `);
+
+    const associatedCount = Number(countResult.recordset[0]?.c ?? 0);
+    if (associatedCount !== requiredKeys.length) {
+      throw new AppError(
+        503,
+        "DEFAULT_GENERIC_LOCATION_ZONES_ASSOCIATION_INCOMPLETE",
+        "No se pudieron asociar todas las zonas genéricas a la empresa.",
+      );
+    }
   },
 };

@@ -278,7 +278,7 @@ export function ImportPage() {
 
   return (
     <Stack gap="md">
-      <PageHeader title="Importaciones" description="Carga masiva por archivo de operaciones, servicios o colaboradores." />
+      <PageHeader title="Importaciones" description="Carga masiva por archivo de operaciones, servicios, colaboradores o clientes." />
 
       <SectionCard title="Tipo de importación">
         <SegmentedControl

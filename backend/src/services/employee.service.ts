@@ -6,6 +6,7 @@ import type {
   UpdateEmployeeInput,
 } from "../schemas/employee.schema";
 import { getPool } from "../database/connection";
+import { employeeClientRepository } from "../repositories/employee-client.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import type { Employee } from "../types/domain";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
@@ -22,6 +23,12 @@ export type EmployeeCreationMode = "interactive" | "import";
 
 export type CreateEmployeeOptions = {
   creationMode?: EmployeeCreationMode;
+  clientIds?: string[];
+  createdByUserId?: string | null;
+};
+
+export type CreateEmployeeForImportInput = CreateEmployeeInput & {
+  clientIds?: string[];
 };
 
 const runPostCommitEffects = async (
@@ -80,6 +87,17 @@ export const employeeService = {
         transaction,
       );
 
+      const clientIds = options?.clientIds ?? [];
+      if (clientIds.length > 0) {
+        await employeeClientRepository.replaceForEmployee(
+          transaction,
+          companyId,
+          employee.id,
+          clientIds,
+          options?.createdByUserId ?? null,
+        );
+      }
+
       await transaction.commit();
       await runPostCommitEffects(companyId, employee, creationMode);
       return employee;
@@ -100,7 +118,8 @@ export const employeeService = {
    */
   async createManyForImport(
     companyId: string,
-    inputs: CreateEmployeeInput[],
+    inputs: CreateEmployeeForImportInput[],
+    createdByUserId: string | null = null,
   ): Promise<Employee[]> {
     if (inputs.length === 0) {
       return [];
@@ -130,6 +149,20 @@ export const employeeService = {
         created.map((employee) => employee.id),
         transaction,
       );
+
+      for (let index = 0; index < created.length; index += 1) {
+        const clientIds = inputs[index]?.clientIds ?? [];
+        if (clientIds.length === 0) {
+          continue;
+        }
+        await employeeClientRepository.replaceForEmployee(
+          transaction,
+          companyId,
+          created[index]!.id,
+          clientIds,
+          createdByUserId,
+        );
+      }
 
       await transaction.commit();
       return created;

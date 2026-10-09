@@ -36,17 +36,23 @@ describe("import column mapper", () => {
 });
 
 describe("import strategy registry", () => {
-  it("registers operations, services and employees", () => {
+  it("registers operations, services, employees and clients", () => {
     const types = importStrategyRegistry.list().map((strategy) => strategy.entityType);
-    assert.deepEqual(types, ["operations", "services", "employees"]);
+    assert.deepEqual(types, ["operations", "services", "employees", "clients"]);
   });
 
   it("builds csv templates for each entity", () => {
     for (const strategy of importStrategyRegistry.list()) {
       const template = strategy.buildTemplate();
       assert.ok(template.fileName.endsWith(".csv"));
-      assert.ok(template.body.length > 0);
-      assert.match(template.body.toString("utf8"), /,/);
+      const body = template.body.toString("utf8");
+      assert.ok(body.length > 0);
+      const lines = body.split(/\r?\n/).filter((line) => line.length > 0);
+      assert.ok(lines.length >= 2, "template should include header and sample row");
+      const commaCountInHeader = (lines[0].match(/,/g) ?? []).length;
+      if (commaCountInHeader > 0) {
+        assert.match(body, /,/);
+      }
     }
   });
 

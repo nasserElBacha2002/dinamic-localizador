@@ -241,10 +241,11 @@ describe("LandingPage", () => {
     assert.ok(postAnalytics.querySelector('a[href="#como-funciona"]'));
   });
 
-  it("navbar muestra lockup de marca final", () => {
-    const { getByLabelText } = renderPage(<LandingPage />);
-    const logo = getByLabelText("Dinamic Operations");
-    assert.ok(logo.querySelector('img[src="/brand/dinamic-operations-logo.png"]'));
+  it("navbar muestra lockup horizontal e isotipo para el viewport", () => {
+    const { getByRole } = renderPage(<LandingPage />);
+    const homeLink = getByRole("link", { name: "Inicio Dinamic Operations" });
+    assert.ok(homeLink.querySelector('img[src="/brand/dinamic-operations-logo.png"]'));
+    assert.ok(homeLink.querySelector('img[src="/brand/dinamic-operations-isotipo.png"]'));
   });
 
   it("navbar y footer mantienen Ingresar y solicitar demo", () => {

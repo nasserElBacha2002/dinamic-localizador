@@ -11,7 +11,8 @@ export function MarketingHeader() {
     <header className={classes.header}>
       <div className={classes.inner}>
         <a href="/" className={classes.logoLink} aria-label="Inicio Dinamic Operations">
-          <BrandLogo variant="horizontal" />
+          <BrandLogo variant="horizontal" className={classes.logoDesktop} />
+          <BrandLogo variant="isotype" className={classes.logoMobile} />
         </a>
         <nav className={classes.nav} aria-label="Secciones">
           <a href="#como-funciona">Cómo funciona</a>

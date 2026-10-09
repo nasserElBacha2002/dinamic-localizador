@@ -9,6 +9,7 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { userRepository } from "../repositories/user.repository";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+import { companyLocationZoneDefaultsService } from "./company-location-zone-defaults.service";
 import { companyWorkScheduleService } from "./company-work-schedule.service";
 import {
   invitationExpiresAt,
@@ -103,6 +104,10 @@ export const platformCompanyService = {
       await companyWorkScheduleService.ensureDefaultForCompany(
         company.id,
         settingsInput.operationTimezone,
+        transaction,
+      );
+      await companyLocationZoneDefaultsService.ensureDefaultGenericZonesForCompany(
+        company.id,
         transaction,
       );
       const { absenceCalendarService } = await import("./absence-calendar.service");

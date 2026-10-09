@@ -150,6 +150,9 @@ export const platformCompanyService = {
       throw error;
     }
 
+    // Post-commit: best-effort geocoding for default zones (shared global catalog).
+    companyLocationZoneDefaultsService.scheduleGeocodingBackfillForCompany(company.id);
+
     // Post-commit delivery: never roll back company creation on email/lookup failures.
     const emailResult = await userInvitationService.deliverEmail(invitation.id, rawToken);
 

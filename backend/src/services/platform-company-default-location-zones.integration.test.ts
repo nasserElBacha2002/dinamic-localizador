@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import {
   DEFAULT_GENERIC_LOCATION_ZONE_SEEDS,
@@ -10,7 +10,7 @@ import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
 import { userRepository } from "../repositories/user.repository";
 import {
-  describeDatabaseIntegration,
+  isDatabaseIntegrationEnabled,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
@@ -23,12 +23,13 @@ import {
   normalizeLocationZoneLocality,
   normalizeLocationZoneName,
 } from "../utils/normalize-location-zone-name";
-import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
-
-const INTEGRATION_GLOBAL_LOCATION_ZONES_CATALOG_LOCK =
-  "integration:global-location-zones-catalog";
-
 const uniqueSuffix = (): string => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+/**
+ * Serial suite ({ concurrency: 1 }): incomplete-catalog case mutates shared global location_zones.
+ * Cross-file: backend/scripts/run-integration-tests.mjs passes --test-concurrency=1.
+ */
+const describeDbIntegration = isDatabaseIntegrationEnabled() ? describe : describe.skip;
 
 const expectedDefaultZoneCount = (): number => DEFAULT_GENERIC_LOCATION_ZONE_SEEDS.length;
 
@@ -52,19 +53,7 @@ const assertCompanyLocationZonesCompanyZoneUniqueKey = async (): Promise<void> =
   assert.deepEqual(columns, ["company_id", "location_zone_id"]);
 };
 
-const withGlobalLocationZonesCatalogMutationLock = async <T>(
-  fn: () => Promise<T>,
-): Promise<T> => {
-  const locked = await withDedicatedSessionAppLock(
-    INTEGRATION_GLOBAL_LOCATION_ZONES_CATALOG_LOCK,
-    fn,
-    { lockTimeoutMs: 60_000 },
-  );
-  assert.equal(locked.outcome, "locked", "global location_zones catalog lock not acquired");
-  return (locked as { outcome: "locked"; value: T }).value;
-};
-
-describeDatabaseIntegration("platform company default location zones", () => {
+describeDbIntegration("platform company default location zones", { concurrency: 1 }, () => {
   const fixtures = createIntegrationFixtureTracker();
   const createdCompanyIds: string[] = [];
 
@@ -204,76 +193,74 @@ describeDatabaseIntegration("platform company default location zones", () => {
   });
 
   it("fails company creation when the global catalog is incomplete", async () => {
-    await withGlobalLocationZonesCatalogMutationLock(async () => {
-      const suffix = uniqueSuffix();
-      const companyName = `LZ Incomplete Catalog ${suffix}`;
-      const caballito = resolveDefaultGenericLocationZoneNormalizedKeys().find(
-        (key) => key.name === "Caballito",
+    const suffix = uniqueSuffix();
+    const companyName = `LZ Incomplete Catalog ${suffix}`;
+    const caballito = resolveDefaultGenericLocationZoneNormalizedKeys().find(
+      (key) => key.name === "Caballito",
+    );
+    assert.ok(caballito);
+
+    const pool = getPool();
+    const priorResult = await pool
+      .request()
+      .input("normalizedName", sql.NVarChar(120), caballito.normalizedName)
+      .input("normalizedLocality", sql.NVarChar(120), caballito.normalizedLocality)
+      .query(`
+        SELECT is_active
+        FROM location_zones
+        WHERE normalized_name = @normalizedName
+          AND normalized_locality = @normalizedLocality
+      `);
+    assert.equal(priorResult.recordset.length, 1);
+    const priorIsActive = Boolean(priorResult.recordset[0].is_active);
+
+    await pool
+      .request()
+      .input("normalizedName", sql.NVarChar(120), caballito.normalizedName)
+      .input("normalizedLocality", sql.NVarChar(120), caballito.normalizedLocality)
+      .query(`
+        UPDATE location_zones
+        SET is_active = 0, updated_at = SYSUTCDATETIME()
+        WHERE normalized_name = @normalizedName
+          AND normalized_locality = @normalizedLocality
+      `);
+
+    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    assert.ok(admin?.isPlatformAdmin);
+
+    try {
+      await assert.rejects(
+        () =>
+          platformCompanyService.createCompany(
+            {
+              name: companyName,
+              defaultTimezone: "America/Argentina/Buenos_Aires",
+              owner: {
+                name: "Owner",
+                email: `lz-incomplete-${suffix}@integration.test`,
+              },
+            },
+            admin.id,
+          ),
+        (error: unknown) =>
+          error instanceof AppError &&
+          error.code === "DEFAULT_GENERIC_LOCATION_ZONES_CATALOG_INCOMPLETE",
       );
-      assert.ok(caballito);
 
-      const pool = getPool();
-      const priorResult = await pool
-        .request()
-        .input("normalizedName", sql.NVarChar(120), caballito.normalizedName)
-        .input("normalizedLocality", sql.NVarChar(120), caballito.normalizedLocality)
-        .query(`
-          SELECT is_active
-          FROM location_zones
-          WHERE normalized_name = @normalizedName
-            AND normalized_locality = @normalizedLocality
-        `);
-      assert.equal(priorResult.recordset.length, 1);
-      const priorIsActive = Boolean(priorResult.recordset[0].is_active);
-
+      const created = await companyRepository.findByName(companyName);
+      assert.equal(created, null);
+    } finally {
       await pool
         .request()
         .input("normalizedName", sql.NVarChar(120), caballito.normalizedName)
         .input("normalizedLocality", sql.NVarChar(120), caballito.normalizedLocality)
+        .input("isActive", sql.Bit, priorIsActive ? 1 : 0)
         .query(`
           UPDATE location_zones
-          SET is_active = 0, updated_at = SYSUTCDATETIME()
+          SET is_active = @isActive, updated_at = SYSUTCDATETIME()
           WHERE normalized_name = @normalizedName
             AND normalized_locality = @normalizedLocality
         `);
-
-      const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
-      assert.ok(admin?.isPlatformAdmin);
-
-      try {
-        await assert.rejects(
-          () =>
-            platformCompanyService.createCompany(
-              {
-                name: companyName,
-                defaultTimezone: "America/Argentina/Buenos_Aires",
-                owner: {
-                  name: "Owner",
-                  email: `lz-incomplete-${suffix}@integration.test`,
-                },
-              },
-              admin.id,
-            ),
-          (error: unknown) =>
-            error instanceof AppError &&
-            error.code === "DEFAULT_GENERIC_LOCATION_ZONES_CATALOG_INCOMPLETE",
-        );
-
-        const created = await companyRepository.findByName(companyName);
-        assert.equal(created, null);
-      } finally {
-        await pool
-          .request()
-          .input("normalizedName", sql.NVarChar(120), caballito.normalizedName)
-          .input("normalizedLocality", sql.NVarChar(120), caballito.normalizedLocality)
-          .input("isActive", sql.Bit, priorIsActive ? 1 : 0)
-          .query(`
-            UPDATE location_zones
-            SET is_active = @isActive, updated_at = SYSUTCDATETIME()
-            WHERE normalized_name = @normalizedName
-              AND normalized_locality = @normalizedLocality
-          `);
-      }
-    });
+    }
   });
 });

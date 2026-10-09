@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 import { AppError } from "../errors/app-error";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { importEntityTypeParamSchema } from "../schemas/import.schema";
 import { importStrategyRegistry } from "./registry";
 import { IMPORT_ENTITY_TYPES } from "./constants";
 import { clientsImportStrategy } from "./strategies/clients.strategy";
@@ -19,6 +20,35 @@ describe("import entity types", () => {
     assert.ok(IMPORT_ENTITY_TYPES.includes("clients"));
     assert.ok(importStrategyRegistry.get("clients"));
   });
+
+  it("accepts clients in HTTP param schema used by import routes", () => {
+    const parsed = importEntityTypeParamSchema.safeParse({ entityType: "clients" });
+    assert.equal(parsed.success, true);
+    const invalid = importEntityTypeParamSchema.safeParse({ entityType: "not-an-entity" });
+    assert.equal(invalid.success, false);
+  });
+});
+
+describe("legacy import templates without Cliente column", () => {
+  it("accepts service rows without client column", async () => {
+    setupUnitTestEnv();
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { companyLocationTypesService } = await import(
+      "../services/company-location-types.service"
+    );
+    mock.method(serviceRepository, "findExistingNames", async () => new Map());
+    mock.method(companyLocationTypesService, "listLocationTypes", async () => []);
+
+    const legacyHeader =
+      "Nombre,Dirección,Barrio,Localidad,Formato,Latitud,Longitud,Radio (metros),Google Place ID";
+    const prepared = await servicesImportStrategy.prepare(
+      companyId,
+      Buffer.from([legacyHeader, `Legacy Svc,,,,,-34.6,-58.4,150,`].join("\n"), "utf8"),
+      "services.csv",
+    );
+    assert.equal(prepared.summary.validRows, 1);
+    assert.equal((prepared.rows[0]?.payload as { clientId?: string | null })?.clientId ?? null, null);
+  });
 });
 
 describe("services import client column", () => {
@@ -32,21 +62,28 @@ describe("services import client column", () => {
 
     mock.method(serviceRepository, "findExistingNames", async () => new Map());
     mock.method(companyLocationTypesService, "listLocationTypes", async () => []);
-    mock.method(clientRepository, "findByNormalizedName", async (cid: string, name: string) => {
-      if (name === "carrefour") {
-        return {
-          id: clientId,
-          companyId: cid,
-          name: "Carrefour",
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: null,
-          updatedBy: null,
-        };
-      }
-      return null;
-    });
+    mock.method(
+      clientRepository,
+      "listByNormalizedNames",
+      async (_cid: string, names: string[]) => {
+        if (names.includes("carrefour")) {
+          return [
+            {
+              id: clientId,
+              companyId,
+              name: "Carrefour",
+              isActive: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              createdBy: null,
+              updatedBy: null,
+            },
+          ];
+        }
+        return [];
+      },
+    );
+    mock.method(clientRepository, "listByIds", async () => []);
 
     const valid = await servicesImportStrategy.prepare(
       companyId,
@@ -77,16 +114,19 @@ describe("services import client column", () => {
     mock.method(companyLocationTypesService, "listLocationTypes", async () => [
       { code: "EXPRESS", name: "Express", isActive: true },
     ]);
-    mock.method(clientRepository, "findByNormalizedName", async () => ({
-      id: clientId,
-      companyId,
-      name: "Carrefour",
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: null,
-      updatedBy: null,
-    }));
+    mock.method(clientRepository, "listByNormalizedNames", async () => [
+      {
+        id: clientId,
+        companyId,
+        name: "Carrefour",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: null,
+        updatedBy: null,
+      },
+    ]);
+    mock.method(clientRepository, "listByIds", async () => []);
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => {
       throw new AppError(
         400,
@@ -119,16 +159,19 @@ describe("employees import client column", () => {
 
     mock.method(employeeCategoryRepository, "listForCompany", async () => []);
     mock.method(employeeRepository, "findExistingPhones", async () => new Set());
-    mock.method(clientRepository, "findByNormalizedName", async () => ({
-      id: clientId,
-      companyId,
-      name: "Carrefour",
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: null,
-      updatedBy: null,
-    }));
+    mock.method(clientRepository, "listByNormalizedNames", async () => [
+      {
+        id: clientId,
+        companyId,
+        name: "Carrefour",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: null,
+        updatedBy: null,
+      },
+    ]);
+    mock.method(clientRepository, "listByIds", async () => []);
 
     const prepared = await employeesImportStrategy.prepare(
       companyId,

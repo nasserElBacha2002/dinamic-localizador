@@ -1,9 +1,6 @@
 -- Allow import_jobs.entity_type = clients for generic client imports.
 -- Rollback: restore CK_import_jobs_entity_type without clients (only if no client jobs exist).
 
-USE dinamic_attendance;
-GO
-
 IF EXISTS (
   SELECT 1
   FROM sys.check_constraints

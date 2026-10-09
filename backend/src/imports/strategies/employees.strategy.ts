@@ -9,7 +9,11 @@ import {
   employeeService,
   type CreateEmployeeForImportInput,
 } from "../../services/employee.service";
-import { buildImportClientLookup } from "../resolve-import-client";
+import {
+  buildImportClientLookup,
+  importClientRowErrors,
+  loadImportClientsByIds,
+} from "../resolve-import-client";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { normalizeCategoryName } from "../../utils/normalize-category-name";
 import { normalizePhoneNumber } from "../../utils/phone";
@@ -371,18 +375,37 @@ export const employeesImportStrategy: ImportStrategy = {
           .map((row) => (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? "")
           .filter(Boolean);
         const existing = await employeeRepository.findExistingPhones(cid, phones);
+        const clientIds = candidateRows.flatMap(
+          (row) => (row.payload as EmployeeImportPayload | null)?.clientIds ?? [],
+        );
+        const clientById = await loadImportClientsByIds(cid, clientIds);
         const map = new Map<number, ReturnType<typeof rowError>[]>();
         for (const row of candidateRows) {
+          const rowErrors: ReturnType<typeof rowError>[] = [];
           const phone = (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? "";
           if (phone && existing.has(phone)) {
-            map.set(row.rowNumber, [
+            rowErrors.push(
               rowError(
                 "EMPLOYEE_PHONE_ALREADY_EXISTS",
                 "El teléfono ya está registrado",
                 "phoneNumber",
                 row.values.phoneNumber,
               ),
-            ]);
+            );
+          }
+          const payload = row.payload as EmployeeImportPayload | null;
+          if (payload?.clientIds?.length) {
+            rowErrors.push(
+              ...importClientRowErrors(
+                payload.clientIds,
+                clientById,
+                "client",
+                row.values.client ?? null,
+              ),
+            );
+          }
+          if (rowErrors.length > 0) {
+            map.set(row.rowNumber, rowErrors);
           }
         }
         return map;

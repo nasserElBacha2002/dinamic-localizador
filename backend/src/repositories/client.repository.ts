@@ -273,6 +273,51 @@ export const clientRepository = {
     }
   },
 
+  async listByNormalizedNames(
+    companyId: string,
+    normalizedNames: string[],
+  ): Promise<Client[]> {
+    const unique = [
+      ...new Set(
+        normalizedNames
+          .map((name) => normalizeClientName(name))
+          .filter(Boolean),
+      ),
+    ];
+
+    if (unique.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const chunkSize = 100;
+    const items: Client[] = [];
+
+    for (let offset = 0; offset < unique.length; offset += chunkSize) {
+      const chunk = unique.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+
+      const params = chunk.map((normalizedName, index) => {
+        const param = `normalizedName${index}`;
+        request.input(param, sql.NVarChar(255), normalizedName);
+        return `@${param}`;
+      });
+
+      const result = await request.query(`
+        SELECT *
+        FROM clients
+        WHERE company_id = @companyId
+          AND normalized_name IN (${params.join(", ")})
+      `);
+
+      for (const row of result.recordset) {
+        items.push(mapClientRow(row as Record<string, unknown>));
+      }
+    }
+
+    return items;
+  },
+
   async findExistingNormalizedNames(
     companyId: string,
     names: string[],

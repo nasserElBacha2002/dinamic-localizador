@@ -17,35 +17,76 @@ describe("resolveImportClientReference", () => {
   it("resolves active client by UUID", async () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../repositories/client.repository");
-    mock.method(clientRepository, "findById", async () => ({
-      id: clientId,
-      companyId,
-      name: "Carrefour",
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: null,
-      updatedBy: null,
-    }));
+    mock.method(clientRepository, "listByIds", async () => [
+      {
+        id: clientId,
+        companyId,
+        name: "Carrefour",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: null,
+        updatedBy: null,
+      },
+    ]);
 
     const result = await resolveImportClientReference(companyId, clientId);
     assert.equal(result.clientId, clientId);
     assert.equal(result.error, null);
   });
 
+  it("resolves multiple references with batched repository access", async () => {
+    setupUnitTestEnv();
+    const { clientRepository } = await import("../repositories/client.repository");
+    let listByIdsCalls = 0;
+    let listByNamesCalls = 0;
+
+    mock.method(clientRepository, "listByIds", async () => {
+      listByIdsCalls += 1;
+      return [];
+    });
+    mock.method(clientRepository, "listByNormalizedNames", async () => {
+      listByNamesCalls += 1;
+      return [
+        {
+          id: clientId,
+          companyId,
+          name: "Carrefour",
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: null,
+          updatedBy: null,
+        },
+      ];
+    });
+
+    const { buildImportClientLookup } = await import("./resolve-import-client");
+    const lookup = await buildImportClientLookup(companyId, [
+      "Carrefour",
+      "Carrefour",
+      "  carrefour  ",
+    ]);
+    assert.equal(lookup.get("Carrefour")?.clientId, clientId);
+    assert.equal(listByIdsCalls, 0);
+    assert.equal(listByNamesCalls, 1);
+  });
+
   it("rejects inactive client", async () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../repositories/client.repository");
-    mock.method(clientRepository, "findByNormalizedName", async () => ({
-      id: clientId,
-      companyId,
-      name: "Inactivo",
-      isActive: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: null,
-      updatedBy: null,
-    }));
+    mock.method(clientRepository, "listByNormalizedNames", async () => [
+      {
+        id: clientId,
+        companyId,
+        name: "Inactivo",
+        isActive: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: null,
+        updatedBy: null,
+      },
+    ]);
 
     const result = await resolveImportClientReference(companyId, "Inactivo");
     assert.equal(result.clientId, null);

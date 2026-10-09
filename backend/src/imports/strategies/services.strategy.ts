@@ -1,12 +1,15 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { AppError } from "../../errors/app-error";
-import { clientRepository } from "../../repositories/client.repository";
 import { serviceRepository } from "../../repositories/service.repository";
 import type { ServiceWriteInput } from "../../repositories/service.repository";
 import { createServiceSchema, type CreateServiceInput } from "../../schemas/service.schema";
 import { auditService } from "../../services/audit.service";
 import { companyLocationTypesService } from "../../services/company-location-types.service";
-import { buildImportClientLookup } from "../resolve-import-client";
+import {
+  buildImportClientLookup,
+  importClientRowErrors,
+  loadImportClientsByIds,
+} from "../resolve-import-client";
 import { locationZoneService } from "../../services/location-zone.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import {
@@ -412,6 +415,10 @@ export const servicesImportStrategy: ImportStrategy = {
           .map((row) => (row.payload as CreateServiceInput | null)?.name ?? "")
           .filter(Boolean);
         const existing = await serviceRepository.findExistingNames(cid, names);
+        const clientIds = rows
+          .map((row) => (row.payload as CreateServiceInput | null)?.clientId ?? "")
+          .filter(Boolean);
+        const clientById = await loadImportClientsByIds(cid, clientIds);
         const map = new Map<number, ReturnType<typeof rowError>[]>();
         for (const row of rows) {
           const payload = row.payload as CreateServiceInput | null;
@@ -428,21 +435,15 @@ export const servicesImportStrategy: ImportStrategy = {
             );
           }
           if (payload?.clientId) {
-            const client = await clientRepository.findById(cid, payload.clientId);
-            if (!client) {
-              rowErrors.push(
-                rowError("CLIENT_NOT_FOUND", "Cliente no encontrado.", "client", row.values.client),
-              );
-            } else if (!client.isActive) {
-              rowErrors.push(
-                rowError(
-                  "CLIENT_INACTIVE",
-                  "No se puede asignar un cliente inactivo.",
-                  "client",
-                  row.values.client,
-                ),
-              );
-            } else if (payload.serviceFormat) {
+            rowErrors.push(
+              ...importClientRowErrors(
+                [payload.clientId],
+                clientById,
+                "client",
+                row.values.client ?? null,
+              ),
+            );
+            if (rowErrors.length === 0 && payload.serviceFormat) {
               try {
                 await companyLocationTypesService.assertActiveServiceFormat(
                   cid,

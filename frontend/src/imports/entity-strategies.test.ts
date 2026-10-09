@@ -10,7 +10,7 @@ describe("import entity UI strategies", () => {
   it("exposes operations, services and employees", () => {
     assert.deepEqual(
       IMPORT_ENTITY_STRATEGIES.map((strategy) => strategy.entityType),
-      ["operations", "services", "employees"],
+      ["operations", "services", "employees", "clients"],
     );
   });
 

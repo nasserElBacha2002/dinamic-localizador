@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  classifyClientUniqueViolation,
   classifyEmployeeUniqueViolation,
   classifyServiceUniqueViolation,
+  CLIENT_COMPANY_NORMALIZED_NAME_UNIQUE_INDEX,
   EMPLOYEE_COMPANY_PHONE_UNIQUE_INDEX,
 } from "../imports/constraint-classifiers";
 import { OPERATIONAL_LOCATION_COMPANY_NAME_UNIQUE_INDEX } from "../utils/service-name-duplicate-errors";
@@ -32,6 +34,15 @@ describe("import constraint classifiers", () => {
       message: `duplicate key with unique index '${OPERATIONAL_LOCATION_COMPANY_NAME_UNIQUE_INDEX}'`,
     });
     assert.equal(classified?.code, "SERVICE_NAME_ALREADY_EXISTS");
+    assert.equal(classified?.field, "name");
+  });
+
+  it("maps client normalized name unique index", () => {
+    const classified = classifyClientUniqueViolation({
+      number: 2601,
+      message: `duplicate key with unique index '${CLIENT_COMPANY_NORMALIZED_NAME_UNIQUE_INDEX}'`,
+    });
+    assert.equal(classified?.code, "CLIENT_NAME_ALREADY_EXISTS");
     assert.equal(classified?.field, "name");
   });
 

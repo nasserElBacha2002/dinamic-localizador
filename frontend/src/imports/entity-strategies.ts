@@ -37,7 +37,8 @@ export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
     description: "Importá servicios con nombre, coordenadas y datos opcionales de ubicación.",
     help: [
       "Columnas: Nombre, Latitud, Longitud (obligatorias).",
-      "Opcionales: Dirección, Barrio, Localidad, Formato, Radio (metros), Google Place ID.",
+      "Opcionales: Dirección, Barrio, Localidad, Cliente, Formato, Radio (metros), Google Place ID.",
+      "Cliente: nombre o UUID de un cliente activo de la compañía.",
       "El Formato debe coincidir con un tipo de ubicación activo (nombre o código).",
       "Si el nombre ya existe en la compañía, la fila se rechaza.",
     ].join(" "),
@@ -52,7 +53,7 @@ export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
     description: "Importá colaboradores con teléfono E.164, tipo y categoría opcional.",
     help: [
       "Columnas: Nombre, Teléfono, Tipo (obligatorias).",
-      "Opcionales: Documento, Categoría (por nombre, sin crear categorías nuevas).",
+      "Opcionales: Documento, Categoría (por nombre, sin crear categorías nuevas), Cliente (nombre o UUID, un cliente por fila).",
       "Tipo: Fijo o Eventual. Teléfono en E.164 (ej. +5491112345678).",
       "Si el teléfono ya existe en la compañía, la fila se rechaza.",
       "Modo importación: no envía WhatsApp, invitaciones ni crea credenciales.",
@@ -60,6 +61,20 @@ export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
     permission: "employees:manage",
     successMessage: `${terminology.worker.plural} importados correctamente.`,
     templateFileName: "plantilla-importacion-colaboradores.csv",
+  },
+  {
+    entityType: "clients",
+    label: "Clientes",
+    title: "Importar clientes",
+    description: "Importá clientes con nombre único por compañía.",
+    help: [
+      "Columnas: Nombre (obligatoria).",
+      "El nombre se normaliza para detectar duplicados.",
+      "Si el nombre ya existe en la compañía, la fila se rechaza.",
+    ].join(" "),
+    permission: "employees:manage",
+    successMessage: "Clientes importados correctamente.",
+    templateFileName: "plantilla-importacion-clientes.csv",
   },
 ];
 
@@ -74,4 +89,7 @@ export const getImportEntityStrategy = (
 };
 
 export const isImportEntityType = (value: string | null | undefined): value is ImportEntityType =>
-  value === "operations" || value === "services" || value === "employees";
+  value === "operations" ||
+  value === "services" ||
+  value === "employees" ||
+  value === "clients";

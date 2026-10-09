@@ -11,6 +11,10 @@ describe("employee creationMode import policy", () => {
     assert.match(source, /creationMode === "import"/);
     assert.doesNotMatch(source, /skipNotifications/);
     assert.match(source, /createManyForImport/);
+    assert.match(source, /replaceForEmployee/);
+    const replaceIndex = source.indexOf("replaceForEmployee");
+    const commitIndex = source.indexOf("await transaction.commit()", replaceIndex);
+    assert.ok(replaceIndex > -1 && commitIndex > replaceIndex);
   });
 
   it("employee import strategy uses creationMode import on row fallback", () => {

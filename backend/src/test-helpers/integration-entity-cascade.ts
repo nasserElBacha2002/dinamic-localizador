@@ -332,6 +332,10 @@ export const deleteEmployeeCascade = async (
         DELETE FROM employee_attendance_alert_state
         WHERE company_id = @companyId AND employee_id = @employeeId;
 
+      IF OBJECT_ID(N'dbo.employee_clients', N'U') IS NOT NULL
+        DELETE FROM employee_clients
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+
       DELETE FROM employees
       WHERE company_id = @companyId AND id = @employeeId;
     `);

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getPool } from "../database/connection";
 import type { ListClientsQuery } from "../schemas/client.schema";
 import type { Client } from "../types/domain";
+import { normalizeClientName } from "../utils/client-name.utils";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import { resolveSqlSort } from "../utils/sql-sort";
 
@@ -270,6 +271,51 @@ export const clientRepository = {
 
       throw error;
     }
+  },
+
+  async findExistingNormalizedNames(
+    companyId: string,
+    names: string[],
+  ): Promise<Set<string>> {
+    const unique = [
+      ...new Set(
+        names
+          .map((name) => normalizeClientName(name))
+          .filter(Boolean),
+      ),
+    ];
+
+    const existing = new Set<string>();
+    if (unique.length === 0) {
+      return existing;
+    }
+
+    const pool = getPool();
+    const chunkSize = 100;
+
+    for (let offset = 0; offset < unique.length; offset += chunkSize) {
+      const chunk = unique.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+
+      const params = chunk.map((normalizedName, index) => {
+        const param = `normalizedName${index}`;
+        request.input(param, sql.NVarChar(255), normalizedName);
+        return `@${param}`;
+      });
+
+      const result = await request.query(`
+        SELECT normalized_name
+        FROM clients
+        WHERE company_id = @companyId
+          AND normalized_name IN (${params.join(", ")})
+      `);
+
+      for (const row of result.recordset) {
+        existing.add(String((row as { normalized_name: string }).normalized_name).toLowerCase());
+      }
+    }
+
+    return existing;
   },
 
   async listByIds(companyId: string, clientIds: string[]): Promise<Client[]> {

@@ -7,7 +7,7 @@ import type {
   ImportRowError,
 } from "./types";
 
-export const IMPORT_STRATEGY_VERSION = "2026-07-23.1";
+export const IMPORT_STRATEGY_VERSION = "2026-10-09.1";
 
 export type ImportJobStatus =
   | "VALIDATING"

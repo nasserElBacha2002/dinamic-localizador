@@ -1,4 +1,4 @@
-export const IMPORT_ENTITY_TYPES = ["operations", "services", "employees"] as const;
+export const IMPORT_ENTITY_TYPES = ["operations", "services", "employees", "clients"] as const;
 export type ImportEntityType = (typeof IMPORT_ENTITY_TYPES)[number];
 
 export const DEFAULT_IMPORT_MAX_ROWS = 2000;

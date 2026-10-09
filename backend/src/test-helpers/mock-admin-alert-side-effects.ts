@@ -33,4 +33,8 @@ export const mockAdminAlertSideEffects = async (): Promise<void> => {
     "emitForPendingWhatsappRequest",
     async () => undefined,
   );
+  const { attendanceThresholdAlertService } = await import(
+    "../services/attendance-threshold-alert.service"
+  );
+  mock.method(attendanceThresholdAlertService, "markEmployeeDirty", async () => undefined);
 };

@@ -149,6 +149,94 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     assert.ok(byEmployeeId.get(unavailableId)?.unavailableAt);
   });
 
+  it("reports workday-level unavailability even when the assignment is still PENDING", async () => {
+    const pool = getPool();
+    const companyResult = await pool.request().query(`
+      SELECT TOP 1 id FROM companies WHERE status = 'ACTIVE' ORDER BY created_at ASC
+    `);
+    const companyId = String(companyResult.recordset[0]?.id ?? "");
+    const serviceResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT TOP 1 id FROM operational_locations
+        WHERE company_id = @companyId AND active = 1
+        ORDER BY created_at ASC
+      `);
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
+    assert.ok(companyId && serviceId);
+
+    const futureStart = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    const operationInsert = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("serviceId", sql.UniqueIdentifier, serviceId)
+      .input("scheduledStart", sql.DateTime2, futureStart)
+      .query(`
+        INSERT INTO scheduled_operations (
+          company_id, service_id, scheduled_start, early_tolerance_minutes, late_tolerance_minutes, status, operation_kind
+        )
+        OUTPUT INSERTED.id
+        VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME')
+      `);
+    const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
+
+    const employees = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("phone1", sql.NVarChar(20), uniquePhone(4))
+      .input("phone2", sql.NVarChar(20), uniquePhone(5))
+      .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+        INSERT INTO employees (company_id, name, phone_number, employee_type, active)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES
+          (@companyId, N'Emp Workday Pending', @phone1, 'fijo', 1),
+          (@companyId, N'Emp Workday Unavailable', @phone2, 'fijo', 1);
+        SELECT id FROM @inserted;
+      `);
+    const [pendingId, unavailableId] = employees.recordset.map((row) =>
+      String((row as { id: string }).id),
+    );
+    fixtures.trackEmployee(companyId, pendingId);
+    fixtures.trackEmployee(companyId, unavailableId);
+
+    await operationAssignmentService.assignEmployee(companyId, operationId, pendingId);
+    const unavailableAssignment = await operationAssignmentService.assignEmployee(
+      companyId,
+      operationId,
+      unavailableId,
+    );
+
+    await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, unavailableAssignment.id)
+      .query(`
+        UPDATE employee_workdays
+        SET unavailable_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId AND operation_assignment_id = @assignmentId;
+      `);
+
+    const summary = await operationAttendanceRepository.getAttendanceSummary(
+      companyId,
+      operationId,
+      1,
+      10,
+    );
+
+    assert.ok(summary);
+    assert.equal(summary.summary.assigned, 2);
+    assert.equal(summary.summary.pendingConfirmationEmployees, 1);
+    assert.equal(summary.summary.unavailableEmployees, 1);
+
+    const byEmployeeId = new Map(summary.employees.map((row) => [row.employee.id, row]));
+    assert.equal(byEmployeeId.get(pendingId)?.confirmationStatus, "PENDING");
+    assert.equal(byEmployeeId.get(unavailableId)?.confirmationStatus, "UNAVAILABLE");
+    assert.ok(byEmployeeId.get(unavailableId)?.unavailableAt);
+  });
+
   it("returns workday-specific employee counts for recurring operations", async () => {
     const pool = getPool();
     const companyResult = await pool.request().query(`

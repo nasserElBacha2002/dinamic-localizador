@@ -11,11 +11,13 @@ import { auditService } from "./audit.service";
 import { formatServiceReferenceFromFields } from "../utils/format-service-reference";
 import { formatLocalTime } from "../utils/attendance-validation";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { toDateOnlyString } from "../utils/row-mappers";
 
 type ReplacementContext = {
   requestId: string;
   operationWorkdayId: string;
   operationId: string;
+  operationKind: string;
   workDate: string;
   operationShiftId: string | null;
   expectedStartAt: string;
@@ -36,7 +38,8 @@ const toContext = (row: Record<string, unknown>): ReplacementContext => ({
   requestId: String(row.request_id),
   operationWorkdayId: String(row.operation_workday_id),
   operationId: String(row.operation_id),
-  workDate: String(row.work_date),
+  operationKind: String(row.operation_kind),
+  workDate: toDateOnlyString(row.work_date as Date | string),
   operationShiftId: row.operation_shift_id ? String(row.operation_shift_id) : null,
   expectedStartAt: String(row.expected_start_at),
   expectedEndAt: row.expected_end_at ? String(row.expected_end_at) : null,
@@ -55,7 +58,7 @@ const toContext = (row: Record<string, unknown>): ReplacementContext => ({
 
 const requestContextSql = `
   SELECT rr.id request_id, rr.status, rr.candidates_materialized_at, rr.notifications_materialized_at,
-    ow.id operation_workday_id, ow.operation_id, ow.work_date, ow.operation_shift_id,
+    ow.id operation_workday_id, ow.operation_id, o.operation_kind, ow.work_date, ow.operation_shift_id,
     ow.expected_start_at, ow.expected_end_at, e.name absent_name, s.name service_name,
     s.address service_address, s.locality service_locality
   FROM replacement_requests rr
@@ -149,7 +152,8 @@ const materializeCandidates = async (
 
   // The recommender is read-only and deliberately runs outside a write transaction.
   const recommendation = await individualRecommendationService.recommendEmployees(
-    companyId, context.operationId, 20, context.workDate,
+    companyId, context.operationId, 20,
+    context.operationKind === "RECURRING" ? context.workDate : undefined,
   );
   const exclusionRows = await getPool().request()
     .input("companyId", sql.UniqueIdentifier, companyId)
@@ -407,9 +411,10 @@ export const replacementRequestService = {
         return staleReply;
       }
 
+      const workDate = toDateOnlyString(row.work_date as Date | string);
       const assignment = await operationEmployeeRepository.createInTransaction(companyId, tx, {
         operationId: String(row.operation_id), employeeId: String(row.candidate_employee_id),
-        validFrom: String(row.work_date), validUntil: String(row.work_date),
+        validFrom: workDate, validUntil: workDate,
         assignmentOrigin: "COVERAGE", operationShiftId: row.operation_shift_id ? String(row.operation_shift_id) : null,
       });
       const cancelled = await new sql.Request(tx)
@@ -438,7 +443,7 @@ export const replacementRequestService = {
         newData: { candidateId: String(row.candidate_id), employeeId: String(row.candidate_employee_id) },
       }, tx);
       await tx.commit();
-      return `✅ Reemplazo asignado.\n\n${String(row.candidate_name)} fue asignado a ${String(row.service_name)} para el ${String(row.work_date)}, ${new Date(String(row.expected_start_at)).toISOString().slice(11,16)}.`;
+      return `✅ Reemplazo asignado.\n\n${String(row.candidate_name)} fue asignado a ${String(row.service_name)} para el ${workDate}, ${new Date(String(row.expected_start_at)).toISOString().slice(11,16)}.`;
     } catch (error) {
       try { await tx.rollback(); } catch { /* transaction was not started or already settled */ }
       throw error;

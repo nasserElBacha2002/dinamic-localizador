@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { deriveEmployeeWorkdayState } from "./derive-employee-workday-state";
-import { EFFECTIVE_STATE_SQL } from "./employee-workday-statistics-projection";
+import {
+  buildEmployeeWorkdayStatisticsFilters,
+  CONFIRMATION_STATUS_SQL,
+  EFFECTIVE_STATE_SQL,
+} from "./employee-workday-statistics-projection";
 
 const schedule = {
   expectedStartAt: "2026-08-10T12:00:00.000Z",
@@ -107,5 +111,43 @@ describe("employee-workday-statistics-projection contract", () => {
       }),
       "PRESENT",
     );
+  });
+
+  it("applies confirmationStatus with workday unavailability taking precedence", () => {
+    const companyId = "11111111-1111-1111-1111-111111111111";
+    for (const status of ["PENDING", "CONFIRMED", "UNAVAILABLE"] as const) {
+      const filters = buildEmployeeWorkdayStatisticsFilters(companyId, {
+        confirmationStatus: status,
+      } as Parameters<typeof buildEmployeeWorkdayStatisticsFilters>[1]);
+      const filter = filters.find((item) => item.clause.includes("@workdayConfirmationStatus"));
+      assert.ok(filter, `missing confirmationStatus filter for ${status}`);
+      const bound: Record<string, unknown> = {};
+      filter.apply({
+        input: (name: string, _type: unknown, value: unknown) => {
+          bound[name] = value;
+        },
+      } as never);
+      assert.deepEqual(bound, { workdayConfirmationStatus: status });
+    }
+
+    const unfiltered = buildEmployeeWorkdayStatisticsFilters(
+      companyId,
+      {} as Parameters<typeof buildEmployeeWorkdayStatisticsFilters>[1],
+    );
+    assert.equal(
+      unfiltered.some((item) => item.clause.includes("@workdayConfirmationStatus")),
+      false,
+    );
+    const pending = buildEmployeeWorkdayStatisticsFilters(companyId, {
+      confirmationStatus: "PENDING",
+    } as Parameters<typeof buildEmployeeWorkdayStatisticsFilters>[1]);
+    assert.equal(
+      pending.some((item) => /@confirmationStatus\b/.test(item.clause)),
+      false,
+      "must not collide with @confirmationStatus bound by incident repositories",
+    );
+
+    assert.match(CONFIRMATION_STATUS_SQL, /WHEN ew\.unavailable_at IS NOT NULL THEN N'UNAVAILABLE'/);
+    assert.match(CONFIRMATION_STATUS_SQL, /ELSE oa\.confirmation_status/);
   });
 });

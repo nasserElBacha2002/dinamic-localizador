@@ -9,7 +9,12 @@ import type {
 } from "../types/daily-attendance-report";
 import { classifyDailyAttendanceReportRow } from "../utils/daily-attendance-report-classify";
 import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../utils/statistics-canonical-attendance";
-import { EFFECTIVE_STATE_SQL, WORKED_MINUTES_SQL, OVERTIME_MINUTES_SQL } from "../utils/employee-workday-statistics-projection";
+import {
+  CONFIRMATION_STATUS_SQL,
+  EFFECTIVE_STATE_SQL,
+  WORKED_MINUTES_SQL,
+  OVERTIME_MINUTES_SQL,
+} from "../utils/employee-workday-statistics-projection";
 import { toDateOnlyString } from "../utils/row-mappers";
 
 const MAX_INCIDENTS = 40;
@@ -56,7 +61,8 @@ const toDate = (value: Date | string | null | undefined): Date | null => {
  *
  * Canonical sources:
  * - JUSTIFIED: employee_workdays.expectation_status (absence reconciliation / UI / WhatsApp)
- * - UNAVAILABLE / PENDING confirmation: operation_assignments.confirmation_status
+ * - UNAVAILABLE / PENDING confirmation: CONFIRMATION_STATUS_SQL (employee_workdays.unavailable_at,
+ *   then operation_assignments.confirmation_status)
  * - Attendance: CANONICAL_PRODUCTION_ATTENDANCE_APPLY (VALID preferred over PENDING_REVIEW)
  *
  * Denominator: expectation not CANCELLED. Cancelled operation_workdays excluded.
@@ -90,7 +96,7 @@ export const dailyAttendanceReportAggregator = {
           ew.id AS employee_workday_id,
           e.name AS employee_name,
           ew.expectation_status,
-          oa.confirmation_status,
+          (${CONFIRMATION_STATUS_SQL}) AS confirmation_status,
           ar.received_at,
           ar.checkout_at,
           ar.punctuality_status,

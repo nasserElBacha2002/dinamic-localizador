@@ -3,6 +3,7 @@ import type { AssignmentConfirmationStatus } from "../constants/assignment-confi
 import { getPool } from "../database/connection";
 import type { OperationalStatus } from "../types/auth";
 import type { AttendanceRecord, Employee, Operation, Service } from "../types/domain";
+import { CONFIRMATION_STATUS_SQL } from "../utils/employee-workday-statistics-projection";
 import { getPagination } from "../utils/pagination";
 import { mapOperationAttendanceSummaryRow } from "../utils/operation-attendance-summary.mapper";
 import { resolveAttendanceSummaryWorkday } from "../utils/operation-attendance-workday-resolver";
@@ -187,9 +188,9 @@ export const operationAttendanceRepository = {
           SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
           SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
           SUM(CASE WHEN ar.id IS NULL AND ew.expectation_status = 'EXPECTED' THEN 1 ELSE 0 END) AS without_check_in,
-          SUM(CASE WHEN oa.confirmation_status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
-          SUM(CASE WHEN oa.confirmation_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
-          SUM(CASE WHEN oa.confirmation_status = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
+          SUM(CASE WHEN (${CONFIRMATION_STATUS_SQL}) = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
+          SUM(CASE WHEN (${CONFIRMATION_STATUS_SQL}) = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
+          SUM(CASE WHEN (${CONFIRMATION_STATUS_SQL}) = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
         ${globalBaseQuery}
       `);
 
@@ -235,9 +236,9 @@ export const operationAttendanceRepository = {
           ew.operation_assignment_id AS assignment_id,
           ew.expectation_status,
           ew.absence_request_id,
-          oa.confirmation_status,
+          (${CONFIRMATION_STATUS_SQL}) AS confirmation_status,
           oa.confirmed_at,
-          oa.unavailable_at,
+          COALESCE(ew.unavailable_at, oa.unavailable_at) AS unavailable_at,
           ew.id AS employee_workday_id,
           ar.id AS attendance_id,
           ar.operation_id AS attendance_operation_id,

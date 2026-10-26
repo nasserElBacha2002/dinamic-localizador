@@ -160,7 +160,8 @@ describeDatabaseIntegration("admin alert migration 103 constraints", () => {
             N'ATTENDANCE_THRESHOLD_CROSSED',
             N'ATTENDANCE_CONFIRMATION_MISSING',
             N'MISSING_CHECKIN_AFTER_START',
-            N'MISSING_CHECKOUT_AFTER_END'
+            N'MISSING_CHECKOUT_AFTER_END',
+            N'REPLACEMENT_REQUEST'
           ));
     `);
   });

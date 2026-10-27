@@ -32,12 +32,13 @@
     "react-router": "^8.3.0",
     "recharts": "^3.2.1",
     "xlsx": "npm:@e965/xlsx@0.20.3",
-    "zod": "^4.1.11"
+    "zod": "^4.6.7"
   },
   "overrides": {
     "esbuild": "0.28.1",
     "brace-expansion": "5.0.12",
-    "undici": "7.29.1",
+    "undici": "7.30.1",
+    "follow-redirects": "1.16.2",
     "nanoid": "3.3.18",
     "browserslist": "4.28.7"
   },
@@ -58,7 +59,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.6.0",
-    "happy-dom": "^20.10.6",
+    "happy-dom": "^21.0.4",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.23",
     "postcss-preset-mantine": "^1.18.0",
@@ -66,6 +67,6 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.61.1",
-    "vite": "^7.1.9"
+    "vite": "^7.3.7"
   }
 }

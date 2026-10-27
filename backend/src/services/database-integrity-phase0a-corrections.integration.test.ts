@@ -148,12 +148,16 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
     });
 
     const year = Number((await resolveCompanyTodayIso(companyId)).slice(0, 4));
-    await absenceBalanceRepository.upsert(companyId, {
-      employeeId: employeeA.id,
-      absenceTypeId: vacation.id,
-      year,
-      totalDays: 30,
-    });
+    // Offsets of 40–81 days cross into the next calendar year from late October onward.
+    // Approval looks up the balance year of the request start date.
+    for (const balanceYear of [year, year + 1]) {
+      await absenceBalanceRepository.upsert(companyId, {
+        employeeId: employeeA.id,
+        absenceTypeId: vacation.id,
+        year: balanceYear,
+        totalDays: 30,
+      });
+    }
 
     return { companyId, vacation, employeeA };
   };

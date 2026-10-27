@@ -85,6 +85,14 @@ export const OPEN_ATTENDANCE_WORKDAY_SQL = `
   END
 `;
 
+/** A workday-level unavailability report overrides the assignment-level confirmation. */
+export const CONFIRMATION_STATUS_SQL = `
+  CASE
+    WHEN ew.unavailable_at IS NOT NULL THEN N'UNAVAILABLE'
+    ELSE oa.confirmation_status
+  END
+`;
+
 const toDateOnly = (value: string): string => value.slice(0, 10);
 
 export const buildEmployeeWorkdayStatisticsFilters = (
@@ -181,6 +189,15 @@ export const buildEmployeeWorkdayStatisticsFilters = (
     sqlFilters.push({
       clause: "ar.punctuality_status = @punctualityStatus",
       apply: (request) => request.input("punctualityStatus", sql.NVarChar, normalized.punctualityStatus),
+    });
+  }
+
+  if (normalized.confirmationStatus) {
+    sqlFilters.push({
+        // Incident repositories bind their own @confirmationStatus on the same request.
+        clause: `(${CONFIRMATION_STATUS_SQL}) = @workdayConfirmationStatus`,
+        apply: (request) =>
+          request.input("workdayConfirmationStatus", sql.NVarChar, normalized.confirmationStatus),
     });
   }
 

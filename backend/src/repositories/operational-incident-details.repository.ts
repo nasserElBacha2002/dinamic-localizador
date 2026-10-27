@@ -2,6 +2,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { StatisticsTableQuery } from "../schemas/statistics.schema";
 import type { OperationalIncidentDetailRow } from "../types/statistics";
+import { toDateOnlyString } from "../utils/row-mappers";
 import {
   OPERATIONAL_INCIDENT_LABELS,
   PUNCH_COMPLETENESS_FROM_WORKDAY_STATS_SQL,
@@ -335,7 +336,7 @@ export const operationalIncidentDetailsRepository = {
         incidentType,
         incidentLabel: OPERATIONAL_INCIDENT_LABELS[incidentType] ?? incidentType,
         operationId: String(row.operation_id),
-        operationalDate: String(row.operational_date).slice(0, 10),
+        operationalDate: toDateOnlyString(row.operational_date as Date | string),
         serviceName: String(row.service_name ?? ""),
         serviceAddress: row.service_address ? String(row.service_address) : null,
         workTeamName: row.work_team_name ? String(row.work_team_name) : null,

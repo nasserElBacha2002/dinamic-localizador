@@ -52,7 +52,7 @@ describe("company settings page UX structure", () => {
       "utf8",
     );
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
 

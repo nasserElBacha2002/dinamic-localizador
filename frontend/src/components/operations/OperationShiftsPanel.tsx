@@ -30,7 +30,7 @@ import { getTodayDateInput } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { isOvernightShift } from "../../utils/operation-shift-payload";
 import { partitionShiftVersions } from "../../utils/operation-shift-version";
-import { OperationTimeInput } from "../../pages/settings/components/OperationTimeInput";
+import { OperationTimeInput } from "../../pages/settings/components/schedule/OperationTimeInput";
 
 const DAY_LABELS: Record<number, string> = {
   1: "Lun",

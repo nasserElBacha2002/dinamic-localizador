@@ -41,7 +41,7 @@ import { operationKindLabels } from "../../utils/operation-schedule-display";
 import { operationStatusLabels } from "../../utils/labels";
 import { isOvernightShift, getCompanyWorkingIsoDays } from "../../utils/operation-shift-payload";
 import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
-import { OperationTimeInput } from "../../pages/settings/components/OperationTimeInput";
+import { OperationTimeInput } from "../../pages/settings/components/schedule/OperationTimeInput";
 import { OperationShiftsPanel } from "./OperationShiftsPanel";
 import type { ScheduleMode } from "../../types/operation-shift";
 

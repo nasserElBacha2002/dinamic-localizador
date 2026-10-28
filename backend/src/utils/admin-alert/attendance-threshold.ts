@@ -1,4 +1,4 @@
-import { calculateAttendanceRate } from "../attendance-statistics-metrics";
+import { calculateAttendanceRate } from "../attendance/attendance-statistics-metrics";
 import type { AttendanceAlertBand } from "../../constants/attendance-alert";
 
 /**

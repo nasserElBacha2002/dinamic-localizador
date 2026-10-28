@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resolveIncidentMetricsSettlement } from "./statistics.service";
-import { emptyOperationalIncidentSummary } from "../utils/operational-incident-statistics";
+import { emptyOperationalIncidentSummary } from "../utils/statistics/operational-incident-statistics";
 
 describe("statisticsService incident partial failure", () => {
   it("maps rejected incident settlement to UNAVAILABLE without zeros", () => {

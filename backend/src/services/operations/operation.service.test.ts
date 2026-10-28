@@ -1,0 +1,279 @@
+import assert from "node:assert/strict";
+import { afterEach, describe, it, mock } from "node:test";
+import { AppError } from "../../errors/app-error";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
+import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
+
+const COMPANY_ID = "company-1";
+const SERVICE_ID = "service-1";
+const FUTURE_START = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+const FUTURE_END = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString();
+
+const activeService = {
+  id: SERVICE_ID,
+  name: "Service 1",
+  address: "Addr",
+  neighborhood: null,
+  locality: null,
+  serviceFormat: null,
+  latitude: -34.6,
+  longitude: -58.38,
+  allowedRadiusMeters: 150,
+  googlePlaceId: null,
+  active: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+const createdOperation = {
+  id: "operation-1",
+  serviceId: SERVICE_ID,
+  operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
+  scheduledStart: FUTURE_START,
+  scheduledEnd: FUTURE_END,
+  earlyToleranceMinutes: 45,
+  lateToleranceMinutes: 75,
+  earlyToleranceSource: "COMPANY_DEFAULT" as const,
+  lateToleranceSource: "COMPANY_DEFAULT" as const,
+  status: "SCHEDULED" as const,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+describe("operationService.create", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("uses company defaults when tolerances are omitted", async () => {
+    setupUnitTestEnv();
+    const { companyOperationalDefaultsResolver } = await import(
+      "../companies/company-operational-defaults.resolver"
+    );
+    const { operationService } = await import("./operation.service");
+
+    let resolverCompanyId = "";
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async (companyId) => {
+      resolverCompanyId = companyId;
+      return {
+        companyId,
+        earlyToleranceMinutes: 45,
+        lateToleranceMinutes: 75,
+        source: "company_settings" as const,
+      };
+    });
+    mock.method(serviceRepository, "findById", async () => activeService);
+    mock.method(operationRepository, "create", async (_companyId, input) => ({
+      ...createdOperation,
+      earlyToleranceMinutes: input.earlyToleranceMinutes!,
+      lateToleranceMinutes: input.lateToleranceMinutes!,
+      earlyToleranceSource: input.earlyToleranceSource,
+      lateToleranceSource: input.lateToleranceSource,
+    }));
+
+    const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
+      serviceId: SERVICE_ID,
+      scheduledStart: FUTURE_START,
+      scheduledEnd: FUTURE_END,
+    });
+
+    assert.equal(resolverCompanyId, COMPANY_ID);
+    assert.equal(result.earlyToleranceMinutes, 45);
+    assert.equal(result.lateToleranceMinutes, 75);
+    assert.equal(result.earlyToleranceSource, "COMPANY_DEFAULT");
+    assert.equal(result.lateToleranceSource, "COMPANY_DEFAULT");
+  });
+
+  it("keeps explicit zero tolerances over company defaults", async () => {
+    setupUnitTestEnv();
+    const { companyOperationalDefaultsResolver } = await import(
+      "../companies/company-operational-defaults.resolver"
+    );
+    const { operationService } = await import("./operation.service");
+
+    let resolverCalls = 0;
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => {
+      resolverCalls += 1;
+      return {
+        companyId: COMPANY_ID,
+        earlyToleranceMinutes: 45,
+        lateToleranceMinutes: 75,
+        source: "company_settings" as const,
+      };
+    });
+    mock.method(serviceRepository, "findById", async () => activeService);
+    mock.method(operationRepository, "create", async (_companyId, input) => ({
+      ...createdOperation,
+      earlyToleranceMinutes: input.earlyToleranceMinutes!,
+      lateToleranceMinutes: input.lateToleranceMinutes!,
+      earlyToleranceSource: input.earlyToleranceSource,
+      lateToleranceSource: input.lateToleranceSource,
+    }));
+
+    const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
+      serviceId: SERVICE_ID,
+      scheduledStart: FUTURE_START,
+      scheduledEnd: FUTURE_END,
+      earlyToleranceMinutes: 0,
+      lateToleranceMinutes: 0,
+    });
+
+    assert.equal(resolverCalls, 1);
+    assert.equal(result.earlyToleranceMinutes, 0);
+    assert.equal(result.lateToleranceMinutes, 0);
+    assert.equal(result.earlyToleranceSource, "CUSTOM");
+    assert.equal(result.lateToleranceSource, "CUSTOM");
+  });
+
+  it("keeps an explicit value custom when it equals the company default", async () => {
+    setupUnitTestEnv();
+    const { companyOperationalDefaultsResolver } = await import(
+      "../companies/company-operational-defaults.resolver"
+    );
+    const { operationService } = await import("./operation.service");
+
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => ({
+      companyId: COMPANY_ID,
+      earlyToleranceMinutes: 45,
+      lateToleranceMinutes: 75,
+      source: "company_settings" as const,
+    }));
+    mock.method(serviceRepository, "findById", async () => activeService);
+    mock.method(operationRepository, "create", async (_companyId, input) => ({
+      ...createdOperation,
+      earlyToleranceMinutes: input.earlyToleranceMinutes,
+      lateToleranceMinutes: input.lateToleranceMinutes,
+      earlyToleranceSource: input.earlyToleranceSource,
+      lateToleranceSource: input.lateToleranceSource,
+    }));
+
+    const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
+      serviceId: SERVICE_ID,
+      scheduledStart: FUTURE_START,
+      scheduledEnd: FUTURE_END,
+      earlyToleranceMinutes: 45,
+      lateToleranceMinutes: 75,
+    });
+
+    assert.equal(result.earlyToleranceSource, "CUSTOM");
+    assert.equal(result.lateToleranceSource, "CUSTOM");
+  });
+
+  it("rejects negative tolerances at schema validation layer", async () => {
+    setupUnitTestEnv();
+    const { createOperationSchema } = await import("../../schemas/operation.schema");
+
+    const parsed = createOperationSchema.safeParse({
+      operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
+      serviceId: SERVICE_ID,
+      scheduledStart: FUTURE_START,
+      scheduledEnd: FUTURE_END,
+      earlyToleranceMinutes: -1,
+      lateToleranceMinutes: 90,
+    });
+
+    assert.equal(parsed.success, false);
+  });
+
+  it("rejects inactive services before resolving defaults", async () => {
+    setupUnitTestEnv();
+    const { companyOperationalDefaultsResolver } = await import(
+      "../companies/company-operational-defaults.resolver"
+    );
+    const { operationService } = await import("./operation.service");
+
+    let resolverCalls = 0;
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => {
+      resolverCalls += 1;
+      return {
+        companyId: COMPANY_ID,
+        earlyToleranceMinutes: 45,
+        lateToleranceMinutes: 75,
+        source: "company_settings" as const,
+      };
+    });
+    mock.method(serviceRepository, "findById", async () => ({ ...activeService, active: false }));
+
+    await assert.rejects(
+      () =>
+        operationService.create(COMPANY_ID, {
+          operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
+          serviceId: SERVICE_ID,
+          scheduledStart: FUTURE_START,
+          scheduledEnd: FUTURE_END,
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "SERVICE_INACTIVE",
+    );
+    assert.equal(resolverCalls, 0);
+  });
+
+  it("falls back to application defaults through resolver when company row is missing", async () => {
+    setupUnitTestEnv();
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { operationService } = await import("./operation.service");
+
+    mock.method(companySettingsRepository, "findByCompanyId", async () => null);
+    mock.method(serviceRepository, "findById", async () => activeService);
+    mock.method(operationRepository, "create", async (_companyId, input) => ({
+      ...createdOperation,
+      earlyToleranceMinutes: input.earlyToleranceMinutes!,
+      lateToleranceMinutes: input.lateToleranceMinutes!,
+    }));
+
+    const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
+      serviceId: SERVICE_ID,
+      scheduledStart: FUTURE_START,
+      scheduledEnd: FUTURE_END,
+    });
+
+    assert.equal(
+      result.earlyToleranceMinutes,
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultEarlyArrivalToleranceMinutes,
+    );
+    assert.equal(
+      result.lateToleranceMinutes,
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultLateArrivalToleranceMinutes,
+    );
+  });
+});
+
+describe("operationService.getById lifecycle", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("case 10: lazy GET persists COMPLETED when SCHEDULED is past scheduledEnd", async () => {
+    setupUnitTestEnv();
+    const stale = {
+      ...createdOperation,
+      scheduledStart: "2026-08-13T23:50:00.000Z",
+      scheduledEnd: "2026-08-14T06:00:00.000Z",
+      status: "SCHEDULED" as const,
+    };
+    let promotions = 0;
+    mock.method(operationRepository, "findById", async () => stale);
+    mock.method(operationRepository, "promoteLifecycleStatus", async (_companyId, id, _from, to) => {
+      promotions += 1;
+      return { ...stale, id, status: to, updatedAt: "2026-08-16T00:00:00.000Z" };
+    });
+
+    const { operationService } = await import("./operation.service");
+    const result = await operationService.getById(COMPANY_ID, stale.id);
+
+    assert.equal(result.status, "COMPLETED");
+    assert.equal(promotions, 1);
+  });
+});

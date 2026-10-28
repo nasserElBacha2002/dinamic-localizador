@@ -1,0 +1,1088 @@
+// Operational domain: Operation maps to scheduled_operations; Service maps to operational_locations.
+import { AppError } from "../../errors/app-error";
+import sql from "mssql";
+import { getPool } from "../../database/connection";
+import { resolveOperationAbsenceBadges } from "../../domain/operation-absence-badges";
+import { operationAttendanceRepository } from "../../repositories/operations/operation-attendance.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import type {
+  CreateOperationInput,
+  CreateOneTimeOperationInput,
+  CreateRecurringOperationInput,
+  ListOperationsQuery,
+  UpdateOperationInput,
+} from "../../schemas/operation.schema";
+import { auditService } from "../audit.service";
+import { absenceOperationalImpactQueryService } from "../absence/absence-operational-impact-query.service";
+import { companyOperationalDefaultsResolver } from "../companies/company-operational-defaults.resolver";
+import { operationChangeEventRepository } from "../../repositories/operations/operation-change-event.repository";
+import {
+  buildOperationChangePayload,
+  resolveOperationOperationalDate,
+} from "../../utils/operations/operation-change-events";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
+import { recurringScheduleService } from "./recurring-schedule.service";
+import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
+import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
+import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../../utils/operations/operation-status";
+import { isActiveOperationDuplicateError } from "../../utils/operations/active-operation-duplicate-errors";
+import { isOperationStartInPast } from "../../utils/operations/operation-lifecycle";
+import { operationLifecycleService } from "./operation-lifecycle.service";
+import { buildPaginationMeta } from "../../utils/pagination";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
+import { getDateIsoInTimezone } from "../../utils/absence-date";
+import { safeRollback } from "../../utils/safe-transaction";
+import { seedMultiShiftOnCreateInTransaction } from "./operation-schedule-mode-transition.service";
+import {
+  normalizeWeeklyScheduleDays,
+  validateWeeklyScheduleDays,
+  weeklySchedulesEqual,
+} from "../../utils/operations/weekly-schedule";
+import type { OperationDetail, OperationWithService } from "../../types/domain";
+import { assertCompanyWorkScheduleExists } from "../../utils/operations/recurring-schedule-consistency";
+import { detectOneTimeScheduleAffectingChanges } from "../../utils/operations/one-time-schedule-change";
+import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";
+
+const resolveCompanyOperationTimezone = async (companyId: string): Promise<string> => {
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  return resolveOperationTimezone(settings?.operationTimezone);
+};
+
+const validateOneTimeDates = (
+  scheduledStart: string,
+  scheduledEnd: string | null | undefined,
+): void => {
+  if (!scheduledEnd) {
+    return;
+  }
+  if (new Date(scheduledEnd) <= new Date(scheduledStart)) {
+    throw new AppError(
+      400,
+      "INVALID_OPERATION_DATE_RANGE",
+      "scheduledEnd debe ser posterior a scheduledStart",
+    );
+  }
+};
+
+const validateOperationStartNotInPast = (scheduledStart: string): void => {
+  if (isOperationStartInPast(scheduledStart)) {
+    throw new AppError(
+      400,
+      "OPERATION_START_IN_PAST",
+      "No se puede programar una operación con fecha de inicio en el pasado",
+    );
+  }
+};
+
+type OperationRecord = NonNullable<Awaited<ReturnType<typeof operationRepository.findById>>>;
+
+const syncLifecycleStatus = async (
+  companyId: string,
+  operation: OperationRecord,
+): Promise<OperationRecord> => {
+  return operationLifecycleService.syncPersistedStatus(companyId, operation);
+};
+
+const resolveCreateTolerances = async (
+  companyId: string,
+  input: Pick<CreateOperationInput, "earlyToleranceMinutes" | "lateToleranceMinutes">,
+) => {
+  const operationDefaults =
+    await companyOperationalDefaultsResolver.getOperationDefaults(companyId);
+
+  return {
+    earlyToleranceMinutes:
+      input.earlyToleranceMinutes ?? operationDefaults.earlyToleranceMinutes,
+    lateToleranceMinutes: input.lateToleranceMinutes ?? operationDefaults.lateToleranceMinutes,
+    earlyToleranceSource:
+      input.earlyToleranceMinutes == null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+    lateToleranceSource:
+      input.lateToleranceMinutes == null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+  };
+};
+
+const resolveUpdateTolerances = async (
+  companyId: string,
+  input: UpdateOperationInput,
+): Promise<
+  Omit<UpdateOperationInput, "earlyToleranceMinutes" | "lateToleranceMinutes"> & {
+    earlyToleranceMinutes?: number;
+    lateToleranceMinutes?: number;
+    earlyToleranceSource?: "COMPANY_DEFAULT" | "CUSTOM";
+    lateToleranceSource?: "COMPANY_DEFAULT" | "CUSTOM";
+  }
+> => {
+  const { earlyToleranceMinutes, lateToleranceMinutes, ...otherInput } = input;
+  const clearsEarlyOverride = earlyToleranceMinutes === null;
+  const clearsLateOverride = lateToleranceMinutes === null;
+  const defaults =
+    clearsEarlyOverride || clearsLateOverride
+      ? await companyOperationalDefaultsResolver.getOperationDefaults(companyId)
+      : null;
+
+  return {
+    ...otherInput,
+    ...(earlyToleranceMinutes !== undefined
+      ? {
+          earlyToleranceMinutes:
+            earlyToleranceMinutes ?? defaults!.earlyToleranceMinutes,
+          earlyToleranceSource:
+            earlyToleranceMinutes === null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+        }
+      : {}),
+    ...(lateToleranceMinutes !== undefined
+      ? {
+          lateToleranceMinutes:
+            lateToleranceMinutes ?? defaults!.lateToleranceMinutes,
+          lateToleranceSource:
+            lateToleranceMinutes === null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+        }
+      : {}),
+  };
+};
+
+const enrichOperationDetail = async (
+  companyId: string,
+  detail: OperationDetail,
+): Promise<OperationDetail> => {
+  if (detail.operationKind !== "RECURRING") {
+    return detail;
+  }
+
+  const schedule = await operationScheduleRepository.findByOperationId(companyId, detail.id);
+  if (!schedule) {
+    throw new AppError(
+      409,
+      "RECURRING_SCHEDULE_DATA_INCONSISTENT",
+      "La operación habitual no tiene configuración de horario",
+    );
+  }
+
+  const companySchedule =
+    schedule.scheduleSource === "COMPANY"
+      ? await companyWorkScheduleRepository.findByCompanyId(companyId)
+      : null;
+  recurringScheduleService.assertScheduleConsistency(detail.id, schedule, companySchedule);
+
+  const effectiveSchedule = await recurringScheduleService.resolveEffectiveSchedule(
+    companyId,
+    schedule,
+    companySchedule,
+  );
+
+  return {
+    ...detail,
+    schedule: recurringScheduleService.buildDisplaySchedule(schedule, effectiveSchedule),
+  };
+};
+
+export const operationService = {
+  async create(companyId: string, input: CreateOperationInput) {
+    const service = await serviceRepository.findById(companyId, input.serviceId);
+    if (!service) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+    }
+    if (!service.active) {
+      throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
+    }
+
+    const tolerances = await resolveCreateTolerances(companyId, input);
+
+    if (input.operationKind === "ONE_TIME") {
+      return this.createOneTime(companyId, input, tolerances);
+    }
+
+    return this.createRecurring(companyId, input, tolerances);
+  },
+
+  async createOneTime(
+    companyId: string,
+    input: CreateOneTimeOperationInput,
+    tolerances: {
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+    },
+  ) {
+    validateOneTimeDates(input.scheduledStart, input.scheduledEnd);
+    validateOperationStartNotInPast(input.scheduledStart);
+
+    const wantsMulti =
+      (input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" && (input.shifts?.length ?? 0) > 0;
+
+    if (!wantsMulti) {
+      try {
+        return await operationRepository.create(companyId, {
+          ...input,
+          ...tolerances,
+        });
+      } catch (error) {
+        if (isActiveOperationDuplicateError(error)) {
+          throw new AppError(
+            409,
+            "OPERATION_DUPLICATE",
+            "Ya existe una operación para ese servicio y fecha de inicio",
+          );
+        }
+        throw error;
+      }
+    }
+
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const timezone = resolveOperationTimezone(settings?.operationTimezone);
+    const effectiveFrom = getDateIsoInTimezone(new Date(input.scheduledStart), timezone);
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const operation = await operationRepository.createInTransaction(companyId, transaction, {
+        ...input,
+        ...tolerances,
+      });
+      await seedMultiShiftOnCreateInTransaction(
+        companyId,
+        operation.id,
+        effectiveFrom,
+        input.shifts ?? [],
+        transaction,
+      );
+      await transaction.commit();
+      const refreshed = await operationRepository.findById(companyId, operation.id);
+      return refreshed ?? { ...operation, scheduleMode: "MULTI_SHIFT" as const };
+    } catch (error) {
+      await safeRollback(transaction);
+      if (isActiveOperationDuplicateError(error)) {
+        throw new AppError(
+          409,
+          "OPERATION_DUPLICATE",
+          "Ya existe una operación para ese servicio y fecha de inicio",
+        );
+      }
+      throw error;
+    }
+  },
+
+  async createRecurring(
+    companyId: string,
+    input: CreateRecurringOperationInput,
+    tolerances: {
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+    },
+  ) {
+    if (input.scheduleSource === "COMPANY") {
+      assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
+    }
+
+    if (input.scheduleSource === "CUSTOM") {
+      const normalizedDays = normalizeWeeklyScheduleDays(input.scheduleDays ?? []);
+      const validation = validateWeeklyScheduleDays(normalizedDays);
+      if (!validation.valid) {
+        throw new AppError(400, validation.code, validation.message);
+      }
+    }
+
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const customTimezone = resolveOperationTimezone(settings?.operationTimezone);
+    const wantsMulti =
+      (input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" && (input.shifts?.length ?? 0) > 0;
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const operation = await operationRepository.createRecurring(
+        companyId,
+        {
+          serviceId: input.serviceId,
+          earlyToleranceMinutes: tolerances.earlyToleranceMinutes,
+          lateToleranceMinutes: tolerances.lateToleranceMinutes,
+          earlyToleranceSource: tolerances.earlyToleranceSource,
+          lateToleranceSource: tolerances.lateToleranceSource,
+        },
+        transaction,
+      );
+
+      await operationScheduleRepository.createInTransaction(companyId, transaction, {
+        operationId: operation.id,
+        scheduleSource: input.scheduleSource,
+        timezone: input.scheduleSource === "CUSTOM" ? customTimezone : null,
+        validFrom: input.validFrom,
+        validUntil: input.validUntil ?? null,
+        days:
+          input.scheduleSource === "CUSTOM"
+            ? normalizeWeeklyScheduleDays(input.scheduleDays ?? [])
+            : undefined,
+      });
+
+      if (wantsMulti) {
+        await seedMultiShiftOnCreateInTransaction(
+          companyId,
+          operation.id,
+          input.validFrom,
+          input.shifts ?? [],
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        operation.id,
+        () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id),
+        "recurring operation create",
+      );
+
+      const refreshed = await operationRepository.findById(companyId, operation.id);
+      return refreshed ?? operation;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  },
+
+  async list(companyId: string, query: ListOperationsQuery) {
+    const result = await operationRepository.list(companyId, query);
+    const syncedItems: OperationWithService[] = await Promise.all(
+      result.items.map(async (item) => {
+        const synced = await syncLifecycleStatus(companyId, item);
+        return { ...item, ...synced };
+      }),
+    );
+    const scheduleSummaries = await operationScheduleSummaryService.buildSummariesForOperations(
+      companyId,
+      syncedItems,
+    );
+
+    const data = syncedItems.map((item) => ({
+      ...item,
+      scheduleSummary: scheduleSummaries.get(item.id),
+    }));
+
+    return {
+      data,
+      meta: buildPaginationMeta(query.page, query.limit, result.total),
+    };
+  },
+
+  async getById(companyId: string, id: string) {
+    const operation = await operationRepository.findById(companyId, id);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    return syncLifecycleStatus(companyId, operation);
+  },
+
+  async getDetailById(companyId: string, id: string) {
+    const operation = await operationRepository.findById(companyId, id);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    let assignmentReferenceDate: string | null = null;
+    if (operation.operationKind === "RECURRING") {
+      const schedule = await operationScheduleRepository.findByOperationId(companyId, id);
+      if (schedule) {
+        const companySchedule =
+          schedule.scheduleSource === "COMPANY"
+            ? await companyWorkScheduleRepository.findByCompanyId(companyId)
+            : null;
+        const effectiveSchedule = await recurringScheduleService.resolveEffectiveSchedule(
+          companyId,
+          schedule,
+          companySchedule,
+        );
+        assignmentReferenceDate = getDateIsoInTimezone(new Date(), effectiveSchedule.timezone);
+      }
+    }
+
+    const detail = await operationRepository.findDetailById(
+      companyId,
+      id,
+      assignmentReferenceDate,
+    );
+    if (!detail) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    const synced = await syncLifecycleStatus(companyId, detail);
+    return enrichOperationDetail(companyId, {
+      ...detail,
+      ...synced,
+    });
+  },
+
+  async update(companyId: string, id: string, input: UpdateOperationInput, userId?: string | null) {
+    const current = await this.getById(companyId, id);
+
+    if (input.operationKind !== undefined) {
+      throw new AppError(
+        409,
+        "OPERATION_KIND_IMMUTABLE",
+        "El tipo de operación no puede modificarse después de crearla",
+      );
+    }
+
+    if (!isOperationEditable(current.status)) {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_EDITABLE",
+        "No se puede modificar una operación completada o cancelada",
+      );
+    }
+
+    if (current.operationKind === "RECURRING") {
+      if (input.scheduledStart !== undefined || input.scheduledEnd !== undefined) {
+        throw new AppError(
+          400,
+          "INVALID_OPERATION_SCHEDULE_FIELDS",
+          "Las operaciones habituales no usan inicio y fin programados",
+        );
+      }
+      return this.updateRecurring(companyId, id, current, input, userId);
+    }
+
+    return this.updateOneTime(companyId, id, current, input, userId);
+  },
+
+  async updateOneTime(
+    companyId: string,
+    id: string,
+    current: OperationRecord,
+    input: UpdateOperationInput,
+    userId?: string | null,
+  ) {
+    const persistenceInput = await resolveUpdateTolerances(companyId, input);
+
+    if (input.serviceId) {
+      const service = await serviceRepository.findById(companyId, input.serviceId);
+      if (!service) {
+        throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+      }
+      if (!service.active) {
+        throw new AppError(409, "SERVICE_INACTIVE", "No se puede asociar un servicio inactivo");
+      }
+    }
+
+    if (input.status && !canTransitionOperationStatus(current.status, input.status)) {
+      throw new AppError(
+        409,
+        "INVALID_OPERATION_STATUS_TRANSITION",
+        "Transición de estado de operación no permitida",
+      );
+    }
+
+    const nextStart = input.scheduledStart ?? current.scheduledStart;
+    if (!nextStart) {
+      throw new AppError(400, "OPERATION_SCHEDULE_REQUIRED", "La operación requiere fecha de inicio");
+    }
+
+    validateOneTimeDates(
+      nextStart,
+      input.scheduledEnd === undefined ? current.scheduledEnd : input.scheduledEnd,
+    );
+
+    if (input.scheduledStart && input.scheduledStart !== current.scheduledStart) {
+      validateOperationStartNotInPast(input.scheduledStart);
+    }
+
+    const scheduleFlags = detectOneTimeScheduleAffectingChanges(current, persistenceInput);
+
+    let updated: OperationRecord | null;
+    let reconcileResult: Awaited<
+      ReturnType<typeof oneTimeScheduleReconciliationCommand.reconcileInTransaction>
+    > | null = null;
+
+    if (scheduleFlags.scheduleAffecting) {
+      const pool = getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
+      try {
+        const locked = await operationRepository.findByIdForUpdate(companyId, id, transaction);
+        if (!locked) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+
+        const lockedFlags = detectOneTimeScheduleAffectingChanges(locked, persistenceInput);
+        updated = await operationRepository.update(
+          companyId,
+          id,
+          persistenceInput,
+          transaction,
+        );
+        if (!updated) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+
+        reconcileResult =
+          await oneTimeScheduleReconciliationCommand.reconcileInTransaction(
+            companyId,
+            transaction,
+            updated,
+            lockedFlags,
+          );
+
+        await auditService.log(
+          companyId,
+          {
+            entityType: "operation",
+            entityId: id,
+            action: "update",
+            userId: userId ?? null,
+            previousData: locked as unknown as Record<string, unknown>,
+            newData: {
+              ...(updated as unknown as Record<string, unknown>),
+              scheduleReconciliation: {
+                workdayAction: reconcileResult.workdayAction,
+                workDate: reconcileResult.workDate,
+                scheduleVersion: reconcileResult.scheduleVersion,
+                assignmentsUpdated: reconcileResult.assignmentsUpdated,
+                confirmationsReset: reconcileResult.confirmationsReset,
+                notificationsSuperseded: reconcileResult.notificationsSuperseded,
+                employeeWorkdaysEnsured: reconcileResult.employeeWorkdaysEnsured,
+                impact: lockedFlags,
+              },
+            },
+            reason: "Actualización vía API",
+          },
+          transaction,
+        );
+
+        const timezone = await resolveCompanyOperationTimezone(companyId);
+        const changePayload = buildOperationChangePayload({
+          previous: locked,
+          next: updated,
+          action: "update",
+          timezone,
+        });
+        if (changePayload) {
+          await operationChangeEventRepository.insert(
+            {
+              companyId,
+              operationId: id,
+              operationalDate: changePayload.operationalDate,
+              changeAction: changePayload.changeAction,
+              changedFields: changePayload.changedFields,
+              actorUserId: userId ?? null,
+              reason: "Actualización vía API",
+            },
+            transaction,
+          );
+        }
+
+        await transaction.commit();
+      } catch (error) {
+        await safeRollback(transaction);
+        throw error;
+      }
+    } else {
+      const pool = getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
+      try {
+        updated = await operationRepository.update(
+          companyId,
+          id,
+          persistenceInput,
+          transaction,
+        );
+        if (!updated) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+
+        await auditService.log(
+          companyId,
+          {
+            entityType: "operation",
+            entityId: id,
+            action: "update",
+            userId: userId ?? null,
+            previousData: current as unknown as Record<string, unknown>,
+            newData: updated as unknown as Record<string, unknown>,
+            reason: "Actualización vía API",
+          },
+          transaction,
+        );
+
+        const timezone = await resolveCompanyOperationTimezone(companyId);
+        const changePayload = buildOperationChangePayload({
+          previous: current,
+          next: updated,
+          action: "update",
+          timezone,
+        });
+        if (changePayload) {
+          await operationChangeEventRepository.insert(
+            {
+              companyId,
+              operationId: id,
+              operationalDate: changePayload.operationalDate,
+              changeAction: changePayload.changeAction,
+              changedFields: changePayload.changedFields,
+              actorUserId: userId ?? null,
+              reason: "Actualización vía API",
+            },
+            transaction,
+          );
+        }
+
+        await transaction.commit();
+      } catch (error) {
+        await safeRollback(transaction);
+        throw error;
+      }
+    }
+
+    if (reconcileResult && reconcileResult.confirmationsReset > 0) {
+      console.info("[operation] confirmation state reset after schedule change", {
+        companyId,
+        operationId: id,
+        resetAssignments: reconcileResult.confirmationsReset,
+        assignmentsUpdated: reconcileResult.assignmentsUpdated,
+        notificationsSuperseded: reconcileResult.notificationsSuperseded,
+        workdayAction: reconcileResult.workdayAction,
+        workDate: reconcileResult.workDate,
+        scheduleVersion: reconcileResult.scheduleVersion,
+      });
+    }
+
+    return updated;
+  },
+
+  async updateRecurring(
+    companyId: string,
+    id: string,
+    current: OperationRecord,
+    input: UpdateOperationInput,
+    userId?: string | null,
+  ) {
+    const persistenceInput = await resolveUpdateTolerances(companyId, input);
+    const schedule = await operationScheduleRepository.findByOperationId(companyId, id);
+    if (!schedule) {
+      throw new AppError(404, "OPERATION_SCHEDULE_NOT_FOUND", "La operación no tiene horario configurado");
+    }
+
+    if (input.scheduleSource === "COMPANY" && input.scheduleDays) {
+      throw new AppError(400, "INVALID_SCHEDULE_SOURCE", "La configuración del horario no es válida");
+    }
+
+    const nextSource = input.scheduleSource ?? schedule.scheduleSource;
+    if (nextSource === "COMPANY") {
+      assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
+    }
+
+    if (input.scheduleSource === "CUSTOM" || schedule.scheduleSource === "CUSTOM") {
+      const sourceForValidation = input.scheduleSource ?? schedule.scheduleSource;
+      if (sourceForValidation === "CUSTOM") {
+        const days = normalizeWeeklyScheduleDays(
+          input.scheduleDays ?? (schedule.scheduleSource === "CUSTOM" ? schedule.days : []),
+        );
+        const validation = validateWeeklyScheduleDays(days);
+        if (!validation.valid) {
+          throw new AppError(400, validation.code, validation.message);
+        }
+      }
+    }
+
+    const nextValidFrom = input.validFrom ?? schedule.validFrom;
+    const nextValidUntil =
+      input.validUntil !== undefined ? input.validUntil : schedule.validUntil;
+    if (nextValidUntil && nextValidUntil < nextValidFrom) {
+      throw new AppError(
+        400,
+        "INVALID_OPERATION_VALIDITY_RANGE",
+        "La fecha de finalización no puede ser anterior a la fecha de inicio",
+      );
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    let updatedOperation: OperationRecord;
+    let scheduleChanged: boolean;
+    let toleranceChanged: boolean;
+
+    try {
+      const persistedOperation = await operationRepository.update(
+        companyId,
+        id,
+        persistenceInput,
+        transaction,
+      );
+      if (!persistedOperation) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+      }
+      updatedOperation = persistedOperation;
+
+      const resolvedNextSource = input.scheduleSource ?? schedule.scheduleSource;
+      const settings = await companySettingsRepository.findByCompanyId(companyId);
+      const customTimezone =
+        schedule.timezone ?? resolveOperationTimezone(settings?.operationTimezone);
+      const nextDays =
+        resolvedNextSource === "CUSTOM"
+          ? normalizeWeeklyScheduleDays(
+              input.scheduleDays ?? (schedule.scheduleSource === "CUSTOM" ? schedule.days : []),
+            )
+          : undefined;
+
+      scheduleChanged =
+        resolvedNextSource !== schedule.scheduleSource ||
+        nextValidFrom !== schedule.validFrom ||
+        nextValidUntil !== schedule.validUntil ||
+        Boolean(
+          resolvedNextSource === "CUSTOM" &&
+            nextDays &&
+            !weeklySchedulesEqual(nextDays, schedule.days),
+        );
+      toleranceChanged =
+        (persistenceInput.earlyToleranceMinutes !== undefined &&
+          persistenceInput.earlyToleranceMinutes !== current.earlyToleranceMinutes) ||
+        (persistenceInput.lateToleranceMinutes !== undefined &&
+          persistenceInput.lateToleranceMinutes !== current.lateToleranceMinutes);
+
+      if (
+        input.scheduleSource !== undefined ||
+        input.validFrom !== undefined ||
+        input.validUntil !== undefined ||
+        input.scheduleDays !== undefined
+      ) {
+        await operationScheduleRepository.updateInTransaction(companyId, transaction, id, {
+          scheduleSource: resolvedNextSource,
+          timezone: resolvedNextSource === "CUSTOM" ? customTimezone : null,
+          validFrom: nextValidFrom,
+          validUntil: nextValidUntil,
+          days: nextDays,
+          nextVersion: scheduleChanged ? schedule.version + 1 : schedule.version,
+        });
+      }
+
+      const changeFields: string[] = [];
+      const opChange = buildOperationChangePayload({
+        previous: current,
+        next: updatedOperation,
+        action: "update",
+        timezone: customTimezone,
+      });
+      if (opChange) {
+        changeFields.push(...opChange.changedFields);
+      }
+      if (scheduleChanged) {
+        changeFields.push("schedule");
+      }
+      if (changeFields.length > 0) {
+        await operationChangeEventRepository.insert(
+          {
+            companyId,
+            operationId: id,
+            operationalDate: resolveOperationOperationalDate(
+              {
+                scheduledStart: updatedOperation.scheduledStart,
+                workDate: nextValidFrom,
+              },
+              customTimezone,
+            ),
+            changeAction: scheduleChanged ? "RESCHEDULE" : "UPDATE",
+            changedFields: [...new Set(changeFields)],
+            actorUserId: userId ?? null,
+            reason: "Actualización vía API",
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+
+    if (scheduleChanged || toleranceChanged) {
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        id,
+        () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id),
+        toleranceChanged ? "recurring tolerance update" : "recurring schedule update",
+      );
+    }
+
+    return updatedOperation;
+  },
+
+  async cancel(companyId: string, id: string, userId?: string | null) {
+    const current = await this.getById(companyId, id);
+    if (!canTransitionOperationStatus(current.status, "CANCELLED")) {
+      throw new AppError(
+        409,
+        "INVALID_OPERATION_STATUS_TRANSITION",
+        "No se puede cancelar una operación en este estado",
+      );
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let cancelled: OperationRecord;
+    try {
+      const cancelledRow = await operationRepository.cancel(companyId, id, transaction);
+      if (!cancelledRow) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+      }
+      cancelled = cancelledRow;
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "operation",
+          entityId: id,
+          action: "cancel",
+          userId: userId ?? null,
+          previousData: current as unknown as Record<string, unknown>,
+          newData: cancelled as unknown as Record<string, unknown>,
+          reason: "Cancelación vía API",
+        },
+        transaction,
+      );
+
+      const timezone = await resolveCompanyOperationTimezone(companyId);
+      const cancelChange = buildOperationChangePayload({
+        previous: current,
+        next: cancelled,
+        action: "cancel",
+        timezone,
+      });
+      if (cancelChange) {
+        await operationChangeEventRepository.insert(
+          {
+            companyId,
+            operationId: id,
+            operationalDate: cancelChange.operationalDate,
+            changeAction: cancelChange.changeAction,
+            changedFields: cancelChange.changedFields,
+            actorUserId: userId ?? null,
+            reason: "Cancelación vía API",
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await safeRollback(transaction);
+      throw error;
+    }
+
+    if ((cancelled.operationKind ?? "ONE_TIME") === "RECURRING") {
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        id,
+        () =>
+          recurringWorkdayMaterializationService.reconcileFutureWorkdaysForCancelledOperation(
+            companyId,
+            id,
+          ),
+        "recurring operation cancel",
+      );
+    }
+
+    return cancelled;
+  },
+
+  async reactivate(companyId: string, id: string, userId?: string | null) {
+    const current = await operationRepository.findById(companyId, id);
+    if (!current) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    if (!isOperationReactivatable(current.status)) {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_CANCELLED",
+        "La operación ya no se encuentra cancelada y no puede reactivarse.",
+      );
+    }
+
+    if (!canTransitionOperationStatus(current.status, OPERATION_REACTIVATION_STATUS)) {
+      throw new AppError(
+        409,
+        "INVALID_OPERATION_STATUS_TRANSITION",
+        "No se puede reactivar una operación en este estado",
+      );
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let reactivated: OperationRecord | null = null;
+    try {
+      reactivated = await operationRepository.reactivateFromCancelled(
+        companyId,
+        id,
+        transaction,
+      );
+      if (!reactivated) {
+        throw new AppError(
+          409,
+          "OPERATION_NOT_CANCELLED",
+          "La operación ya no se encuentra cancelada y no puede reactivarse.",
+        );
+      }
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "operation",
+          entityId: id,
+          action: "reactivate",
+          userId: userId ?? null,
+          previousData: {
+            ...(current as unknown as Record<string, unknown>),
+            previousStatus: current.status,
+            restoredStatus: OPERATION_REACTIVATION_STATUS,
+          },
+          newData: reactivated as unknown as Record<string, unknown>,
+          reason: "Reactivación vía API",
+        },
+        transaction,
+      );
+
+      const timezone = await resolveCompanyOperationTimezone(companyId);
+      const reactivateChange = buildOperationChangePayload({
+        previous: current,
+        next: reactivated,
+        action: "reactivate",
+        timezone,
+      });
+      if (reactivateChange) {
+        await operationChangeEventRepository.insert(
+          {
+            companyId,
+            operationId: id,
+            operationalDate: reactivateChange.operationalDate,
+            changeAction: reactivateChange.changeAction,
+            changedFields: reactivateChange.changedFields,
+            actorUserId: userId ?? null,
+            reason: "Reactivación vía API",
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await safeRollback(transaction);
+      if (
+        error instanceof AppError &&
+        error.code === "OPERATION_NOT_CANCELLED" &&
+        !reactivated
+      ) {
+        const raced = await operationRepository.findById(companyId, id);
+        if (!raced) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+      }
+      throw error;
+    }
+
+    if ((reactivated.operationKind ?? "ONE_TIME") === "RECURRING") {
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        id,
+        () =>
+          recurringWorkdayMaterializationService.reconcileWorkdaysForReactivatedOperation(
+            companyId,
+            id,
+          ),
+        "recurring operation reactivate",
+      );
+    }
+
+    return syncLifecycleStatus(companyId, reactivated);
+  },
+
+  async getAttendanceSummary(
+    companyId: string,
+    operationId: string,
+    page = 1,
+    limit = 10,
+    search?: string,
+    workDate?: string,
+    workdayId?: string,
+  ) {
+    const summary = await operationAttendanceRepository.getAttendanceSummary(
+      companyId,
+      operationId,
+      page,
+      limit,
+      search,
+      workDate,
+      workdayId,
+    );
+    if (!summary) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    const syncedOperation = await syncLifecycleStatus(companyId, summary.operation);
+
+    const featureEnabled =
+      await absenceOperationalImpactQueryService.isFeatureEnabled(companyId);
+    const conflicts = featureEnabled
+      ? await absenceOperationalImpactRepository.listConflictsByOperation(
+          companyId,
+          operationId,
+        )
+      : [];
+
+    const employees = summary.employees.map((employee) => {
+      const badges = featureEnabled
+        ? resolveOperationAbsenceBadges({
+            employeeId: employee.employee.id,
+            assignmentId: employee.assignmentId,
+            expectationStatus: employee.expectationStatus,
+            conflicts,
+          })
+        : [];
+      return {
+        assignmentId: employee.assignmentId,
+        employee: employee.employee,
+        attendance: employee.attendance,
+        operationalStatus: employee.operationalStatus,
+        confirmationStatus: employee.confirmationStatus,
+        confirmedAt: employee.confirmedAt,
+        unavailableAt: employee.unavailableAt,
+        expectationStatus: employee.expectationStatus,
+        absenceRequestId: employee.absenceRequestId,
+        employeeWorkdayId: employee.employeeWorkdayId,
+        absenceBadges: badges,
+      };
+    });
+
+    return {
+      operation: {
+        ...summary.operation,
+        ...syncedOperation,
+        service: summary.service,
+      },
+      operationWorkdayId: summary.operationWorkdayId,
+      workDate: summary.workDate,
+      summary: summary.summary,
+      employees,
+      meta: buildPaginationMeta(page, limit, summary.total),
+    };
+  },
+};

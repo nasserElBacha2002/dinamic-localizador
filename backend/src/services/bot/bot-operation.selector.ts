@@ -1,5 +1,5 @@
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { operationRepository } from "../../repositories/operation.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import type { CheckoutEligibleOperation, CompatibleOperation } from "../../types/twilio.types";
 import { parseOperationSelection } from "../../utils/intent";
 

@@ -3,12 +3,12 @@ import {
   buildRoleCapabilities,
   isCompanyRole,
 } from "../constants/company-permission-catalog";
-import { companyModuleService } from "../services/company-module.service";
-import { companyService } from "../services/company.service";
-import { companyUserService } from "../services/company-user.service";
-import { platformAdminService } from "../services/platform-admin.service";
-import { whatsappQuotaSettingsService } from "../services/whatsapp-quota-settings.service";
-import { userRepository } from "../repositories/user.repository";
+import { companyModuleService } from "../services/companies/company-module.service";
+import { companyService } from "../services/companies/company.service";
+import { companyUserService } from "../services/companies/company-user.service";
+import { platformAdminService } from "../services/companies/platform-admin.service";
+import { whatsappQuotaSettingsService } from "../services/whatsapp/whatsapp-quota-settings.service";
+import { userRepository } from "../repositories/identity/user.repository";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const companyController = {

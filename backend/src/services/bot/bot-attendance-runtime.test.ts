@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
-import { evaluatePunctuality } from "../../utils/attendance-validation";
+import { evaluatePunctuality } from "../../utils/attendance/attendance-validation";
 import {
   buildCheckInValidation,
   buildCheckoutValidation,

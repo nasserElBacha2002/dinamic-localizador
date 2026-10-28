@@ -7,7 +7,7 @@ setupUnitTestEnv();
 
 import { authenticate } from "../middleware/authenticate";
 import { errorHandler } from "../middleware/error-handler";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
 import type { User } from "../types/auth";
 import { TWO_FACTOR_USER_DEFAULTS } from "../types/auth";

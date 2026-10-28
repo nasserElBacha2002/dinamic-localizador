@@ -6,7 +6,7 @@ import type {
 import {
   employeeWorkdayAvailabilityService,
   type CheckoutCandidateRevalidationResult,
-} from "../employee-workday-availability.service";
+} from "../workdays/employee-workday-availability.service";
 import { parseOperationSelection } from "../../utils/intent";
 
 export type { CheckoutCandidateRevalidationResult };

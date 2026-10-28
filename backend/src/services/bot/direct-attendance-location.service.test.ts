@@ -138,7 +138,7 @@ describe("processDirectLocationAttendance checkout guard", () => {
     const { mock } = await import("node:test");
     const { WHATSAPP_RESULT_CODES } = await import("../../constants/whatsapp-observability");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
     const { processDirectLocationAttendance } = await import("./direct-attendance-location.service");
 
@@ -189,9 +189,9 @@ describe("processDirectLocationAttendance checkout guard", () => {
   it("stores a direct location while waiting for explicit exit intent", async () => {
     const { mock } = await import("node:test");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { botSessionService } = await import("../bot-session.service");
+    const { botSessionService } = await import("./bot-session.service");
     const { processDirectLocationAttendance } = await import("./direct-attendance-location.service");
     const exitWithoutArrival = {
       ...baseCheckIn({ employeeWorkdayId: "ew-exit" }),

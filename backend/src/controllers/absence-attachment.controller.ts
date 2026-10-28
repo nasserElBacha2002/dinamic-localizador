@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../errors/app-error";
-import { absenceAttachmentService } from "../services/absence-attachment.service";
+import { absenceAttachmentService } from "../services/absence/absence-attachment.service";
 import { buildContentDisposition } from "../utils/absence-attachments/content-disposition";
 import { absenceAttachmentMetrics } from "../utils/absence-attachments/metrics";
 import { requireRequestCompanyId } from "../utils/request-company";

@@ -3,12 +3,12 @@ import { afterEach, describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
 import type sql from "mssql";
 import { AppError } from "../errors/app-error";
-import { absenceRequestRepository } from "../repositories/absence-request.repository";
-import { absenceAttachmentRepository } from "../repositories/absence-attachment.repository";
-import { absenceTypeRepository } from "../repositories/absence-type.repository";
-import { absenceAttachmentService } from "./absence-attachment.service";
-import { absenceReviewService } from "./absence-review.service";
-import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
+import { absenceRequestRepository } from "../repositories/absence/absence-request.repository";
+import { absenceAttachmentRepository } from "../repositories/absence/absence-attachment.repository";
+import { absenceTypeRepository } from "../repositories/absence/absence-type.repository";
+import { absenceAttachmentService } from "./absence/absence-attachment.service";
+import { absenceReviewService } from "./absence/absence-review.service";
+import { absenceWorkdaySyncService } from "./absence/absence-workday-sync.service";
 
 const COMPANY_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const REQUEST_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -102,14 +102,14 @@ describe("phase0a H4 checkout without location atomicity", () => {
     // Primary H4 evidence: database-integrity-phase0a-corrections.integration.test.ts
     // (success + injected before-commit failure rollback + MessageSid retry).
     const attendanceSource = await readFile(
-      new URL("../repositories/attendance.repository.ts", import.meta.url),
+      new URL("../repositories/attendance/attendance.repository.ts", import.meta.url),
       "utf8",
     );
     assert.ok(attendanceSource.includes("registerCheckoutInTransaction"));
     assert.ok(attendanceSource.includes("AND checkout_at IS NULL"));
 
     const checkoutCommandSource = await readFile(
-      new URL("./employee-workday-checkout.command.ts", import.meta.url),
+      new URL("./workdays/employee-workday-checkout.command.ts", import.meta.url),
       "utf8",
     );
     const withoutLoc = checkoutCommandSource.indexOf(

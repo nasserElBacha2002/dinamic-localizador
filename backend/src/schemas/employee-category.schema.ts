@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EMPLOYEE_CATEGORY_NAME_MAX_LENGTH } from "../utils/normalize-category-name";
+import { EMPLOYEE_CATEGORY_NAME_MAX_LENGTH } from "../utils/employees/normalize-category-name";
 
 const categoryNameSchema = z
   .string()

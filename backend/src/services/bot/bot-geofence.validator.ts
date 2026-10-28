@@ -1,6 +1,6 @@
-import type { GeofenceEvaluation } from "../../utils/attendance-validation";
-import { evaluateGeofence as evaluateGeofenceStatus } from "../../utils/attendance-validation";
-import { getDefaultRadiusMeters } from "../../utils/bot-runtime-settings-scope";
+import type { GeofenceEvaluation } from "../../utils/attendance/attendance-validation";
+import { evaluateGeofence as evaluateGeofenceStatus } from "../../utils/attendance/attendance-validation";
+import { getDefaultRadiusMeters } from "../../utils/bot/bot-runtime-settings-scope";
 import { calculateDistanceMeters } from "../../utils/haversine";
 
 export type GeofenceDecision =

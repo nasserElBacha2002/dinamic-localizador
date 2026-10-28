@@ -11,7 +11,7 @@ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 
 describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
   const runId = randomUUID().replace(/-/g, "").slice(0, 8);

@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction } from "express";
 describe("whatsapp message cost observability authz", () => {
   it("rejects non-platform admin via requirePlatformAdmin (shared gate)", async () => {
     mock.reset();
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     mock.method(userRepository, "findById", async () => ({
       id: "u1",
       active: true,

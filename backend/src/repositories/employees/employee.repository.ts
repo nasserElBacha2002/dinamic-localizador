@@ -1,0 +1,674 @@
+// Phase 2.3 terminology note: Employee remains the technical DB/API model (employees table).
+// Conceptually this represents a Worker — see types/operational-domain.ts.
+import sql from "mssql";
+import { AppError } from "../../errors/app-error";
+import { getPool } from "../../database/connection";
+import type { Employee } from "../../types/domain";
+import { applySqlFilters, buildWhereClause, type SqlFilter } from "../../utils/sql-list-query";
+import { resolveSqlSort } from "../../utils/sql-sort";
+import { mapEmployeeRow } from "../../utils/row-mappers";
+import type {
+  EmployeeListSortField,
+  ListEmployeesQuery,
+  UpdateEmployeeInput,
+} from "../../schemas/employee.schema";
+
+/**
+ * Exhaustive SQL column map for employee list sorting.
+ * Every `EmployeeListSortField` must have a whitelist entry.
+ * Category nulls sort last (both ASC and DESC).
+ */
+export const EMPLOYEE_LIST_SORT_COLUMNS = {
+  name: "e.name",
+  documentNumber: "e.document_number",
+  phoneNumber: "e.phone_number",
+  category: "ec.name",
+  employeeType: "e.employee_type",
+  active: "e.active",
+} as const satisfies Record<EmployeeListSortField, string>;
+
+/** Scoped category join: global (NULL company) or same-company customs only. */
+const buildEmployeeCategoryJoin = () => `
+  LEFT JOIN employee_categories ec
+    ON ec.id = e.category_id
+   AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
+`;
+
+/** Zone join: location_zones are global; company scope is enforced on write. */
+const buildEmployeeLocationZoneJoin = () => `
+  LEFT JOIN location_zones lz
+    ON lz.id = e.location_zone_id
+`;
+
+const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
+  LEFT JOIN (
+    SELECT employee_id, MAX(received_at) AS last_worked_at
+    FROM attendance_records
+    WHERE company_id = ${companyIdParam}
+    GROUP BY employee_id
+  ) lw ON lw.employee_id = e.id
+`;
+
+const buildEmployeeSelect = () => `
+  SELECT
+    e.*,
+    lw.last_worked_at,
+    ec.name AS category_name,
+    ec.is_system AS category_is_system,
+    ec.is_active AS category_is_active,
+    lz.name AS location_zone_name,
+    lz.locality AS location_zone_locality,
+    lz.is_active AS location_zone_is_active
+  FROM employees e
+  ${buildEmployeeCategoryJoin()}
+  ${buildEmployeeLocationZoneJoin()}
+  ${buildEmployeeLastWorkedJoin()}
+`;
+
+const buildEmployeeSelectWithoutLastWorked = () => `
+  SELECT
+    e.*,
+    CAST(NULL AS DATETIME2) AS last_worked_at,
+    ec.name AS category_name,
+    ec.is_system AS category_is_system,
+    ec.is_active AS category_is_active,
+    lz.name AS location_zone_name,
+    lz.locality AS location_zone_locality,
+    lz.is_active AS location_zone_is_active
+  FROM employees e
+  ${buildEmployeeCategoryJoin()}
+  ${buildEmployeeLocationZoneJoin()}
+`;
+
+const resolveEmployeeOrderBy = (
+  sortBy: EmployeeListSortField | undefined,
+  sortDirection: "asc" | "desc",
+): string => {
+  if (sortBy === "category") {
+    const direction = sortDirection === "asc" ? "ASC" : "DESC";
+    // Null categories always last; then name; stable tie-break by id.
+    return `CASE WHEN ec.name IS NULL THEN 1 ELSE 0 END ASC, ec.name ${direction}, e.id ASC`;
+  }
+
+  const orderBy = resolveSqlSort(
+    sortBy,
+    EMPLOYEE_LIST_SORT_COLUMNS,
+    "e.created_at",
+    sortBy ? sortDirection : "desc",
+  );
+  return `${orderBy}, e.id ASC`;
+};
+
+export const employeeRepository = {
+  async create(
+    companyId: string,
+    input: {
+      name: string;
+      documentNumber: string | null;
+      phoneNumber: string;
+      employeeType: Employee["employeeType"];
+      categoryId: string | null;
+      locationZoneId: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<Employee> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("name", sql.NVarChar(150), input.name)
+      .input("documentNumber", sql.NVarChar(50), input.documentNumber)
+      .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
+      .input("employeeType", sql.NVarChar(20), input.employeeType)
+      .input("categoryId", sql.UniqueIdentifier, input.categoryId)
+      .input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId)
+      .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+        DECLARE @categoryOk BIT = CASE
+          WHEN @categoryId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
+            WHERE ec.id = @categoryId
+              AND ec.is_active = 1
+              AND (ec.company_id IS NULL OR ec.company_id = @companyId)
+          ) THEN 1
+          ELSE 0
+        END;
+        DECLARE @zoneOk BIT = CASE
+          WHEN @locationZoneId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM company_location_zones clz WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN location_zones lz WITH (UPDLOCK, HOLDLOCK)
+              ON lz.id = clz.location_zone_id
+            WHERE clz.location_zone_id = @locationZoneId
+              AND clz.company_id = @companyId
+              AND clz.is_active = 1
+              AND lz.is_active = 1
+          ) THEN 1
+          ELSE 0
+        END;
+
+        INSERT INTO employees (
+          company_id,
+          name,
+          document_number,
+          phone_number,
+          employee_type,
+          category_id,
+          location_zone_id
+        )
+        OUTPUT INSERTED.id INTO @inserted (id)
+        SELECT
+          @companyId,
+          @name,
+          @documentNumber,
+          @phoneNumber,
+          @employeeType,
+          @categoryId,
+          @locationZoneId
+        WHERE @categoryOk = 1
+          AND @zoneOk = 1;
+
+        SELECT id FROM @inserted;
+        SELECT @categoryOk AS category_ok, @zoneOk AS zone_ok;
+      `);
+
+    const recordsets = Array.isArray(result.recordsets)
+      ? result.recordsets
+      : [result.recordset];
+    const insertedId = recordsets[0]?.[0]?.id;
+    if (!insertedId) {
+      const flags = (recordsets[1]?.[0] ?? {}) as {
+        category_ok?: boolean | number;
+        zone_ok?: boolean | number;
+      };
+      const categoryOk = Number(flags.category_ok) === 1;
+      const zoneOk = Number(flags.zone_ok) === 1;
+      if (!categoryOk) {
+        throw new AppError(
+          400,
+          "EMPLOYEE_CATEGORY_INVALID",
+          "La categoría seleccionada no está disponible para esta empresa.",
+        );
+      }
+      if (!zoneOk) {
+        throw new AppError(
+          400,
+          "EMPLOYEE_LOCATION_ZONE_INVALID",
+          "La zona seleccionada no está disponible para esta empresa.",
+        );
+      }
+      throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudo crear el colaborador.");
+    }
+
+    const withCategory = await this.findById(companyId, String(insertedId), transaction);
+    if (!withCategory) {
+      throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudo crear el colaborador.");
+    }
+    return withCategory;
+  },
+
+  /**
+   * Multi-row insert for imports. Caller must pre-validate category IDs.
+   * Location zones are intentionally unsupported here (always NULL) until an
+   * explicit bulk-zone import phase is implemented.
+   */
+  async createMany(
+    companyId: string,
+    inputs: Array<{
+      name: string;
+      documentNumber: string | null;
+      phoneNumber: string;
+      employeeType: Employee["employeeType"];
+      categoryId: string | null;
+    }>,
+    transaction?: sql.Transaction,
+  ): Promise<Employee[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+    const valueSql: string[] = [];
+
+    for (let index = 0; index < inputs.length; index += 1) {
+      const input = inputs[index]!;
+      request.input(`name${index}`, sql.NVarChar(150), input.name);
+      request.input(`documentNumber${index}`, sql.NVarChar(50), input.documentNumber);
+      request.input(`phoneNumber${index}`, sql.NVarChar(30), input.phoneNumber);
+      request.input(`employeeType${index}`, sql.NVarChar(20), input.employeeType);
+      request.input(`categoryId${index}`, sql.UniqueIdentifier, input.categoryId);
+      valueSql.push(
+        `(@companyId, @name${index}, @documentNumber${index}, @phoneNumber${index}, @employeeType${index}, @categoryId${index})`,
+      );
+    }
+
+    const result = await request.query(`
+      DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+      INSERT INTO employees (
+        company_id,
+        name,
+        document_number,
+        phone_number,
+        employee_type,
+        category_id
+      )
+      OUTPUT INSERTED.id INTO @inserted (id)
+      VALUES ${valueSql.join(",\n")};
+      SELECT id FROM @inserted;
+    `);
+
+    const ids = (result.recordset as Array<{ id: string }>).map((row) => String(row.id));
+    if (ids.length !== inputs.length) {
+      throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudieron crear los colaboradores.");
+    }
+
+    return this.listByIds(companyId, ids, transaction);
+  },
+
+  async findById(
+    companyId: string,
+    id: string,
+    transaction?: sql.Transaction,
+  ): Promise<Employee | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`${buildEmployeeSelect()} WHERE e.id = @id AND e.company_id = @companyId`);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Match employees by company + normalized document_number (digits only).
+   * Prefer active; caller handles ambiguous multiple actives.
+   */
+  async findByNormalizedDocument(
+    companyId: string,
+    normalizedDocument: string,
+    transaction?: sql.Transaction,
+  ): Promise<Employee[]> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("normalizedDocument", sql.NVarChar(20), normalizedDocument)
+      .query(`
+        ${buildEmployeeSelectWithoutLastWorked()}
+        WHERE e.company_id = @companyId
+          AND e.document_number IS NOT NULL
+          AND REPLACE(REPLACE(REPLACE(e.document_number, N'-', N''), N'.', N''), N' ', N'') = @normalizedDocument
+        ORDER BY e.active DESC, e.created_at ASC
+      `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
+  async listByIds(
+    companyId: string,
+    ids: string[],
+    transaction?: sql.Transaction,
+  ): Promise<Employee[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+    const idParams = ids.map((id, index) => {
+      const param = `id${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      ${buildEmployeeSelectWithoutLastWorked()}
+      WHERE e.company_id = @companyId
+        AND e.id IN (${idParams.join(", ")})
+    `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
+  async findByPhone(companyId: string, phoneNumber: string): Promise<Employee | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("phoneNumber", sql.NVarChar(30), phoneNumber)
+      .query(`
+        ${buildEmployeeSelectWithoutLastWorked()}
+        WHERE e.phone_number = @phoneNumber AND e.company_id = @companyId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /** Returns the set of phone numbers that already exist for the company (exact match). */
+  async findExistingPhones(companyId: string, phones: string[]): Promise<Set<string>> {
+    const unique = [...new Set(phones.map((phone) => phone.trim()).filter(Boolean))];
+    const existing = new Set<string>();
+    if (unique.length === 0) {
+      return existing;
+    }
+
+    const pool = getPool();
+    const chunkSize = 100;
+    for (let offset = 0; offset < unique.length; offset += chunkSize) {
+      const chunk = unique.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const params = chunk.map((phone, index) => {
+        const key = `phone${index}`;
+        request.input(key, sql.NVarChar(30), phone);
+        return `@${key}`;
+      });
+      const result = await request.query(`
+        SELECT phone_number
+        FROM employees
+        WHERE company_id = @companyId
+          AND phone_number IN (${params.join(", ")})
+      `);
+      for (const row of result.recordset as Array<{ phone_number: string }>) {
+        existing.add(String(row.phone_number));
+      }
+    }
+
+    return existing;
+  },
+
+  async listActiveByPhone(phoneNumber: string): Promise<Array<Employee & { companyId: string }>> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("phoneNumber", sql.NVarChar(30), phoneNumber)
+      .query(`
+        SELECT
+          e.*,
+          CAST(NULL AS DATETIME2) AS last_worked_at,
+          ec.name AS category_name,
+          ec.is_system AS category_is_system,
+          ec.is_active AS category_is_active
+        FROM employees e
+        INNER JOIN companies c ON c.id = e.company_id
+        ${buildEmployeeCategoryJoin()}
+        WHERE e.phone_number = @phoneNumber
+          AND e.active = 1
+          AND c.status = 'ACTIVE'
+        ORDER BY e.created_at ASC
+      `);
+
+    return result.recordset.map((row) => ({
+      ...mapEmployeeRow(row as Record<string, unknown>),
+      companyId: String((row as Record<string, unknown>).company_id),
+    }));
+  },
+
+  async listActiveByCompanyId(companyId: string): Promise<Employee[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        ${buildEmployeeSelectWithoutLastWorked()}
+        WHERE e.company_id = @companyId
+          AND e.active = 1
+        ORDER BY e.name ASC, e.created_at ASC
+      `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
+  async list(
+    companyId: string,
+    query: ListEmployeesQuery,
+  ): Promise<{ items: Employee[]; total: number }> {
+    const pool = getPool();
+    const filters: SqlFilter[] = [
+      {
+        clause: "e.company_id = @companyId",
+        apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+      },
+    ];
+
+    if (query.active !== undefined) {
+      filters.push({
+        clause: "e.active = @active",
+        apply: (request) => request.input("active", sql.Bit, query.active),
+      });
+    }
+
+    if (query.search) {
+      filters.push({
+        clause: "(e.name LIKE @search OR e.phone_number LIKE @search OR e.document_number LIKE @search)",
+        apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
+      });
+    }
+
+    if (query.categoryId === "none") {
+      filters.push({
+        clause: "e.category_id IS NULL",
+        apply: () => undefined,
+      });
+    } else if (query.categoryId) {
+      filters.push({
+        clause: "e.category_id = @categoryId",
+        apply: (request) => request.input("categoryId", sql.UniqueIdentifier, query.categoryId),
+      });
+    }
+
+    const whereClause = buildWhereClause(filters);
+    const sortDirection = query.sortDirection ?? "asc";
+    const orderBy = resolveEmployeeOrderBy(query.sortBy, sortDirection);
+
+    const countRequest = pool.request();
+    applySqlFilters(countRequest, filters);
+    const countResult = await countRequest.query(`
+      SELECT COUNT(*) AS total
+      FROM employees e
+      ${whereClause}
+    `);
+    const total = Number(countResult.recordset[0].total);
+
+    const dataRequest = pool.request();
+    applySqlFilters(dataRequest, filters);
+    dataRequest.input("offset", sql.Int, (query.page - 1) * query.limit);
+    dataRequest.input("limit", sql.Int, query.limit);
+
+    const dataResult = await dataRequest.query(`
+      ${buildEmployeeSelect()}
+      ${whereClause}
+      ORDER BY ${orderBy}
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+    return {
+      items: dataResult.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>)),
+      total,
+    };
+  },
+
+  async update(
+    companyId: string,
+    id: string,
+    input: UpdateEmployeeInput & { phoneNumber?: string },
+    transaction?: sql.Transaction,
+  ): Promise<Employee | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const fields: string[] = [];
+    request.input("companyId", sql.UniqueIdentifier, companyId).input("id", sql.UniqueIdentifier, id);
+
+    if (input.name !== undefined) {
+      request.input("name", sql.NVarChar(150), input.name);
+      fields.push("name = @name");
+    }
+
+    if (input.documentNumber !== undefined) {
+      request.input("documentNumber", sql.NVarChar(50), input.documentNumber);
+      fields.push("document_number = @documentNumber");
+    }
+
+    if (input.phoneNumber !== undefined) {
+      request.input("phoneNumber", sql.NVarChar(30), input.phoneNumber);
+      fields.push("phone_number = @phoneNumber");
+    }
+
+    if (input.employeeType !== undefined) {
+      request.input("employeeType", sql.NVarChar(20), input.employeeType);
+      fields.push("employee_type = @employeeType");
+    }
+
+    const updatingCategory = input.categoryId !== undefined;
+    if (updatingCategory) {
+      request.input("categoryId", sql.UniqueIdentifier, input.categoryId);
+      fields.push("category_id = @categoryId");
+    }
+
+    const updatingLocationZone = input.locationZoneId !== undefined;
+    if (updatingLocationZone) {
+      request.input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId);
+      fields.push("location_zone_id = @locationZoneId");
+    }
+
+    if (input.active !== undefined) {
+      request.input("active", sql.Bit, input.active);
+      fields.push("active = @active");
+    }
+
+    if (fields.length === 0) {
+      return this.findById(companyId, id, transaction);
+    }
+
+    fields.push("updated_at = SYSUTCDATETIME()");
+
+    const categoryOkSql = updatingCategory
+      ? `CASE
+          WHEN @categoryId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
+            WHERE ec.id = @categoryId
+              AND (ec.company_id IS NULL OR ec.company_id = @companyId)
+              AND (
+                ec.is_active = 1
+                OR ec.id = employees.category_id
+              )
+          ) THEN 1
+          ELSE 0
+        END`
+      : "1";
+
+    const zoneOkSql = updatingLocationZone
+      ? `CASE
+          WHEN @locationZoneId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM company_location_zones clz WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN location_zones lz WITH (UPDLOCK, HOLDLOCK)
+              ON lz.id = clz.location_zone_id
+            WHERE clz.location_zone_id = @locationZoneId
+              AND clz.company_id = @companyId
+              AND (
+                (clz.is_active = 1 AND lz.is_active = 1)
+                OR lz.id = employees.location_zone_id
+              )
+          ) THEN 1
+          ELSE 0
+        END`
+      : "1";
+
+    const result = await request.query(`
+      DECLARE @updated TABLE (id UNIQUEIDENTIFIER);
+      DECLARE @categoryOk BIT = NULL;
+      DECLARE @zoneOk BIT = NULL;
+      DECLARE @found BIT = 0;
+
+      SELECT
+        @found = 1,
+        @categoryOk = ${categoryOkSql},
+        @zoneOk = ${zoneOkSql}
+      FROM employees
+      WHERE id = @id AND company_id = @companyId;
+
+      IF @found = 1 AND @categoryOk = 1 AND @zoneOk = 1
+      BEGIN
+        UPDATE employees
+        SET ${fields.join(", ")}
+        OUTPUT INSERTED.id INTO @updated (id)
+        WHERE id = @id
+          AND company_id = @companyId;
+      END;
+
+      SELECT id FROM @updated;
+      SELECT @found AS found, @categoryOk AS category_ok, @zoneOk AS zone_ok;
+    `);
+
+    const recordsets = Array.isArray(result.recordsets)
+      ? result.recordsets
+      : [result.recordset];
+    const updatedId = recordsets[0]?.[0]?.id;
+    if (!updatedId) {
+      if (updatingCategory || updatingLocationZone) {
+        const flags = (recordsets[1]?.[0] ?? {}) as {
+          found?: boolean | number | null;
+          category_ok?: boolean | number | null;
+          zone_ok?: boolean | number | null;
+        };
+        if (Number(flags.found) !== 1) {
+          return null;
+        }
+        const categoryOk = Number(flags.category_ok) === 1;
+        const zoneOk = Number(flags.zone_ok) === 1;
+        if (updatingCategory && !categoryOk) {
+          throw new AppError(
+            400,
+            "EMPLOYEE_CATEGORY_INVALID",
+            "La categoría seleccionada no está disponible para esta empresa.",
+          );
+        }
+        if (updatingLocationZone && !zoneOk) {
+          throw new AppError(
+            400,
+            "EMPLOYEE_LOCATION_ZONE_INVALID",
+            "La zona seleccionada no está disponible para esta empresa.",
+          );
+        }
+      }
+      return null;
+    }
+
+    return this.findById(companyId, id, transaction);
+  },
+
+  async deactivate(companyId: string, id: string): Promise<Employee | null> {
+    return this.update(companyId, id, { active: false });
+  },
+
+  async hasActiveOrScheduledOperations(companyId: string, employeeId: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.operation_id
+        WHERE ie.employee_id = @employeeId
+          AND ie.company_id = @companyId
+          AND i.company_id = @companyId
+          AND i.status IN ('SCHEDULED', 'IN_PROGRESS')
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+};

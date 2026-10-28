@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../errors/app-error";
-import { companyRepository } from "../repositories/company.repository";
-import { operationScheduleRepository } from "../repositories/operation-schedule.repository";
+import { companyRepository } from "../repositories/companies/company.repository";
+import { operationScheduleRepository } from "../repositories/operations/operation-schedule.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
 describe("recurring workday materialization job handler", () => {
@@ -20,7 +20,7 @@ describe("recurring workday materialization job handler", () => {
     ]);
 
     const { recurringWorkdayMaterializationService } = await import(
-      "../services/recurring-workday-materialization.service"
+      "../services/workdays/recurring-workday-materialization.service"
     );
 
     let materializeCalls = 0;
@@ -60,7 +60,7 @@ describe("recurring workday materialization job handler", () => {
     setupUnitTestEnv();
 
     const { recurringWorkdayMaterializationService } = await import(
-      "../services/recurring-workday-materialization.service"
+      "../services/workdays/recurring-workday-materialization.service"
     );
     let called = 0;
     mock.method(recurringWorkdayMaterializationService, "runScheduledTick", async () => {
@@ -87,14 +87,14 @@ describe("whatsapp quota policy load semantics (4B.2)", () => {
 
   it("configured settings → company policy", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../repositories/companies/company-settings.repository");
     mock.method(companySettingsRepository, "findByCompanyId", async () => ({
       operationTimezone: "America/Argentina/Buenos_Aires",
       whatsappQuotaMode: "ENFORCE",
       whatsappQuotaDailyTurns: 10,
     }));
 
-    const { whatsappUsageQuotaService } = await import("../services/whatsapp-usage-quota.service");
+    const { whatsappUsageQuotaService } = await import("../services/whatsapp/whatsapp-usage-quota.service");
     const resolved = await whatsappUsageQuotaService.resolvePolicy("company-1");
     assert.equal(resolved.kind, "configured");
     if (resolved.kind === "configured") {
@@ -106,10 +106,10 @@ describe("whatsapp quota policy load semantics (4B.2)", () => {
 
   it("missing settings row → documented default (not error)", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../repositories/companies/company-settings.repository");
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);
 
-    const { whatsappUsageQuotaService } = await import("../services/whatsapp-usage-quota.service");
+    const { whatsappUsageQuotaService } = await import("../services/whatsapp/whatsapp-usage-quota.service");
     const resolved = await whatsappUsageQuotaService.resolvePolicy("company-1");
     assert.equal(resolved.kind, "defaulted");
     if (resolved.kind === "defaulted") {
@@ -120,12 +120,12 @@ describe("whatsapp quota policy load semantics (4B.2)", () => {
 
   it("repository failure → explicit error (no silent default)", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../repositories/companies/company-settings.repository");
     mock.method(companySettingsRepository, "findByCompanyId", async () => {
       throw new Error("DB timeout");
     });
 
-    const { whatsappUsageQuotaService } = await import("../services/whatsapp-usage-quota.service");
+    const { whatsappUsageQuotaService } = await import("../services/whatsapp/whatsapp-usage-quota.service");
     const resolved = await whatsappUsageQuotaService.resolvePolicy("company-1");
     assert.equal(resolved.kind, "error");
 

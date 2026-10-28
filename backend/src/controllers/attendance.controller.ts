@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { CreateAttendanceInput } from "../schemas/attendance.schema";
-import { attendanceService } from "../services/attendance.service";
-import { manualAttendanceService } from "../services/manual-attendance.service";
+import { attendanceService } from "../services/attendance/attendance.service";
+import { manualAttendanceService } from "../services/attendance/manual-attendance.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const attendanceController = {

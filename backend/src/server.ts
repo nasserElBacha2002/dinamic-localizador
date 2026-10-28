@@ -2,7 +2,7 @@ import type { Server } from "node:http";
 import { app } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, connectDatabase } from "./database/connection";
-import { warnOnDuplicateTwilioContentSids } from "./utils/whatsapp-notification-observability";
+import { warnOnDuplicateTwilioContentSids } from "./utils/whatsapp/whatsapp-notification-observability";
 import { startAbsenceWorkdaySyncJob, stopAbsenceWorkdaySyncJob } from "./jobs/absence-workday-sync.job";
 import {
   startAbsenceAttachmentCleanupJob,

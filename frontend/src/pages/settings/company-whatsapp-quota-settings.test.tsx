@@ -73,11 +73,11 @@ const companyValue = {
   clearActiveCompany: () => undefined,
 };
 
-let CompanyWhatsAppQuotaSettingsDialog: typeof import("./components/CompanyWhatsAppQuotaSettingsDialog").CompanyWhatsAppQuotaSettingsDialog;
+let CompanyWhatsAppQuotaSettingsDialog: typeof import("./components/whatsapp/CompanyWhatsAppQuotaSettingsDialog").CompanyWhatsAppQuotaSettingsDialog;
 
 before(async () => {
   ({ CompanyWhatsAppQuotaSettingsDialog } = await import(
-    "./components/CompanyWhatsAppQuotaSettingsDialog"
+    "./components/whatsapp/CompanyWhatsAppQuotaSettingsDialog"
   ));
 });
 

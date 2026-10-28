@@ -7,14 +7,14 @@ import {
   isCheckInSessionState,
   isCheckoutSessionState,
   isPayrollReceiptSessionState,
-} from "../../utils/bot-session-states";
+} from "../../utils/bot/bot-session-states";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
   getPayrollReceiptsModuleBlockedMessage,
-} from "../whatsapp-module-gate";
+} from "../whatsapp/whatsapp-module-gate";
 import {
   buildAvailableMenuOptions,
   formatMenuOptionsLines,

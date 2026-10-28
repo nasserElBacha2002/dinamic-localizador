@@ -11,7 +11,7 @@ import {
 import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { clientsImportStrategy } from "./strategies/clients.strategy";
 import { employeesImportStrategy } from "./strategies/employees.strategy";
-import { employeeService } from "../services/employee.service";
+import { employeeService } from "../services/employees/employee.service";
 import { normalizeClientName } from "../utils/client-name.utils";
 
 const uniquePhone = (suffix: number): string =>

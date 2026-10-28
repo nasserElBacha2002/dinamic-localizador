@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import { AppError } from "../errors/app-error";
-import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
-import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
-import { userRepository } from "../repositories/user.repository";
+import { companyAlertRecipientRepository } from "../repositories/companies/company-alert-recipient.repository";
+import { userCompanyMembershipRepository } from "../repositories/companies/user-company-membership.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import type {
   CreateCompanyAlertRecipientInput,
   UpdateCompanyAlertRecipientInput,
@@ -94,7 +94,7 @@ export const companyAlertRecipientController = {
         phoneNumber: resolved.phoneNumber,
         displayName: resolved.displayName,
       });
-      const { adminAlertCutoverService } = await import("../services/admin-alert-cutover.service");
+      const { adminAlertCutoverService } = await import("../services/admin-alerts/admin-alert-cutover.service");
       await adminAlertCutoverService.tryAutoCutoverToDailyEmail({
         companyId,
         actorUserId: req.auth?.userId ?? "system:alert-recipient",

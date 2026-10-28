@@ -1,5 +1,5 @@
 import { Checkbox, Grid, Group, Stack, Text } from "@mantine/core";
-import { OperationTimeInput } from "../../pages/settings/components/OperationTimeInput";
+import { OperationTimeInput } from "../../pages/settings/components/schedule/OperationTimeInput";
 import {
   WEEKDAY_LABELS_ES,
   WEEKDAYS,

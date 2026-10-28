@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../errors/app-error";
-import { payrollReceiptService } from "../services/payroll-receipt.service";
+import { payrollReceiptService } from "../services/payroll/payroll-receipt.service";
 import { payrollReceiptMetrics } from "../utils/payroll-receipts/metrics";
 import { requireRequestCompanyId } from "../utils/request-company";
 

@@ -1,8 +1,8 @@
 import { env } from "../config/env";
-import { adminAlertDeliveryService } from "../services/admin-alert-delivery.service";
-import { adminAlertReconciliationService } from "../services/admin-alert-reconciliation.service";
-import { adminDynamicAttendanceAlertService } from "../services/admin-dynamic-attendance-alert.service";
-import { attendanceThresholdAlertService } from "../services/attendance-threshold-alert.service";
+import { adminAlertDeliveryService } from "../services/admin-alerts/admin-alert-delivery.service";
+import { adminAlertReconciliationService } from "../services/admin-alerts/admin-alert-reconciliation.service";
+import { adminDynamicAttendanceAlertService } from "../services/admin-alerts/admin-dynamic-attendance-alert.service";
+import { attendanceThresholdAlertService } from "../services/admin-alerts/attendance-threshold-alert.service";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;

@@ -9,7 +9,7 @@ describe("operation lifecycle job", () => {
 
   it("skips a tick while a previous run is still in progress", async () => {
     setupUnitTestEnv();
-    const { operationLifecycleService } = await import("../services/operation-lifecycle.service");
+    const { operationLifecycleService } = await import("../services/operations/operation-lifecycle.service");
 
     let started = 0;
     let release!: () => void;

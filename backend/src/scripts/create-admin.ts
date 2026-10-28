@@ -1,6 +1,6 @@
 import { config } from "dotenv";
 import { normalizeEmail, hashPassword } from "../utils/password";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { connectDatabase, closeDatabase } from "../database/connection";
 
 config();

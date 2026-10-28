@@ -3,8 +3,8 @@ import type {
   ListEmployeeRecommendationsQuery,
   RecommendOperationTeamInput,
 } from "../schemas/operation-recommendation.schema";
-import { individualRecommendationService } from "../services/individual-recommendation.service";
-import { teamRecommendationService } from "../services/team-recommendation.service";
+import { individualRecommendationService } from "../services/recommendation/individual-recommendation.service";
+import { teamRecommendationService } from "../services/recommendation/team-recommendation.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const operationRecommendationController = {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { updateWhatsAppQuotaSettingsSchema } from "./whatsapp-quota-settings.schema";
-import { explainEffectiveQuotaMode } from "../services/whatsapp-usage-quota.service";
+import { explainEffectiveQuotaMode } from "../services/whatsapp/whatsapp-usage-quota.service";
 
 describe("whatsapp quota settings schema", () => {
   const valid = {

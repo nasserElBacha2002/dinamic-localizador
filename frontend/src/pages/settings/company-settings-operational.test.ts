@@ -40,7 +40,7 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
 describe("OperationalSettingsForm", () => {
   it("renders editable fields without page-level save actions", () => {
     const formFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/OperationalSettingsForm.tsx"),
       "utf8",
     );
 
@@ -59,7 +59,7 @@ describe("OperationalSettingsForm", () => {
 
   it("uses aligned SettingsFormField wrappers with helper text on every field", () => {
     const formFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/OperationalSettingsForm.tsx"),
       "utf8",
     );
     const activeSection = formFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
@@ -89,7 +89,7 @@ describe("OperationalSettingsForm", () => {
 describe("CompanyOperationalSettingsDialog", () => {
   it("uses SettingsDialog with dirty-aware save and unsaved-close protection", () => {
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
 
@@ -230,7 +230,7 @@ describe("Company modules permissions", () => {
       "utf8",
     );
     const serviceFile = readFileSync(
-      join(process.cwd(), "../backend/src/services/company-module.service.ts"),
+      join(process.cwd(), "../backend/src/services/companies/company-module.service.ts"),
       "utf8",
     );
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { OPERATION_KINDS } from "../constants/operation-kind";
-import { OPERATIONAL_INCIDENT_TYPES } from "../utils/operational-incident-statistics";
-import { PUNCH_COMPLETENESS_CATEGORIES } from "../utils/operational-incident-statistics";
+import { OPERATIONAL_INCIDENT_TYPES } from "../utils/statistics/operational-incident-statistics";
+import { PUNCH_COMPLETENESS_CATEGORIES } from "../utils/statistics/operational-incident-statistics";
 import { dateRangeSchema, paginationQuerySchema } from "./common.schema";
 import { assertWithinMultiFilterLimit, mergeLegacySingularId, uuidIdListSchema } from "./uuid-id-list";
 

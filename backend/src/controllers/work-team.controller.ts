@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { RecommendWorkTeamInput } from "../schemas/operation-recommendation.schema";
-import { teamRecommendationService } from "../services/team-recommendation.service";
-import { workTeamService } from "../services/work-team.service";
+import { teamRecommendationService } from "../services/recommendation/team-recommendation.service";
+import { workTeamService } from "../services/work-teams/work-team.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const workTeamController = {

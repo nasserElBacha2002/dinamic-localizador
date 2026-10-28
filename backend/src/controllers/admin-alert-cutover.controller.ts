@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { AppError } from "../errors/app-error";
-import { adminAlertCutoverService } from "../services/admin-alert-cutover.service";
+import { adminAlertCutoverService } from "../services/admin-alerts/admin-alert-cutover.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const setAdminAlertDeliveryModeSchema = z.object({

@@ -9,7 +9,7 @@ import {
 } from "../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
-import { DEFAULT_OPERATION_TIMEZONE } from "../utils/operation-timezone";
+import { DEFAULT_OPERATION_TIMEZONE } from "../utils/operations/operation-timezone";
 
 describeDatabaseIntegration("workday domain migration backfill", () => {
   before(async () => {

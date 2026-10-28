@@ -2,7 +2,7 @@ import type { CompanyModuleKey } from "../../constants/company-modules";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,
-} from "../whatsapp-module-gate";
+} from "../whatsapp/whatsapp-module-gate";
 import { parseOperationSelection } from "../../utils/intent";
 
 export type AbsenceKindOptionKey = "single_workday" | "absence" | "vacation";

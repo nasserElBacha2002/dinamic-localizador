@@ -21,21 +21,21 @@ import {
   buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
-import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
-import { CompanyWhatsAppQuotaSettingsDialog } from "./components/CompanyWhatsAppQuotaSettingsDialog";
+import { CompanyWhatsAppAlertsDialog } from "./components/whatsapp/CompanyWhatsAppAlertsDialog";
+import { CompanyWhatsAppQuotaSettingsDialog } from "./components/whatsapp/CompanyWhatsAppQuotaSettingsDialog";
 import {
   useCompanyAlertRecipients,
 } from "../../hooks/useCompanyAlertRecipients";
 import { useWhatsAppQuotaSettings } from "../../hooks/useWhatsAppQuotaSettings";
-import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
-import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
-import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
-import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypePolicyDialog";
-import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
-import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
-import { CompanyShiftTemplatesDialog } from "./components/CompanyShiftTemplatesDialog";
-import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
-import { LocationZonesDialog } from "./components/LocationZonesDialog";
+import { CompanyAbsenceCalendarDialog } from "./components/absence/CompanyAbsenceCalendarDialog";
+import { CompanyAbsenceOperationalIntegrationDialog } from "./components/absence/CompanyAbsenceOperationalIntegrationDialog";
+import { CompanyAbsenceSettingsDialog } from "./components/absence/CompanyAbsenceSettingsDialog";
+import { CompanyAbsenceTypePolicyDialog } from "./components/absence/CompanyAbsenceTypePolicyDialog";
+import { CompanyOperationalSettingsDialog } from "./components/schedule/CompanyOperationalSettingsDialog";
+import { CompanyWeeklyScheduleDialog } from "./components/schedule/CompanyWeeklyScheduleDialog";
+import { CompanyShiftTemplatesDialog } from "./components/schedule/CompanyShiftTemplatesDialog";
+import { EmployeeCategoriesDialog } from "./components/employees/EmployeeCategoriesDialog";
+import { LocationZonesDialog } from "./components/locations/LocationZonesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 import pageClasses from "./settings-visual.module.css";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";

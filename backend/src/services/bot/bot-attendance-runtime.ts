@@ -1,11 +1,11 @@
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
-import type { AttendanceValidationResult } from "../../utils/attendance-validation";
-import { evaluateAttendanceCheckIn } from "../../utils/evaluate-attendance-check-in";
+import type { AttendanceValidationResult } from "../../utils/attendance/attendance-validation";
+import { evaluateAttendanceCheckIn } from "../../utils/attendance/evaluate-attendance-check-in";
 import {
   combineCheckoutValidation,
   evaluateCheckoutTime,
   type CheckoutValidationResult,
-} from "../../utils/checkout-validation";
+} from "../../utils/attendance/checkout-validation";
 import { evaluateAttendanceGeofence } from "./bot-geofence.validator";
 
 /**

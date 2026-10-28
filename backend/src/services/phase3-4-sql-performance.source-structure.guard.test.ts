@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 describe("phase3-4 sql performance source guards", () => {
   it("absence claim short-circuits idle empty retries", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/repositories/absence-workday-sync-job.repository.ts"),
+      resolve(process.cwd(), "src/repositories/absence/absence-workday-sync-job.repository.ts"),
       "utf8",
     );
     assert.match(source, /hasClaimablePending/);
@@ -19,7 +19,7 @@ describe("phase3-4 sql performance source guards", () => {
 
   it("cost sync heartbeat skips redundant singleton UPDATE", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/repositories/whatsapp-message-cost-ledger-query.repository.ts"),
+      resolve(process.cwd(), "src/repositories/whatsapp/whatsapp-message-cost-ledger-query.repository.ts"),
       "utf8",
     );
     assert.match(source, /COST_SYNC_HEARTBEAT_TOUCH_MINUTES/);
@@ -29,7 +29,7 @@ describe("phase3-4 sql performance source guards", () => {
 
   it("cost reconcile uses sargable SID anti-join branches", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/services/whatsapp-message-cost-reconcile.service.ts"),
+      resolve(process.cwd(), "src/services/whatsapp/whatsapp-message-cost-reconcile.service.ts"),
       "utf8",
     );
     assert.match(source, /l\.provider_message_sid = m\.provider_message_sid/);
@@ -51,11 +51,11 @@ describe("phase3-4 sql performance source guards", () => {
 
   it("attendance reminders probe SENT_RECOVERY before per-company UPDATE", () => {
     const service = readFileSync(
-      resolve(process.cwd(), "src/services/attendance-reminder.service.ts"),
+      resolve(process.cwd(), "src/services/attendance/attendance-reminder.service.ts"),
       "utf8",
     );
     const repo = readFileSync(
-      resolve(process.cwd(), "src/repositories/attendance-notification.repository.ts"),
+      resolve(process.cwd(), "src/repositories/admin-alerts/attendance-notification.repository.ts"),
       "utf8",
     );
     assert.match(repo, /hasAnySentRecoveryRequired/);
@@ -65,7 +65,7 @@ describe("phase3-4 sql performance source guards", () => {
 
   it("missing checkout predicates keep expected_end_at sargable", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/repositories/admin-dynamic-attendance-alert.repository.ts"),
+      resolve(process.cwd(), "src/repositories/admin-alerts/admin-dynamic-attendance-alert.repository.ts"),
       "utf8",
     );
     assert.match(

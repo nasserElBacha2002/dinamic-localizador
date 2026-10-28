@@ -2,28 +2,28 @@
  * Check-in conversation flows for WhatsApp (start, workday selection, location).
  * Mixed selection sessions may hand off to checkout flow processors.
  */
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
-import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot-runtime-settings-scope";
-import { getObservabilityTrace } from "../../utils/whatsapp-observability-scope";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot/bot-session-expiration";
+import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot/bot-runtime-settings-scope";
+import { getObservabilityTrace } from "../../utils/whatsapp/whatsapp-observability-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
-import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
-import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
-import { companyModuleService } from "../company-module.service";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp/whatsapp-notification-observability";
+import { logMultiShiftAttendanceEvent } from "../../utils/workdays/multi-shift-attendance-observability";
+import { companyModuleService } from "../companies/company-module.service";
 import {
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
-} from "../whatsapp-module-gate";
+} from "../whatsapp/whatsapp-module-gate";
 import { buildCheckInValidation } from "./bot-attendance-runtime";
-import { botSessionService } from "../bot-session.service";
-import { recordInvalidContextualInput } from "../contextual-session-retry.service";
-import { employeeWorkdayAttendanceCommand } from "../employee-workday-attendance.command";
-import { employeeWorkdayAvailabilityService } from "../employee-workday-availability.service";
+import { botSessionService } from "./bot-session.service";
+import { recordInvalidContextualInput } from "./contextual-session-retry.service";
+import { employeeWorkdayAttendanceCommand } from "../attendance/employee-workday-attendance.command";
+import { employeeWorkdayAvailabilityService } from "../workdays/employee-workday-availability.service";
 import {
   isActiveAttendanceDuplicateKeyError,
   isAttendanceSourceMessageSidDuplicateKeyError,
   isLegacyInventoryActiveAttendanceDuplicateKeyError,
-} from "../../utils/attendance-duplicate-errors";
+} from "../../utils/attendance/attendance-duplicate-errors";
 import {
   buildArrivalRegisteredMessage,
   buildCheckoutLocationRequestMessage,
@@ -60,7 +60,7 @@ import {
   isSimulationDryRun,
   recordSimulationArtifact,
   setTechnicalDetail,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { respond } from "./bot-outbound-response";
 import {
   processCheckoutWithoutLocation,

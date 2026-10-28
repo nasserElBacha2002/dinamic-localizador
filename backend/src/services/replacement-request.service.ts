@@ -1,16 +1,16 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
-import { individualRecommendationService } from "./individual-recommendation.service";
-import { employeeAvailabilityService } from "./employee-availability.service";
-import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
-import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
-import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
-import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+import { individualRecommendationService } from "./recommendation/individual-recommendation.service";
+import { employeeAvailabilityService } from "./employees/employee-availability.service";
+import { companyAlertRecipientRepository } from "../repositories/companies/company-alert-recipient.repository";
+import { adminAlertNotificationRepository } from "../repositories/admin-alerts/admin-alert-notification.repository";
+import { operationEmployeeRepository } from "../repositories/operations/operation-employee.repository";
+import { employeeWorkdayRepository } from "../repositories/workdays/employee-workday.repository";
 import { auditService } from "./audit.service";
-import { formatServiceReferenceFromFields } from "../utils/format-service-reference";
-import { formatLocalTime } from "../utils/attendance-validation";
-import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { formatServiceReferenceFromFields } from "../utils/operations/format-service-reference";
+import { formatLocalTime } from "../utils/attendance/attendance-validation";
+import { companySettingsRepository } from "../repositories/companies/company-settings.repository";
 import { toDateOnlyString } from "../utils/row-mappers";
 
 type ReplacementContext = {

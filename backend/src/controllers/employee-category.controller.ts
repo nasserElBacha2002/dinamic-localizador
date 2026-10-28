@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import type { ListEmployeeCategoriesQuery } from "../schemas/employee-category.schema";
-import { employeeCategoryService } from "../services/employee-category.service";
+import { employeeCategoryService } from "../services/employees/employee-category.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const employeeCategoryController = {

@@ -9,13 +9,13 @@ import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 import type { BotSession } from "../../types/twilio.types";
 import type { EmployeeWorkdayCheckoutCandidate } from "../../types/employee-workday-availability";
 import type { AttendanceRecord } from "../../types/domain";
-import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../../utils/bot/bot-runtime-settings-scope";
 import {
   getRoutingResult,
   runWithRoutingResultScope,
-} from "../../utils/whatsapp-routing-result";
+} from "../../utils/whatsapp/whatsapp-routing-result";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
-import type { CheckoutWriteFields } from "../employee-workday-checkout.command";
+import type { CheckoutWriteFields } from "../workdays/employee-workday-checkout.command";
 
 const companyId = "00000000-0000-4000-8000-0000000000c1";
 const employeeId = "00000000-0000-4000-8000-0000000000c2";
@@ -150,12 +150,12 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let capturedFields: CheckoutWriteFields | null = null;
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
@@ -209,12 +209,12 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let capturedFields: CheckoutWriteFields | null = null;
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
@@ -267,11 +267,11 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let registerCalls = 0;
     mock.method(
@@ -335,12 +335,12 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import(
-      "../../utils/bot-runtime-context"
+      "../../utils/bot/bot-runtime-context"
     );
 
     let durableCalls = 0;

@@ -3,26 +3,26 @@
  * Durable checkout + session completion live in employeeWorkdayCheckoutCommand;
  * this module only orchestrates chat (selection, validation, simulation, responses).
  */
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
-import { formatLocalTime } from "../../utils/attendance-validation";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot/bot-session-expiration";
+import { formatLocalTime } from "../../utils/attendance/attendance-validation";
 import {
   getBotOperationTimezone,
   getBotRuntimeSettings,
   getRequireCheckoutLocation,
-} from "../../utils/bot-runtime-settings-scope";
+} from "../../utils/bot/bot-runtime-settings-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
-import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp/whatsapp-notification-observability";
 import {
   buildCheckoutValidation,
   buildCheckoutValidationWithoutLocation,
 } from "./bot-attendance-runtime";
-import { botSessionService } from "../bot-session.service";
-import { recordInvalidContextualInput } from "../contextual-session-retry.service";
+import { botSessionService } from "./bot-session.service";
+import { recordInvalidContextualInput } from "./contextual-session-retry.service";
 import {
   CheckoutCommandError,
   employeeWorkdayCheckoutCommand,
-} from "../employee-workday-checkout.command";
+} from "../workdays/employee-workday-checkout.command";
 import {
   buildCheckoutWorkdaySelectionPrompt,
   buildCheckoutLocationRequestMessage,
@@ -58,7 +58,7 @@ import {
   isSimulationDryRun,
   recordSimulationArtifact,
   setTechnicalDetail,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { respond } from "./bot-outbound-response";
 import {
   resolveCheckoutWhatsAppResultCode,

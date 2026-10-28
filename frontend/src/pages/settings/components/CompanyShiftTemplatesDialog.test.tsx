@@ -70,11 +70,11 @@ import { mockViewport } from "../../../test/mock-match-media";
 installLayoutPolyfills();
 
 let renderPage: typeof import("../../../test/render-page").renderPage;
-let CompanyShiftTemplatesDialog: typeof import("./CompanyShiftTemplatesDialog").CompanyShiftTemplatesDialog;
+let CompanyShiftTemplatesDialog: typeof import("./schedule/CompanyShiftTemplatesDialog").CompanyShiftTemplatesDialog;
 
 before(async () => {
   ({ renderPage } = await import("../../../test/render-page"));
-  ({ CompanyShiftTemplatesDialog } = await import("./CompanyShiftTemplatesDialog"));
+  ({ CompanyShiftTemplatesDialog } = await import("./schedule/CompanyShiftTemplatesDialog"));
 });
 
 afterEach(() => {

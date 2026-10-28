@@ -28,7 +28,7 @@ describe("whatsappObservabilityService.listMessages", () => {
   it("returns 404 when conversation does not exist", async () => {
     mock.reset();
     const { whatsappObservabilityRepository } = await import(
-      "../../repositories/whatsapp-observability.repository"
+      "../../repositories/whatsapp/whatsapp-observability.repository"
     );
     mock.method(whatsappObservabilityRepository, "getConversationDetail", async () => null);
     const listSpy = mock.method(whatsappObservabilityRepository, "listMessages", async () => {
@@ -55,7 +55,7 @@ describe("whatsappObservabilityService.listMessages", () => {
     const msg = buildMessage(1, "2026-01-01T00:01:00.000Z");
     let received: unknown;
     const { whatsappObservabilityRepository } = await import(
-      "../../repositories/whatsapp-observability.repository"
+      "../../repositories/whatsapp/whatsapp-observability.repository"
     );
     mock.method(whatsappObservabilityRepository, "getConversationDetail", async () => ({
       id: conversationId,
@@ -92,7 +92,7 @@ describe("whatsappObservabilityService.listMessages", () => {
     mock.reset();
     const conversationId = "22222222-2222-2222-2222-222222222222";
     const { whatsappObservabilityRepository } = await import(
-      "../../repositories/whatsapp-observability.repository"
+      "../../repositories/whatsapp/whatsapp-observability.repository"
     );
     mock.method(whatsappObservabilityRepository, "getConversationDetail", async () => ({
       id: conversationId,

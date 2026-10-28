@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { PayrollReceipt } from "../../types/payroll-receipt";
-import { payrollReceiptRepository } from "../../repositories/payroll-receipt.repository";
-import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll-receipt-query-delivery.repository";
+import { payrollReceiptRepository } from "../../repositories/payroll/payroll-receipt.repository";
+import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
 import { payrollReceiptPeriodQueryService } from "./payroll-receipt-period-query.service";
-import { runWithBotRuntimeContext } from "../../utils/bot-runtime-context";
+import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 
 const COMPANY_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const EMPLOYEE_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";

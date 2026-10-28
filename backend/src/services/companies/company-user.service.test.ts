@@ -45,7 +45,7 @@ describe("company user service rules", () => {
 
   it("create issues an invitation and never returns credentials", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyUserService } = await import("./company-user.service");
     const { userInvitationService } = await import("../identity/user-invitation.service");
     const { auditService } = await import("../audit.service");
@@ -101,7 +101,7 @@ describe("company user service rules", () => {
 
   it("OWNER can invite another OWNER", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyUserService } = await import("./company-user.service");
     const { userInvitationService } = await import("../identity/user-invitation.service");
     const { auditService } = await import("../audit.service");
@@ -154,7 +154,7 @@ describe("company user service rules", () => {
 
   it("ADMIN cannot invite ADMIN", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
 
@@ -177,7 +177,7 @@ describe("company user service rules", () => {
 
   it("create propagates membership-already-exists from invitation service", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyUserService } = await import("./company-user.service");
     const { userInvitationService } = await import("../identity/user-invitation.service");
 
@@ -206,10 +206,10 @@ describe("company user service rules", () => {
 
   it("blocks demoting the last active OWNER", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -264,10 +264,10 @@ describe("company user service rules", () => {
 
   it("blocks peer-rank company user role update", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -314,10 +314,10 @@ describe("company user service rules", () => {
 
   it("allows superior actor to update inferior membership", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -381,8 +381,8 @@ describe("company user service rules", () => {
 
   it("blocks regular user from modifying platform superadmin", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { companyUserService } = await import("./company-user.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -417,10 +417,10 @@ describe("company user service rules", () => {
 
   it("allows self profile updates while remaining active", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -508,10 +508,10 @@ describe("company user service rules", () => {
 
   it("allows profile-only update without status field (no accidental inactivation)", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -599,10 +599,10 @@ describe("company user service rules", () => {
 
   it("blocks self deactivation even when personal fields are included", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -650,10 +650,10 @@ describe("company user service rules", () => {
 
   it("blocks peer and superior inactivation; allows inferior", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -761,10 +761,10 @@ describe("company user service rules", () => {
 
   it("uses locked membership status so stale ACTIVE cannot bypass inactivation rules", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -811,10 +811,10 @@ describe("company user service rules", () => {
 
   it("blocks third-party personal profile edits for company admins", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -866,10 +866,10 @@ describe("company user service rules", () => {
 
   it("maps duplicate email pre-check and SQL unique violation to EMAIL_ALREADY_EXISTS", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -948,10 +948,10 @@ describe("company user service rules", () => {
 
   it("deactivate endpoint reuses the same inactivation policy as update", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");
@@ -995,10 +995,10 @@ describe("company user service rules", () => {
 
   it("uses locked actor role so a demoted requester loses privileges", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("../audit.service");

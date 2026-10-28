@@ -14,7 +14,7 @@ import { whatsappRetentionService } from "./whatsapp-retention.service";
 import {
   acquireDedicatedSessionAppLockForTests,
   withDedicatedSessionAppLock,
-} from "../../utils/whatsapp-retention-lock";
+} from "../../utils/whatsapp/whatsapp-retention-lock";
 
 describeDatabaseIntegration("whatsapp retention distributed lock (SQL)", () => {
   const nowUtc = new Date("2026-08-28T12:00:00.000Z");

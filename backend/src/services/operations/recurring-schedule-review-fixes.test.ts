@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
-import { operationScheduleRepository } from "../../repositories/operation-schedule.repository";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
+import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { WEEKDAYS } from "../../constants/weekday";
 
@@ -102,7 +102,7 @@ describe("operationService.createRecurring COMPANY validation", () => {
       "../companies/company-operational-defaults.resolver"
     );
     const { operationService } = await import("./operation.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
 
     mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => ({
       companyId: COMPANY_ID,
@@ -149,7 +149,7 @@ describe("companyWorkScheduleService.update no-op", () => {
   it("returns current schedule without repository replace for identical payload", async () => {
     setupUnitTestEnv();
     const { companyWorkScheduleService } = await import("../companies/company-work-schedule.service");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => ({
       operationTimezone: "America/Argentina/Buenos_Aires",

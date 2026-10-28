@@ -5,7 +5,7 @@ import {
   payrollReceiptQueryDeliveryRepository,
   type PayrollReceiptQueryDelivery,
   type PayrollReceiptQueryReconciliationResolution,
-} from "../../repositories/payroll-receipt-query-delivery.repository";
+} from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
 import { auditService } from "../audit.service";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { MonthlyAttendanceReportRow } from "../../repositories/monthly-attendance-report.repository";
+import type { MonthlyAttendanceReportRow } from "../../repositories/reports/monthly-attendance-report.repository";
 import { buildMonthlyAttendanceDatasetFromRows } from "./monthly-attendance-report.service";
 
 const evaluatedAt = new Date("2026-10-02T15:00:00.000Z");

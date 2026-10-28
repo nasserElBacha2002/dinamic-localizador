@@ -9,8 +9,8 @@ import {
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { getPool } from "../../database/connection";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { AppError } from "../../errors/app-error";
 import { getTodayAbsenceDateIso } from "../../utils/absence-date";
 import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
@@ -46,7 +46,7 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
   });
 
   const seed = async () => {
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(admin);
     actorUserId = admin.id;

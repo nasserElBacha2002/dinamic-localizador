@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, it, mock } from "node:test";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { absenceBalanceRepository } from "../../repositories/absence-balance.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceBalanceRepository } from "../../repositories/absence/absence-balance.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import {
   describeDatabaseIntegration,

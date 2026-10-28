@@ -12,8 +12,8 @@ import { employeeDeactivationService } from "./employee-deactivation.service";
 import { employeeService } from "./employee.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { AppError } from "../../errors/app-error";
-import { employeeDeactivationRepository } from "../../repositories/employee-deactivation.repository";
-import { resolveOperationDisplayName } from "../../utils/employee-deactivation-impact";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { resolveOperationDisplayName } from "../../utils/employees/employee-deactivation-impact";
 import { operationWorkDateService } from "../operations/operation-work-date.service";
 
 const uniquePhone = (suffix: number): string =>

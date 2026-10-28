@@ -121,7 +121,7 @@ describe("absenceWorkdaySyncService", () => {
   it("empty queue: one claim then stop (respects batch limit without N empty claims)", async () => {
     setupUnitTestEnv();
     const { absenceWorkdaySyncJobRepository } = await import(
-      "../../repositories/absence-workday-sync-job.repository"
+      "../../repositories/absence/absence-workday-sync-job.repository"
     );
     const { absenceWorkdaySyncService } = await import("./absence-workday-sync.service");
 
@@ -141,7 +141,7 @@ describe("absenceWorkdaySyncService", () => {
   it("queue with work continues until empty and second tick still claims", async () => {
     setupUnitTestEnv();
     const { absenceWorkdaySyncJobRepository } = await import(
-      "../../repositories/absence-workday-sync-job.repository"
+      "../../repositories/absence/absence-workday-sync-job.repository"
     );
     const { absenceOperationalReconciliationService } = await import(
       "./absence-operational-reconciliation.service"
@@ -219,7 +219,7 @@ describe("absenceWorkdaySyncService", () => {
   it("respects max batch limit when queue stays full", async () => {
     setupUnitTestEnv();
     const { absenceWorkdaySyncJobRepository } = await import(
-      "../../repositories/absence-workday-sync-job.repository"
+      "../../repositories/absence/absence-workday-sync-job.repository"
     );
     const { absenceOperationalReconciliationService } = await import(
       "./absence-operational-reconciliation.service"

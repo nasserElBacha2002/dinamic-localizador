@@ -2,7 +2,7 @@ import sql from "mssql";
 import type { StatisticsFilters } from "../schemas/statistics.schema";
 import type { DerivedEmployeeWorkdayState } from "../types/employee-workday-state";
 import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "./statistics-canonical-attendance";
-import { normalizeStatisticsFilters } from "../utils/statistics-display-labels";
+import { normalizeStatisticsFilters } from "./statistics/statistics-display-labels";
 import { applySqlFilters, type SqlFilter } from "./sql-list-query";
 import { createUuidInFilter } from "./sql-uuid-in-filter";
 

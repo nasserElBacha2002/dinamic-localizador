@@ -6,7 +6,7 @@ import { employeeOperationsService } from "../services/employees/employee-operat
 import { employeeClientService } from "../services/employees/employee-client.service";
 import type { ListEmployeeOperationsQuery } from "../schemas/employee.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
-import { projectEmployeeForRole } from "../utils/employee-residence-privacy";
+import { projectEmployeeForRole } from "../utils/employees/employee-residence-privacy";
 
 export const employeeController = {
   async create(req: Request, res: Response) {

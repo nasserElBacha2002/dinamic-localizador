@@ -12,8 +12,8 @@ import { getPool } from "../../database/connection";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import { insertOperationalLocationFixture } from "../../test-helpers/operational-location-fixture";
-import { userRepository } from "../../repositories/user.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
 import { hashPassword } from "../../utils/password";
 import { employeeService } from "../employees/employee.service";
 

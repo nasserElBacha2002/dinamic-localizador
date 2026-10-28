@@ -11,7 +11,7 @@ import {
   isGlobalHelpCommand,
   isGlobalMenuCommand,
 } from "../../../utils/intent";
-import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import { handleMenuFallback } from "./menu.handler";
 

@@ -19,7 +19,7 @@ import {
   assertNoCompanyResidues,
   deleteCompanyIdentityAndConfigSetBased,
   deleteCompanyOperationalDataSetBased,
-} from "../../repositories/company-purge.repository";
+} from "../../repositories/companies/company-purge.repository";
 import { pendingStorageDeletionRepository } from "../../repositories/pending-storage-deletion.repository";
 
 const uniqueName = (): string =>

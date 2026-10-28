@@ -3,10 +3,10 @@ import {
   resolveAttachmentPolicy,
 } from "../../domain/absence-attachment-policy";
 import { AppError } from "../../errors/app-error";
-import { absenceAttachmentRepository } from "../../repositories/absence-attachment.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { absenceRequestDraftRepository } from "../../repositories/absence-request-draft.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
+import { absenceAttachmentRepository } from "../../repositories/absence/absence-attachment.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { absenceRequestDraftRepository } from "../../repositories/absence/absence-request-draft.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
 import type { AbsenceAttachmentPolicy } from "../../types/absence-attachment";
 import { getGcsUnavailableReason, isGcsConfigured } from "./storage";
 

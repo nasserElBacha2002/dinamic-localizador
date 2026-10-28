@@ -4,8 +4,8 @@ import sql from "mssql";
 import { toCompanySettingsInput } from "../../constants/company-settings";
 import { WEEKDAYS } from "../../constants/weekday";
 import { getPool } from "../../database/connection";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { createIntegrationFixtureTracker } from "../../test-helpers/integration-cleanup";
 import {
   describeDatabaseIntegration,

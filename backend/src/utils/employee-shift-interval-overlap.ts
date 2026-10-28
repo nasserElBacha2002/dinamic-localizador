@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { buildRecurringExpectedInstants } from "./recurring-workday-instant";
-import { isOvernightShift, normalizeShiftTime } from "./shift-time";
+import { isOvernightShift, normalizeShiftTime } from "./operations/shift-time";
 
 export type ShiftIntervalInput = {
   operationId: string;

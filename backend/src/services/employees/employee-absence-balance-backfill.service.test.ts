@@ -116,15 +116,15 @@ describe("employeeAbsenceBalanceBackfillService", () => {
     inactiveTypeCodes?: string[];
   }) => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyAbsenceSettingsService } = await import("../companies/company-absence-settings.service");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
     const { employeeAbsenceBalanceBackfillService } = await import(
       "./employee-absence-balance-backfill.service"
     );
@@ -264,7 +264,7 @@ describe("employeeAbsenceBalanceBackfillService", () => {
 
   it("supports specific companyId", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { employeeAbsenceBalanceBackfillService } = await import(
       "./employee-absence-balance-backfill.service"
     );
@@ -280,12 +280,12 @@ describe("employeeAbsenceBalanceBackfillService", () => {
 
     const { companyAbsenceSettingsService } = await import("../companies/company-absence-settings.service");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
 
     mock.method(companyAbsenceSettingsService, "ensureAbsenceCatalogForCompany", async () => undefined);
     mock.method(companyAbsenceSettingsRepository, "listByCompanyId", async () => companySettings);
@@ -315,15 +315,15 @@ describe("employeeAbsenceBalanceBackfillService", () => {
 
   it("defaults year from company timezone when year is not passed", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyAbsenceSettingsService } = await import("../companies/company-absence-settings.service");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
     const { employeeAbsenceBalanceBackfillService } = await import(
       "./employee-absence-balance-backfill.service"
     );
@@ -354,7 +354,7 @@ describe("employeeAbsenceBalanceBackfillService", () => {
 
   it("rejects unknown companyId", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { employeeAbsenceBalanceBackfillService } = await import(
       "./employee-absence-balance-backfill.service"
     );

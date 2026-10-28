@@ -26,7 +26,7 @@ describe("botRuntimeSettingsService", () => {
 
   it("returns persisted company settings including company geofence review margin", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => existingSettings);
@@ -43,7 +43,7 @@ describe("botRuntimeSettingsService", () => {
 
   it("uses env geofence margin when company has no custom margin", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => ({
@@ -57,7 +57,7 @@ describe("botRuntimeSettingsService", () => {
 
   it("falls back to application defaults when settings row is missing", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);
@@ -71,7 +71,7 @@ describe("botRuntimeSettingsService", () => {
 
   it("fails closed when repository read fails with transient error", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => {
@@ -89,7 +89,7 @@ describe("botRuntimeSettingsService", () => {
 
   it("rethrows business errors for invalid company access", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => {

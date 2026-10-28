@@ -6,11 +6,11 @@ import {
   DYNAMIC_ADMIN_ATTENDANCE_ALERT_TYPES,
   type DynamicAdminAttendanceAlertType,
 } from "../../constants/admin-alert";
-import { adminAlertNotificationRepository } from "../../repositories/admin-alert-notification.repository";
-import { adminDynamicAttendanceAlertRepository } from "../../repositories/admin-dynamic-attendance-alert.repository";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
+import { adminAlertNotificationRepository } from "../../repositories/admin-alerts/admin-alert-notification.repository";
+import { adminDynamicAttendanceAlertRepository } from "../../repositories/admin-alerts/admin-dynamic-attendance-alert.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import type { AdminAlertNotification } from "../../types/admin-alert";
 import { resolveAdminAlertContentSid } from "../../utils/admin-alert/content-sid";
 import {
@@ -18,7 +18,7 @@ import {
   minutesBetween,
 } from "../../utils/admin-alert/dynamic-attendance-due-at";
 import { logAdminAlertEvent } from "../../utils/admin-alert/observability";
-import { decideAdminNotificationChannel } from "../../utils/admin-notification-channel-policy";
+import { decideAdminNotificationChannel } from "../../utils/admin-alert/admin-notification-channel-policy";
 import {
   classifyTwilioOutboundError,
   isAmbiguousTwilioSendFailure,

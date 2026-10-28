@@ -2,13 +2,13 @@ import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import type { ManualAttendanceAuditAction } from "../../constants/attendance-registration-source";
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import type {
   ManualAttendanceCreateInput,
   ManualAttendanceEditInput,
@@ -18,9 +18,9 @@ import type { AttendanceRecordWithRelations, PunctualityStatus } from "../../typ
 import type { EmployeeWorkday, OperationWorkday } from "../../types/workday";
 import type { CheckoutStatus } from "../../constants/checkout-status";
 import { evaluatePunctuality } from "../../utils/attendance-validation";
-import { evaluateCheckoutTime } from "../../utils/checkout-validation";
+import { evaluateCheckoutTime } from "../../utils/attendance/checkout-validation";
 import { isActiveAttendanceDuplicateKeyError } from "../../utils/attendance-duplicate-errors";
-import { assertOccurredAtCompatibleWithWorkday } from "../../utils/manual-attendance-temporal";
+import { assertOccurredAtCompatibleWithWorkday } from "../../utils/attendance/manual-attendance-temporal";
 import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 import { auditService } from "../audit.service";
 import { botRuntimeSettingsService } from "../bot/bot-runtime-settings.service";

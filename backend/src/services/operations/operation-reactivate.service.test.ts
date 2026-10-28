@@ -3,7 +3,7 @@ import sql from "mssql";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
 import { setTestPool } from "../../database/connection";
-import { operationRepository } from "../../repositories/operation.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 
 const COMPANY_ID = "company-1";
@@ -61,10 +61,10 @@ describe("operationService.reactivate", () => {
     const { operationService } = await import("./operation.service");
     const { auditService } = await import("../audit.service");
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { operationChangeEventRepository } = await import(
-      "../../repositories/operation-change-event.repository"
+      "../../repositories/operations/operation-change-event.repository"
     );
 
     mock.method(operationRepository, "findById", async () => cancelledOperation);

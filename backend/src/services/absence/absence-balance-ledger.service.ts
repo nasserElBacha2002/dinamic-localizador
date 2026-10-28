@@ -4,9 +4,9 @@ import {
   type AbsenceBalanceMovementType,
 } from "../../constants/absence-balance-ledger";
 import { AppError } from "../../errors/app-error";
-import { absenceBalanceLedgerRepository } from "../../repositories/absence-balance-ledger.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { absenceBalanceLedgerRepository } from "../../repositories/absence/absence-balance-ledger.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type {
   AbsenceBalanceMovement,
   LedgerActor,

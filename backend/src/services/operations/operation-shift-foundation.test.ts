@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { normalizeShiftCode } from "../../utils/shift-code";
+import { normalizeShiftCode } from "../../utils/operations/shift-code";
 import {
   assertEffectiveRange,
   assertShiftTimesDistinct,
@@ -10,7 +10,7 @@ import {
   isOvernightShift,
   normalizeShiftTime,
   ShiftTimeError,
-} from "../../utils/shift-time";
+} from "../../utils/operations/shift-time";
 import {
   assertAssignmentShiftMatchesScheduleMode,
   assertWorkdayShiftMatchesScheduleMode,

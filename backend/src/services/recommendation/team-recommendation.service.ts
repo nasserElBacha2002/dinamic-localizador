@@ -6,15 +6,15 @@ import {
 } from "../../constants/workforce-team-recommendation-v1";
 import { WORKFORCE_RECOMMENDATION_V1_RECENCY } from "../../constants/workforce-recommendation-v1";
 import type { EmployeeType } from "../../constants/employee-types";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeClientRepository } from "../../repositories/employee-client.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeClientRepository } from "../../repositories/employees/employee-client.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import {
   recommendationFeatureRepository,
   type RecommendationCandidateRow,
 } from "../../repositories/recommendation-feature.repository";
-import { serviceRepository } from "../../repositories/service.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
 import type {
   TeamRecommendationMember,
   TeamRecommendationOption,
@@ -22,7 +22,7 @@ import type {
 } from "../../types/recommendation";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
 import { isOperationAssignable } from "../../utils/operation-status";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { operationWorkDateService } from "../operations/operation-work-date.service";
 import { preselectCandidateIds } from "./candidate-preselection";
 import { composeTeamAlternatives } from "./team-composition-engine";

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 
 describe("absence-request getById error semantics (4B.3)", () => {

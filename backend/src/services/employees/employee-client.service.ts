@@ -1,8 +1,8 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import { clientRepository } from "../../repositories/client.repository";
-import { employeeClientRepository } from "../../repositories/employee-client.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeClientRepository } from "../../repositories/employees/employee-client.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { getPool } from "../../database/connection";
 import { auditService } from "../audit.service";
 

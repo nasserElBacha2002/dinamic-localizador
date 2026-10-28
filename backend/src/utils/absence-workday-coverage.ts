@@ -3,4 +3,4 @@ export {
   getCalendarDatesSpannedByWorkInterval,
   isWorkdayCoveredByAbsence,
   resolveEffectiveAbsenceForWorkday,
-} from "./resolve-effective-absence-for-workday";
+} from "./absence/resolve-effective-absence-for-workday";

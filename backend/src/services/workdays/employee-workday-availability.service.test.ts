@@ -40,7 +40,7 @@ describe("employeeWorkdayAvailabilityService", () => {
   it("excludes mid-shift candidates after the arrival window", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -50,7 +50,7 @@ describe("employeeWorkdayAvailabilityService", () => {
       baseCandidate(),
     ]);
     mock.method(employeeWorkdayAvailabilityRepository, "hasJustifiedWorkdayInRange", async () => false);
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     mock.method(operationRepository, "findCompatibleForEmployee", async () => []);
 
     const at = new Date("2026-07-31T14:41:51.000Z");
@@ -66,7 +66,7 @@ describe("employeeWorkdayAvailabilityService", () => {
   it("excludes candidates after expected end", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -76,7 +76,7 @@ describe("employeeWorkdayAvailabilityService", () => {
       baseCandidate(),
     ]);
     mock.method(employeeWorkdayAvailabilityRepository, "hasJustifiedWorkdayInRange", async () => false);
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     mock.method(operationRepository, "findCompatibleForEmployee", async () => []);
 
     const at = new Date("2026-07-31T20:00:00.000Z");
@@ -92,7 +92,7 @@ describe("employeeWorkdayAvailabilityService", () => {
   it("orders candidates deterministically", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -112,7 +112,7 @@ describe("employeeWorkdayAvailabilityService", () => {
       }),
     ]);
     mock.method(employeeWorkdayAvailabilityRepository, "hasJustifiedWorkdayInRange", async () => false);
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     mock.method(operationRepository, "findCompatibleForEmployee", async () => []);
 
     const at = new Date("2026-07-31T12:15:00.000Z");
@@ -129,7 +129,7 @@ describe("employeeWorkdayAvailabilityService", () => {
   it("reports justified-only windows when no check-in candidate exists", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -137,7 +137,7 @@ describe("employeeWorkdayAvailabilityService", () => {
 
     mock.method(employeeWorkdayAvailabilityRepository, "listCheckInCandidates", async () => []);
     mock.method(employeeWorkdayAvailabilityRepository, "hasJustifiedWorkdayInRange", async () => true);
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     mock.method(operationRepository, "findCompatibleForEmployee", async () => []);
 
     const result = await employeeWorkdayAvailabilityService.listAvailableForCheckIn(
@@ -153,9 +153,9 @@ describe("employeeWorkdayAvailabilityService", () => {
   it("diagnoses AFTER_CHECK_IN_WINDOW from the real candidate without ONE_TIME pollution", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );
@@ -221,9 +221,9 @@ describe("employeeWorkdayAvailabilityService", () => {
   it("diagnoses PRIOR_ATTENDANCE with the matching attendance id", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );

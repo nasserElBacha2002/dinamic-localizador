@@ -15,12 +15,12 @@ import {
 import { deleteOperationCascade } from "../../test-helpers/integration-entity-cascade";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { operationScheduleModeTransitionService } from "../operations/operation-schedule-mode-transition.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
   let companyId = "";

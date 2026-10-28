@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { botSimulationSessionRepository } from "../../repositories/bot-simulation-session.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { serviceRepository } from "../../repositories/service.repository";
-import { botSessionRepository } from "../../repositories/bot-session.repository";
+import { botSimulationSessionRepository } from "../../repositories/whatsapp/bot-simulation-session.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
+import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
 import type {
   CreateBotSimulationSessionInput,
   SendBotSimulationLocationInput,
@@ -17,7 +17,7 @@ import {
   type BotRuntimeContext,
   type BotSimulatorMessage,
   runWithBotRuntimeContext,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { normalizeWhatsAppPhone } from "../../utils/phone";
 import { extractMessageFromTwiml } from "../../utils/twiml-message";
 import { whatsappBotService } from "../whatsapp/whatsapp-bot.service";

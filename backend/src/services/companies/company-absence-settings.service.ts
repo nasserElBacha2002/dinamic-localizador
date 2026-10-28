@@ -3,11 +3,11 @@ import { resolveDefaultCompanyAbsenceSetting } from "../../constants/company-abs
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
 import { roleHasPermission } from "../../constants/company-permissions";
 import { AppError } from "../../errors/app-error";
-import { absenceBalanceRepository } from "../../repositories/absence-balance.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { companyAbsenceSettingsRepository } from "../../repositories/company-absence-settings.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { absenceBalanceRepository } from "../../repositories/absence/absence-balance.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { companyAbsenceSettingsRepository } from "../../repositories/companies/company-absence-settings.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type { UpdateCompanyAbsenceSettingsInput } from "../../schemas/company-absence-settings.schema";
 import type { CompanyMembershipSummary } from "../../types/company";
 import { getCurrentYearInTimezone } from "../../utils/operational-year";

@@ -4,8 +4,8 @@ import { formatBotWorkdaySelectionLines, formatWorkdayScheduleLine } from "../..
 import {
   resolveMultiShiftOneTimeLifecycleStatus,
   hasActiveFutureOrInProgressWorkday,
-} from "../../utils/multi-shift-lifecycle";
-import { isWorkdayCoveredByAbsence } from "../../utils/resolve-effective-absence-for-workday";
+} from "../../utils/workdays/multi-shift-lifecycle";
+import { isWorkdayCoveredByAbsence } from "../../utils/absence/resolve-effective-absence-for-workday";
 import type { OperationWorkday } from "../../types/workday";
 
 const TIMEZONE = "America/Argentina/Buenos_Aires";

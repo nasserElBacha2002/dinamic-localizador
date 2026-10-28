@@ -1,16 +1,16 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
 import type { CompanyWorkSchedule, WeeklyScheduleDay } from "../../types/schedule";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import {
   createDefaultWeeklyScheduleDays,
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
   weeklySchedulesEqual,
-} from "../../utils/weekly-schedule";
+} from "../../utils/operations/weekly-schedule";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
 

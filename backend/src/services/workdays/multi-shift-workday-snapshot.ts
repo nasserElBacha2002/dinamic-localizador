@@ -1,5 +1,5 @@
 import type { OperationShift, OperationShiftVersion } from "../../types/operation-shift";
-import type { ResolvedShiftScheduleForDate } from "../../utils/operation-shift-version-resolver";
+import type { ResolvedShiftScheduleForDate } from "../../utils/operations/operation-shift-version-resolver";
 
 export type MultiShiftWorkdaySnapshot = {
   workDate: string;

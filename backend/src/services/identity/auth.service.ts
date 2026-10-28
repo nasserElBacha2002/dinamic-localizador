@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { toPublicUser, userRepository } from "../../repositories/user.repository";
+import { toPublicUser, userRepository } from "../../repositories/identity/user.repository";
 import { issueLoginChallenge } from "./two-factor.service";
 import type { AuthTokenPayload, LoginResult, PublicUser, User } from "../../types/auth";
 import { signSessionToken } from "../../utils/auth-token";

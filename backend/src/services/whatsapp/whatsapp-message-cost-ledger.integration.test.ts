@@ -3,8 +3,8 @@ import { after, before, it } from "node:test";
 import sql from "mssql";
 import { randomUUID } from "node:crypto";
 import { getPool } from "../../database/connection";
-import { whatsappMessageCostLedgerClaimRepository } from "../../repositories/whatsapp-message-cost-ledger-claim.repository";
-import { whatsappMessageCostLedgerWriteRepository } from "../../repositories/whatsapp-message-cost-ledger-write.repository";
+import { whatsappMessageCostLedgerClaimRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger-claim.repository";
+import { whatsappMessageCostLedgerWriteRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger-write.repository";
 import {
   describeDatabaseIntegration,
   setupDatabaseIntegration,

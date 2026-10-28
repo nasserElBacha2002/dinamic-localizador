@@ -9,9 +9,9 @@ import {
   requireDinamicCompanyId,
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
-import { whatsappConversationRepository } from "../../repositories/whatsapp-conversation.repository";
-import { whatsappProviderEventRepository } from "../../repositories/whatsapp-provider-event.repository";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
+import { whatsappConversationRepository } from "../../repositories/whatsapp/whatsapp-conversation.repository";
+import { whatsappProviderEventRepository } from "../../repositories/whatsapp/whatsapp-provider-event.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 
 describeDatabaseIntegration("whatsapp observability sql concurrency", () => {
   let companyId = "";

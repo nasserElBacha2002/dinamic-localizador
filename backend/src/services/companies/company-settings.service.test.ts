@@ -43,8 +43,8 @@ describe("companyService settings", () => {
 
   it("OWNER can read settings and receives DTO without id", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyService } = await import("./company.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -57,8 +57,8 @@ describe("companyService settings", () => {
 
   it("uses findOrCreateByCompanyId when settings row is missing", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyService } = await import("./company.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -70,8 +70,8 @@ describe("companyService settings", () => {
 
   it("OWNER can update existing settings", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyService } = await import("./company.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -89,8 +89,8 @@ describe("companyService settings", () => {
 
   it("creates defaults plus patch input in one write when row is missing", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyService } = await import("./company.service");
 
     let updateCalls = 0;
@@ -131,7 +131,7 @@ describe("companyService settings", () => {
 
   it("fails update for invalid company", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyService } = await import("./company.service");
 
     mock.method(companyRepository, "findById", async () => null);
@@ -153,7 +153,7 @@ describe("companyOperationalSettingsService", () => {
 
   it("returns persisted settings when available", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyOperationalSettingsService } = await import(
       "./company-operational-settings.service"
     );
@@ -172,7 +172,7 @@ describe("companyOperationalSettingsService", () => {
 
   it("uses application defaults when settings row is missing", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyOperationalSettingsService } = await import(
       "./company-operational-settings.service"
     );

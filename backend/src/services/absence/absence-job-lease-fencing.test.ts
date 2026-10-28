@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AppError } from "../../errors/app-error";
-import type { JobLeaseToken } from "../../repositories/absence-workday-sync-job.repository";
+import type { JobLeaseToken } from "../../repositories/absence/absence-workday-sync-job.repository";
 
 /**
  * Pure fencing predicate tests (no DB). Live crash/lease scenarios live in

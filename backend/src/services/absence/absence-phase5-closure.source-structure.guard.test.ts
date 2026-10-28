@@ -42,7 +42,7 @@ describe("attendance during absence command", () => {
 
 describe("job lease claim", () => {
   const source = readFileSync(
-    resolve(process.cwd(), "src/repositories/absence-workday-sync-job.repository.ts"),
+    resolve(process.cwd(), "src/repositories/absence/absence-workday-sync-job.repository.ts"),
     "utf8",
   );
 

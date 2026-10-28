@@ -13,7 +13,7 @@ describe("whatsapp check-in during approved absence", () => {
     "utf8",
   );
   const availability = readFileSync(
-    resolve(process.cwd(), "src/repositories/employee-workday-availability.repository.ts"),
+    resolve(process.cwd(), "src/repositories/workdays/employee-workday-availability.repository.ts"),
     "utf8",
   );
 

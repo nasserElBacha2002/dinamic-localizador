@@ -3,12 +3,12 @@ import { AppError } from "../../errors/app-error";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { resolveOperationAbsenceBadges } from "../../domain/operation-absence-badges";
-import { operationAttendanceRepository } from "../../repositories/operation-attendance.repository";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationScheduleRepository } from "../../repositories/operation-schedule.repository";
-import { serviceRepository } from "../../repositories/service.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { operationAttendanceRepository } from "../../repositories/operations/operation-attendance.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type {
   CreateOperationInput,
   CreateOneTimeOperationInput,
@@ -19,22 +19,22 @@ import type {
 import { auditService } from "../audit.service";
 import { absenceOperationalImpactQueryService } from "../absence/absence-operational-impact-query.service";
 import { companyOperationalDefaultsResolver } from "../companies/company-operational-defaults.resolver";
-import { operationChangeEventRepository } from "../../repositories/operation-change-event.repository";
+import { operationChangeEventRepository } from "../../repositories/operations/operation-change-event.repository";
 import {
   buildOperationChangePayload,
   resolveOperationOperationalDate,
-} from "../../utils/operation-change-events";
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
+} from "../../utils/operations/operation-change-events";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../../utils/operation-status";
-import { isActiveOperationDuplicateError } from "../../utils/active-operation-duplicate-errors";
-import { isOperationStartInPast } from "../../utils/operation-lifecycle";
+import { isActiveOperationDuplicateError } from "../../utils/operations/active-operation-duplicate-errors";
+import { isOperationStartInPast } from "../../utils/operations/operation-lifecycle";
 import { operationLifecycleService } from "./operation-lifecycle.service";
 import { buildPaginationMeta } from "../../utils/pagination";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
 import { safeRollback } from "../../utils/safe-transaction";
 import { seedMultiShiftOnCreateInTransaction } from "./operation-schedule-mode-transition.service";
@@ -42,10 +42,10 @@ import {
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
   weeklySchedulesEqual,
-} from "../../utils/weekly-schedule";
+} from "../../utils/operations/weekly-schedule";
 import type { OperationDetail, OperationWithService } from "../../types/domain";
-import { assertCompanyWorkScheduleExists } from "../../utils/recurring-schedule-consistency";
-import { detectOneTimeScheduleAffectingChanges } from "../../utils/one-time-schedule-change";
+import { assertCompanyWorkScheduleExists } from "../../utils/operations/recurring-schedule-consistency";
+import { detectOneTimeScheduleAffectingChanges } from "../../utils/operations/one-time-schedule-change";
 import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";
 
 const resolveCompanyOperationTimezone = async (companyId: string): Promise<string> => {

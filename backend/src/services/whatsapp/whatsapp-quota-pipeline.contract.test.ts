@@ -12,7 +12,7 @@ import {
   resolveEffectiveQuotaMode,
   whatsappUsageQuotaService,
 } from "./whatsapp-usage-quota.service";
-import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp-usage-quota.repository";
+import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp/whatsapp-usage-quota.repository";
 import type { BotSession } from "../../types/twilio.types";
 import type { WhatsAppQuotaPolicy } from "../../types/whatsapp-usage-quota";
 import { WHATSAPP_QUOTA_DEFAULTS } from "../../constants/whatsapp-usage-quota";

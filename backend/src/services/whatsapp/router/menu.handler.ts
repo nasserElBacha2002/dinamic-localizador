@@ -9,7 +9,7 @@ import {
   type BotMenuOptionKey,
 } from "../../bot/bot-menu.builder";
 import { botSessionService } from "../../bot/bot-session.service";
-import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import type { BotSession } from "../../../types/twilio.types";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import { handleAbsenceIntent } from "./absence.handler";

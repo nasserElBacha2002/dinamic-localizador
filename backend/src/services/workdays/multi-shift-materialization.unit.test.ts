@@ -8,7 +8,7 @@ import {
   isDayEnabled,
   resolveShiftScheduleForDate,
   resolveVersionForDate,
-} from "../../utils/operation-shift-version-resolver";
+} from "../../utils/operations/operation-shift-version-resolver";
 import { employeeShiftIntervalOverlap } from "../../utils/employee-shift-interval-overlap";
 import type { OperationShiftVersion } from "../../types/operation-shift";
 import type { OperationWorkday } from "../../types/workday";

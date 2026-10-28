@@ -10,7 +10,7 @@ import {
 import {
   LOCATION_ZONE_NORMALIZATION_GOLDEN_CASES,
   normalizeLocationZoneName,
-} from "../utils/normalize-location-zone-name";
+} from "./locations/normalize-location-zone-name";
 
 describeDatabaseIntegration("fn_normalize_location_zone_text matches Node", () => {
   before(async () => {

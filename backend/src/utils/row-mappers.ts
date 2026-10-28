@@ -13,7 +13,7 @@ import type { AttendanceReview, User } from "../types/auth";
 import {
   inferHistoricalIntentFromState,
   isBotSessionIntent,
-} from "./bot-session-intent";
+} from "./bot/bot-session-intent";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();

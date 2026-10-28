@@ -1,8 +1,8 @@
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import {
   employeeWorkdayRepository,
   type EmployeeWorkdayWithSchedule,
-} from "../../repositories/employee-workday.repository";
+} from "../../repositories/workdays/employee-workday.repository";
 import type { ApprovedAbsenceForWorkday } from "../../types/absence";
 import {
   emptyAbsenceWorkdayReconciliationResult,
@@ -11,7 +11,7 @@ import {
 import {
   applyPersistedAbsenceDeltas,
   resolveWorkdayAbsenceDeltas,
-} from "../../utils/resolve-workday-absence-deltas";
+} from "../../utils/absence/resolve-workday-absence-deltas";
 import { getAbsenceDateRangeForWorkday } from "../../utils/absence-workday-coverage";
 
 const getDateRangeBounds = (workdays: EmployeeWorkdayWithSchedule[]): {

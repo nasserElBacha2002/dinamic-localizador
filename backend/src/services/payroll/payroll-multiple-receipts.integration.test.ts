@@ -13,8 +13,8 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
-import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll-receipt-query-delivery.repository";
-import { payrollReceiptRepository } from "../../repositories/payroll-receipt.repository";
+import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
+import { payrollReceiptRepository } from "../../repositories/payroll/payroll-receipt.repository";
 
 const checksumFor = (label: string): string =>
   createHash("sha256").update(label).digest("hex");

@@ -2,10 +2,10 @@ import sql from "mssql";
 import { env } from "../../config/env";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
-import { userInvitationRepository } from "../../repositories/user-invitation.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { userInvitationRepository } from "../../repositories/identity/user-invitation.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import type { CompanyRole } from "../../types/company";
 import type {
   UserInvitation,
@@ -20,7 +20,7 @@ import { buildPaginationMeta } from "../../utils/pagination";
 import {
   generateInvitationToken,
   hashInvitationToken,
-} from "../../utils/invitation-token";
+} from "../../utils/identity/invitation-token";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../../utils/sql-server-errors";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { sendEmail } from "../email.service";

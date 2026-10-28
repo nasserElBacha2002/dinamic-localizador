@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import type { ApprovedAbsenceForWorkday } from "../../types/absence";
 

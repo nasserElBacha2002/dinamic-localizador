@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+
+const repositorySource = readFileSync(
+  join(process.cwd(), "src/repositories/employees/employee-assignment-query.repository.ts"),
+  "utf8",
+);
+
+const availabilityRepositorySource = readFileSync(
+  join(process.cwd(), "src/repositories/workdays/employee-workday-availability.repository.ts"),
+  "utf8",
+);
+
+describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
+  it("uses a half-open UTC range for scheduled_start", () => {
+    assert.match(repositorySource, /getOperationDayUtcBounds\(at, operationTimezone\)/);
+    assert.match(repositorySource, /\.input\("dayStartUtc", sql\.DateTime2, dayStartUtc\)/);
+    assert.match(repositorySource, /\.input\("nextDayStartUtc", sql\.DateTime2, nextDayStartUtc\)/);
+    assert.match(repositorySource, /i\.scheduled_start >= @dayStartUtc/);
+    assert.match(repositorySource, /i\.scheduled_start < @nextDayStartUtc/);
+    assert.doesNotMatch(repositorySource, /dayEndUtc/);
+    assert.doesNotMatch(repositorySource, /<= @dayEndUtc/);
+  });
+
+  it("keeps upcoming/confirm flows scoped to ONE_TIME while today uses workdays", () => {
+    assert.match(repositorySource, /i\.operation_kind = N'ONE_TIME'/);
+  });
+
+  it("lists unavailability with RECURRING end-window and ONE_TIME future-start semantics", () => {
+    const methodSource = repositorySource.slice(
+      repositorySource.indexOf("async listUnavailabilityForEmployee"),
+      repositorySource.indexOf("async findOccurrenceByEmployeeWorkdayForEmployee"),
+    );
+    assert.match(methodSource, /i\.operation_kind = N'RECURRING'/);
+    assert.match(methodSource, /COALESCE\(ow\.expected_end_at, ow\.expected_start_at\) >= @at/);
+    assert.match(methodSource, /i\.operation_kind <> N'RECURRING'/);
+    assert.match(methodSource, /ow\.expected_start_at > @at/);
+    assert.match(methodSource, /ew\.id IS NOT NULL/);
+  });
+});
+
+describe("employeeAssignmentQueryRepository.listEmployeeOperations", () => {
+  it("lists workday-based operations for ONE_TIME and RECURRING with consistent pagination", () => {
+    assert.match(repositorySource, /const EMPLOYEE_WORKDAY_OPERATIONS_SELECT/);
+    assert.match(repositorySource, /ow\.expected_start_at AS scheduled_start/);
+    assert.match(repositorySource, /ow\.expected_end_at AS scheduled_end/);
+
+    const methodSource = repositorySource.slice(
+      repositorySource.indexOf("async listEmployeeOperations"),
+      repositorySource.indexOf("async listUpcomingForEmployee"),
+    );
+    assert.doesNotMatch(methodSource, /i\.operation_kind = N'ONE_TIME'/);
+    assert.match(methodSource, /SELECT COUNT\(\*\) AS total/);
+    assert.match(methodSource, /ORDER BY scheduled_start DESC, operation_workday_id DESC, assignment_id DESC/);
+    assert.match(methodSource, /ORDER BY scheduled_start ASC, operation_workday_id ASC, assignment_id ASC/);
+    assert.doesNotMatch(methodSource, /ORDER BY i\.scheduled_start (ASC|DESC)/);
+    assert.match(methodSource, /ow\.expected_end_at IS NULL/);
+  });
+});
+
+describe("employeeWorkdayAvailabilityRepository.listTodayWorkdaysForEmployee", () => {
+  it("lists today workdays by work_date for ONE_TIME and RECURRING", () => {
+    assert.match(availabilityRepositorySource, /async listTodayWorkdaysForEmployee/);
+    assert.match(availabilityRepositorySource, /ow\.work_date = @workDate/);
+    assert.match(availabilityRepositorySource, /operation_kind = N'RECURRING'/);
+  });
+});

@@ -3,10 +3,10 @@ import { DEFAULT_COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { toCompanySettingsInput } from "../../constants/company-settings";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companyModuleRepository } from "../../repositories/company-module.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { companyModuleRepository } from "../../repositories/companies/company-module.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import type { CreatePlatformCompanyInput } from "../../schemas/platform-company.schema";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { companyLocationZoneDefaultsService } from "./company-location-zone-defaults.service";
@@ -17,7 +17,7 @@ import {
   userInvitationService,
 } from "../identity/user-invitation.service";
 import { normalizeEmail } from "../../utils/password";
-import { generateInvitationToken, hashInvitationToken } from "../../utils/invitation-token";
+import { generateInvitationToken, hashInvitationToken } from "../../utils/identity/invitation-token";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../../utils/sql-server-errors";
 
 function mapCompanyCreateDuplicateError(error: unknown): never {

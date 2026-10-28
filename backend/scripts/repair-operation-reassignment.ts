@@ -1,6 +1,6 @@
 import sql from "mssql";
 import { connectDatabase, closeDatabase, getPool } from "../src/database/connection";
-import { operationAttendanceRepository } from "../src/repositories/operation-attendance.repository";
+import { operationAttendanceRepository } from "../src/repositories/operations/operation-attendance.repository";
 import { recurringWorkdayMaterializationService } from "../src/services/workdays/recurring-workday-materialization.service";
 import {
   exitWithError,

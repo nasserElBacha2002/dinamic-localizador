@@ -19,8 +19,8 @@ import {
 } from "../../test-helpers/integration-test";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { whatsappRetentionService } from "./whatsapp-retention.service";
 
 const nowUtc = new Date("2026-08-28T12:00:00.000Z");

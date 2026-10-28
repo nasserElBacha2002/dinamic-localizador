@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { getBotRuntimeContext } from "./bot-runtime-context";
+import { getBotRuntimeContext } from "./bot/bot-runtime-context";
 
 export type BotSessionScope =
   | { mode: "production" }

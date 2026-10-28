@@ -5,8 +5,8 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 setupUnitTestEnv();
 
 import { env } from "../../config/env";
-import { passwordResetTokenRepository } from "../../repositories/password-reset-token.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { passwordResetTokenRepository } from "../../repositories/identity/password-reset-token.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import {
   PASSWORD_RESET_PUBLIC_MESSAGE,
   passwordResetIssuer,

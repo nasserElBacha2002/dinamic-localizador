@@ -29,7 +29,7 @@ describe("whatsapp observability listMessages PII contract", () => {
     };
 
     const { whatsappObservabilityRepository } = await import(
-      "../../repositories/whatsapp-observability.repository"
+      "../../repositories/whatsapp/whatsapp-observability.repository"
     );
     mock.method(whatsappObservabilityRepository, "listMessages", async () => ({
       data: [message],

@@ -1,7 +1,7 @@
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 import type { CompanySettings } from "../../types/company";
 import { geofencePolicyResolver } from "../locations/geofence-policy.resolver";

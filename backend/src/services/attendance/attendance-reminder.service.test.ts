@@ -82,9 +82,9 @@ describe("attendanceReminderService", () => {
   beforeEach(async () => {
     setupUnitTestEnv();
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     mock.method(attendanceNotificationRepository, "reconcileSentRecoveryRequired", async () => 0);
     mock.method(attendanceNotificationRepository, "isArrivalReminderEligible", async () => true);
     mock.method(attendanceNotificationRepository, "isExitReminderEligible", async () => true);
@@ -111,7 +111,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -150,7 +150,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -192,7 +192,7 @@ describe("attendanceReminderService", () => {
     env.TWILIO_TEMPLATE_NO_CHECKIN_SID = undefined;
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -224,7 +224,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -261,7 +261,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -301,7 +301,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -333,7 +333,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -367,7 +367,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -414,7 +414,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -461,7 +461,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -507,7 +507,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -558,7 +558,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -611,7 +611,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -671,7 +671,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -731,7 +731,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -781,7 +781,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -832,7 +832,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -884,7 +884,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -933,7 +933,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -966,7 +966,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const {
       attendanceReminderService,
@@ -1057,7 +1057,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -1119,7 +1119,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { attendanceReminderService } = await import("./attendance-reminder.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
@@ -1178,7 +1178,7 @@ describe("attendanceReminderService", () => {
     configureTwilioEnv(env);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const {
       attendanceReminderService,

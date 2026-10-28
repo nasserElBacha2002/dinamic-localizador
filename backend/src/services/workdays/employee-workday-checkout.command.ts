@@ -1,7 +1,7 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { botSessionRepository } from "../../repositories/bot-session.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
 import type { AttendanceRecord } from "../../types/domain";
 import type { CheckoutStatus } from "../../constants/checkout-status";
 import { runCheckoutWithoutLocationBeforeCommitHookForTests } from "../../utils/checkout-transaction-hooks";
@@ -10,7 +10,7 @@ import {
   isAttendanceCheckoutMessageSidDuplicateKeyError,
 } from "../../utils/attendance-duplicate-errors";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
-import { getSimulationSessionId } from "../../utils/bot-runtime-context";
+import { getSimulationSessionId } from "../../utils/bot/bot-runtime-context";
 
 export type CheckoutWriteFields = {
   checkoutLatitude: number | null;

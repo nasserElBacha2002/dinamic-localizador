@@ -1,4 +1,4 @@
-import { adminAlertContextRepository } from "../../repositories/admin-alert-context.repository";
+import { adminAlertContextRepository } from "../../repositories/admin-alerts/admin-alert-context.repository";
 import type { AdminAlertOutboxObligation } from "../../types/admin-alert";
 import { logAdminAlertEvent } from "../../utils/admin-alert/observability";
 import { adminAlertService } from "./admin-alert.service";

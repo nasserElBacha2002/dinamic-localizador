@@ -1,8 +1,8 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import { getPool } from "../../database/connection";
-import { absenceCalendarRepository } from "../../repositories/absence-calendar.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
+import { absenceCalendarRepository } from "../../repositories/absence/absence-calendar.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
 import type { UpdateAbsenceTypeInput } from "../../schemas/absence-type.schema";
 import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 import { auditService } from "../audit.service";

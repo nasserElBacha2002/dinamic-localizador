@@ -8,15 +8,15 @@ import {
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
 import { companyContextService } from "./companies/company-context.service";
-import { employeeRepository } from "../repositories/employee.repository";
-import { serviceRepository } from "../repositories/service.repository";
-import { operationRepository } from "../repositories/operation.repository";
-import { attendanceRepository } from "../repositories/attendance.repository";
-import { absenceRequestRepository } from "../repositories/absence-request.repository";
-import { botSimulationSessionRepository } from "../repositories/bot-simulation-session.repository";
-import { companyRepository } from "../repositories/company.repository";
-import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
-import { userRepository } from "../repositories/user.repository";
+import { employeeRepository } from "../repositories/employees/employee.repository";
+import { serviceRepository } from "../repositories/locations/service.repository";
+import { operationRepository } from "../repositories/operations/operation.repository";
+import { attendanceRepository } from "../repositories/attendance/attendance.repository";
+import { absenceRequestRepository } from "../repositories/absence/absence-request.repository";
+import { botSimulationSessionRepository } from "../repositories/whatsapp/bot-simulation-session.repository";
+import { companyRepository } from "../repositories/companies/company.repository";
+import { userCompanyMembershipRepository } from "../repositories/companies/user-company-membership.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { getPool } from "../database/connection";
 
 describeDatabaseIntegration("tenant isolation hardening", () => {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { botSessionRepository } from "../../repositories/bot-session.repository";
+import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
 import {
   createIntegrationFixtureTracker,
   describeDatabaseIntegration,

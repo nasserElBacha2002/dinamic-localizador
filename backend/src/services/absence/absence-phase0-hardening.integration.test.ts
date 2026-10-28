@@ -10,11 +10,11 @@ import {
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { getPool } from "../../database/connection";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceReviewService } from "./absence-review.service";
-import { absenceBalanceRepository } from "../../repositories/absence-balance.repository";
+import { absenceBalanceRepository } from "../../repositories/absence/absence-balance.repository";
 import { AppError } from "../../errors/app-error";
 
 const uniqueCompanyName = (): string =>
@@ -63,7 +63,7 @@ describeDatabaseIntegration("absence phase0 hardening integration", () => {
   });
 
   const seedCompany = async (timezone = "America/Argentina/Buenos_Aires") => {
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(admin);
     actorUserId = admin.id;

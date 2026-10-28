@@ -23,9 +23,9 @@ describeDatabaseIntegration("company user last-owner concurrency", () => {
 
   it("keeps at least one active OWNER under concurrent demotions", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { deleteCompanyCascade } = await import("../../test-helpers/integration-cleanup");

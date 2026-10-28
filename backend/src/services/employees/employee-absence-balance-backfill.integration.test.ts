@@ -8,9 +8,9 @@ import {
 } from "../../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { getPool } from "../../database/connection";
-import { absenceBalanceRepository } from "../../repositories/absence-balance.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceBalanceRepository } from "../../repositories/absence/absence-balance.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { companyAbsenceSettingsService } from "../companies/company-absence-settings.service";
 import { employeeAbsenceBalanceBackfillService } from "./employee-absence-balance-backfill.service";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";

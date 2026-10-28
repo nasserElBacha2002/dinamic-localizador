@@ -3,17 +3,17 @@ import {
   resolveEmployeeAbsenceAvailabilityStatus,
 } from "../../domain/absence-operational-effects";
 import { AppError } from "../../errors/app-error";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { absenceWorkdaySyncJobRepository } from "../../repositories/absence-workday-sync-job.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { absenceWorkdaySyncJobRepository } from "../../repositories/absence/absence-workday-sync-job.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import type { AffectedOperationWarning } from "../../types/absence";
 import type { AbsenceOperationalImpactResult } from "../../types/absence-operational-impact";
 import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../../utils/absence-date";
 import { isWorkdayCoveredByAbsence } from "../../utils/absence-workday-coverage";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 const rangesOverlap = (
   aStart: Date,

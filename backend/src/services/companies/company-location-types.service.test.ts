@@ -55,9 +55,9 @@ describe("companyLocationTypesService", () => {
 
   it("lists only active types when activeOnly is true", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -77,7 +77,7 @@ describe("companyLocationTypesService", () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../../repositories/client.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -108,7 +108,7 @@ describe("companyLocationTypesService", () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../../repositories/client.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -132,9 +132,9 @@ describe("companyLocationTypesService", () => {
 
   it("rejects duplicate explicit code on create before insert", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -161,9 +161,9 @@ describe("companyLocationTypesService", () => {
 
   it("rejects duplicate generated code from name on create", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -183,9 +183,9 @@ describe("companyLocationTypesService", () => {
 
   it("allows same code in different companies", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -207,9 +207,9 @@ describe("companyLocationTypesService", () => {
 
   it("updates name and sortOrder without changing code", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -235,9 +235,9 @@ describe("companyLocationTypesService", () => {
 
   it("rejects update to another existing code in same company", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -257,9 +257,9 @@ describe("companyLocationTypesService", () => {
 
   it("soft-disables a type", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -281,7 +281,7 @@ describe("companyLocationTypesService", () => {
   it("rejects company-wide format when the service belongs to a client", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -306,7 +306,7 @@ describe("companyLocationTypesService", () => {
   it("rejects another client format when the service belongs to a different client", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -331,7 +331,7 @@ describe("companyLocationTypesService", () => {
   it("allows a client-owned format for the same client", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 
@@ -351,7 +351,7 @@ describe("companyLocationTypesService", () => {
   it("rejects inactive location type for service assignment", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyLocationTypesService } = await import("./company-location-types.service");
 

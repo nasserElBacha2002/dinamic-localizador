@@ -1,7 +1,7 @@
 import type { BotSession } from "../../types/twilio.types";
 import type { AbsenceType } from "../../types/absence";
 import { AppError } from "../../errors/app-error";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
 import { absenceAttachmentService } from "./absence-attachment.service";
 import {
   extractTwilioMediaItems,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
-import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { employeeWorkdayAvailabilityRepository } from "../repositories/workdays/employee-workday-availability.repository";
+import { companySettingsRepository } from "../repositories/companies/company-settings.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
 describe("diagnoseCheckInUnavailability best-effort", () => {

@@ -58,9 +58,9 @@ describe("workdayMaterializationService", () => {
 
   it("creates ONE_TIME operation workday when missing", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
     const { workdayMaterializationService } = await import("./workday-materialization.service");
 
     mock.method(operationRepository, "findById", async () => operation());
@@ -76,9 +76,9 @@ describe("workdayMaterializationService", () => {
 
   it("returns persisted ONE_TIME workday even when current schedule resolves a different date", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
     const { workdayMaterializationService } = await import("./workday-materialization.service");
 
     mock.method(operationRepository, "findById", async () => operation());
@@ -98,9 +98,9 @@ describe("workdayMaterializationService", () => {
 
   it("throws when ONE_TIME operation has multiple persisted workdays", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
     const { workdayMaterializationService } = await import("./workday-materialization.service");
 
     mock.method(operationRepository, "findById", async () => operation());
@@ -120,11 +120,11 @@ describe("workdayMaterializationService", () => {
 
   it("creates expected employee workday for each employee", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
-    const { employeeWorkdayRepository } = await import("../../repositories/employee-workday.repository");
-    const { operationEmployeeRepository } = await import("../../repositories/operation-employee.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
+    const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
+    const { operationEmployeeRepository } = await import("../../repositories/operations/operation-employee.repository");
     const { workdayMaterializationService } = await import("./workday-materialization.service");
 
     mock.method(operationRepository, "findById", async () => operation());
@@ -156,10 +156,10 @@ describe("workdayMaterializationService", () => {
 
   it("rejects employee workday when no active assignment covers work date", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
-    const { operationEmployeeRepository } = await import("../../repositories/operation-employee.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
+    const { operationEmployeeRepository } = await import("../../repositories/operations/operation-employee.repository");
     const { workdayMaterializationService } = await import("./workday-materialization.service");
     const { AppError } = await import("../../errors/app-error");
 

@@ -17,19 +17,19 @@ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { AppError } from "../errors/app-error";
-import { absenceTypeRepository } from "../repositories/absence-type.repository";
-import { employeeRepository } from "../repositories/employee.repository";
-import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
-import { absenceAttachmentRepository } from "../repositories/absence-attachment.repository";
-import { botSessionRepository } from "../repositories/bot-session.repository";
+import { absenceTypeRepository } from "../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../repositories/employees/employee.repository";
+import { absenceBalanceRepository } from "../repositories/absence/absence-balance.repository";
+import { absenceAttachmentRepository } from "../repositories/absence/absence-attachment.repository";
+import { botSessionRepository } from "../repositories/whatsapp/bot-session.repository";
 import { absenceRequestService } from "./absence/absence-request.service";
 import { absenceReviewService } from "./absence/absence-review.service";
 import { attachmentDeletionService } from "./attachments/attachment-deletion.service";
 import { operationAssignmentService } from "./operations/operation-assignment.service";
 import { processCheckoutWithoutLocation } from "./bot/checkout-attendance.flow";
 import { employeeWorkdayAvailabilityService } from "./workdays/employee-workday-availability.service";
-import { attendanceRepository } from "../repositories/attendance.repository";
-import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
+import { attendanceRepository } from "../repositories/attendance/attendance.repository";
+import { runWithBotRuntimeContext } from "../utils/bot/bot-runtime-context";
 import { runWithBotRuntimeSettings } from "../utils/bot-runtime-settings-scope";
 import {
   setCheckoutWithoutLocationBeforeCommitHookForTests,
@@ -106,7 +106,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
   });
 
   const seedAbsenceCompany = async (options?: { requireAttachment?: boolean }) => {
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(admin);
     actorUserId = admin.id;
@@ -464,7 +464,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
 
   const seedCheckoutFixture = async (simulationSessionId: string) => {
     const pool = getPool();
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(admin);
 

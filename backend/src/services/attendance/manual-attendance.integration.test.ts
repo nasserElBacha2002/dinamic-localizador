@@ -12,9 +12,9 @@ import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { applySqlScriptInTransaction, stripLegacyDatabaseUse } from "../../database/run-migrations";
 import { AppError } from "../../errors/app-error";
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { manualAttendanceService } from "./manual-attendance.service";
 import {
   createIntegrationFixtureTracker,

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   MULTI_SHIFT_CONSUMER_AUDIT,
-} from "../utils/multi-shift-consumer-audit";
+} from "./workdays/multi-shift-consumer-audit";
 import type { MultiShiftAttendanceLogAction } from "../utils/multi-shift-attendance-observability";
 
 const ROOT = join(process.cwd(), "src");
@@ -52,7 +52,7 @@ describe("multi-shift observability and SAFE consumer evidence", () => {
   it("SAFE reminder consumer is backed by employee_workday claim path", () => {
     const reminder = readFileSync(join(ROOT, "services/attendance/attendance-reminder.service.ts"), "utf8");
     const repo = readFileSync(
-      join(ROOT, "repositories/attendance-notification.repository.ts"),
+      join(ROOT, "repositories/admin-alerts/attendance-notification.repository.ts"),
       "utf8",
     );
     assert.match(reminder, /employeeWorkdayId: candidate\.employeeWorkdayId/);
@@ -71,7 +71,7 @@ describe("multi-shift observability and SAFE consumer evidence", () => {
 
   it("SAFE alert consumer uses toDateOnlyString for workDate", () => {
     const alertRepo = readFileSync(
-      join(ROOT, "repositories/admin-dynamic-attendance-alert.repository.ts"),
+      join(ROOT, "repositories/admin-alerts/admin-dynamic-attendance-alert.repository.ts"),
       "utf8",
     );
     assert.match(alertRepo, /toDateOnlyString\(record\.work_date/);

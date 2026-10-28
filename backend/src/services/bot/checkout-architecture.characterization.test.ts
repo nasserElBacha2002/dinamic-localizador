@@ -6,7 +6,7 @@ import {
   roundCheckoutDistanceMeters,
 } from "./checkout-result-code";
 import { attendanceRecordFromVirtualCheckIn } from "./checkout-simulation-attendance";
-import type { VirtualAttendanceRecord } from "../../utils/bot-runtime-context";
+import type { VirtualAttendanceRecord } from "../../utils/bot/bot-runtime-context";
 import {
   classifyReminderSendOutcome,
   emptyReminderKindCounts,

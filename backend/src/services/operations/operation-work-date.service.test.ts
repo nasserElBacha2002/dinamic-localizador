@@ -12,8 +12,8 @@ describe("operationWorkDateService", () => {
 
   it("returns materialized work date without persisting", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
     const { operationWorkDateService } = await import("./operation-work-date.service");
 
     mock.method(operationRepository, "findById", async () => ({
@@ -32,9 +32,9 @@ describe("operationWorkDateService", () => {
 
   it("derives work date from schedule when not materialized", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { operationWorkdayRepository } = await import("../../repositories/operation-workday.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { operationWorkdayRepository } = await import("../../repositories/operations/operation-workday.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { operationWorkDateService } = await import("./operation-work-date.service");
 
     mock.method(operationRepository, "findById", async () => ({

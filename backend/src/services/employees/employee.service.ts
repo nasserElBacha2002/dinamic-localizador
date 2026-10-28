@@ -6,8 +6,8 @@ import type {
   UpdateEmployeeInput,
 } from "../../schemas/employee.schema";
 import { getPool } from "../../database/connection";
-import { employeeClientRepository } from "../../repositories/employee-client.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeClientRepository } from "../../repositories/employees/employee-client.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type { Employee } from "../../types/domain";
 import { companyAbsenceSettingsService } from "../companies/company-absence-settings.service";
 import { normalizePhoneNumber } from "../../utils/phone";

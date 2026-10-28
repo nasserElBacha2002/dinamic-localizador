@@ -14,13 +14,13 @@ import {
 } from "../../test-helpers/integration-test";
 import { deleteOperationCascade } from "../../test-helpers/integration-entity-cascade";
 import { createDedicatedDatabaseConnection, getPool } from "../../database/connection";
-import { attendanceNotificationRepository } from "../../repositories/attendance-notification.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { attendanceNotificationRepository } from "../../repositories/admin-alerts/attendance-notification.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { operationScheduleModeTransitionService } from "../operations/operation-schedule-mode-transition.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 const NOTIFICATION_TYPE = "ARRIVAL_REMINDER_15_MIN" as const;
 

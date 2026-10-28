@@ -7,7 +7,7 @@ import type {
   DailyAttendanceReportTotals,
   DailyAttendanceReportWorkday,
 } from "../../types/daily-attendance-report";
-import { classifyDailyAttendanceReportRow } from "../../utils/daily-attendance-report-classify";
+import { classifyDailyAttendanceReportRow } from "../../utils/reports/daily-attendance-report-classify";
 import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../../utils/statistics-canonical-attendance";
 import {
   CONFIRMATION_STATUS_SQL,

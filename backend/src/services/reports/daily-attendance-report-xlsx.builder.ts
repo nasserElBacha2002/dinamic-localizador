@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import type { DailyAttendanceReportPayload } from "../../types/daily-attendance-report";
-import { getAttendanceIncidentLabel } from "../../utils/attendance-report-presentation";
+import { getAttendanceIncidentLabel } from "../../utils/attendance/attendance-report-presentation";
 
 const hhmm = (value: string | null | undefined, timezoneId: string): string => value ? new Date(value).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: timezoneId }) : "";
 

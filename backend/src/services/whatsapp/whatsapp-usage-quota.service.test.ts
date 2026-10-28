@@ -5,7 +5,7 @@ import {
   preferOpenOrResolvePeriod,
   resolveDayPeriod,
   resolveWeekPeriod,
-} from "../../utils/whatsapp-quota-periods";
+} from "../../utils/whatsapp/whatsapp-quota-periods";
 import {
   resolveEffectiveQuotaMode,
   whatsappUsageQuotaService,
@@ -13,7 +13,7 @@ import {
 import { WHATSAPP_QUOTA_DEFAULTS } from "../../constants/whatsapp-usage-quota";
 import type { WhatsAppQuotaPolicy } from "../../types/whatsapp-usage-quota";
 import { env } from "../../config/env";
-import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp-usage-quota.repository";
+import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp/whatsapp-usage-quota.repository";
 
 const basePolicy = (overrides?: Partial<WhatsAppQuotaPolicy>): WhatsAppQuotaPolicy => ({
   mode: "ENFORCE",

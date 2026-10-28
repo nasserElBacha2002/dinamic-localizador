@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { absenceAttachmentRepository } from "../../repositories/absence-attachment.repository";
+import { absenceAttachmentRepository } from "../../repositories/absence/absence-attachment.repository";
 import {
   toAbsenceAttachmentDto,
   type AbsenceRequestAttachmentDto,

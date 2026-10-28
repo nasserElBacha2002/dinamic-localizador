@@ -1,27 +1,27 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
-import { operationShiftVersionRepository } from "../../repositories/operation-shift-version.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type {
   TransitionToMultiShiftInput,
   TransitionToSingleInput,
 } from "../../types/operation-shift";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
 import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
-import { normalizeShiftCode } from "../../utils/shift-code";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
+import { normalizeShiftCode } from "../../utils/operations/shift-code";
 import {
   assertEffectiveRange,
   assertShiftTimesDistinct,
   normalizeShiftTime,
   ShiftTimeError,
-} from "../../utils/shift-time";
+} from "../../utils/operations/shift-time";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 
 const assertActiveCompany = async (companyId: string): Promise<void> => {

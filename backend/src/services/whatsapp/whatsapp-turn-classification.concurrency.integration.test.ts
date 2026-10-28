@@ -8,8 +8,8 @@ import {
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
-import { whatsappSystemInteractionRepository } from "../../repositories/whatsapp-system-interaction.repository";
-import { whatsappTurnClassificationRepository } from "../../repositories/whatsapp-turn-classification.repository";
+import { whatsappSystemInteractionRepository } from "../../repositories/whatsapp/whatsapp-system-interaction.repository";
+import { whatsappTurnClassificationRepository } from "../../repositories/whatsapp/whatsapp-turn-classification.repository";
 
 describeDatabaseIntegration("whatsapp turn classification SQL concurrency", () => {
   before(async () => {

@@ -9,22 +9,22 @@ import { isValidOperationTimezone } from "../../constants/company-settings";
 import { WEEKDAY_NUMBERS, type WeekdayNumber } from "../../constants/weekday";
 import { AppError } from "../../errors/app-error";
 import { getPool } from "../../database/connection";
-import { absenceCalendarRepository } from "../../repositories/absence-calendar.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceCalendarRepository } from "../../repositories/absence/absence-calendar.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type { AbsenceDayPeriod, AbsenceType } from "../../types/absence";
 import type {
   AbsenceCalculationFingerprint,
   CompanyWorkCalendar,
 } from "../../types/absence-calendar";
-import { buildAbsenceCalculationInputHash } from "../../utils/absence-calculation-hash";
+import { buildAbsenceCalculationInputHash } from "../../utils/absence/absence-calculation-hash";
 import {
   calculateAbsenceDuration,
   buildLegacyCalendarDaysBreakdown,
   type AbsenceDurationCalculation,
-} from "../../utils/absence-duration";
-import { allocationsByYearFromBreakdown } from "../../utils/absence-year-allocations";
+} from "../../utils/absence/absence-duration";
+import { allocationsByYearFromBreakdown } from "../../utils/absence/absence-year-allocations";
 import {
   calculateTotalAbsenceDays,
   compareAbsenceDates,

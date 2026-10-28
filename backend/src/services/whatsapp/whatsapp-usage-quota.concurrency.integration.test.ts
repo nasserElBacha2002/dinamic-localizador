@@ -8,8 +8,8 @@ import {
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
-import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp-usage-quota.repository";
-import { resolveDayPeriod, resolveWeekPeriod } from "../../utils/whatsapp-quota-periods";
+import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp/whatsapp-usage-quota.repository";
+import { resolveDayPeriod, resolveWeekPeriod } from "../../utils/whatsapp/whatsapp-quota-periods";
 
 describeDatabaseIntegration("whatsapp usage quota SQL concurrency", () => {
   before(async () => {

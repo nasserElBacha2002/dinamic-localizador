@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildCsv } from "../../utils/csv";
-import type { WhatsappMessageCostLedgerRow } from "../../repositories/whatsapp-message-cost-ledger.repository";
+import type { WhatsappMessageCostLedgerRow } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 
 describe("whatsapp message cost CSV export shape", () => {
   it("exports masked phones and cost quality without secrets", () => {

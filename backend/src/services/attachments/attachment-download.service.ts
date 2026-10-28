@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 import { AppError } from "../../errors/app-error";
-import { absenceAttachmentRepository } from "../../repositories/absence-attachment.repository";
+import { absenceAttachmentRepository } from "../../repositories/absence/absence-attachment.repository";
 import { isInlineDispositionMime, buildDownloadFileName } from "../../utils/absence-attachments/file-validation";
 import { absenceAttachmentMetrics } from "../../utils/absence-attachments/metrics";
 import { assertAttachmentsFeatureEnabled } from "./attachment-policy.service";

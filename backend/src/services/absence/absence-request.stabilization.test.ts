@@ -26,7 +26,7 @@ describeDatabaseIntegration("absence request stabilization (database)", () => {
   });
 
   it("lists absence requests with PENDING filter without SQL errors", async () => {
-    const { absenceRequestRepository } = await import("../../repositories/absence-request.repository");
+    const { absenceRequestRepository } = await import("../../repositories/absence/absence-request.repository");
     const companyId = await requireDinamicCompanyId();
     const result = await absenceRequestRepository.list(companyId, {
       page: 1,
@@ -59,7 +59,7 @@ describeDatabaseIntegration("absence request stabilization (database)", () => {
   });
 
   it("findAffectedOperations tolerates operations without scheduled_start", async () => {
-    const { absenceRequestRepository } = await import("../../repositories/absence-request.repository");
+    const { absenceRequestRepository } = await import("../../repositories/absence/absence-request.repository");
     const companyId = await requireDinamicCompanyId();
     const operations = await absenceRequestRepository.findAffectedOperations(
       companyId,

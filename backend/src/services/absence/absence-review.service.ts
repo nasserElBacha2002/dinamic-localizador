@@ -2,7 +2,7 @@ import sql from "mssql";
 import { assertAbsenceTransition } from "../../constants/absence-transitions";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import type {
   NeedsInfoAbsenceRequestInput,
   RejectAbsenceRequestInput,
@@ -16,7 +16,7 @@ import { absenceBalanceImpactService } from "./absence-balance-impact.service";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "../workdays/employee-workday-absence-reconciliation.service";
-import type { AbsenceWorkdaySyncOperation } from "../../repositories/absence-workday-sync-job.repository";
+import type { AbsenceWorkdaySyncOperation } from "../../repositories/absence/absence-workday-sync-job.repository";
 
 const transition = async (input: {
   companyId: string;

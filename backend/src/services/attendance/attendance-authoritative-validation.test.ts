@@ -24,16 +24,16 @@ describe("attendanceService.create authoritative validation", () => {
     expectedStart?: string;
     now?: Date;
   }) {
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { operationEmployeeRepository } = await import(
-      "../../repositories/operation-employee.repository"
+      "../../repositories/operations/operation-employee.repository"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
     const { workdayMaterializationService } = await import("../workdays/workday-materialization.service");
     const { geofencePolicyResolver } = await import("../locations/geofence-policy.resolver");
-    const clock = await import("../../utils/attendance-authoritative-clock");
+    const clock = await import("../../utils/attendance/attendance-authoritative-clock");
     const { attendanceService } = await import("./attendance.service");
 
     const serviceLat = options?.serviceLat ?? -34.6037;

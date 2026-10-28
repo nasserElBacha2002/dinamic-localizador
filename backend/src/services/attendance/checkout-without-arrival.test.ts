@@ -9,7 +9,7 @@ import {
   ON_TIME_WORKDAY_SQL,
   WORKED_MINUTES_SQL,
 } from "../../utils/employee-workday-statistics-projection";
-import { buildAnalyticalProjectionRow } from "../../utils/statistics-projection-contract";
+import { buildAnalyticalProjectionRow } from "../../utils/statistics/statistics-projection-contract";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
@@ -188,7 +188,7 @@ describe("checkout without prior arrival", () => {
     const { botSessionService } = await import("../bot/bot-session.service");
     const { startCheckout } = await import("../bot/checkout-attendance.flow");
     const { extractMessageFromTwiml } = await import("../../utils/twiml-message");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
     mock.method(
@@ -240,7 +240,7 @@ describe("checkout without prior arrival", () => {
     );
     const { startCheckout } = await import("../bot/checkout-attendance.flow");
     const { extractMessageFromTwiml } = await import("../../utils/twiml-message");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
     mock.method(
@@ -284,7 +284,7 @@ describe("checkout without prior arrival", () => {
   it("sorts exit-without-arrival candidates by expectedStart DESC (O2 over O1)", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "../workdays/employee-workday-availability.service"
@@ -326,7 +326,7 @@ describe("checkout without prior arrival", () => {
 
   it("missing-checkin alert query requires received_at IS NOT NULL", () => {
     const source = readFileSync(
-      join(process.cwd(), "src/repositories/admin-alert-context.repository.ts"),
+      join(process.cwd(), "src/repositories/admin-alerts/admin-alert-context.repository.ts"),
       "utf8",
     );
     assert.match(source, /MISSING_CHECKIN_AFTER_OPERATION/);

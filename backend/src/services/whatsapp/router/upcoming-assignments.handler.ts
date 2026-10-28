@@ -2,7 +2,7 @@ import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability
 import { employeeWorkdayService } from "../../workdays/employee-workday.service";
 import { getUpcomingAssignmentsModuleBlockedMessage } from "../whatsapp-module-gate";
 import { logModuleBlocked } from "./module-session-gate";
-import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 
 export const handleUpcomingAssignmentsIntent = async (

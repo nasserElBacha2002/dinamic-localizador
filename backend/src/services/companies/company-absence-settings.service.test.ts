@@ -39,10 +39,10 @@ describe("companyAbsenceSettingsService", () => {
 
   it("OWNER can read absence settings with catalog ensure", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
     const { companyAbsenceSettingsService } = await import("./company-absence-settings.service");
 
@@ -77,10 +77,10 @@ describe("companyAbsenceSettingsService", () => {
 
   it("rejects unknown absence type on update", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
     const { companyAbsenceSettingsService } = await import("./company-absence-settings.service");
 
@@ -125,12 +125,12 @@ describe("companyAbsenceSettingsService", () => {
 
   it("initializes balances only for auto-assign settings on active types", async () => {
     setupUnitTestEnv();
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
     const { companyAbsenceSettingsService } = await import("./company-absence-settings.service");
 
     const createdBalances: Array<{ absenceTypeId: string; totalDays: number }> = [];
@@ -192,12 +192,12 @@ describe("companyAbsenceSettingsService", () => {
 
   it("passes transaction to createIfNotExists when provided", async () => {
     setupUnitTestEnv();
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
     const { companyAbsenceSettingsService } = await import("./company-absence-settings.service");
 
     const fakeTransaction = { id: "tx-1" } as import("mssql").Transaction;

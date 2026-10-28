@@ -1,13 +1,13 @@
 import sql from "mssql";
 import { env } from "../../config/env";
 import { getPool } from "../../database/connection";
-import { companyDeletionRecordRepository } from "../../repositories/company-deletion-record.repository";
-import { companyRepository } from "../../repositories/company.repository";
+import { companyDeletionRecordRepository } from "../../repositories/companies/company-deletion-record.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
 import {
   assertNoCompanyResidues,
   deleteCompanyIdentityAndConfigSetBased,
   deleteCompanyOperationalDataSetBased,
-} from "../../repositories/company-purge.repository";
+} from "../../repositories/companies/company-purge.repository";
 import { pendingStorageDeletionRepository } from "../../repositories/pending-storage-deletion.repository";
 import type { Company } from "../../types/company";
 import {

@@ -8,7 +8,7 @@ import type { BotSession } from "../../types/twilio.types";
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import type { WhatsAppInboundContext } from "../../types/whatsapp-company-context";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
-import { runWithBotRuntimeContext } from "../../utils/bot-runtime-context";
+import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 import { extractMessageFromTwiml } from "../../utils/twiml-message";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { mockAdminAlertSideEffects } from "../../test-helpers/mock-admin-alert-side-effects";
@@ -220,9 +220,9 @@ const setupCommonWebhookMocks = async (options: {
   const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
   const { companyModuleService } = await import("../companies/company-module.service");
   const { botSessionService } = await import("../bot/bot-session.service");
-  const { employeeRepository } = await import("../../repositories/employee.repository");
+  const { employeeRepository } = await import("../../repositories/employees/employee.repository");
   const { attendanceNotificationRepository } = await import(
-    "../../repositories/attendance-notification.repository"
+    "../../repositories/admin-alerts/attendance-notification.repository"
   );
   const { whatsappUsageQuotaService } = await import("./whatsapp-usage-quota.service");
 
@@ -381,7 +381,7 @@ describe("whatsapp webhook unknown employee", () => {
       inbound: { employeeId: employeeA },
       simulation: { employeeIdOverride: null },
       setup: async () => {
-        const { employeeRepository } = await import("../../repositories/employee.repository");
+        const { employeeRepository } = await import("../../repositories/employees/employee.repository");
         mock.method(employeeRepository, "findById", async () => null);
       },
     });
@@ -398,7 +398,7 @@ describe("whatsapp webhook unknown employee", () => {
       }),
       simulation: { employeeIdOverride: null },
       setup: async () => {
-        const { employeeRepository } = await import("../../repositories/employee.repository");
+        const { employeeRepository } = await import("../../repositories/employees/employee.repository");
         mock.method(employeeRepository, "findById", async () => null);
       },
     });
@@ -409,7 +409,7 @@ describe("whatsapp webhook unknown employee", () => {
   it("does not create attendance for unknown employee", async () => {
     setupUnitTestEnv();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
     const { botSessionService } = await import("../bot/bot-session.service");
     let attendanceCreates = 0;
     let sessionCreates = 0;
@@ -924,7 +924,7 @@ describe("whatsapp webhook multi-company isolation", () => {
   it("scopes employee lookup to inbound company context", async () => {
     setupUnitTestEnv();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     let findByIdCompanyId: string | null = null;
 
     await setupCommonWebhookMocks({ companyId: companyA });
@@ -984,7 +984,7 @@ describe("whatsapp webhook bot simulator regression", () => {
   it("works with forced company context and records greeting intent", async () => {
     setupUnitTestEnv();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
-    const { getBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { getBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     await setupCommonWebhookMocks({ companyId: companyA });
 
@@ -1006,13 +1006,13 @@ describe("whatsapp webhook bot simulator regression", () => {
     const { env } = await import("../../config/env");
     Object.assign(env, { TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000" });
     const { whatsappBotService } = await import("./whatsapp-bot.service");
-    const { whatsappMessageRepository } = await import("../../repositories/whatsapp-message.repository");
+    const { whatsappMessageRepository } = await import("../../repositories/whatsapp/whatsapp-message.repository");
     const { whatsappWebhookEventRepository } = await import(
-      "../../repositories/whatsapp-webhook-event.repository"
+      "../../repositories/whatsapp/whatsapp-webhook-event.repository"
     );
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
     const { companyModuleService } = await import("../companies/company-module.service");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { botSessionService } = await import("../bot/bot-session.service");
     let attendanceCreates = 0;
 
@@ -1052,7 +1052,7 @@ describe("whatsapp webhook bot simulator regression", () => {
     }));
     mock.method(whatsappMessageRepository, "updateProcessingStatus", async () => undefined);
 
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
     mock.method(attendanceRepository, "create", async () => {
       attendanceCreates += 1;
       throw new Error("should not create attendance");
@@ -1096,7 +1096,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
       setup: async () => {
         const { employeeWorkdayAvailabilityRepository } = await import(
-          "../../repositories/employee-workday-availability.repository"
+          "../../repositories/workdays/employee-workday-availability.repository"
         );
         mock.method(employeeWorkdayAvailabilityRepository, "listTodayWorkdaysForEmployee", async () => [
           {
@@ -1133,7 +1133,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
       setup: async () => {
         const { employeeAssignmentQueryRepository } = await import(
-          "../../repositories/employee-assignment-query.repository"
+          "../../repositories/employees/employee-assignment-query.repository"
         );
         mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
           sampleAssignment(),
@@ -1152,7 +1152,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
       setup: async () => {
         const { employeeAssignmentQueryRepository } = await import(
-          "../../repositories/employee-assignment-query.repository"
+          "../../repositories/employees/employee-assignment-query.repository"
         );
         mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
           sampleAssignment(),
@@ -1178,7 +1178,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
       setup: async () => {
         const { employeeAssignmentQueryRepository } = await import(
-          "../../repositories/employee-assignment-query.repository"
+          "../../repositories/employees/employee-assignment-query.repository"
         );
         mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
           sampleAssignment(),
@@ -1219,10 +1219,10 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       setup: async () => {
         const { botSessionService } = await import("../bot/bot-session.service");
         const { employeeAssignmentQueryRepository } = await import(
-          "../../repositories/employee-assignment-query.repository"
+          "../../repositories/employees/employee-assignment-query.repository"
         );
         const { employeeWorkdayRepository } = await import(
-          "../../repositories/employee-workday.repository"
+          "../../repositories/workdays/employee-workday.repository"
         );
         const { replacementRequestService } = await import("../replacement-request.service");
         const menuOptions = buildAvailableMenuOptions(enabledStates()).map((option) => option.key);
@@ -1280,7 +1280,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       inbound: { employeeId: employeeA },
       simulation: { employeeIdOverride: null },
       setup: async () => {
-        const { employeeRepository } = await import("../../repositories/employee.repository");
+        const { employeeRepository } = await import("../../repositories/employees/employee.repository");
         mock.method(employeeRepository, "findById", async () => null);
       },
     });

@@ -44,12 +44,12 @@ const ALLOWLISTED_FILES = new Set([
 const ALLOWED_LEGACY_REFERENCES: Record<string, RegExp[]> = {
   "backend/src/utils/legacy-operation-session-context.ts": [/inventoryId/, /inventoryOptions/],
   "backend/src/constants/operation-import.ts": [/tienda/, /Tienda/],
-  "backend/src/repositories/service.repository.ts": [/store_format/, /@serviceFormat/],
+  "backend/src/repositories/locations/service.repository.ts": [/store_format/, /@serviceFormat/],
   "backend/src/utils/row-mappers.ts": [/store_format/],
   "backend/src/utils/bot-session-states.ts": [/WAITING_.*OPERATION_SELECTION/],
   "backend/src/constants/company-location-types.ts": [/store_format/],
   "backend/src/types/twilio.types.ts": [/inventoryId/, /inventoryOptions/],
-  "backend/src/utils/bot-runtime-context.ts": [/\.getStore\(\)/],
+  "backend/src/utils/bot/bot-runtime-context.ts": [/\.getStore\(\)/],
   "backend/src/utils/bot-runtime-settings-scope.ts": [/\.getStore\(\)/],
   "backend/src/scripts/export-database-services.ts": [/store_format/],
   "backend/src/routes/api-route-aliases.test.ts": [

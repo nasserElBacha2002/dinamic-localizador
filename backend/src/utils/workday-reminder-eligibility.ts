@@ -2,7 +2,7 @@ import {
   ATTENDANCE_REMINDER_LEAD_MINUTES,
   NO_CHECKIN_AT_START_WINDOW_MINUTES,
 } from "../constants/attendance-notification";
-import { buildOperationStartDueWindow, buildReminderDueWindow } from "./reminder-time-window";
+import { buildOperationStartDueWindow, buildReminderDueWindow } from "./attendance/reminder-time-window";
 
 export type ReminderOperationKind = "ONE_TIME" | "RECURRING";
 

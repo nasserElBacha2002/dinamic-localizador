@@ -1,4 +1,4 @@
-import type { BotSimulationMode, BotSimulatorMessage } from "../utils/bot-runtime-context";
+import type { BotSimulationMode, BotSimulatorMessage } from "../utils/bot/bot-runtime-context";
 
 export type BotSimulationSession = {
   id: string;

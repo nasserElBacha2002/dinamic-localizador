@@ -34,8 +34,8 @@ describe("companyModuleService", () => {
 
   it("lists all default modules for a company", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companyModuleRepository } = await import("../../repositories/company-module.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companyModuleRepository } = await import("../../repositories/companies/company-module.repository");
     const { companyModuleService } = await import("./company-module.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -53,8 +53,8 @@ describe("companyModuleService", () => {
 
   it("merges missing module rows with default enabled state", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companyModuleRepository } = await import("../../repositories/company-module.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companyModuleRepository } = await import("../../repositories/companies/company-module.repository");
     const { companyModuleService } = await import("./company-module.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -71,8 +71,8 @@ describe("companyModuleService", () => {
 
   it("updates modules when requester is platform admin", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companyModuleRepository } = await import("../../repositories/company-module.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companyModuleRepository } = await import("../../repositories/companies/company-module.repository");
     const { companyModuleService } = await import("./company-module.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -92,8 +92,8 @@ describe("companyModuleService", () => {
 
   it("rejects update when all core modules would be disabled", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companyModuleRepository } = await import("../../repositories/company-module.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companyModuleRepository } = await import("../../repositories/companies/company-module.repository");
     const { companyModuleService } = await import("./company-module.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -119,7 +119,7 @@ describe("companyModuleService", () => {
 
   it("rejects update when requester is not platform admin", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyModuleService } = await import("./company-module.service");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
@@ -140,8 +140,8 @@ describe("companyModuleService", () => {
 
   it("ensures default modules for older companies", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companyModuleRepository } = await import("../../repositories/company-module.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companyModuleRepository } = await import("../../repositories/companies/company-module.repository");
     const { companyModuleService } = await import("./company-module.service");
 
     let ensured = false;

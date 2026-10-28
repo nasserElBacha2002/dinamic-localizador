@@ -4,12 +4,12 @@ import { InvalidCoordinatesError } from "../../../utils/haversine";
 import { parseOperationSelection } from "../../../utils/intent";
 import { maskPhoneNumberForLog } from "../../../utils/phone";
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
-import { employeeRepository } from "../../../repositories/employee.repository";
+import { employeeRepository } from "../../../repositories/employees/employee.repository";
 import { buildForwardedLocationDedupKey } from "../../../utils/admin-alert/dedup-keys";
 import {
   extractLocationMessageMetadata,
   isExplicitlyForwardedLocation,
-} from "../../../utils/location-message-metadata";
+} from "../../../utils/whatsapp/location-message-metadata";
 import { emitAdminAlertSafely } from "../../admin-alerts/admin-alert-emit.helpers";
 import { parseBotIntent } from "../../bot/bot-intent.parser";
 import {
@@ -22,7 +22,7 @@ import {
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "../../bot/bot-response.builder";
 import { logWhatsAppAttendanceEvent } from "../../../utils/whatsapp-notification-observability";
-import { twilioWebhookPayloadToUnknownRecord } from "../../../utils/twilio-webhook-payload";
+import { twilioWebhookPayloadToUnknownRecord } from "../../../utils/whatsapp/twilio-webhook-payload";
 import {
   handleActiveAbsenceSession,
   handleAbsenceIntent,

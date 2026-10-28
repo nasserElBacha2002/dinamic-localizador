@@ -1,4 +1,4 @@
-import { adminDynamicAttendanceAlertRepository } from "../../repositories/admin-dynamic-attendance-alert.repository";
+import { adminDynamicAttendanceAlertRepository } from "../../repositories/admin-alerts/admin-dynamic-attendance-alert.repository";
 import type { AdminAlertOutboxObligation } from "../../types/admin-alert";
 import { minutesBetween } from "../../utils/admin-alert/dynamic-attendance-due-at";
 import { logAdminAlertEvent } from "../../utils/admin-alert/observability";

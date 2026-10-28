@@ -1,7 +1,7 @@
 import { env } from "../../config/env";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type { CompanySettings } from "../../types/company";
 
 export type GeofencePolicySource = "service" | "company_settings" | "operational_defaults" | "environment";

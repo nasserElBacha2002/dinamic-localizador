@@ -1,7 +1,7 @@
 import type { CompanyModuleKey } from "../../constants/company-modules";
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import type { BotSession } from "../../types/twilio.types";
-import { getBotNow } from "../../utils/bot-runtime-context";
+import { getBotNow } from "../../utils/bot/bot-runtime-context";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { botSessionService } from "./bot-session.service";
 import {

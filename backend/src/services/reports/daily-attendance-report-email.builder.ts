@@ -1,6 +1,6 @@
 import type { DailyAttendanceReportPayload } from "../../types/daily-attendance-report";
-import { escapeHtml } from "../../utils/daily-attendance-report-email";
-import { getAttendanceIncidentLabel, getAttendanceIncidentPriority } from "../../utils/attendance-report-presentation";
+import { escapeHtml } from "../../utils/reports/daily-attendance-report-email";
+import { getAttendanceIncidentLabel, getAttendanceIncidentPriority } from "../../utils/attendance/attendance-report-presentation";
 
 const labels: Record<string, string> = { MISSING_CHECKIN: "No registró llegada", MISSING_CHECKOUT: "No registró salida", LATE: "Llegó tarde", EARLY_LEAVE: "Salida anticipada", UNAVAILABLE: "Avisó que no asistiría", PENDING_REVIEW: "Pendiente de revisión", REJECTED: "Asistencia rechazada", OUTSIDE_GEOFENCE: "Fuera de geocerca", CONFIRMED_BUT_ABSENT: "Confirmó asistencia pero faltó", UNANNOUNCED_ABSENCE: "Falta sin aviso", INCOMPLETE: "Jornada abierta" };
 const priority: Record<string, number> = { REJECTED: 1, PENDING_REVIEW: 2, OUTSIDE_GEOFENCE: 3, CONFIRMED_BUT_ABSENT: 4, UNANNOUNCED_ABSENCE: 5, MISSING_CHECKIN: 6, MISSING_CHECKOUT: 7, EARLY_LEAVE: 8, LATE: 9, UNAVAILABLE: 10 };

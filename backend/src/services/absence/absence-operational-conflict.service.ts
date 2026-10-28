@@ -1,12 +1,12 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { employeeDeactivationRepository } from "../../repositories/employee-deactivation.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import {
   buildResolutionCommandId,
   type AbsenceOperationalResolutionCode,
@@ -15,10 +15,10 @@ import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 import { auditService } from "../audit.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
-import { operationCoverageEventRepository } from "../../repositories/operation-coverage-event.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { resolveOperationOperationalDate } from "../../utils/operation-change-events";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { resolveOperationOperationalDate } from "../../utils/operations/operation-change-events";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { employeeAvailabilityService } from "../employees/employee-availability.service";
 import { operationAssignmentCore } from "../operations/operation-assignment-core.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";

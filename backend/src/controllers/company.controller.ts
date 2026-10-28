@@ -8,7 +8,7 @@ import { companyService } from "../services/companies/company.service";
 import { companyUserService } from "../services/companies/company-user.service";
 import { platformAdminService } from "../services/companies/platform-admin.service";
 import { whatsappQuotaSettingsService } from "../services/whatsapp/whatsapp-quota-settings.service";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const companyController = {

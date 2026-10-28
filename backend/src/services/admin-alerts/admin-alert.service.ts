@@ -3,10 +3,10 @@ import {
   type AdminAlertSeverity,
   type AdminAlertTemplateCategory,
 } from "../../constants/admin-alert";
-import { companyRepository } from "../../repositories/company.repository";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { adminAlertNotificationRepository } from "../../repositories/admin-alert-notification.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { adminAlertNotificationRepository } from "../../repositories/admin-alerts/admin-alert-notification.repository";
 import type {
   AdminAlertEmitInput,
   AdminAlertEmitResult,
@@ -14,7 +14,7 @@ import type {
 } from "../../types/admin-alert";
 import { buildAdminAlertTemplateVariables } from "../../utils/admin-alert/template-variables";
 import { logAdminAlertEvent } from "../../utils/admin-alert/observability";
-import { decideAdminNotificationChannel } from "../../utils/admin-notification-channel-policy";
+import { decideAdminNotificationChannel } from "../../utils/admin-alert/admin-notification-channel-policy";
 import { normalizePhoneNumber } from "../../utils/phone";
 
 const isValidE164 = (phone: string): boolean => /^\+[1-9]\d{6,14}$/.test(phone);

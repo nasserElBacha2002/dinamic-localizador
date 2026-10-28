@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { adminAlertNotificationRepository } from "../../repositories/admin-alert-notification.repository";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { adminAlertNotificationRepository } from "../../repositories/admin-alerts/admin-alert-notification.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import {

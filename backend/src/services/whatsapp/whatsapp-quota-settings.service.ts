@@ -5,8 +5,8 @@ import {
   type WhatsAppQuotaMode,
 } from "../../constants/whatsapp-usage-quota";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { getPool } from "../../database/connection";
 import sql from "mssql";
 import type { UpdateWhatsAppQuotaSettingsInput } from "../../schemas/whatsapp-quota-settings.schema";

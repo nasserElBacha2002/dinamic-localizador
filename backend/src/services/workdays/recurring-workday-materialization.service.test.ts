@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationScheduleRepository } from "../../repositories/operation-schedule.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { WEEKDAYS } from "../../constants/weekday";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
 import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
 import type { OperationWorkday } from "../../types/workday";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 
 const emptyAbsenceReconciliation = async () => ({

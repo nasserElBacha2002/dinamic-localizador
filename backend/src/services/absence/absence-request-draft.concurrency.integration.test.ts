@@ -15,8 +15,8 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { getPool } from "../../database/connection";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
-import { userRepository } from "../../repositories/user.repository";
-import { absenceRequestDraftRepository } from "../../repositories/absence-request-draft.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
+import { absenceRequestDraftRepository } from "../../repositories/absence/absence-request-draft.repository";
 import { absenceRequestDraftService } from "./absence-request-draft.service";
 import { AppError } from "../../errors/app-error";
 

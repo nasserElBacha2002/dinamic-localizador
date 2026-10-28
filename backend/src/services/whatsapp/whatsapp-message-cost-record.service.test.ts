@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp-message-cost-ledger.repository";
+import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 import { whatsappMessageCostRecordService } from "./whatsapp-message-cost-record.service";
 
 describe("whatsappMessageCostRecordService", () => {

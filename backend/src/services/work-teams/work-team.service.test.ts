@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { normalizeWorkTeamName } from "../../utils/work-team-name";
-import { hashWorkTeamMembers } from "../../utils/work-team-snapshot-hash";
+import { normalizeWorkTeamName } from "../../utils/work-teams/work-team-name";
+import { hashWorkTeamMembers } from "../../utils/work-teams/work-team-snapshot-hash";
 import { classifyAssignmentOverlap } from "../operations/operation-assignment-core.service";
 
 describe("work team utilities", () => {

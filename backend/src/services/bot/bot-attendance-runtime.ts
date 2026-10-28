@@ -5,7 +5,7 @@ import {
   combineCheckoutValidation,
   evaluateCheckoutTime,
   type CheckoutValidationResult,
-} from "../../utils/checkout-validation";
+} from "../../utils/attendance/checkout-validation";
 import { evaluateAttendanceGeofence } from "./bot-geofence.validator";
 
 /**

@@ -6,23 +6,23 @@ import {
   DAILY_ATTENDANCE_REPORT_TEMPLATE_VERSION,
 } from "../../constants/daily-attendance-report";
 import { getPool } from "../../database/connection";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { dailyAttendanceReportDeliveryRepository } from "../../repositories/daily-attendance-report-delivery.repository";
-import { dailyAttendanceReportRunRepository } from "../../repositories/daily-attendance-report-run.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { dailyAttendanceReportDeliveryRepository } from "../../repositories/reports/daily-attendance-report-delivery.repository";
+import { dailyAttendanceReportRunRepository } from "../../repositories/reports/daily-attendance-report-run.repository";
 import { sendEmail } from "../email.service";
 import { dailyAttendanceReportAggregator } from "./daily-attendance-report-aggregator.service";
 import { buildDailyAttendanceReportEmail } from "./daily-attendance-report-email.builder";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import {
   hasLocalReportTimeArrived,
   listCatchUpReportDates,
   normalizeReportTimeHHmm,
   resolveReportDateLocal,
-} from "../../utils/daily-attendance-report-time";
-import { validateManualReportDate } from "../../utils/daily-attendance-report-manual-date";
-import { logDailyAttendanceReportEvent } from "../../utils/daily-attendance-report-observability";
-import { assertDailyReportAudienceSchemaReady } from "../../utils/daily-attendance-report-schema-guard";
+} from "../../utils/reports/daily-attendance-report-time";
+import { validateManualReportDate } from "../../utils/reports/daily-attendance-report-manual-date";
+import { logDailyAttendanceReportEvent } from "../../utils/reports/daily-attendance-report-observability";
+import { assertDailyReportAudienceSchemaReady } from "../../utils/reports/daily-attendance-report-schema-guard";
 import type { DailyAttendanceReportRun } from "../../types/daily-attendance-report";
 import { buildDailyAttendanceReportXlsx, DAILY_XLSX_CONTENT_TYPE } from "./daily-attendance-report-xlsx.builder";
 

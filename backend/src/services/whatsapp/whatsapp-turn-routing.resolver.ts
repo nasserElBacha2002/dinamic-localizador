@@ -30,7 +30,7 @@ import {
 import type { CompanyModuleKey } from "../../constants/company-modules";
 import type { BotSession } from "../../types/twilio.types";
 import type { PlannedTurnDestination } from "../../types/whatsapp-usage-quota";
-import { isExplicitIntentCompatibleWithSession } from "../../utils/bot-session-intent";
+import { isExplicitIntentCompatibleWithSession } from "../../utils/bot/bot-session-intent";
 import {
   isGlobalBackCommand,
   isGlobalCancelCommand,

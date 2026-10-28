@@ -10,7 +10,7 @@ describe("adminAlertService", () => {
   });
 
   it("skips enqueue when company not found", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { adminAlertService } = await import("./admin-alert.service");
 
     mock.method(companyRepository, "findById", async () => null);
@@ -26,8 +26,8 @@ describe("adminAlertService", () => {
   });
 
   it("skips enqueue when admin alerts disabled", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { adminAlertService } = await import("./admin-alert.service");
 
     mock.method(companyRepository, "findById", async () => ({
@@ -51,10 +51,10 @@ describe("adminAlertService", () => {
   });
 
   it("skips when no enabled recipients", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
 
@@ -80,13 +80,13 @@ describe("adminAlertService", () => {
   });
 
   it("enqueues for multiple recipients and skips invalid phone", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
 
@@ -152,13 +152,13 @@ describe("adminAlertService", () => {
   });
 
   it("dedup skips when outbox already exists", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
 
@@ -203,13 +203,13 @@ describe("adminAlertService", () => {
   });
 
   it("skips recipients created after the domain event", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
 
@@ -259,13 +259,13 @@ describe("adminAlertService", () => {
   });
 
   it("enqueues REQUEST alerts for receiveRequestAlerts recipients", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
 
@@ -329,13 +329,13 @@ describe("adminAlertService", () => {
   });
 
   it("does not enqueue informational alerts under DAILY_EMAIL mode", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
 

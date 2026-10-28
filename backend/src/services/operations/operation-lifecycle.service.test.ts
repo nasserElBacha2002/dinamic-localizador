@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { operationRepository } from "../../repositories/operation.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { mockAdminAlertSideEffects } from "../../test-helpers/mock-admin-alert-side-effects";
 import type { Operation } from "../../types/domain";

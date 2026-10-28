@@ -14,7 +14,7 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { getPool } from "../../database/connection";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
-import { userRepository } from "../../repositories/user.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { companyLifecycleService } from "./company-lifecycle.service";
 
 const uniqueName = (): string =>

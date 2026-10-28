@@ -14,7 +14,7 @@ import {
 } from "../test-helpers/integration-test";
 import { getPool } from "../database/connection";
 import { applySqlScriptInTransaction } from "../database/run-migrations";
-import { isActiveOperationDuplicateError } from "../utils/active-operation-duplicate-errors";
+import { isActiveOperationDuplicateError } from "../utils/operations/active-operation-duplicate-errors";
 
 const migrationsDir =
   process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");

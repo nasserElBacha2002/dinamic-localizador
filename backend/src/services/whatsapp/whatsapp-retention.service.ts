@@ -7,9 +7,9 @@ import {
 import {
   defaultWhatsappRetentionPolicyParams,
   whatsappRetentionRepository,
-} from "../../repositories/whatsapp-retention.repository";
+} from "../../repositories/whatsapp/whatsapp-retention.repository";
 import { computeRetentionCutoff } from "../../utils/retention-cutoff";
-import { withDedicatedSessionAppLock } from "../../utils/whatsapp-retention-lock";
+import { withDedicatedSessionAppLock } from "../../utils/whatsapp/whatsapp-retention-lock";
 
 export type WhatsappRetentionRunResult = {
   skipped?: boolean;

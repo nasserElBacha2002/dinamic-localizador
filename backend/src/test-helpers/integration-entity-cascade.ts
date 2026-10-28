@@ -3,7 +3,7 @@ import { getPool } from "../database/connection";
 import {
   deleteCompanyIdentityAndConfigSetBased,
   deleteCompanyOperationalDataSetBased,
-} from "../repositories/company-purge.repository";
+} from "../repositories/companies/company-purge.repository";
 
 /**
  * Fixture-only cascades for integration cleanup / junk scripts.

@@ -6,10 +6,10 @@ import {
 } from "../../constants/absence-transitions";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type {
   CreateAbsenceRequestInput,
   ListAbsenceRequestsQuery,

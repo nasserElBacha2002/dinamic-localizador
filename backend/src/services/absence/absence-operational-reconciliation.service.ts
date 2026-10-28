@@ -4,14 +4,14 @@ import {
 } from "../../types/absence-operational-impact";
 import { resolveAbsenceOperationalEffectPlan } from "../../domain/absence-operational-effects";
 import { AppError } from "../../errors/app-error";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import {
   absenceWorkdaySyncJobRepository,
   type AbsenceWorkdaySyncJob,
   type AbsenceWorkdaySyncOperation,
   type JobLeaseToken,
-} from "../../repositories/absence-workday-sync-job.repository";
+} from "../../repositories/absence/absence-workday-sync-job.repository";
 import { employeeWorkdayAbsenceReconciliationService } from "../workdays/employee-workday-absence-reconciliation.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import type sql from "mssql";

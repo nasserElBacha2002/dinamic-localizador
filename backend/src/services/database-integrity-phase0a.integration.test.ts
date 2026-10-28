@@ -18,9 +18,9 @@ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { AppError } from "../errors/app-error";
-import { absenceTypeRepository } from "../repositories/absence-type.repository";
-import { employeeRepository } from "../repositories/employee.repository";
-import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
+import { absenceTypeRepository } from "../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../repositories/employees/employee.repository";
+import { absenceBalanceRepository } from "../repositories/absence/absence-balance.repository";
 import { absenceRequestService } from "./absence/absence-request.service";
 import { attendanceService } from "./attendance/attendance.service";
 import { operationAssignmentService } from "./operations/operation-assignment.service";
@@ -65,7 +65,7 @@ describeDatabaseIntegration("database integrity phase0a H1 H2", () => {
   });
 
   const seedAbsenceCompany = async () => {
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(admin);
     actorUserId = admin.id;
@@ -231,7 +231,7 @@ describeDatabaseIntegration("database integrity phase0a H1 H2", () => {
 
   it("H2: concurrent reviews → 1 success / 1 conflict and exactly one review row", async () => {
     const pool = getPool();
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(admin);
     actorUserId = admin.id;

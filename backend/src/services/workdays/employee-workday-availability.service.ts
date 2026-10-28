@@ -1,7 +1,7 @@
 import sql from "mssql";
-import { operationRepository } from "../../repositories/operation.repository";
-import { employeeWorkdayAvailabilityRepository } from "../../repositories/employee-workday-availability.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { employeeWorkdayAvailabilityRepository } from "../../repositories/workdays/employee-workday-availability.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { workdayMaterializationService } from "./workday-materialization.service";
 import type {
   EmployeeWorkdayCheckInCandidate,
@@ -13,15 +13,15 @@ import {
   evaluateCheckInWindow,
   isWithinCheckInAvailabilityWindow,
   resolveCheckInCandidateRange,
-} from "../../utils/resolve-check-in-availability-window";
-import { getSimulationSessionId } from "../../utils/bot-runtime-context";
+} from "../../utils/attendance/resolve-check-in-availability-window";
+import { getSimulationSessionId } from "../../utils/bot/bot-runtime-context";
 import { getPendingOperationExpirationHours } from "../../utils/bot-runtime-settings-scope";
 import {
   isPendingCheckoutEligible,
   resolveCheckoutEligibilityEndAt,
-} from "../../utils/pending-checkout-eligibility";
+} from "../../utils/attendance/pending-checkout-eligibility";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 export type CheckInCandidateRejectionReason =
   | "BEFORE_CHECK_IN_WINDOW"

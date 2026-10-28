@@ -26,7 +26,7 @@ describe("sql-sort whitelist", () => {
 describe("sql injection regression — parameterized hotspots", () => {
   it("absence-attachment markStatus / listForCleanup use bind parameters", () => {
     const src = readFileSync(
-      path.join(here, "../repositories/absence-attachment.repository.ts"),
+      path.join(here, "../repositories/absence/absence-attachment.repository.ts"),
       "utf8",
     );
     assert.doesNotMatch(src, /status = N'\$\{current\.status\}'/);

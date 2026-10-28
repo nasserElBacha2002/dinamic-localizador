@@ -23,7 +23,7 @@ describe("invitation preview + token lifecycle", () => {
 
   it("service.preview returns INVALID for unknown token", async () => {
     const { userInvitationRepository } = await import(
-      "../../repositories/user-invitation.repository"
+      "../../repositories/identity/user-invitation.repository"
     );
     const { userInvitationService } = await import("./user-invitation.service");
 
@@ -35,7 +35,7 @@ describe("invitation preview + token lifecycle", () => {
 
   it("service.preview rejects expired pending invitation (returns INVALID)", async () => {
     const { userInvitationRepository } = await import(
-      "../../repositories/user-invitation.repository"
+      "../../repositories/identity/user-invitation.repository"
     );
     const { userInvitationService } = await import("./user-invitation.service");
     const { auditService } = await import("../audit.service");
@@ -61,7 +61,7 @@ describe("invitation preview + token lifecycle", () => {
 
   it("service.preview rejects already-accepted token (replay surface)", async () => {
     const { userInvitationRepository } = await import(
-      "../../repositories/user-invitation.repository"
+      "../../repositories/identity/user-invitation.repository"
     );
     const { userInvitationService } = await import("./user-invitation.service");
 

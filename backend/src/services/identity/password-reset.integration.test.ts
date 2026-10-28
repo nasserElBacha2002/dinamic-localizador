@@ -26,9 +26,9 @@ describeDatabaseIntegration("password reset SQL concurrency", () => {
 
   it("rotates tokens, consumes once under concurrency, and invalidates prior JWTs", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { passwordResetTokenRepository } = await import(
-      "../../repositories/password-reset-token.repository"
+      "../../repositories/identity/password-reset-token.repository"
     );
     const { passwordResetService, passwordResetMailer } = await import("./password-reset.service");
     const { authService } = await import("./auth.service");
@@ -127,7 +127,7 @@ describeDatabaseIntegration("password reset SQL concurrency", () => {
 
   it("invalidates an issued token when SMTP send throws", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { passwordResetService, passwordResetMailer } = await import("./password-reset.service");
     const sql = (await import("mssql")).default;
 
@@ -167,7 +167,7 @@ describeDatabaseIntegration("password reset SQL concurrency", () => {
 
   it("never persists plaintext reset tokens", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { passwordResetService, passwordResetMailer } = await import("./password-reset.service");
     const sql = (await import("mssql")).default;
 
@@ -219,9 +219,9 @@ describeDatabaseIntegration("password reset SQL concurrency", () => {
 
   it("rejects an expired unconsumed token", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { passwordResetTokenRepository } = await import(
-      "../../repositories/password-reset-token.repository"
+      "../../repositories/identity/password-reset-token.repository"
     );
     const { passwordResetService } = await import("./password-reset.service");
     const { generateOpaqueToken, hashOpaqueToken: hashToken } = await import("../../utils/opaque-token");
@@ -258,9 +258,9 @@ describeDatabaseIntegration("password reset SQL concurrency", () => {
 
   it("keeps a consistent DB when forgot-password races reset-password", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { passwordResetTokenRepository } = await import(
-      "../../repositories/password-reset-token.repository"
+      "../../repositories/identity/password-reset-token.repository"
     );
     const { passwordResetService, passwordResetMailer } = await import("./password-reset.service");
     const { generateOpaqueToken, hashOpaqueToken: hashToken } = await import("../../utils/opaque-token");

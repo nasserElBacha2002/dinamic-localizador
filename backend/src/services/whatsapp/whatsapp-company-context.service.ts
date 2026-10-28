@@ -1,16 +1,16 @@
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { botSessionRepository } from "../../repositories/bot-session.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
+import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
 import type {
   ResolveWhatsAppCompanyContextInput,
   WhatsAppCompanyResolution,
   WhatsAppInboundContext,
   WhatsAppResolutionSource,
 } from "../../types/whatsapp-company-context";
-import { getBotRuntimeContext } from "../../utils/bot-runtime-context";
+import { getBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 import { maskPhoneNumberForLog, normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../../utils/phone";
 import {
   AMBIGUOUS_COMPANY_MESSAGE,

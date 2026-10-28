@@ -102,8 +102,8 @@ describe("whatsapp pending checkout expiration flows", () => {
     const { employeeWorkdayAvailabilityService } = await import(
       "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let registerCalls = 0;
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
@@ -144,8 +144,8 @@ describe("whatsapp pending checkout expiration flows", () => {
     const { employeeWorkdayAvailabilityService } = await import(
       "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let registerCalls = 0;
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
@@ -191,8 +191,8 @@ describe("whatsapp pending checkout expiration flows", () => {
       "../workdays/employee-workday-availability.service"
     );
     const { botSessionService } = await import("../bot/bot-session.service");
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let waitingLocationCalls = 0;
     let registerCalls = 0;
@@ -264,10 +264,10 @@ describe("whatsapp pending checkout expiration flows", () => {
     const { employeeWorkdayAvailabilityService } = await import(
       "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
     const { botSessionService } = await import("../bot/bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import(
-      "../../utils/bot-runtime-context"
+      "../../utils/bot/bot-runtime-context"
     );
 
     let registerCalls = 0;

@@ -24,7 +24,7 @@ describe("geofence policy cross-flow regression", () => {
   const employeeLon = serviceLon;
 
   it("company margin + service radius yield identical outcomes for REST and bot primitive", async () => {
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { geofencePolicyResolver } = await import("./geofence-policy.resolver");
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
     const { geolocationService } = await import("./geolocation.service");
@@ -85,7 +85,7 @@ describe("geofence policy cross-flow regression", () => {
   });
 
   it("missing custom settings falls back to env margin consistently", async () => {
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { geofencePolicyResolver } = await import("./geofence-policy.resolver");
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
 
@@ -100,7 +100,7 @@ describe("geofence policy cross-flow regression", () => {
   });
 
   it("settings repository error fails closed for REST and bot", async () => {
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { geofencePolicyResolver } = await import("./geofence-policy.resolver");
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
 

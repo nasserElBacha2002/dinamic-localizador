@@ -18,13 +18,13 @@ import { getPool } from "../database/connection";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { AppError } from "../errors/app-error";
 import { setAuditBeforeInsertHookForTests } from "../repositories/audit.repository";
-import { userInvitationRepository } from "../repositories/user-invitation.repository";
-import { userRepository } from "../repositories/user.repository";
+import { userInvitationRepository } from "../repositories/identity/user-invitation.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { attendanceService } from "./attendance/attendance.service";
 import { companyUserService } from "./companies/company-user.service";
 import { operationAssignmentService } from "./operations/operation-assignment.service";
 import { userInvitationService } from "./identity/user-invitation.service";
-import { generateInvitationToken, hashInvitationToken } from "../utils/invitation-token";
+import { generateInvitationToken, hashInvitationToken } from "../utils/identity/invitation-token";
 import { hashPassword, normalizeEmail } from "../utils/password";
 
 const uniqueCompanyName = (): string =>

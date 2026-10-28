@@ -2,7 +2,7 @@ import { AppError } from "../../errors/app-error";
 import type { OperationKind } from "../../constants/operation-kind";
 import type { Operation } from "../../types/domain";
 import type { ResolvedOperationWorkday } from "../../types/workday";
-import { resolveWorkDateFromScheduledStart } from "../../utils/work-date";
+import { resolveWorkDateFromScheduledStart } from "../../utils/workdays/work-date";
 
 const buildCheckInWindow = (
   expectedStartAt: Date,

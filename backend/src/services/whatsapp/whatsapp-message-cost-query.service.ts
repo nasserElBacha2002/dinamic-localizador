@@ -4,7 +4,7 @@ import {
   whatsappMessageCostLedgerRepository,
   type CostLedgerFilters,
   type WhatsappMessageCostLedgerRow,
-} from "../../repositories/whatsapp-message-cost-ledger.repository";
+} from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 import type {
   MessageCostDetailQuery,
   MessageCostMonthQuery,

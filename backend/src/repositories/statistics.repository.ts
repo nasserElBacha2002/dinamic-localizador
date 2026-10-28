@@ -18,7 +18,7 @@ import {
   calculatePunctualityRate,
   hasSufficientSample,
 } from "../utils/attendance-statistics-metrics";
-import { buildActionExceptions } from "../utils/statistics-action-exceptions";
+import { buildActionExceptions } from "../utils/statistics/statistics-action-exceptions";
 import {
   applyEmployeeWorkdayStatisticsFilters,
   buildEmployeeWorkdayStatisticsCte,
@@ -27,7 +27,7 @@ import {
 } from "../utils/employee-workday-statistics-projection";
 import { toDateOnlyString } from "../utils/row-mappers";
 import type { StatisticsRankingMode } from "../schemas/statistics.schema";
-import { emptyOperationalIncidentSummary } from "../utils/operational-incident-statistics";
+import { emptyOperationalIncidentSummary } from "../utils/statistics/operational-incident-statistics";
 
 const toNumber = (value: unknown): number => Number(value ?? 0);
 

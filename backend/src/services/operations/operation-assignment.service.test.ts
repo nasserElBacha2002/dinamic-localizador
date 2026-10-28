@@ -24,8 +24,8 @@ describe("operationAssignmentService", () => {
 
   it("rejects ONE_TIME assignment outside operation work date", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { operationWorkDateService } = await import("./operation-work-date.service");
     const { operationAssignmentService } = await import("./operation-assignment.service");
     const { AppError } = await import("../../errors/app-error");
@@ -77,13 +77,13 @@ describe("operationAssignmentService", () => {
       (sql as { Transaction: typeof sql.Transaction }).Transaction = OriginalTransaction;
     });
 
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { operationEmployeeRepository } = await import(
-      "../../repositories/operation-employee.repository"
+      "../../repositories/operations/operation-employee.repository"
     );
     const { operationWorkDateService } = await import("./operation-work-date.service");
-    const { operationShiftRepository } = await import("../../repositories/operation-shift.repository");
+    const { operationShiftRepository } = await import("../../repositories/operations/operation-shift.repository");
     const { recurringWorkdayMaterializationService } = await import(
       "../workdays/recurring-workday-materialization.service"
     );

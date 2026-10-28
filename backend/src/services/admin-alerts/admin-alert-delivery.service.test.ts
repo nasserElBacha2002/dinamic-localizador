@@ -40,10 +40,10 @@ describe("adminAlertDeliveryService", () => {
 
   it("skips send when recipient category disabled", async () => {
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertDeliveryService } = await import("./admin-alert-delivery.service");
 
@@ -88,13 +88,13 @@ describe("adminAlertDeliveryService", () => {
       "";
 
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertDeliveryService } = await import("./admin-alert-delivery.service");
 
@@ -153,10 +153,10 @@ describe("adminAlertDeliveryService", () => {
 
   it("REQUEST recipient with receiveRequestAlerts=false → SKIPPED", async () => {
     const { companyAlertRecipientRepository } = await import(
-      "../../repositories/company-alert-recipient.repository"
+      "../../repositories/companies/company-alert-recipient.repository"
     );
     const { adminAlertNotificationRepository } = await import(
-      "../../repositories/admin-alert-notification.repository"
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
     );
     const { adminAlertDeliveryService } = await import("./admin-alert-delivery.service");
 

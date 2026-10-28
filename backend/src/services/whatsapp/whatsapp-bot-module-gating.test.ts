@@ -3,7 +3,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { MODULE_DISABLED_MESSAGE } from "../bot/bot-response.builder";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
-import { runWithBotRuntimeContext } from "../../utils/bot-runtime-context";
+import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const employeeId = "00000000-0000-4000-8000-000000000002";
@@ -75,7 +75,7 @@ describe("whatsapp bot module gating", () => {
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { companyModuleService } = await import("../companies/company-module.service");
     const { botSessionService } = await import("../bot/bot-session.service");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
 
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
@@ -224,11 +224,11 @@ describe("whatsapp bot module gating", () => {
 
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { companyModuleService } = await import("../companies/company-module.service");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
-    const { whatsappMessageRepository } = await import("../../repositories/whatsapp-message.repository");
+    const { whatsappMessageRepository } = await import("../../repositories/whatsapp/whatsapp-message.repository");
     const { whatsappWebhookEventRepository } = await import(
-      "../../repositories/whatsapp-webhook-event.repository"
+      "../../repositories/whatsapp/whatsapp-webhook-event.repository"
     );
     const { whatsappFlowTraceService } = await import("./whatsapp-flow-trace.service");
 
@@ -348,7 +348,7 @@ describe("whatsapp bot session module gating", () => {
     await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("../bot/bot-session.service");
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
 
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
@@ -389,7 +389,7 @@ describe("whatsapp bot session module gating", () => {
     await mockQuotaAdmittedOff();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("../bot/bot-session.service");
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
 
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);

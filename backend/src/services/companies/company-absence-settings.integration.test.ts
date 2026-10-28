@@ -11,10 +11,10 @@ import { apiRequest, signTestToken, startTestServer } from "../../test-helpers/h
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { getPool } from "../../database/connection";
 import { STANDARD_ABSENCE_TYPE_CODES } from "../../constants/company-absence";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { companyAbsenceSettingsRepository } from "../../repositories/company-absence-settings.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { companyAbsenceSettingsRepository } from "../../repositories/companies/company-absence-settings.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { hashPassword } from "../../utils/password";
@@ -332,7 +332,7 @@ describeDatabaseIntegration("company absence settings integration", () => {
     });
     createdEmployeeIds.push(employee.id);
 
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
     const vacationType = await absenceTypeRepository.findByCode(companyId, "VACATION");
     const studyType = await absenceTypeRepository.findByCode(companyId, "STUDY_DAY");
     const sickType = await absenceTypeRepository.findByCode(companyId, "SICK_LEAVE");

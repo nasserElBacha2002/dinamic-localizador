@@ -16,7 +16,7 @@ import {
   toSystemRuntimeLogSummary,
 } from "../utils/system-logs/present";
 import { assertSystemLogsStorageAvailable } from "../utils/system-logs/storage-availability";
-import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
+import { withDedicatedSessionAppLock } from "../utils/whatsapp/whatsapp-retention-lock";
 
 const clampPage = (page: number): number => {
   const n = Number(page);

@@ -13,7 +13,7 @@ describe("adminAlertMissingCheckinService (legacy WhatsApp disabled)", () => {
     const { adminAlertService } = await import("./admin-alert.service");
     const { adminAlertMissingCheckinService } = await import("./admin-alert-missing-checkin.service");
     const { adminAlertContextRepository } = await import(
-      "../../repositories/admin-alert-context.repository"
+      "../../repositories/admin-alerts/admin-alert-context.repository"
     );
     const { attendanceThresholdAlertService } = await import(
       "./attendance-threshold-alert.service"
@@ -66,7 +66,7 @@ describe("adminDynamicAttendanceAlertService", () => {
 
   it("enqueues due obligations for the three dynamic types", async () => {
     const { adminDynamicAttendanceAlertRepository } = await import(
-      "../../repositories/admin-dynamic-attendance-alert.repository"
+      "../../repositories/admin-alerts/admin-dynamic-attendance-alert.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
     const { adminDynamicAttendanceAlertService } = await import(

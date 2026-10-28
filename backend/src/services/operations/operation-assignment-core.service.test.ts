@@ -10,7 +10,7 @@ describe("operationAssignmentCore", () => {
 
   it("creates a ONE_TIME assignment without an assignment WhatsApp outbox side effect", async () => {
     const { operationEmployeeRepository } = await import(
-      "../../repositories/operation-employee.repository"
+      "../../repositories/operations/operation-employee.repository"
     );
     const { workdayMaterializationService } = await import("../workdays/workday-materialization.service");
     const { operationAssignmentCore } = await import("./operation-assignment-core.service");

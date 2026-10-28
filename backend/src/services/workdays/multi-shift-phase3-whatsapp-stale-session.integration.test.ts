@@ -23,20 +23,20 @@ import type { BotSession } from "../../types/twilio.types";
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import type { WhatsAppInboundContext } from "../../types/whatsapp-company-context";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
-import { runWithBotRuntimeContext } from "../../utils/bot-runtime-context";
+import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 import { extractMessageFromTwiml } from "../../utils/twiml-message";
 import {
   DUPLICATE_MESSAGE_SID_RESPONSE,
   WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
 } from "../bot/bot-response.builder";
 import { formatBotWorkdaySelectionLines, formatWorkdayScheduleLine } from "../../utils/employee-assignment-format";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { operationScheduleModeTransitionService } from "../operations/operation-schedule-mode-transition.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { handleOperationSelection, startCheckIn } from "../bot/check-in-attendance.flow";
 
 const companyA = "11111111-1111-1111-1111-111111111111";
@@ -187,9 +187,9 @@ const setupCommonWebhookMocks = async () => {
   const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
   const { companyModuleService } = await import("../companies/company-module.service");
   const { botSessionService } = await import("../bot/bot-session.service");
-  const { employeeRepository } = await import("../../repositories/employee.repository");
+  const { employeeRepository } = await import("../../repositories/employees/employee.repository");
   const { attendanceNotificationRepository } = await import(
-    "../../repositories/attendance-notification.repository"
+    "../../repositories/admin-alerts/attendance-notification.repository"
   );
   const { whatsappUsageQuotaService } = await import("../whatsapp/whatsapp-usage-quota.service");
 
@@ -374,7 +374,7 @@ describe("phase3 whatsapp stale-session / multi-shift (mock dry-run)", () => {
 
     await runWithBotRuntimeContext(ctx, async () => {
       const { addVirtualCheckIn, hasVirtualActiveRecord, completeVirtualCheckOut } = await import(
-        "../../utils/bot-runtime-context"
+        "../../utils/bot/bot-runtime-context"
       );
       assert.equal(hasVirtualActiveRecord(employeeWorkdayMorning), true);
       assert.equal(hasVirtualActiveRecord(employeeWorkdayAfternoon), false);
@@ -405,13 +405,13 @@ describe("phase3 whatsapp stale-session / multi-shift (mock dry-run)", () => {
     const { env } = await import("../../config/env");
     Object.assign(env, { TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000" });
     const { whatsappBotService } = await import("../whatsapp/whatsapp-bot.service");
-    const { whatsappMessageRepository } = await import("../../repositories/whatsapp-message.repository");
+    const { whatsappMessageRepository } = await import("../../repositories/whatsapp/whatsapp-message.repository");
     const { whatsappWebhookEventRepository } = await import(
-      "../../repositories/whatsapp-webhook-event.repository"
+      "../../repositories/whatsapp/whatsapp-webhook-event.repository"
     );
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
     const { companyModuleService } = await import("../companies/company-module.service");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { botSessionService } = await import("../bot/bot-session.service");
 
     mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () =>

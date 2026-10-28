@@ -8,18 +8,18 @@ import {
 } from "../../constants/operation-import";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { operationRepository } from "../../repositories/operation.repository";
-import { serviceRepository } from "../../repositories/service.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
 import type { Service } from "../../types/domain";
 import type {
   OperationImportConfirmRow,
   OperationImportPreviewResult,
   OperationImportPreviewRow,
 } from "../../types/operation-import";
-import { mapImportHeaders } from "../../utils/operation-import-headers";
-import { createOperationImportDateTimeUtils } from "../../utils/operation-import-datetime";
-import { isOperationStartInPast } from "../../utils/operation-lifecycle";
-import { isActiveOperationDuplicateError } from "../../utils/active-operation-duplicate-errors";
+import { mapImportHeaders } from "../../utils/operations/operation-import-headers";
+import { createOperationImportDateTimeUtils } from "../../utils/operations/operation-import-datetime";
+import { isOperationStartInPast } from "../../utils/operations/operation-lifecycle";
+import { isActiveOperationDuplicateError } from "../../utils/operations/active-operation-duplicate-errors";
 import {
   detectSpreadsheetFileType,
   isLikelyBinaryUpload,

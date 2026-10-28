@@ -1,20 +1,20 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { employeeDeactivationRepository } from "../../repositories/employee-deactivation.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { OperationEmployeeAssignment } from "../../types/domain";
 import {
   isAssignmentActiveOnWorkDate,
   resolveAssignmentLifecycleState,
 } from "../../utils/assignment-period";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { isOperationAssignable } from "../../utils/operation-status";
 import { safeRollback } from "../../utils/safe-transaction";
 import { logAuditSafe } from "../../utils/audit-post-commit";
@@ -23,10 +23,10 @@ import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { auditService } from "../audit.service";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
-import { operationCoverageEventRepository } from "../../repositories/operation-coverage-event.repository";
-import { operationChangeEventRepository } from "../../repositories/operation-change-event.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
-import { resolveOperationOperationalDate } from "../../utils/operation-change-events";
+import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import { operationChangeEventRepository } from "../../repositories/operations/operation-change-event.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { resolveOperationOperationalDate } from "../../utils/operations/operation-change-events";
 
 const withLifecycleState = (
   assignment: OperationEmployeeAssignment,

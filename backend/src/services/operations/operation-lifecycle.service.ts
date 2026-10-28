@@ -1,13 +1,13 @@
 import { env } from "../../config/env";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { Operation } from "../../types/domain";
 import type { OperationWorkday } from "../../types/workday";
 import { canTransitionOperationLifecycleStatus } from "../../utils/operation-status";
 import {
   hasActiveFutureOrInProgressWorkday,
   resolveOperationLifecycleStatusForMode,
-} from "../../utils/multi-shift-lifecycle";
+} from "../../utils/workdays/multi-shift-lifecycle";
 import { markMissingCheckinEmployeesDirtyForThreshold } from "../admin-alerts/attendance-threshold-completed-operation.service";
 
 export type OperationLifecycleReconcileResult = {

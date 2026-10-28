@@ -3,9 +3,9 @@ import { mock } from "node:test";
 /** Stub admin alert side effects for unit tests that touch emit hooks. */
 export const mockAdminAlertSideEffects = async (): Promise<void> => {
   const { adminAlertContextRepository } = await import(
-    "../repositories/admin-alert-context.repository"
+    "../repositories/admin-alerts/admin-alert-context.repository"
   );
-  const { employeeRepository } = await import("../repositories/employee.repository");
+  const { employeeRepository } = await import("../repositories/employees/employee.repository");
   const { adminAlertService } = await import("../services/admin-alerts/admin-alert.service");
   const { adminAlertMissingCheckinService } = await import(
     "../services/admin-alerts/admin-alert-missing-checkin.service"

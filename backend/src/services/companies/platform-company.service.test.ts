@@ -10,7 +10,7 @@ describe("platformCompanyService", () => {
 
   it("returns 409 when company name already exists (pre-check)", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { platformCompanyService } = await import("./platform-company.service");
 
     mock.method(companyRepository, "findByName", async () => ({
@@ -45,8 +45,8 @@ describe("platformCompanyService", () => {
 
   it("does not require temporary password for new owners", async () => {
     setupUnitTestEnv();
-    const { companyRepository } = await import("../../repositories/company.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { platformCompanyService } = await import("./platform-company.service");
 
     mock.method(companyRepository, "findByName", async () => null);

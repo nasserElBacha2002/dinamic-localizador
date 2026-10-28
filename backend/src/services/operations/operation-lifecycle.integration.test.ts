@@ -12,7 +12,7 @@ import {
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
-import { operationRepository } from "../../repositories/operation.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import { operationLifecycleService } from "./operation-lifecycle.service";
 import type { Operation } from "../../types/domain";
 

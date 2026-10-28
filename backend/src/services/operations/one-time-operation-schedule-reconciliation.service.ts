@@ -1,18 +1,18 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import { getPool } from "../../database/connection";
-import { attendanceNotificationRepository } from "../../repositories/attendance-notification.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeAssignmentQueryRepository } from "../../repositories/employee-assignment-query.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { attendanceNotificationRepository } from "../../repositories/admin-alerts/attendance-notification.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeAssignmentQueryRepository } from "../../repositories/employees/employee-assignment-query.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { Operation } from "../../types/domain";
 import type { OperationWorkday } from "../../types/workday";
-import type { OneTimeScheduleChangeImpact } from "../../utils/one-time-schedule-change";
-import { resolveNextWorkdayScheduleVersion } from "../../utils/one-time-schedule-change";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import type { OneTimeScheduleChangeImpact } from "../../utils/operations/one-time-schedule-change";
+import { resolveNextWorkdayScheduleVersion } from "../../utils/operations/one-time-schedule-change";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 import {
   oneTimeScheduleConsistencyInspector,

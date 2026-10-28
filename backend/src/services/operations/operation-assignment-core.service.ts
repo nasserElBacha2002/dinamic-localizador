@@ -1,11 +1,11 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import type { WorkTeamAssignmentSkipReason } from "../../constants/work-team-assignment";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationShiftVersionRepository } from "../../repositories/operation-shift-version.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { OperationEmployeeAssignment } from "../../types/domain";
 import {
   assertValidAssignmentDateRange,
@@ -17,8 +17,8 @@ import {
   type CrossOperationShiftOverlapWarning,
 } from "../../utils/employee-shift-interval-overlap";
 import { assertAssignmentShiftMatchesScheduleMode } from "../../utils/operation-schedule-mode-guard";
-import { resolveVersionForDate } from "../../utils/operation-shift-version-resolver";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveVersionForDate } from "../../utils/operations/operation-shift-version-resolver";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { addDaysToDateIso, compareDateIso } from "../../utils/recurring-workday-instant";
 import { workdayMaterializationService } from "../workdays/workday-materialization.service";
 

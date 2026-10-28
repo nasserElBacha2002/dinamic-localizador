@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "./connection";
-import { operationRepository } from "../repositories/operation.repository";
+import { operationRepository } from "../repositories/operations/operation.repository";
 import { lookupRepository } from "../repositories/lookup.repository";
-import { serviceRepository } from "../repositories/service.repository";
+import { serviceRepository } from "../repositories/locations/service.repository";
 import {
   describeDatabaseIntegration,
   requireDinamicCompanyId,

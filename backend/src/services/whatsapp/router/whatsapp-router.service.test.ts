@@ -166,7 +166,7 @@ const prepareRouterUnitTest = async (): Promise<void> => {
   await mockAdminAlertSideEffects();
   await mockActiveVacationAbsenceType();
   const { attendanceNotificationRepository } = await import(
-    "../../../repositories/attendance-notification.repository"
+    "../../../repositories/admin-alerts/attendance-notification.repository"
   );
   const { botSessionService } = await import("../../bot/bot-session.service");
   // Durable confirmation lookup must not hit SQL in router unit tests.
@@ -368,7 +368,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
   it("responds unavailable for vacaciones when VACATION absence type is inactive", async () => {
     await prepareRouterUnitTest();
-    const { absenceTypeRepository } = await import("../../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../../repositories/absence/absence-type.repository");
     const { absenceBotService } = await import("../../absence/absence-bot.service");
     const { botSessionService } = await import("../../bot/bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -401,7 +401,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
   it("responds unavailable for vacaciones when VACATION absence type is missing", async () => {
     await prepareRouterUnitTest();
-    const { absenceTypeRepository } = await import("../../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../../repositories/absence/absence-type.repository");
     const { absenceBotService } = await import("../../absence/absence-bot.service");
     const { botSessionService } = await import("../../bot/bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -495,7 +495,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { handlers, calls } = createMockHandlers();
 
@@ -529,7 +529,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { employeeWorkdayService } = await import("../../workdays/employee-workday.service");
     const { handlers } = createMockHandlers();
@@ -563,7 +563,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { employeeWorkdayService } = await import("../../workdays/employee-workday.service");
     const { handlers } = createMockHandlers();
@@ -597,7 +597,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { handlers, calls } = createMockHandlers();
 
@@ -631,7 +631,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { handlers, calls } = createMockHandlers();
 
@@ -681,7 +681,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { handlers, calls } = createMockHandlers();
 
@@ -2143,7 +2143,7 @@ describe("whatsappRouterService numeric menu selection", () => {
 
   it("omits vacation from kind selection when VACATION absence type is inactive", async () => {
     await prepareRouterUnitTest();
-    const { absenceTypeRepository } = await import("../../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../../repositories/absence/absence-type.repository");
     const { absenceBotService } = await import("../../absence/absence-bot.service");
     const { botSessionService } = await import("../../bot/bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");

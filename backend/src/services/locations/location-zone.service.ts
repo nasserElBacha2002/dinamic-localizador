@@ -1,7 +1,7 @@
 import { roleHasPermission } from "../../constants/company-permissions";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 import type {
   CreateLocationZoneInput,
   ListLocationZonesQuery,
@@ -19,7 +19,7 @@ import {
   canonicalizeLocationZoneLocality,
   normalizeLocationZoneLocality,
   normalizeLocationZoneName,
-} from "../../utils/normalize-location-zone-name";
+} from "../../utils/locations/normalize-location-zone-name";
 import { resolveCanonicalLocality } from "../../utils/geocoding/canonical-locality";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 import { locationZoneGeocodingService } from "./location-zone-geocoding.service";

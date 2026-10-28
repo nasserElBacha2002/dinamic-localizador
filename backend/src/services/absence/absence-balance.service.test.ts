@@ -8,7 +8,7 @@ import {
   requireDinamicCompanyId,
 } from "../../test-helpers/integration-test";
 import { AppError } from "../../errors/app-error";
-import { computeBalanceCounters } from "../../utils/absence-balance.utils";
+import { computeBalanceCounters } from "../../utils/absence/absence-balance.utils";
 
 const TEST_YEAR = 2098;
 
@@ -31,7 +31,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   });
 
   const requireActiveEmployee = async () => {
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const companyId = await requireDinamicCompanyId();
     const employees = await employeeRepository.list(companyId, { page: 1, limit: 1, active: true });
     const employee = employees.items[0];
@@ -42,7 +42,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   };
 
   const requireVacationType = async (companyId: string) => {
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
     const vacationType = await absenceTypeRepository.findByCode(companyId, "VACATION");
     if (!vacationType) {
       assert.fail("Test requires VACATION absence type fixture");
@@ -51,7 +51,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   };
 
   const requireSickLeaveType = async (companyId: string) => {
-    const { absenceTypeRepository } = await import("../../repositories/absence-type.repository");
+    const { absenceTypeRepository } = await import("../../repositories/absence/absence-type.repository");
     const sickLeave = await absenceTypeRepository.findByCode(companyId, "SICK_LEAVE");
     if (!sickLeave) {
       assert.fail("Test requires SICK_LEAVE absence type fixture");
@@ -86,7 +86,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
 
   it("upserts balance and updates the same employee/type/year row", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
-    const { absenceBalanceRepository } = await import("../../repositories/absence-balance.repository");
+    const { absenceBalanceRepository } = await import("../../repositories/absence/absence-balance.repository");
     const { companyId, employee } = await requireActiveEmployee();
     const vacationType = await requireVacationType(companyId);
     const adminUserId = await requireAdminUserId();

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 
 const COMPANY_ID = "company-1";

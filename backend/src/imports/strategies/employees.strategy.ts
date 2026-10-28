@@ -1,8 +1,8 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
 import { AppError } from "../../errors/app-error";
-import { employeeCategoryRepository } from "../../repositories/employee-category.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeCategoryRepository } from "../../repositories/employees/employee-category.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { createEmployeeSchema, type CreateEmployeeInput } from "../../schemas/employee.schema";
 import { auditService } from "../../services/audit.service";
 import {
@@ -15,7 +15,7 @@ import {
   loadImportClientsByIds,
 } from "../resolve-import-client";
 import { logAuditSafe } from "../../utils/audit-post-commit";
-import { normalizeCategoryName } from "../../utils/normalize-category-name";
+import { normalizeCategoryName } from "../../utils/employees/normalize-category-name";
 import { normalizePhoneNumber } from "../../utils/phone";
 import {
   markInFileDuplicates,

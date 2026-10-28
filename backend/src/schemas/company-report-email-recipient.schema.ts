@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isValidReportEmail, normalizeReportEmail } from "../utils/daily-attendance-report-email";
+import { isValidReportEmail, normalizeReportEmail } from "../utils/reports/daily-attendance-report-email";
 
 export const companyReportEmailRecipientIdParamSchema = z.object({
   companyId: z.string().uuid("ID de empresa inválido"),

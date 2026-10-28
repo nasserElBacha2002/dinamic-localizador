@@ -6,14 +6,14 @@ import {
   type WhatsappFlowStepStatus,
   type WhatsappFlowStepType,
 } from "../../constants/whatsapp-observability";
-import { attendanceNotificationRepository } from "../../repositories/attendance-notification.repository";
-import { adminAlertNotificationRepository } from "../../repositories/admin-alert-notification.repository";
-import { payrollReceiptNotificationRepository } from "../../repositories/payroll-receipt-notification.repository";
-import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll-receipt-query-delivery.repository";
-import { whatsappConversationRepository } from "../../repositories/whatsapp-conversation.repository";
-import { whatsappFlowExecutionRepository } from "../../repositories/whatsapp-flow-execution.repository";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
-import { whatsappProviderEventRepository } from "../../repositories/whatsapp-provider-event.repository";
+import { attendanceNotificationRepository } from "../../repositories/admin-alerts/attendance-notification.repository";
+import { adminAlertNotificationRepository } from "../../repositories/admin-alerts/admin-alert-notification.repository";
+import { payrollReceiptNotificationRepository } from "../../repositories/payroll/payroll-receipt-notification.repository";
+import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
+import { whatsappConversationRepository } from "../../repositories/whatsapp/whatsapp-conversation.repository";
+import { whatsappFlowExecutionRepository } from "../../repositories/whatsapp/whatsapp-flow-execution.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
+import { whatsappProviderEventRepository } from "../../repositories/whatsapp/whatsapp-provider-event.repository";
 import type { WhatsappConversation, WhatsappFlowExecution } from "../../types/whatsapp-observability";
 import {
   buildProviderEventKey,
@@ -27,7 +27,7 @@ import {
 import {
   decryptPhoneForObservability,
   encryptPhoneForObservability,
-} from "../../utils/whatsapp-observability-phone-crypto";
+} from "../../utils/whatsapp/whatsapp-observability-phone-crypto";
 
 const safe = async <T>(label: string, fn: () => Promise<T>): Promise<T | null> => {
   try {

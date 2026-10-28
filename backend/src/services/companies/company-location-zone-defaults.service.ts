@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 
 /**
  * Associates the standard CABA/GBA catalog zones with a company (idempotent).

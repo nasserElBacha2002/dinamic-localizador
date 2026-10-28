@@ -1,11 +1,11 @@
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
 import { AppError } from "../../errors/app-error";
-import { absenceBalanceRepository } from "../../repositories/absence-balance.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { companyAbsenceSettingsRepository } from "../../repositories/company-absence-settings.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceBalanceRepository } from "../../repositories/absence/absence-balance.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { companyAbsenceSettingsRepository } from "../../repositories/companies/company-absence-settings.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { companyAbsenceSettingsService } from "../companies/company-absence-settings.service";
 import { getCurrentYearInTimezone } from "../../utils/operational-year";
 

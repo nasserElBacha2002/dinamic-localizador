@@ -1,10 +1,10 @@
 import { AppError } from "../../errors/app-error";
 import { env } from "../../config/env";
 import { auditService } from "../audit.service";
-import { whatsappObservabilityRepository } from "../../repositories/whatsapp-observability.repository";
+import { whatsappObservabilityRepository } from "../../repositories/whatsapp/whatsapp-observability.repository";
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
-import { mapMessageToObservabilityDto } from "../../utils/whatsapp-observability-message-dto";
-import { whatsappProviderEventRepository } from "../../repositories/whatsapp-provider-event.repository";
+import { mapMessageToObservabilityDto } from "../../utils/whatsapp/whatsapp-observability-message-dto";
+import { whatsappProviderEventRepository } from "../../repositories/whatsapp/whatsapp-provider-event.repository";
 import type { ObservabilityListMessagesQuery } from "../../schemas/whatsapp-observability.schema";
 
 const clampLimit = (limit: number | undefined): number =>

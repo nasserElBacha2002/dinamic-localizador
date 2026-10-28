@@ -10,7 +10,7 @@ import {
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 import { locationZoneService } from "./location-zone.service";
 import { locationZoneGeocodingService } from "./location-zone-geocoding.service";
 

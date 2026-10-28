@@ -2,10 +2,10 @@
  * Check-in conversation flows for WhatsApp (start, workday selection, location).
  * Mixed selection sessions may hand off to checkout flow processors.
  */
-import { attendanceRepository } from "../../repositories/attendance.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
 import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot-runtime-settings-scope";
-import { getObservabilityTrace } from "../../utils/whatsapp-observability-scope";
+import { getObservabilityTrace } from "../../utils/whatsapp/whatsapp-observability-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
@@ -60,7 +60,7 @@ import {
   isSimulationDryRun,
   recordSimulationArtifact,
   setTechnicalDetail,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { respond } from "./bot-outbound-response";
 import {
   processCheckoutWithoutLocation,

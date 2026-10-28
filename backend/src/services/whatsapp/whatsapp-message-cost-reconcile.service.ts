@@ -1,6 +1,6 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { whatsappMessageCostLedgerWriteRepository } from "../../repositories/whatsapp-message-cost-ledger-write.repository";
+import { whatsappMessageCostLedgerWriteRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger-write.repository";
 import { maskPhoneNumberForLog } from "../../utils/phone";
 
 export interface CostLedgerReconcileResult {

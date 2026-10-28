@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
-import { employeeCategoryRepository } from "../../repositories/employee-category.repository";
-import { companyRepository } from "../../repositories/company.repository";
+import { employeeCategoryRepository } from "../../repositories/employees/employee-category.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { employeeCategoryService } from "./employee-category.service";
 

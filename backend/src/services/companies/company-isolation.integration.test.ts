@@ -9,11 +9,11 @@ import {
 } from "../../test-helpers/integration-test";
 import { companyContextService } from "./company-context.service";
 import { companyService } from "./company.service";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { serviceRepository } from "../../repositories/service.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { getPool } from "../../database/connection";
 
 describeDatabaseIntegration("multi-company foundation isolation", () => {

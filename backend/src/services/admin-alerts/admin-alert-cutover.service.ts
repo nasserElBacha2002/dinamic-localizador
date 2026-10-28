@@ -1,14 +1,14 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { env } from "../../config/env";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { assertDailyReportAudienceSchemaReady } from "../../utils/daily-attendance-report-schema-guard";
-import { ADMIN_DAILY_REPORT_ALERT_TYPES } from "../../utils/admin-notification-channel-policy";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { assertDailyReportAudienceSchemaReady } from "../../utils/reports/daily-attendance-report-schema-guard";
+import { ADMIN_DAILY_REPORT_ALERT_TYPES } from "../../utils/admin-alert/admin-notification-channel-policy";
 import { logAdminAlertEvent } from "../../utils/admin-alert/observability";
-import type { AdminAlertDeliveryMode } from "../../utils/admin-notification-channel-policy";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
-import { normalizeReportTimeHHmm } from "../../utils/daily-attendance-report-time";
+import type { AdminAlertDeliveryMode } from "../../utils/admin-alert/admin-notification-channel-policy";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
+import { normalizeReportTimeHHmm } from "../../utils/reports/daily-attendance-report-time";
 
 const INFORMATIONAL_TYPES_SQL = ADMIN_DAILY_REPORT_ALERT_TYPES.map((t) => `N'${t}'`).join(", ");
 

@@ -3,7 +3,7 @@
  * Durable checkout + session completion live in employeeWorkdayCheckoutCommand;
  * this module only orchestrates chat (selection, validation, simulation, responses).
  */
-import { attendanceRepository } from "../../repositories/attendance.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
 import { formatLocalTime } from "../../utils/attendance-validation";
 import {
@@ -58,7 +58,7 @@ import {
   isSimulationDryRun,
   recordSimulationArtifact,
   setTechnicalDetail,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { respond } from "./bot-outbound-response";
 import {
   resolveCheckoutWhatsAppResultCode,

@@ -4,7 +4,7 @@ import {
   runTwilioSignatureValidation,
   type TwilioSignatureFailureCode,
   type TwilioSignatureValidationConfig,
-} from "../utils/twilio-webhook-signature";
+} from "../utils/whatsapp/twilio-webhook-signature";
 
 const signatureErrorMessages: Record<TwilioSignatureFailureCode, string> = {
   TWILIO_SIGNATURE_CONFIG_MISSING: "No fue posible validar la solicitud de Twilio",

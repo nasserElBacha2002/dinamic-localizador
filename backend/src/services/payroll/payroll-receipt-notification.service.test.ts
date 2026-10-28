@@ -64,9 +64,9 @@ describe("payrollReceiptNotificationService", () => {
 
   it("worker skips obsolete receipt (marks cancelled)", async () => {
     const { payrollReceiptNotificationRepository } = await import(
-      "../../repositories/payroll-receipt-notification.repository"
+      "../../repositories/payroll/payroll-receipt-notification.repository"
     );
-    const { payrollReceiptRepository } = await import("../../repositories/payroll-receipt.repository");
+    const { payrollReceiptRepository } = await import("../../repositories/payroll/payroll-receipt.repository");
     const { companyModuleService } = await import("../companies/company-module.service");
     const { payrollReceiptNotificationService } = await import(
       "./payroll-receipt-notification.service"
@@ -102,10 +102,10 @@ describe("payrollReceiptNotificationService", () => {
 
   it("ambiguous Twilio failure after beginSendAttempt → reconciliation; claim again does not call Twilio", async () => {
     const { payrollReceiptNotificationRepository } = await import(
-      "../../repositories/payroll-receipt-notification.repository"
+      "../../repositories/payroll/payroll-receipt-notification.repository"
     );
-    const { payrollReceiptRepository } = await import("../../repositories/payroll-receipt.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { payrollReceiptRepository } = await import("../../repositories/payroll/payroll-receipt.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { companyModuleService } = await import("../companies/company-module.service");
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
     const { payrollReceiptNotificationService } = await import(

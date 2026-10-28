@@ -13,7 +13,7 @@ import { createIntegrationFixtureTracker } from "../../test-helpers/integration-
 import { locationZoneService } from "./location-zone.service";
 import { employeeService } from "../employees/employee.service";
 import { serviceService } from "./service.service";
-import { normalizeLocationZoneName } from "../../utils/normalize-location-zone-name";
+import { normalizeLocationZoneName } from "../../utils/locations/normalize-location-zone-name";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 

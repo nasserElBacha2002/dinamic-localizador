@@ -1,5 +1,5 @@
 import { AppError } from "../../errors/app-error";
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
 import type {
   CompanyWorkSchedule,
   EffectiveRecurringSchedule,
@@ -9,9 +9,9 @@ import type {
 import {
   assertCompanyWorkScheduleExists,
   assertRecurringScheduleConsistency,
-} from "../../utils/recurring-schedule-consistency";
-import { recurringScheduleResolver } from "../../utils/recurring-schedule-resolver";
-import { normalizeWeeklyScheduleDays } from "../../utils/weekly-schedule";
+} from "../../utils/operations/recurring-schedule-consistency";
+import { recurringScheduleResolver } from "../../utils/operations/recurring-schedule-resolver";
+import { normalizeWeeklyScheduleDays } from "../../utils/operations/weekly-schedule";
 
 const assertScheduleCoversWorkDate = (
   schedule: Pick<OperationSchedule, "validFrom" | "validUntil">,
@@ -89,7 +89,7 @@ export const recurringScheduleService = {
     operationId: string,
   ): Promise<OperationSchedule> {
     const { operationScheduleRepository } = await import(
-      "../../repositories/operation-schedule.repository"
+      "../../repositories/operations/operation-schedule.repository"
     );
     const schedule = await operationScheduleRepository.findByOperationId(companyId, operationId);
     if (!schedule) {

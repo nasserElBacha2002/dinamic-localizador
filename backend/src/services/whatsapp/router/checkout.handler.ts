@@ -6,7 +6,7 @@ import {
 } from "../../bot/bot-response.builder";
 import { isAbsenceSessionState } from "../../../utils/bot-session-states";
 import { isCheckoutIntent } from "../../../utils/intent";
-import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import { getAttendanceModuleBlockedMessage } from "../whatsapp-module-gate";
 import { botSessionService } from "../../bot/bot-session.service";
 import { logModuleBlocked } from "./module-session-gate";

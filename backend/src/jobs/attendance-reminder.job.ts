@@ -2,7 +2,7 @@ import { env } from "../config/env";
 import { ATTENDANCE_REMINDER_JOB_LOCK_RESOURCE } from "../constants/job-locks";
 import { attendanceReminderService } from "../services/attendance/attendance-reminder.service";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
-import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
+import { withDedicatedSessionAppLock } from "../utils/whatsapp/whatsapp-retention-lock";
 
 const JOB_INTERVAL_MS = 60_000;
 

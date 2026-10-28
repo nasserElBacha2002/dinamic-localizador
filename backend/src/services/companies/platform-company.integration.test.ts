@@ -9,12 +9,12 @@ import { apiRequest, signTestToken, startTestServer } from "../../test-helpers/h
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { getPool } from "../../database/connection";
-import { companyModuleRepository } from "../../repositories/company-module.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
-import { userInvitationRepository } from "../../repositories/user-invitation.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { companyModuleRepository } from "../../repositories/companies/company-module.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { userInvitationRepository } from "../../repositories/identity/user-invitation.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { companyWorkScheduleService } from "./company-work-schedule.service";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 

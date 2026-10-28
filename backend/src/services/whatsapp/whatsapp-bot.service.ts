@@ -1,12 +1,12 @@
 import type { CompanyModuleKey } from "../../constants/company-modules";
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import {
   hashWebhookPayload,
   whatsappWebhookEventRepository,
-} from "../../repositories/whatsapp-webhook-event.repository";
+} from "../../repositories/whatsapp/whatsapp-webhook-event.repository";
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import { botSessionService } from "../bot/bot-session.service";
 import type { WhatsAppInboundContext } from "../../types/whatsapp-company-context";
@@ -18,11 +18,11 @@ import {
   getObservabilityFlowResult,
   getObservabilityTrace,
   runWithObservabilityTrace,
-} from "../../utils/whatsapp-observability-scope";
+} from "../../utils/whatsapp/whatsapp-observability-scope";
 import {
   getRoutingResult,
   runWithRoutingResultScope,
-} from "../../utils/whatsapp-routing-result";
+} from "../../utils/whatsapp/whatsapp-routing-result";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { companyModuleService } from "../companies/company-module.service";
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
@@ -40,7 +40,7 @@ import {
 import { whatsappTurnClassificationService } from "./whatsapp-turn-classification.service";
 import { whatsappUsageQuotaService } from "./whatsapp-usage-quota.service";
 import { runWithQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
-import { resolveDayPeriod } from "../../utils/whatsapp-quota-periods";
+import { resolveDayPeriod } from "../../utils/whatsapp/whatsapp-quota-periods";
 import {
   DUPLICATE_MESSAGE_SID_RESPONSE,
   GENERIC_ERROR_MESSAGE,
@@ -67,11 +67,11 @@ import {
   setLastBotResponse,
   setLastTwilioPayload,
   setTechnicalDetail,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import {
   twilioWebhookPayloadToStringRecord,
   twilioWebhookPayloadToUnknownRecord,
-} from "../../utils/twilio-webhook-payload";
+} from "../../utils/whatsapp/twilio-webhook-payload";
 
 const isLocationMessage = (payload: TwilioWebhookInput): boolean =>
   Boolean(payload.Latitude && payload.Longitude);

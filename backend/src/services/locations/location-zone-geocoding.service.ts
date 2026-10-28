@@ -9,9 +9,9 @@ import {
   buildLocationZoneGeocodingQuery,
   selectCompatibleGeocodeCandidate,
 } from "../../utils/geocoding/location-zone-query";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 import type { LocationZone } from "../../types/location-zone";
-import type { LocationZoneGeocodingWrite } from "../../repositories/location-zone.repository";
+import type { LocationZoneGeocodingWrite } from "../../repositories/locations/location-zone.repository";
 
 const LOG_PREFIX = "[location-zone-geocoding]";
 

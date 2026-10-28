@@ -1,6 +1,6 @@
 import { env } from "../../config/env";
-import { whatsappLifecycleRepository } from "../../repositories/whatsapp-lifecycle.repository";
-import { withDedicatedSessionAppLock } from "../../utils/whatsapp-retention-lock";
+import { whatsappLifecycleRepository } from "../../repositories/whatsapp/whatsapp-lifecycle.repository";
+import { withDedicatedSessionAppLock } from "../../utils/whatsapp/whatsapp-retention-lock";
 
 export const WHATSAPP_LIFECYCLE_LOCK_RESOURCE = "whatsapp-lifecycle-reconcile";
 

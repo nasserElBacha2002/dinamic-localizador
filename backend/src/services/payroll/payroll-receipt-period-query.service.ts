@@ -1,7 +1,7 @@
 import { env } from "../../config/env";
 import { formatPayrollReceiptPeriod } from "../../utils/payroll-receipts/period-format";
-import { payrollReceiptRepository } from "../../repositories/payroll-receipt.repository";
-import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll-receipt-query-delivery.repository";
+import { payrollReceiptRepository } from "../../repositories/payroll/payroll-receipt.repository";
+import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
 import { resolveBotSessionScope } from "../../utils/bot-session-scope";
 import { normalizePhoneNumber } from "../../utils/phone";

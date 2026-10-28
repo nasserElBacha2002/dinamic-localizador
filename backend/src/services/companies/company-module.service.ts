@@ -4,8 +4,8 @@ import {
   type CompanyModuleKey,
 } from "../../constants/company-modules";
 import { AppError } from "../../errors/app-error";
-import { companyModuleRepository } from "../../repositories/company-module.repository";
-import { companyRepository } from "../../repositories/company.repository";
+import { companyModuleRepository } from "../../repositories/companies/company-module.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
 import type { UpdateCompanyModulesInput } from "../../schemas/company-module.schema";
 import type { CompanyModule, CompanyModuleDto } from "../../types/company";
 

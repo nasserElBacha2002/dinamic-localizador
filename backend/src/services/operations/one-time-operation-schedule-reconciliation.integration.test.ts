@@ -9,10 +9,10 @@ import {
 } from "../../test-helpers/integration-test";
 import { createIntegrationFixtureTracker } from "../../test-helpers/integration-cleanup";
 import { getPool } from "../../database/connection";
-import { resolveWorkDateFromScheduledStart } from "../../utils/work-date";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveWorkDateFromScheduledStart } from "../../utils/workdays/work-date";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { toDateOnlyString } from "../../utils/row-mappers";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { employeeWorkdayAvailabilityService } from "../workdays/employee-workday-availability.service";
 import { oneTimeScheduleRepairService } from "./one-time-operation-schedule-reconciliation.service";
 import { workdayMaterializationService } from "../workdays/workday-materialization.service";

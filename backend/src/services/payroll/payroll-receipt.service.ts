@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { payrollReceiptRepository } from "../../repositories/payroll-receipt.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { payrollReceiptRepository } from "../../repositories/payroll/payroll-receipt.repository";
 import { pendingStorageDeletionRepository } from "../../repositories/pending-storage-deletion.repository";
 import type {
   PayrollReceipt,

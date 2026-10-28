@@ -3,7 +3,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import type { EmployeeAssignedOperation } from "../../types/employee-assignment-query";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { mockAdminAlertSideEffects } from "../../test-helpers/mock-admin-alert-side-effects";
-import { runWithBotRuntimeContext } from "../../utils/bot-runtime-context";
+import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 import {
   NO_TODAY_ASSIGNMENTS_MESSAGE,
   NO_UPCOMING_ASSIGNMENTS_MESSAGE,
@@ -38,7 +38,7 @@ const assignment = (
 
 const mockEmptyUnavailabilityList = async () => {
   const { employeeAssignmentQueryRepository } = await import(
-    "../../repositories/employee-assignment-query.repository"
+    "../../repositories/employees/employee-assignment-query.repository"
   );
   mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => []);
 };
@@ -71,7 +71,7 @@ describe("employeeWorkdayService", () => {
   it("returns no-assignment message when today has no operations", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -87,7 +87,7 @@ describe("employeeWorkdayService", () => {
   it("returns numbered today assignments with attendance state", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -136,7 +136,7 @@ describe("employeeWorkdayService", () => {
   it("includes canonical service reference in upcoming assignments message", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -161,7 +161,7 @@ describe("employeeWorkdayService", () => {
   it("returns upcoming assignments ordered and limited by repository", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -180,7 +180,7 @@ describe("employeeWorkdayService", () => {
   it("returns no upcoming message when repository is empty", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -196,7 +196,7 @@ describe("employeeWorkdayService", () => {
   it("confirms assignment idempotently when already confirmed", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -222,7 +222,7 @@ describe("employeeWorkdayService", () => {
     setupUnitTestEnv();
     await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -247,10 +247,10 @@ describe("employeeWorkdayService", () => {
   it("allows unavailability for a habitual assignment on today's started workday", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
-    const { employeeWorkdayRepository } = await import("../../repositories/employee-workday.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { replacementRequestService } = await import("../replacement-request.service");
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -299,7 +299,7 @@ describe("employeeWorkdayService", () => {
   it("keeps ONE_TIME future unavailability allowed and ONE_TIME started rejected", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
     const { PAST_ASSIGNMENT_MESSAGE } = await import("../../utils/employee-assignment-format");
@@ -322,8 +322,8 @@ describe("employeeWorkdayService", () => {
     ]);
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => true);
 
-    const { employeeWorkdayRepository } = await import("../../repositories/employee-workday.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { replacementRequestService } = await import("../replacement-request.service");
     mock.method(employeeWorkdayRepository, "markUnavailable", async () => true);
     mock.method(employeeRepository, "findById", async () => null);
@@ -357,10 +357,10 @@ describe("employeeWorkdayService", () => {
   it("emits distinct unavailable-workday dedup keys for distinct recurring occurrences", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
-    const { employeeWorkdayRepository } = await import("../../repositories/employee-workday.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { replacementRequestService } = await import("../replacement-request.service");
     const { adminAlertService } = await import("../admin-alerts/admin-alert.service");
     const { attendanceThresholdAlertService } = await import("../admin-alerts/attendance-threshold-alert.service");
@@ -437,10 +437,10 @@ describe("employeeWorkdayService", () => {
   it("allows unavailability for a habitual assignment on a future workday", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
-    const { employeeWorkdayRepository } = await import("../../repositories/employee-workday.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { replacementRequestService } = await import("../replacement-request.service");
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -490,10 +490,10 @@ describe("employeeWorkdayService", () => {
   it("marks only the selected recurring occurrence unavailable without changing its base assignment", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
-    const { employeeWorkdayRepository } = await import("../../repositories/employee-workday.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { replacementRequestService } = await import("../replacement-request.service");
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -530,7 +530,7 @@ describe("employeeWorkdayService", () => {
     setupUnitTestEnv();
     await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
     const { INVALID_SELECTION_MESSAGE } = await import("../bot/bot-response.builder");
@@ -553,7 +553,7 @@ describe("employeeWorkdayService", () => {
   it("does not confirm past assignments", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -571,7 +571,7 @@ describe("employeeWorkdayService", () => {
   it("scopes today workday query to company and employee", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -599,7 +599,7 @@ describe("employeeWorkdayService", () => {
   it("scopes upcoming assignments query to company and employee", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -627,7 +627,7 @@ describe("employeeWorkdayService", () => {
   it("cannot confirm assignment outside resolved company or employee scope", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
     const { INVALID_SELECTION_MESSAGE } = await import("../bot/bot-response.builder");
@@ -652,7 +652,7 @@ describe("employeeWorkdayService", () => {
     setupUnitTestEnv();
     await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
     const { INVALID_SELECTION_MESSAGE } = await import("../bot/bot-response.builder");
@@ -676,7 +676,7 @@ describe("employeeWorkdayService", () => {
   it("keeps UNAVAILABLE final when confirm reply arrives (no flip)", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -702,7 +702,7 @@ describe("employeeWorkdayService", () => {
     setupUnitTestEnv();
     await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -727,7 +727,7 @@ describe("employeeWorkdayService", () => {
   it("CAS confirm transitions only from PENDING", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -757,7 +757,7 @@ describe("employeeWorkdayService", () => {
     await mockAdminAlertSideEffects();
     await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -786,7 +786,7 @@ describe("employeeWorkdayService", () => {
   it("concurrent 1 vs 2: confirm CAS loss surfaces UNAVAILABLE winner", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -812,7 +812,7 @@ describe("employeeWorkdayService", () => {
     await mockAdminAlertSideEffects();
     await mockEmptyUnavailabilityList();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -836,7 +836,7 @@ describe("employeeWorkdayService", () => {
   it("concurrent 1 vs 1: confirm CAS loss still reports CONFIRMED", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 

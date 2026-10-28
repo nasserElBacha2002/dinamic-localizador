@@ -5,8 +5,8 @@ import {
   type WhatsAppQuotaMode,
 } from "../../constants/whatsapp-usage-quota";
 import { AppError } from "../../errors/app-error";
-import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp-usage-quota.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { whatsappUsageQuotaRepository } from "../../repositories/whatsapp/whatsapp-usage-quota.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type {
   QuotaOutboundReserveResult,
   QuotaTurnAdmissionResult,
@@ -16,7 +16,7 @@ import {
   preferOpenOrResolvePeriod,
   resolveDayPeriod,
   type QuotaPeriodWindow,
-} from "../../utils/whatsapp-quota-periods";
+} from "../../utils/whatsapp/whatsapp-quota-periods";
 import { systemLogger } from "../../utils/system-logs/logger";
 import { DateTime } from "luxon";
 

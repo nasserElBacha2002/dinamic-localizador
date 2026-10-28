@@ -7,8 +7,8 @@ import {
   IMPORT_MISSING_DATE_MESSAGE,
   IMPORT_MISSING_LOCATION_MESSAGE,
 } from "../../constants/operation-import";
-import { operationRepository } from "../../repositories/operation.repository";
-import { serviceRepository } from "../../repositories/service.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
 import { companyOperationalDefaultsResolver } from "../companies/company-operational-defaults.resolver";
 import { companyLocationTypesService } from "../companies/company-location-types.service";
 import { operationImportService } from "./operation-import.service";

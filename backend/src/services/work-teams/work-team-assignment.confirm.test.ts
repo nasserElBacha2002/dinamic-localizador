@@ -4,7 +4,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import { setTestPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
-import { hashWorkTeamMembers } from "../../utils/work-team-snapshot-hash";
+import { hashWorkTeamMembers } from "../../utils/work-teams/work-team-snapshot-hash";
 
 const buildEmployee = (id: string) => ({
   id,
@@ -84,16 +84,16 @@ describe("workTeamAssignmentService.confirm rollback", () => {
     });
 
     const { workTeamAssignmentBatchRepository } = await import(
-      "../../repositories/work-team-assignment-batch.repository"
+      "../../repositories/work-teams/work-team-assignment-batch.repository"
     );
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { workTeamRepository } = await import("../../repositories/work-team.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { workTeamRepository } = await import("../../repositories/work-teams/work-team.repository");
     const { operationEmployeeRepository } = await import(
-      "../../repositories/operation-employee.repository"
+      "../../repositories/operations/operation-employee.repository"
     );
     const { operationAssignmentCore } = await import("../operations/operation-assignment-core.service");
     const { employeeDeactivationRepository } = await import(
-      "../../repositories/employee-deactivation.repository"
+      "../../repositories/employees/employee-deactivation.repository"
     );
     const { workTeamAssignmentService } = await import("./work-team-assignment.service");
 
@@ -227,9 +227,9 @@ describe("workTeamAssignmentService.confirm rollback", () => {
     patchTransaction();
 
     const { workTeamAssignmentBatchRepository } = await import(
-      "../../repositories/work-team-assignment-batch.repository"
+      "../../repositories/work-teams/work-team-assignment-batch.repository"
     );
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     const { workTeamAssignmentService } = await import("./work-team-assignment.service");
 
     mock.method(workTeamAssignmentBatchRepository, "expireStalePreviews", async () => undefined);
@@ -273,9 +273,9 @@ describe("workTeamAssignmentService.confirm rollback", () => {
     patchTransaction();
 
     const { workTeamAssignmentBatchRepository } = await import(
-      "../../repositories/work-team-assignment-batch.repository"
+      "../../repositories/work-teams/work-team-assignment-batch.repository"
     );
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     const { workTeamAssignmentService } = await import("./work-team-assignment.service");
 
     const consoleErrorMock = mock.method(console, "error", () => undefined);
@@ -318,9 +318,9 @@ describe("workTeamAssignmentService.confirm rollback", () => {
     patchTransaction();
 
     const { workTeamAssignmentBatchRepository } = await import(
-      "../../repositories/work-team-assignment-batch.repository"
+      "../../repositories/work-teams/work-team-assignment-batch.repository"
     );
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     const { operationAssignmentCore } = await import("../operations/operation-assignment-core.service");
     const { workTeamAssignmentService } = await import("./work-team-assignment.service");
 

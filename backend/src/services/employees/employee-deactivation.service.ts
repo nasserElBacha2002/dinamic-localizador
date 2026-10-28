@@ -1,18 +1,18 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import { getPool } from "../../database/connection";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeDeactivationRepository } from "../../repositories/employee-deactivation.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type { Employee } from "../../types/domain";
 import type { UpdateEmployeeInput } from "../../schemas/employee.schema";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
 import {
   buildDeactivationReleasePlan,
   summarizeDeactivationImpact,
-} from "../../utils/employee-deactivation-impact";
+} from "../../utils/employees/employee-deactivation-impact";
 import { normalizePhoneNumber } from "../../utils/phone";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { safeRollback } from "../../utils/safe-transaction";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { auditService } from "../audit.service";

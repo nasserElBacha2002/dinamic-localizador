@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { createLocationZoneSchema } from "../../schemas/location-zone.schema";
 import {
   normalizeLocationZoneLocality,
   normalizeLocationZoneName,
-} from "../../utils/normalize-location-zone-name";
+} from "../../utils/locations/normalize-location-zone-name";
 import { locationZoneGeocodingService } from "./location-zone-geocoding.service";
 import { locationZoneService } from "./location-zone.service";
 

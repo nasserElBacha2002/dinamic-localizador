@@ -1,4 +1,4 @@
-import { platformAuditRepository } from "../../repositories/platform-audit.repository";
+import { platformAuditRepository } from "../../repositories/companies/platform-audit.repository";
 import { auditService } from "../audit.service";
 
 /**

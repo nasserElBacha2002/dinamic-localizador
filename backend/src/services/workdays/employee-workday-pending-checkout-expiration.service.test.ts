@@ -40,7 +40,7 @@ describe("employeeWorkdayAvailabilityService pending checkout expiration", () =>
   it("filters listOpenForCheckout by expiration hours (A/B/C/E)", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -117,7 +117,7 @@ describe("employeeWorkdayAvailabilityService pending checkout expiration", () =>
   it("revalidateCheckoutCandidate rejects an expired checkout candidate", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -174,7 +174,7 @@ describe("employeeWorkdayAvailabilityService pending checkout expiration", () =>
   it("revalidateCheckoutCandidate returns not_available when open attendance is gone", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -199,7 +199,7 @@ describe("employeeWorkdayAvailabilityService pending checkout expiration", () =>
   it("company isolation uses per-call expiration hours", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -253,7 +253,7 @@ describe("employeeWorkdayAvailabilityService pending checkout expiration", () =>
   it("service filter does not mutate candidate historical fields", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
-      "../../repositories/employee-workday-availability.repository"
+      "../../repositories/workdays/employee-workday-availability.repository"
     );
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"

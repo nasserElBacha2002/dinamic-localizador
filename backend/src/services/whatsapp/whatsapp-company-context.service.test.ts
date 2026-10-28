@@ -44,10 +44,10 @@ describe("whatsappCompanyContextService", () => {
 
   it("prefers an active session company over default company fallback", async () => {
     setupUnitTestEnv();
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { companyAlertRecipientRepository } = await import("../../repositories/company-alert-recipient.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../../repositories/companies/company-alert-recipient.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () =>
@@ -75,8 +75,8 @@ describe("whatsappCompanyContextService", () => {
 
   it("resolves a unique employee phone match within one company", async () => {
     setupUnitTestEnv();
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () => null);
@@ -101,8 +101,8 @@ describe("whatsappCompanyContextService", () => {
 
   it("blocks when the same phone belongs to multiple companies", async () => {
     setupUnitTestEnv();
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () => null);
@@ -126,10 +126,10 @@ describe("whatsappCompanyContextService", () => {
   it("uses default company fallback only when no safer match exists", async () => {
     setupUnitTestEnv();
     process.env.BOT_DEFAULT_COMPANY_ID = companyA;
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { companyAlertRecipientRepository } = await import("../../repositories/company-alert-recipient.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../../repositories/companies/company-alert-recipient.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () => null);
@@ -158,10 +158,10 @@ describe("whatsappCompanyContextService", () => {
 
   it("blocks when company context cannot be resolved safely", async () => {
     setupUnitTestEnv();
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { companyAlertRecipientRepository } = await import("../../repositories/company-alert-recipient.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../../repositories/companies/company-alert-recipient.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () => null);
@@ -186,10 +186,10 @@ describe("whatsappCompanyContextService", () => {
 
   it("uses legacy default fallback when exactly one active company exists", async () => {
     setupUnitTestEnv();
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { companyAlertRecipientRepository } = await import("../../repositories/company-alert-recipient.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { companyAlertRecipientRepository } = await import("../../repositories/companies/company-alert-recipient.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () => null);
@@ -214,10 +214,10 @@ describe("whatsappCompanyContextService", () => {
 
   it("uses forced company in simulation without global ambiguity checks", async () => {
     setupUnitTestEnv();
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(botSessionRepository, "findLatestValidActiveByPhoneForCompanyResolutionOnly", async () => null);
     mock.method(botSessionRepository, "findValidActiveByPhone", async () => null);

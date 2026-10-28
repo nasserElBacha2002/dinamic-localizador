@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { AppError } from "../../errors/app-error";
 import { listAssignableCompanyRoles, listInvitableCompanyRoles } from "../../constants/company-role-hierarchy";
-import { companyRepository } from "../../repositories/company.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import type {
   CreateCompanyUserInput,
   ListCompanyUsersQuery,

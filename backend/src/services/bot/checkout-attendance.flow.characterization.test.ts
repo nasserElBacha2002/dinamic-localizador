@@ -13,7 +13,7 @@ import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scop
 import {
   getRoutingResult,
   runWithRoutingResultScope,
-} from "../../utils/whatsapp-routing-result";
+} from "../../utils/whatsapp/whatsapp-routing-result";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import type { CheckoutWriteFields } from "../workdays/employee-workday-checkout.command";
 
@@ -152,10 +152,10 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     const { employeeWorkdayAvailabilityService } = await import(
       "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
     const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
     const { botSessionService } = await import("./bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let capturedFields: CheckoutWriteFields | null = null;
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
@@ -211,10 +211,10 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     const { employeeWorkdayAvailabilityService } = await import(
       "../workdays/employee-workday-availability.service"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
     const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
     const { botSessionService } = await import("./bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let capturedFields: CheckoutWriteFields | null = null;
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
@@ -271,7 +271,7 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     );
     const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
     const { botSessionService } = await import("./bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     let registerCalls = 0;
     mock.method(
@@ -340,7 +340,7 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
     const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import(
-      "../../utils/bot-runtime-context"
+      "../../utils/bot/bot-runtime-context"
     );
 
     let durableCalls = 0;

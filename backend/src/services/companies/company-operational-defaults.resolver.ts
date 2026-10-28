@@ -3,12 +3,12 @@ import {
   DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
   toCompanySettingsInput,
 } from "../../constants/company-settings";
-import { companyAbsenceSettingsRepository } from "../../repositories/company-absence-settings.repository";
-import { companyLocationTypesRepository } from "../../repositories/company-location-types.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companyAbsenceSettingsRepository } from "../../repositories/companies/company-absence-settings.repository";
+import { companyLocationTypesRepository } from "../../repositories/companies/company-location-types.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type { CompanyAbsenceSetting, CompanyLocationType, CompanySettings } from "../../types/company";
 import { companyOperationalSettingsService } from "./company-operational-settings.service";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 export type OperationalDefaultsSource = "company_settings" | "operational_defaults" | "environment";
 

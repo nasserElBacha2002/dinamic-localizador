@@ -15,8 +15,8 @@ import {
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
 import { hashPassword, normalizeEmail } from "../../utils/password";
-import { generateTotpCode } from "../../utils/totp";
-import { hashRecoveryCode } from "../../utils/recovery-code";
+import { generateTotpCode } from "../../utils/identity/totp";
+import { hashRecoveryCode } from "../../utils/identity/recovery-code";
 import { decryptProtectedSecret } from "../../utils/protected-secret";
 
 describeDatabaseIntegration("two-factor TOTP SQL", () => {
@@ -30,17 +30,17 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
 
   it("enrolls 2FA, challenges login, consumes recovery once, and keeps 2FA after password reset", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { twoFactorService } = await import("./two-factor.service");
     const { authService } = await import("./auth.service");
     const { passwordResetService, passwordResetMailer } = await import(
       "./password-reset.service"
     );
     const { passwordResetTokenRepository } = await import(
-      "../../repositories/password-reset-token.repository"
+      "../../repositories/identity/password-reset-token.repository"
     );
     const { twoFactorRecoveryCodeRepository } = await import(
-      "../../repositories/two-factor-recovery-code.repository"
+      "../../repositories/identity/two-factor-recovery-code.repository"
     );
     const { mock } = await import("node:test");
 
@@ -230,7 +230,7 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
 
   it("rejects a reused TOTP step and an inactive user completing a challenge", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { twoFactorService } = await import("./two-factor.service");
     const { authService } = await import("./auth.service");
 
@@ -308,7 +308,7 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
   });
 
   it("serializes concurrent setup onto one persisted pending secret", async () => {
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { twoFactorService } = await import("./two-factor.service");
     const { decryptProtectedSecret } = await import("../../utils/protected-secret");
 
@@ -339,7 +339,7 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
   });
 
   it("rejects reusing a TOTP step for disable or recovery regenerate", async () => {
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { twoFactorService } = await import("./two-factor.service");
     const { authService } = await import("./auth.service");
 
@@ -397,11 +397,11 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
 
   it("reconfigures to authenticator B only after confirm, and cancels without replacing A", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { twoFactorService } = await import("./two-factor.service");
     const { authService } = await import("./auth.service");
     const { twoFactorRecoveryCodeRepository } = await import(
-      "../../repositories/two-factor-recovery-code.repository"
+      "../../repositories/identity/two-factor-recovery-code.repository"
     );
     const { issueLoginChallenge } = await import("./two-factor.service");
 
@@ -556,7 +556,7 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
   });
 
   it("allows only one concurrent reconfigure setup to consume the same TOTP", async () => {
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { twoFactorService } = await import("./two-factor.service");
 
     const email = normalizeEmail(

@@ -30,7 +30,7 @@ describe("DTO contracts include stable navigation ids", () => {
       "utf8",
     );
     const be = readFileSync(
-      resolve(process.cwd(), "../backend/src/utils/employee-deactivation-impact.ts"),
+      resolve(process.cwd(), "../backend/src/utils/employees/employee-deactivation-impact.ts"),
       "utf8",
     );
     assert.match(fe, /interface DeactivationImpactAssignment \{[\s\S]*workTeamId:/);

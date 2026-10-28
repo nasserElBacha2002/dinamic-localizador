@@ -1,6 +1,6 @@
 import { AppError } from "../../errors/app-error";
 import { clientRepository } from "../../repositories/client.repository";
-import { serviceRepository } from "../../repositories/service.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
 import type {
   CreateServiceInput,
   ListServicesQuery,
@@ -8,7 +8,7 @@ import type {
 } from "../../schemas/service.schema";
 import { normalizeOptionalText } from "../../utils/normalize-optional-text";
 import { buildPaginationMeta } from "../../utils/pagination";
-import { isOperationalLocationNameDuplicateKeyError } from "../../utils/service-name-duplicate-errors";
+import { isOperationalLocationNameDuplicateKeyError } from "../../utils/operations/service-name-duplicate-errors";
 import { companyLocationTypesService } from "../companies/company-location-types.service";
 import { locationZoneService } from "./location-zone.service";
 

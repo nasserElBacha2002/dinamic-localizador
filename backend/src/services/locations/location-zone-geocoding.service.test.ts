@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import type { LocationZone } from "../../types/location-zone";
 import { locationZoneGeocodingService } from "./location-zone-geocoding.service";

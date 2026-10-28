@@ -7,7 +7,7 @@ setupUnitTestEnv();
 
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { userRepository } from "../../repositories/user.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { authService } from "./auth.service";
 import type { User } from "../../types/auth";
 import { TWO_FACTOR_USER_DEFAULTS } from "../../types/auth";
@@ -89,7 +89,7 @@ describe("authService.login", () => {
       throw new Error("last_login must not update after password only");
     });
     const { twoFactorChallengeRepository } = await import(
-      "../../repositories/two-factor-challenge.repository"
+      "../../repositories/identity/two-factor-challenge.repository"
     );
     mock.method(twoFactorChallengeRepository, "insert", async () => ({ id: "challenge-id" }));
     mock.method(twoFactorChallengeRepository, "deleteStaleForUser", async () => 0);

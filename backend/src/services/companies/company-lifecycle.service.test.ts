@@ -49,7 +49,7 @@ describe("companyLifecycleService corrections", () => {
   });
 
   it("is idempotent on second deactivate without moving scheduledDeletionAt", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLifecycleService } = await import("./company-lifecycle.service");
 
     const pending = baseCompany({
@@ -81,7 +81,7 @@ describe("companyLifecycleService corrections", () => {
     (env as { COMPANY_PROTECTED_IDS: string }).COMPANY_PROTECTED_IDS =
       "11111111-1111-4111-8111-111111111111";
     try {
-      const { companyRepository } = await import("../../repositories/company.repository");
+      const { companyRepository } = await import("../../repositories/companies/company.repository");
       const { companyLifecycleService } = await import("./company-lifecycle.service");
       mock.method(companyRepository, "findById", async () =>
         baseCompany({ name: "Renamed Corp", status: "ACTIVE" }),
@@ -101,7 +101,7 @@ describe("companyLifecycleService corrections", () => {
   });
 
   it("rejects reactivation while DELETING", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLifecycleService } = await import("./company-lifecycle.service");
     mock.method(companyRepository, "findById", async () => baseCompany({ status: "DELETING" }));
     await assert.rejects(
@@ -116,7 +116,7 @@ describe("companyLifecycleService corrections", () => {
   });
 
   it("reactivates idempotently when already ACTIVE", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLifecycleService } = await import("./company-lifecycle.service");
     mock.method(companyRepository, "findById", async () => baseCompany({ status: "ACTIVE" }));
     const result = await companyLifecycleService.reactivate(
@@ -127,7 +127,7 @@ describe("companyLifecycleService corrections", () => {
   });
 
   it("does not process deletions before due time when claim returns null", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLifecycleService } = await import("./company-lifecycle.service");
     mock.method(companyRepository, "claimNextDueForDeletion", async () => null);
     const result = await companyLifecycleService.processDueDeletions(
@@ -137,7 +137,7 @@ describe("companyLifecycleService corrections", () => {
   });
 
   it("marks deletion failed when purge throws after claim and lease still held", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLifecycleService } = await import("./company-lifecycle.service");
     const { companyDeletionPurgeService } = await import("./company-deletion-purge.service");
 
@@ -170,7 +170,7 @@ describe("companyLifecycleService corrections", () => {
   });
 
   it("skips markDeletionFailed when lease was lost", async () => {
-    const { companyRepository } = await import("../../repositories/company.repository");
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { companyLifecycleService } = await import("./company-lifecycle.service");
     const { companyDeletionPurgeService, LeaseLostError } = await import(
       "./company-deletion-purge.service"

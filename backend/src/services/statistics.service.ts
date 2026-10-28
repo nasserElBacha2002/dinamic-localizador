@@ -1,7 +1,7 @@
 import type { StatisticsFilters, StatisticsTableQuery } from "../schemas/statistics.schema";
 import { MAX_STATISTICS_EXPORT_ROWS } from "../schemas/statistics.schema";
 import { statisticsRepository } from "../repositories/statistics.repository";
-import { operationalIncidentStatisticsRepository } from "../repositories/operational-incident-statistics.repository";
+import { operationalIncidentStatisticsRepository } from "../repositories/operations/operational-incident-statistics.repository";
 import { companyOperationalSettingsService } from "./companies/company-operational-settings.service";
 import type {
   AttendanceStatisticsPeriodComparison,
@@ -13,13 +13,13 @@ import {
   buildNormalizedIncidentRate,
   buildRateDelta,
 } from "../utils/attendance-statistics-metrics";
-import { buildActionExceptions } from "../utils/statistics-action-exceptions";
+import { buildActionExceptions } from "../utils/statistics/statistics-action-exceptions";
 import { buildPaginationMeta } from "../utils/pagination";
-import { resolveOperationTimezone } from "../utils/operation-timezone";
+import { resolveOperationTimezone } from "../utils/operations/operation-timezone";
 import {
   buildStatisticsTimeContext,
   withPreviousPeriodFilters,
-} from "../utils/statistics-period";
+} from "../utils/statistics/statistics-period";
 
 const resolvePagination = (query: StatisticsTableQuery) => {
   if (query.export) {

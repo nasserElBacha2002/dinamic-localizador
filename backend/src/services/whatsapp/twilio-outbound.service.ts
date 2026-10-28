@@ -2,7 +2,7 @@ import twilio from "twilio";
 import { env } from "../../config/env";
 import type { MessageCostFlowLabel, MessageCostKind } from "../../constants/whatsapp-message-cost";
 import { systemLogger } from "../../utils/system-logs/logger";
-import { formatWhatsAppAddress } from "../../utils/whatsapp-phone";
+import { formatWhatsAppAddress } from "../../utils/whatsapp/whatsapp-phone";
 import { whatsappMessageCostRecordService } from "./whatsapp-message-cost-record.service";
 
 export interface WhatsAppCostContext {

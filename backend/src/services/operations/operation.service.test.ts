@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
-import { operationRepository } from "../../repositories/operation.repository";
-import { serviceRepository } from "../../repositories/service.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 
 const COMPANY_ID = "company-1";
@@ -220,7 +220,7 @@ describe("operationService.create", () => {
 
   it("falls back to application defaults through resolver when company row is missing", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { operationService } = await import("./operation.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);

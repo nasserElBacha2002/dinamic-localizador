@@ -5,7 +5,7 @@ import {
   isUpcomingAssignmentsIntent,
   isWorkdayQueryIntent,
 } from "../../utils/assignment-intent";
-import { isPayrollReceiptIntent } from "../../utils/payroll-receipt-intent";
+import { isPayrollReceiptIntent } from "../../utils/payroll-receipts/payroll-receipt-intent";
 import {
   isCheckInIntent,
   isCheckoutIntent,

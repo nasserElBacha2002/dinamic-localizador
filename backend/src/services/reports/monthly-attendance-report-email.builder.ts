@@ -1,5 +1,5 @@
 import type { MonthlyAttendanceReportDataset } from "../../types/monthly-attendance-report";
-import { escapeHtml } from "../../utils/daily-attendance-report-email";
+import { escapeHtml } from "../../utils/reports/daily-attendance-report-email";
 
 const label = (value: number): string => value.toLocaleString("es-AR");
 export const buildMonthlyAttendanceReportEmail = (dataset: MonthlyAttendanceReportDataset, companyName: string) => {

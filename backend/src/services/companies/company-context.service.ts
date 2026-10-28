@@ -1,7 +1,7 @@
 import { env } from "../../config/env";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
 import type { Company, UserCompanyMembership } from "../../types/company";
 import { isCompanyOperationallyActive } from "../../types/company";
 import { buildPlatformAdminMembership } from "../../utils/platform-admin-membership";

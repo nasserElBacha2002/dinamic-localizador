@@ -1,6 +1,6 @@
 import twilio from "twilio";
-import { normalizeTwilioFormBody } from "../utils/twilio-form-body";
-import { runTwilioSignatureValidation } from "../utils/twilio-webhook-signature";
+import { normalizeTwilioFormBody } from "../utils/whatsapp/twilio-form-body";
+import { runTwilioSignatureValidation } from "../utils/whatsapp/twilio-webhook-signature";
 
 const readArg = (name: string): string | undefined => {
   const prefix = `--${name}=`;

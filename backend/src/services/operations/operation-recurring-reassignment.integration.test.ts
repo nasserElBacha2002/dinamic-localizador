@@ -11,7 +11,7 @@ import {
 } from "../../test-helpers/integration-test";
 import { createIntegrationFixtureTracker } from "../../test-helpers/integration-cleanup";
 import { getPool } from "../../database/connection";
-import { operationAttendanceRepository } from "../../repositories/operation-attendance.repository";
+import { operationAttendanceRepository } from "../../repositories/operations/operation-attendance.repository";
 import { operationAssignmentService } from "./operation-assignment.service";
 import { operationService } from "./operation.service";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";

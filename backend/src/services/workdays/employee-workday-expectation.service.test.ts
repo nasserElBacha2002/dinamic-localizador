@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import type { EmployeeWorkday, OperationWorkday } from "../../types/workday";
 
@@ -95,7 +95,7 @@ describe("employeeWorkdayExpectationService", () => {
     setupUnitTestEnv();
     const { employeeWorkdayExpectationService } = await import("./employee-workday-expectation.service");
     const { operationEmployeeRepository } = await import(
-      "../../repositories/operation-employee.repository"
+      "../../repositories/operations/operation-employee.repository"
     );
     const existing = baseEmployeeWorkday({
       operationAssignmentId: "assign-old",
@@ -138,7 +138,7 @@ describe("employeeWorkdayExpectationService", () => {
 
     mock.method(employeeWorkdayRepository, "reactivateAssignmentCancelledExpectation", async () => null);
     mock.method(
-      (await import("../../repositories/operation-employee.repository")).operationEmployeeRepository,
+      (await import("../../repositories/operations/operation-employee.repository")).operationEmployeeRepository,
       "findById",
       async () => ({ id: "assign-old", cancelledAt: "2026-07-13T12:00:00.000Z" }),
     );
@@ -162,7 +162,7 @@ describe("employeeWorkdayExpectationService", () => {
     setupUnitTestEnv();
     const { employeeWorkdayExpectationService } = await import("./employee-workday-expectation.service");
     const { operationEmployeeRepository } = await import(
-      "../../repositories/operation-employee.repository"
+      "../../repositories/operations/operation-employee.repository"
     );
     const existing = baseEmployeeWorkday({
       operationAssignmentId: "assign-old",

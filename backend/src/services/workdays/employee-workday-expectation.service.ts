@@ -1,8 +1,8 @@
 import { AppError } from "../../errors/app-error";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import type { EnsureEmployeeWorkdayOutcome } from "../../types/materialization";
 import type { EmployeeWorkday, OperationWorkday } from "../../types/workday";
-import { isRecoverableCancelledExpectation } from "../../utils/employee-workday-recovery";
+import { isRecoverableCancelledExpectation } from "../../utils/workdays/employee-workday-recovery";
 
 const reactivateRecoverableCancelledExpectation = async (
   companyId: string,

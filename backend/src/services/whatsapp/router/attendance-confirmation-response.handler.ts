@@ -9,12 +9,12 @@ import { companyOperationalSettingsService } from "../../companies/company-opera
 import {
   parseAttendanceConfirmationReply,
   type AttendanceConfirmationReplyIntent,
-} from "../../../utils/attendance-confirmation-reply";
+} from "../../../utils/attendance/attendance-confirmation-reply";
 import { isAttendanceConfirmationResponseSessionState } from "../../../utils/bot-session-states";
 import { CONFIRMATION_EXPIRED_USER_MESSAGE } from "../../../utils/attendance-confirmation-validity";
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
-import { attendanceNotificationRepository } from "../../../repositories/attendance-notification.repository";
-import { getBotNow } from "../../../utils/bot-runtime-context";
+import { attendanceNotificationRepository } from "../../../repositories/admin-alerts/attendance-notification.repository";
+import { getBotNow } from "../../../utils/bot/bot-runtime-context";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../../types/twilio.types";
 

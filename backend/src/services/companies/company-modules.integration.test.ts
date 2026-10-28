@@ -10,10 +10,10 @@ import {
 import { apiRequest, signTestToken, startTestServer } from "../../test-helpers/http-test";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { getPool } from "../../database/connection";
-import { companyModuleRepository } from "../../repositories/company-module.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { companyModuleRepository } from "../../repositories/companies/company-module.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { hashPassword } from "../../utils/password";
 
 const TEST_OWNER_EMAIL = "integration-modules-owner@test.local";

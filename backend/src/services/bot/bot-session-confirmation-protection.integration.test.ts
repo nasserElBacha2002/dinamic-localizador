@@ -156,7 +156,7 @@ describeDatabaseIntegration("bot-session confirmation vs physical attendance", (
       });
     } else {
       // Persist physical session directly when workday materialization is absent.
-      const { botSessionRepository } = await import("../../repositories/bot-session.repository");
+      const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
       waiting = await botSessionRepository.create({
         companyId,
         employeeId,
@@ -181,7 +181,7 @@ describeDatabaseIntegration("bot-session confirmation vs physical attendance", (
 
   it("preserves WAITING_CHECKOUT_LOCATION when confirmation session is requested", async () => {
     const { employeeId, phone } = await insertEmployee(2);
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
     const waiting = await botSessionRepository.create({
       companyId,
       employeeId,
@@ -204,7 +204,7 @@ describeDatabaseIntegration("bot-session confirmation vs physical attendance", (
 
   it("preserves WAITING_OPERATION_SELECTION when confirmation session is requested", async () => {
     const { employeeId, phone } = await insertEmployee(3);
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
     const waiting = await botSessionRepository.create({
       companyId,
       employeeId,
@@ -224,7 +224,7 @@ describeDatabaseIntegration("bot-session confirmation vs physical attendance", (
 
   it("preserves WAITING_CHECKOUT_OPERATION_SELECTION when confirmation session is requested", async () => {
     const { employeeId, phone } = await insertEmployee(4);
-    const { botSessionRepository } = await import("../../repositories/bot-session.repository");
+    const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
     const waiting = await botSessionRepository.create({
       companyId,
       employeeId,

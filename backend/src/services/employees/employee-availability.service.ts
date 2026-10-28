@@ -1,8 +1,8 @@
 import { DateTime } from "luxon";
 import { resolveEmployeeAbsenceAvailabilityStatus } from "../../domain/absence-operational-effects";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type { EmployeeAbsenceAvailabilityStatus } from "../../types/absence-operational-impact";
 import { isWorkdayCoveredByAbsence } from "../../utils/absence-workday-coverage";
 import { absenceOperationalImpactQueryService } from "../absence/absence-operational-impact-query.service";

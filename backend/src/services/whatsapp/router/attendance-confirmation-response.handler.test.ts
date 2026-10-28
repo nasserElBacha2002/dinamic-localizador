@@ -3,7 +3,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import { setupUnitTestEnv } from "../../../test-helpers/unit-test-env";
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
 import { CONFIRMATION_EXPIRED_USER_MESSAGE } from "../../../utils/attendance-confirmation-validity";
-import { runWithBotRuntimeContext, type BotRuntimeContext } from "../../../utils/bot-runtime-context";
+import { runWithBotRuntimeContext, type BotRuntimeContext } from "../../../utils/bot/bot-runtime-context";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../../types/twilio.types";
 
@@ -77,7 +77,7 @@ describe("attendance confirmation response handler", () => {
   it("confirms via durable open-window target after conversational TTL", async () => {
     setupUnitTestEnv();
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { employeeWorkdayService } = await import("../../workdays/employee-workday.service");
     const { handleDurableAttendanceConfirmationReply } = await import(
@@ -133,7 +133,7 @@ describe("attendance confirmation response handler", () => {
   it("does not intercept numeric reply from historical PENDING alone", async () => {
     setupUnitTestEnv();
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { handleDurableAttendanceConfirmationReply } = await import(
       "./attendance-confirmation-response.handler"
@@ -156,7 +156,7 @@ describe("attendance confirmation response handler", () => {
   it("returns CONFIRMATION_EXPIRED only with expired confirmation session context", async () => {
     setupUnitTestEnv();
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { botSessionService } = await import("../../bot/bot-session.service");
     const { handleDurableAttendanceConfirmationReply } = await import(
@@ -221,7 +221,7 @@ describe("attendance confirmation response handler", () => {
   it("is idempotent for a second affirmative reply while window is open", async () => {
     setupUnitTestEnv();
     const { attendanceNotificationRepository } = await import(
-      "../../../repositories/attendance-notification.repository"
+      "../../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { employeeWorkdayService } = await import("../../workdays/employee-workday.service");
     const { handleDurableAttendanceConfirmationReply } = await import(

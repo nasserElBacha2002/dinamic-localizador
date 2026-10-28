@@ -1,7 +1,7 @@
 import twilio from "twilio";
 import { randomUUID } from "node:crypto";
 import { env } from "../../config/env";
-import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp-message-cost-ledger.repository";
+import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 import { absDecimalString, normalizeDecimalString } from "../../utils/money-decimal";
 
 export interface CostSyncBatchResult {

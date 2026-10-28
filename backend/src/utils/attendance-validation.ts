@@ -3,7 +3,7 @@ import type {
   PunctualityStatus,
   ValidationStatus,
 } from "../types/domain";
-import { evaluateCheckInWindow } from "./resolve-check-in-availability-window";
+import { evaluateCheckInWindow } from "./attendance/resolve-check-in-availability-window";
 
 export interface GeofenceEvaluation {
   locationStatus: LocationStatus;

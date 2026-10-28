@@ -3,8 +3,8 @@ import {
   absenceWorkdaySyncJobRepository,
   type AbsenceWorkdaySyncOperation,
   type JobLeaseToken,
-} from "../../repositories/absence-workday-sync-job.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+} from "../../repositories/absence/absence-workday-sync-job.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import type { AbsenceWorkdayReconciliationResult } from "../../types/absence-workday-reconciliation";
 import { absenceOperationalReconciliationService } from "./absence-operational-reconciliation.service";
 import type sql from "mssql";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { isAbsenceReviewableStatus } from "../../constants/absence-transitions";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 
 describe("approved absence mutability", () => {
   it("does not expose an update endpoint for approved absence coverage fields", () => {

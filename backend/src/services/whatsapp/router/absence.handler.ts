@@ -1,5 +1,5 @@
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
-import { absenceTypeRepository } from "../../../repositories/absence-type.repository";
+import { absenceTypeRepository } from "../../../repositories/absence/absence-type.repository";
 import { absenceBotService } from "../../absence/absence-bot.service";
 import { ACTIVE_ATTENDANCE_FLOW_MESSAGE, MODULE_DISABLED_MESSAGE } from "../../bot/bot-response.builder";
 import {
@@ -13,7 +13,7 @@ import {
   isAbsenceKindSelectionSessionState,
   isAbsenceSessionState,
 } from "../../../utils/bot-session-states";
-import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,

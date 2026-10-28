@@ -6,7 +6,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
-import { generateInvitationToken, hashInvitationToken } from "../../utils/invitation-token";
+import { generateInvitationToken, hashInvitationToken } from "../../utils/identity/invitation-token";
 import { normalizeEmail } from "../../utils/password";
 
 /**
@@ -25,7 +25,7 @@ describeDatabaseIntegration("user invitations concurrency", () => {
   it("rotates token at most once under concurrent resend locks", async () => {
     const { getPool } = await import("../../database/connection");
     const { userInvitationRepository } = await import(
-      "../../repositories/user-invitation.repository"
+      "../../repositories/identity/user-invitation.repository"
     );
     const { userInvitationService } = await import("./user-invitation.service");
     const sql = (await import("mssql")).default;
@@ -86,11 +86,11 @@ describeDatabaseIntegration("user invitations concurrency", () => {
   it("accepts a new-user invitation transactionally", async () => {
     const { getPool } = await import("../../database/connection");
     const { userInvitationRepository } = await import(
-      "../../repositories/user-invitation.repository"
+      "../../repositories/identity/user-invitation.repository"
     );
     const { userInvitationService } = await import("./user-invitation.service");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const sql = (await import("mssql")).default;
 

@@ -15,10 +15,10 @@ import {
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { absenceWorkdaySyncJobRepository } from "../../repositories/absence-workday-sync-job.repository";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { absenceWorkdaySyncJobRepository } from "../../repositories/absence/absence-workday-sync-job.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { absenceOperationalConflictService, __setResolveConflictFailurePointForTests } from "./absence-operational-conflict.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { absenceOperationalReconciliationService } from "./absence-operational-reconciliation.service";

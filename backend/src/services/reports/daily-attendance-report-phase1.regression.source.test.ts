@@ -59,7 +59,7 @@ describe("phase-1 daily attendance report regression guards", () => {
     assert.match(service, /result\.transport === "disabled"/);
     assert.match(service, /terminal/);
     const deliveryRepo = readFileSync(
-      join(process.cwd(), "src/repositories/daily-attendance-report-delivery.repository.ts"),
+      join(process.cwd(), "src/repositories/reports/daily-attendance-report-delivery.repository.ts"),
       "utf8",
     );
     assert.match(deliveryRepo, /FAILED_TERMINAL/);
@@ -88,7 +88,7 @@ describe("phase-1 daily attendance report regression guards", () => {
     assert.match(migration136, /email_snapshot/);
 
     const repo = readFileSync(
-      join(process.cwd(), "src/repositories/company-alert-recipient.repository.ts"),
+      join(process.cwd(), "src/repositories/companies/company-alert-recipient.repository.ts"),
       "utf8",
     );
     assert.match(repo, /listEnabledWithUserEmailForDailyReport/);

@@ -10,8 +10,8 @@ import {
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companyShiftTemplateRepository } from "../../repositories/company-shift-template.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
+import { companyShiftTemplateRepository } from "../../repositories/companies/company-shift-template.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
 import { operationShiftFoundationService } from "./operation-shift-foundation.service";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 

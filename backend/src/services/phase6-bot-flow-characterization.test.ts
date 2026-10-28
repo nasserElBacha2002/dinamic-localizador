@@ -10,7 +10,7 @@ import { runWithBotRuntimeSettings } from "../utils/bot-runtime-settings-scope";
 import {
   getObservabilityFlowResult,
   runWithObservabilityTrace,
-} from "../utils/whatsapp-observability-scope";
+} from "../utils/whatsapp/whatsapp-observability-scope";
 import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import {
   GENERIC_ERROR_MESSAGE,
@@ -60,7 +60,7 @@ describe("phase6 bot flow behavioral characterization", () => {
     const { employeeWorkdayAvailabilityService } = await import(
       "./workdays/employee-workday-availability.service"
     );
-    const { runWithBotRuntimeContext } = await import("../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../utils/bot/bot-runtime-context");
 
     mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
       candidates: [],
@@ -85,7 +85,7 @@ describe("phase6 bot flow behavioral characterization", () => {
     setupUnitTestEnv();
     const { handleCheckoutOperationSelection } = await import("./bot/checkout-attendance.flow");
     const { botSessionService } = await import("./bot/bot-session.service");
-    const { runWithBotRuntimeContext } = await import("../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../utils/bot/bot-runtime-context");
     mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
       kind: "retry" as const,
       session: { ...session, failedAttempts: 1 },
@@ -134,7 +134,7 @@ describe("phase6 bot flow behavioral characterization", () => {
     );
     const { botSessionService } = await import("./bot/bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import(
-      "../utils/bot-runtime-context"
+      "../utils/bot/bot-runtime-context"
     );
 
     const employeeWorkdayId = "00000000-0000-4000-8000-000000000004";

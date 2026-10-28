@@ -33,7 +33,7 @@ describe("companyOperationalDefaultsResolver", () => {
 
   it("getOperationDefaults returns persisted company tolerances", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
     );
@@ -48,7 +48,7 @@ describe("companyOperationalDefaultsResolver", () => {
 
   it("getOperationDefaults falls back to application defaults when row is missing", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
     );
@@ -69,7 +69,7 @@ describe("companyOperationalDefaultsResolver", () => {
 
   it("getImportDefaults resolves timezone, schedule, and geofence review margin", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
     );
@@ -94,7 +94,7 @@ describe("companyOperationalDefaultsResolver", () => {
 
   it("getImportDefaults uses env for geofence review margin when company value is null", async () => {
     setupUnitTestEnv();
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
     );
@@ -147,7 +147,7 @@ describe("companyOperationalDefaultsResolver", () => {
   it("getAbsenceDefaults maps repository rows", async () => {
     setupUnitTestEnv();
     const { companyAbsenceSettingsRepository } = await import(
-      "../../repositories/company-absence-settings.repository"
+      "../../repositories/companies/company-absence-settings.repository"
     );
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
@@ -175,7 +175,7 @@ describe("companyOperationalDefaultsResolver", () => {
   it("getLocationTypes returns active location types", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
-      "../../repositories/company-location-types.repository"
+      "../../repositories/companies/company-location-types.repository"
     );
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"

@@ -12,7 +12,7 @@ import {
   formatBotOperationSelectionLines,
   formatBotWorkdaySelectionLines,
 } from "../../utils/employee-assignment-format";
-import { checkoutStatusLabel } from "../../utils/checkout-validation";
+import { checkoutStatusLabel } from "../../utils/attendance/checkout-validation";
 
 export const GLOBAL_CANCEL_MESSAGE =
   "Flujo cancelado. Ahora podés iniciar otra operación.";

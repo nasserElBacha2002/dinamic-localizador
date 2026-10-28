@@ -1,7 +1,7 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { botSessionRepository } from "../../repositories/bot-session.repository";
+import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
 import type {
   BotSession,
   BotSessionContext,

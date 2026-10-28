@@ -1,7 +1,7 @@
 import { roleHasPermission } from "../../constants/company-permissions";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { employeeCategoryRepository } from "../../repositories/employee-category.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { employeeCategoryRepository } from "../../repositories/employees/employee-category.repository";
 import type {
   CreateEmployeeCategoryInput,
   ListEmployeeCategoriesQuery,
@@ -12,7 +12,7 @@ import type { EmployeeCategory } from "../../types/employee-category";
 import {
   canonicalizeCategoryDisplayName,
   normalizeCategoryName,
-} from "../../utils/normalize-category-name";
+} from "../../utils/employees/normalize-category-name";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 
 const assertActiveCompany = async (companyId: string): Promise<void> => {

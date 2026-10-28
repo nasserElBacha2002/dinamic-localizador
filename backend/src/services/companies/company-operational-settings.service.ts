@@ -1,5 +1,5 @@
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type { CompanySettings } from "../../types/company";
 
 export type CompanyOperationalSettings = Pick<

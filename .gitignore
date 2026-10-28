@@ -44,6 +44,10 @@ backend/reports/
 # Domain module, not generated artifacts (reports/ matches any directory).
 !backend/src/services/reports/
 !backend/src/services/reports/**
+!backend/src/repositories/reports/
+!backend/src/repositories/reports/**
+!backend/src/utils/reports/
+!backend/src/utils/reports/**
 
 # Local git review artifacts (Cursor commands)
 review/

@@ -1,15 +1,15 @@
 import twilio from "twilio";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import {
   getObservabilityTrace,
   setObservabilityFlowResult,
-} from "../../utils/whatsapp-observability-scope";
+} from "../../utils/whatsapp/whatsapp-observability-scope";
 import {
   isSimulationActive,
   setLastBotResponse,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { runOutboundPersistAfterCommitHookForTests } from "../../utils/checkout-transaction-hooks";
-import { setRoutingResult } from "../../utils/whatsapp-routing-result";
+import { setRoutingResult } from "../../utils/whatsapp/whatsapp-routing-result";
 import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
 import { whatsappUsageQuotaService } from "../whatsapp/whatsapp-usage-quota.service";
 import { whatsappFlowTraceService } from "../whatsapp/whatsapp-flow-trace.service";

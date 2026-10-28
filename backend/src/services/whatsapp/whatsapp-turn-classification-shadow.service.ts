@@ -4,7 +4,7 @@ import {
   WHATSAPP_TURN_SHADOW_BUDGET_MS,
 } from "../../constants/whatsapp-turn-classification";
 import { env } from "../../config/env";
-import { whatsappTurnClassificationRepository } from "../../repositories/whatsapp-turn-classification.repository";
+import { whatsappTurnClassificationRepository } from "../../repositories/whatsapp/whatsapp-turn-classification.repository";
 import type { TurnClassificationInput } from "../../types/whatsapp-turn-classification";
 import { raceTimeout } from "../../utils/race-timeout";
 import { systemLogger } from "../../utils/system-logs/logger";

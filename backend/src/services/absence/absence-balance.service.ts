@@ -2,10 +2,10 @@ import { AppError } from "../../errors/app-error";
 import sql from "mssql";
 import { buildAbsenceBalanceIdempotencyKey } from "../../constants/absence-balance-ledger";
 import { getPool } from "../../database/connection";
-import { absenceBalanceRepository } from "../../repositories/absence-balance.repository";
-import { absenceBalanceLedgerRepository } from "../../repositories/absence-balance-ledger.repository";
-import { absenceTypeRepository } from "../../repositories/absence-type.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { absenceBalanceRepository } from "../../repositories/absence/absence-balance.repository";
+import { absenceBalanceLedgerRepository } from "../../repositories/absence/absence-balance-ledger.repository";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type {
   AdjustEmployeeAbsenceBalanceInput,
   ReverseAbsenceBalanceMovementInput,
@@ -24,8 +24,8 @@ import {
   computeBalanceCounters,
   getAbsenceRequestYear,
   hasSufficientBalanceForApproval,
-} from "../../utils/absence-balance.utils";
-import { resolveYearAllocations } from "../../utils/absence-year-allocations";
+} from "../../utils/absence/absence-balance.utils";
+import { resolveYearAllocations } from "../../utils/absence/absence-year-allocations";
 import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 
 const sumDaysForStatuses = (
@@ -300,7 +300,7 @@ export const absenceBalanceService = {
       }
       const allocations = allocationsForRequest(request);
       const { absenceBalanceLedgerRepository } = await import(
-        "../../repositories/absence-balance-ledger.repository"
+        "../../repositories/absence/absence-balance-ledger.repository"
       );
       for (const allocation of allocations) {
         const balance = await absenceBalanceLedgerRepository.lockBalanceForUpdate(

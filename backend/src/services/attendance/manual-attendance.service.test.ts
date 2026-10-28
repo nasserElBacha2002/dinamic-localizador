@@ -43,18 +43,18 @@ describe("manualAttendanceService", () => {
     operationWorkdayOverrides?: Record<string, unknown>;
   }) {
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { employeeWorkdayRepository } = await import(
-      "../../repositories/employee-workday.repository"
+      "../../repositories/workdays/employee-workday.repository"
     );
     const { operationWorkdayRepository } = await import(
-      "../../repositories/operation-workday.repository"
+      "../../repositories/operations/operation-workday.repository"
     );
-    const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { attendanceRepository } = await import("../../repositories/attendance/attendance.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
     const { auditService } = await import("../audit.service");
     const { manualAttendanceService } = await import("./manual-attendance.service");

@@ -8,7 +8,7 @@ import {
 } from "../../test-helpers/integration-test";
 import { createIntegrationFixtureTracker } from "../../test-helpers/integration-cleanup";
 import { getPool } from "../../database/connection";
-import { operationRepository } from "../../repositories/operation.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import { operationService } from "./operation.service";
 
 const uniquePhone = (suffix: number): string =>

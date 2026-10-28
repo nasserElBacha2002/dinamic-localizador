@@ -78,7 +78,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
     fixtures.trackEmployee(companyId, employeeId);
 
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
 
     const claimed = await attendanceNotificationRepository.claimNotificationForAttempt(companyId, {
@@ -196,7 +196,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
 
     const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
     const { attendanceNotificationRepository } = await import(
-      "../../repositories/attendance-notification.repository"
+      "../../repositories/admin-alerts/attendance-notification.repository"
     );
     const { botSessionService } = await import("../bot/bot-session.service");
 

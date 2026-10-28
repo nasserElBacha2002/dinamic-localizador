@@ -4,9 +4,9 @@ import sql from "mssql";
 import { env } from "../../config/env";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { twoFactorChallengeRepository } from "../../repositories/two-factor-challenge.repository";
-import { twoFactorRecoveryCodeRepository } from "../../repositories/two-factor-recovery-code.repository";
-import { toPublicUser, userRepository } from "../../repositories/user.repository";
+import { twoFactorChallengeRepository } from "../../repositories/identity/two-factor-challenge.repository";
+import { twoFactorRecoveryCodeRepository } from "../../repositories/identity/two-factor-recovery-code.repository";
+import { toPublicUser, userRepository } from "../../repositories/identity/user.repository";
 import type {
   PublicUser,
   TwoFactorChallengePayload,
@@ -23,9 +23,9 @@ import { signSessionToken } from "../../utils/auth-token";
 import { hashOpaqueToken } from "../../utils/opaque-token";
 import { verifyPassword } from "../../utils/password";
 import { decryptProtectedSecret, encryptProtectedSecret } from "../../utils/protected-secret";
-import { generateRecoveryCodes, hashRecoveryCode } from "../../utils/recovery-code";
+import { generateRecoveryCodes, hashRecoveryCode } from "../../utils/identity/recovery-code";
 import { rollbackTransactionSafely } from "../../utils/sql-transaction";
-import { buildTotpUri, createTotpSecret, verifyTotpCode } from "../../utils/totp";
+import { buildTotpUri, createTotpSecret, verifyTotpCode } from "../../utils/identity/totp";
 
 const GENERIC_TWO_FACTOR_FAILURE = new AppError(
   401,

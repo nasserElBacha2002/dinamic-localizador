@@ -3,12 +3,12 @@ import { getPool } from "../../database/connection";
 import { WORK_TEAM_PREVIEW_TTL_MINUTES } from "../../constants/work-team-assignment";
 import type { WorkTeamAssignmentSkipReason } from "../../constants/work-team-assignment";
 import { AppError } from "../../errors/app-error";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { employeeDeactivationRepository } from "../../repositories/employee-deactivation.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
-import { workTeamAssignmentBatchRepository } from "../../repositories/work-team-assignment-batch.repository";
-import { workTeamRepository } from "../../repositories/work-team.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { workTeamAssignmentBatchRepository } from "../../repositories/work-teams/work-team-assignment-batch.repository";
+import { workTeamRepository } from "../../repositories/work-teams/work-team.repository";
 import type {
   WorkTeamAssignConfirmInput,
   WorkTeamAssignPreviewInput,
@@ -24,7 +24,7 @@ import { safeRollback } from "../../utils/safe-transaction";
 import {
   hashWorkTeamMembers,
   hashWorkTeamPreviewSnapshot,
-} from "../../utils/work-team-snapshot-hash";
+} from "../../utils/work-teams/work-team-snapshot-hash";
 import { auditService } from "../audit.service";
 import { operationAssignmentCore } from "../operations/operation-assignment-core.service";
 import { operationWorkDateService } from "../operations/operation-work-date.service";

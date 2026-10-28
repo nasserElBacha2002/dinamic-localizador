@@ -12,7 +12,7 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import { locationZoneService } from "./location-zone.service";
 import { employeeService } from "../employees/employee.service";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { RECOMMENDATION_REASON_CODES, WORKFORCE_RECOMMENDATION_ALGORITHM_VERSION } from "../../types/recommendation";
 

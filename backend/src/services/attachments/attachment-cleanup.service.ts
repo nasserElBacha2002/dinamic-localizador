@@ -1,5 +1,5 @@
 import { env } from "../../config/env";
-import { absenceAttachmentRepository } from "../../repositories/absence-attachment.repository";
+import { absenceAttachmentRepository } from "../../repositories/absence/absence-attachment.repository";
 import { absenceAttachmentMetrics } from "../../utils/absence-attachments/metrics";
 import { getAttachmentStorage, isGcsConfigured } from "./storage";
 

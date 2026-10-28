@@ -206,7 +206,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
       `);
 
     const { employeeAssignmentQueryRepository } = await import(
-      "../../repositories/employee-assignment-query.repository"
+      "../../repositories/employees/employee-assignment-query.repository"
     );
     const { auditService } = await import("../audit.service");
 

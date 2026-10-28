@@ -1,10 +1,10 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { attendanceRepository } from "../../repositories/attendance.repository";
-import { absenceOperationalImpactRepository } from "../../repositories/absence-operational-impact.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
-import { botSessionRepository } from "../../repositories/bot-session.repository";
-import { employeeWorkdayAvailabilityRepository } from "../../repositories/employee-workday-availability.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
+import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
+import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
+import { employeeWorkdayAvailabilityRepository } from "../../repositories/workdays/employee-workday-availability.repository";
 import {
   buildAttendanceDuringAbsenceConflictKey,
   buildOperationalConflictIdempotencyKey,
@@ -12,8 +12,8 @@ import {
 import type { AttendanceRecord } from "../../types/domain";
 import type { EmployeeWorkdayCheckInCandidate } from "../../types/employee-workday-availability";
 import type { AttendanceValidationResult } from "../../utils/attendance-validation";
-import { isWithinCheckInAvailabilityWindow } from "../../utils/resolve-check-in-availability-window";
-import { getSimulationSessionId } from "../../utils/bot-runtime-context";
+import { isWithinCheckInAvailabilityWindow } from "../../utils/attendance/resolve-check-in-availability-window";
+import { getSimulationSessionId } from "../../utils/bot/bot-runtime-context";
 import { absenceOperationalImpactQueryService } from "../absence/absence-operational-impact-query.service";
 import { auditService } from "../audit.service";
 

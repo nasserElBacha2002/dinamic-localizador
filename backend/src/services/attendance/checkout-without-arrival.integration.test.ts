@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { attendanceRepository } from "../../repositories/attendance.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
 import {
   CheckoutCommandError,
   employeeWorkdayCheckoutCommand,

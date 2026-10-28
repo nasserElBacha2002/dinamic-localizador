@@ -1,17 +1,17 @@
 import { env } from "../../config/env";
 import { RECURRING_WORKDAY_MATERIALIZATION_LOCK_RESOURCE } from "../../constants/job-locks";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationScheduleRepository } from "../../repositories/operation-schedule.repository";
-import { operationShiftExceptionRepository } from "../../repositories/operation-shift-exception.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
-import { operationShiftVersionRepository } from "../../repositories/operation-shift-version.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
+import { operationShiftExceptionRepository } from "../../repositories/operations/operation-shift-exception.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { OperationEmployeeAssignment } from "../../types/domain";
 import type { CompanyMaterializationSummary, MaterializationResult } from "../../types/materialization";
 import {
@@ -26,15 +26,15 @@ import {
   isDayEnabled,
   resolveShiftScheduleForDate,
   resolveVersionForDate,
-} from "../../utils/operation-shift-version-resolver";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
-import { recurringScheduleResolver } from "../../utils/recurring-schedule-resolver";
+} from "../../utils/operations/operation-shift-version-resolver";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
+import { recurringScheduleResolver } from "../../utils/operations/recurring-schedule-resolver";
 import { buildRecurringExpectedInstants } from "../../utils/recurring-workday-instant";
 import {
   computeMaterializationRange,
   iterateDateIsoRange,
-} from "../../utils/recurring-workday-range";
-import { withDedicatedSessionAppLock } from "../../utils/whatsapp-retention-lock";
+} from "../../utils/workdays/recurring-workday-range";
+import { withDedicatedSessionAppLock } from "../../utils/whatsapp/whatsapp-retention-lock";
 import {
   buildEmployeeWorkdayIndex,
   employeeWorkdayExpectationService,

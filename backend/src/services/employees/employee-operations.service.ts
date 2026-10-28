@@ -1,5 +1,5 @@
-import { employeeAssignmentQueryRepository } from "../../repositories/employee-assignment-query.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeAssignmentQueryRepository } from "../../repositories/employees/employee-assignment-query.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type { ListEmployeeOperationsQuery } from "../../schemas/employee.schema";
 import type { EmployeeAssignedOperation } from "../../types/employee-assignment-query";
 import { AppError } from "../../errors/app-error";

@@ -7,8 +7,8 @@ import {
 } from "../../constants/default-location-zones";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import {
   isDatabaseIntegrationEnabled,
   setupDatabaseIntegration,
@@ -17,12 +17,12 @@ import {
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { createIntegrationFixtureTracker } from "../../test-helpers/integration-cleanup";
 import { companyLocationZoneDefaultsService } from "./company-location-zone-defaults.service";
-import { locationZoneRepository } from "../../repositories/location-zone.repository";
+import { locationZoneRepository } from "../../repositories/locations/location-zone.repository";
 import { platformCompanyService } from "./platform-company.service";
 import {
   normalizeLocationZoneLocality,
   normalizeLocationZoneName,
-} from "../../utils/normalize-location-zone-name";
+} from "../../utils/locations/normalize-location-zone-name";
 const uniqueSuffix = (): string => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 /**

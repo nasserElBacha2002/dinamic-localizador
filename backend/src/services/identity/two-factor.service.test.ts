@@ -9,15 +9,15 @@ setupUnitTestEnv();
 import { env } from "../../config/env";
 import { setTestPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { twoFactorChallengeRepository } from "../../repositories/two-factor-challenge.repository";
-import { twoFactorRecoveryCodeRepository } from "../../repositories/two-factor-recovery-code.repository";
-import { userRepository } from "../../repositories/user.repository";
+import { twoFactorChallengeRepository } from "../../repositories/identity/two-factor-challenge.repository";
+import { twoFactorRecoveryCodeRepository } from "../../repositories/identity/two-factor-recovery-code.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
 import { issueLoginChallenge, twoFactorService } from "./two-factor.service";
 import type { User } from "../../types/auth";
 import { TWO_FACTOR_USER_DEFAULTS } from "../../types/auth";
 import { hashPassword } from "../../utils/password";
 import { encryptProtectedSecret } from "../../utils/protected-secret";
-import { generateTotpCode } from "../../utils/totp";
+import { generateTotpCode } from "../../utils/identity/totp";
 
 const user: User = {
   id: "11111111-1111-4111-8111-111111111111",

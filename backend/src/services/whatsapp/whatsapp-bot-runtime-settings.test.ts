@@ -61,7 +61,7 @@ describe("whatsapp bot runtime settings integration", () => {
     let loadCount = 0;
     const { botRuntimeSettingsService } = await import("../bot/bot-runtime-settings.service");
     const { whatsappBotService } = await import("./whatsapp-bot.service");
-    const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () => {
       loadCount += 1;
@@ -134,7 +134,7 @@ describe("whatsapp bot runtime settings integration", () => {
       "../workdays/employee-workday-availability.service"
     );
     const { botSessionService } = await import("../bot/bot-session.service");
-    const { runWithBotRuntimeContext, addVirtualCheckIn } = await import("../../utils/bot-runtime-context");
+    const { runWithBotRuntimeContext, addVirtualCheckIn } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
       kind: "eligible" as const,

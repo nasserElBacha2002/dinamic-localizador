@@ -1,12 +1,12 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import {
   workTeamMemberRepository,
   workTeamRepository,
-} from "../../repositories/work-team.repository";
-import { workTeamAssignmentBatchRepository } from "../../repositories/work-team-assignment-batch.repository";
+} from "../../repositories/work-teams/work-team.repository";
+import { workTeamAssignmentBatchRepository } from "../../repositories/work-teams/work-team-assignment-batch.repository";
 import type {
   AddWorkTeamMembersInput,
   CreateWorkTeamInput,
@@ -17,7 +17,7 @@ import type {
 } from "../../schemas/work-team.schema";
 import type { WorkTeamDetail } from "../../types/work-team";
 import { buildPaginationMeta } from "../../utils/pagination";
-import { normalizeWorkTeamName } from "../../utils/work-team-name";
+import { normalizeWorkTeamName } from "../../utils/work-teams/work-team-name";
 import { auditService } from "../audit.service";
 
 const assertUniqueEmployeeIds = (employeeIds: string[]): void => {

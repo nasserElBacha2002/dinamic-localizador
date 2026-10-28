@@ -30,7 +30,7 @@ describe("serviceService location type validation", () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
     const { locationZoneService } = await import("./location-zone.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
@@ -105,7 +105,7 @@ describe("serviceService location type validation", () => {
   it("updates service with active company location type", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
@@ -124,7 +124,7 @@ describe("serviceService location type validation", () => {
   it("rejects unknown service format on update", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
@@ -148,7 +148,7 @@ describe("serviceService location type validation", () => {
   it("rejects inactive service format on update", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
@@ -171,7 +171,7 @@ describe("serviceService location type validation", () => {
 
   it("reads existing service with legacy or inactive type without validation", async () => {
     setupUnitTestEnv();
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => ({
@@ -194,7 +194,7 @@ describe("serviceService client validation", () => {
     const { clientRepository } = await import("../../repositories/client.repository");
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
     const { locationZoneService } = await import("./location-zone.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(clientRepository, "findById", async () => {
@@ -222,7 +222,7 @@ describe("serviceService client validation", () => {
     const { clientRepository } = await import("../../repositories/client.repository");
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
     const { locationZoneService } = await import("./location-zone.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
     const clientId = "11111111-1111-4111-8111-111111111111";
 
@@ -312,7 +312,7 @@ describe("serviceService client validation", () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../../repositories/client.repository");
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
     const assignedClientId = "44444444-4444-4444-8444-444444444444";
     const replacementClientId = "55555555-5555-4555-8555-555555555555";
@@ -358,7 +358,7 @@ describe("serviceService name uniqueness per company", () => {
   it("rejects create when same company already has the name", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
@@ -386,7 +386,7 @@ describe("serviceService name uniqueness per company", () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
     const { locationZoneService } = await import("./location-zone.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
@@ -413,7 +413,7 @@ describe("serviceService name uniqueness per company", () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("../companies/company-location-types.service");
     const { locationZoneService } = await import("./location-zone.service");
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
@@ -442,7 +442,7 @@ describe("serviceService name uniqueness per company", () => {
 
   it("allows update when keeping the same name", async () => {
     setupUnitTestEnv();
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
@@ -460,7 +460,7 @@ describe("serviceService name uniqueness per company", () => {
 
   it("rejects update when another service in the same company already has the name", async () => {
     setupUnitTestEnv();
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
@@ -487,7 +487,7 @@ describe("serviceService name uniqueness per company", () => {
 
   it("maps SQL duplicate key race on update to SERVICE_NAME_ALREADY_EXISTS", async () => {
     setupUnitTestEnv();
-    const { serviceRepository } = await import("../../repositories/service.repository");
+    const { serviceRepository } = await import("../../repositories/locations/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);

@@ -14,7 +14,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
-import { payrollReceiptNotificationRepository } from "../../repositories/payroll-receipt-notification.repository";
+import { payrollReceiptNotificationRepository } from "../../repositories/payroll/payroll-receipt-notification.repository";
 
 /** Deterministic unique year/month from receipt id (avoids UX collision + flaky Math.random). */
 const periodFromReceiptId = (receiptId: string): { year: number; month: number } => {

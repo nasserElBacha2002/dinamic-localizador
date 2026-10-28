@@ -1,7 +1,7 @@
 import type { Transporter } from "nodemailer";
 import nodemailer from "nodemailer";
 import { env } from "../config/env";
-import { redactInvitationSecrets } from "../utils/invitation-token";
+import { redactInvitationSecrets } from "../utils/identity/invitation-token";
 
 export interface SendEmailInput {
   to: string;

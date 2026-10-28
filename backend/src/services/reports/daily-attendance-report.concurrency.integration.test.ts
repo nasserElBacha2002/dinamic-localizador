@@ -12,7 +12,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
-import { dailyAttendanceReportDeliveryRepository } from "../../repositories/daily-attendance-report-delivery.repository";
+import { dailyAttendanceReportDeliveryRepository } from "../../repositories/reports/daily-attendance-report-delivery.repository";
 
 describeDatabaseIntegration("daily attendance report sql concurrency", () => {
   const fixtures = createIntegrationFixtureTracker();

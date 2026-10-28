@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { monthlyAttendanceReportRepository, type MonthlyAttendanceReportRow } from "../../repositories/monthly-attendance-report.repository";
+import { monthlyAttendanceReportRepository, type MonthlyAttendanceReportRow } from "../../repositories/reports/monthly-attendance-report.repository";
 import type {
   MonthlyAttendanceEmployeeStats,
   MonthlyAttendanceIncident,

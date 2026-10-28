@@ -3,12 +3,12 @@ import {
   ATTENDANCE_ALERT_EVALUATION_BATCH_SIZE,
   ATTENDANCE_ALERT_EVALUATION_LEASE_SECONDS,
 } from "../../constants/attendance-alert";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { attendanceAlertMetricsRepository } from "../../repositories/attendance-alert-metrics.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { attendanceAlertMetricsRepository } from "../../repositories/attendance/attendance-alert-metrics.repository";
 import {
   attendanceAlertEvaluationQueueRepository,
   attendanceAlertStateRepository,
-} from "../../repositories/attendance-alert-state.repository";
+} from "../../repositories/attendance/attendance-alert-state.repository";
 import {
   classifyAttendanceThresholdTransition,
   isCooldownElapsed,

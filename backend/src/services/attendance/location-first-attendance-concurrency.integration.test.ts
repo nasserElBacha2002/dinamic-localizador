@@ -16,8 +16,8 @@ import { getPool } from "../../database/connection";
 import {
   hashWebhookPayload,
   whatsappWebhookEventRepository,
-} from "../../repositories/whatsapp-webhook-event.repository";
-import { attendanceRepository } from "../../repositories/attendance.repository";
+} from "../../repositories/whatsapp/whatsapp-webhook-event.repository";
+import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
 import {
   createIntegrationFixtureTracker,
   describeDatabaseIntegration,

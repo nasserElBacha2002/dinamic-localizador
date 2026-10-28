@@ -11,8 +11,8 @@ import {
 import { apiRequest, signTestToken, startTestServer } from "../../test-helpers/http-test";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { hashPassword } from "../../utils/password";
-import { userRepository } from "../../repositories/user.repository";
-import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
+import { userRepository } from "../../repositories/identity/user.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

@@ -5,7 +5,7 @@ import { INVALID_SELECTION_MESSAGE } from "../../bot/bot-response.builder";
 import { getAssignmentConfirmationModuleBlockedMessage } from "../whatsapp-module-gate";
 import { isAssignmentSelectionSessionState } from "../../../utils/bot-session-states";
 import { parseOptionalAssignmentSelection } from "../../../utils/assignment-intent";
-import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import {
   isValidOperationSelection,
   parseOperationSelectionIndex,

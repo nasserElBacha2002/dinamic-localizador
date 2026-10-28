@@ -1,12 +1,12 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationShiftExceptionRepository } from "../../repositories/operation-shift-exception.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
-import { operationShiftVersionRepository } from "../../repositories/operation-shift-version.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationShiftExceptionRepository } from "../../repositories/operations/operation-shift-exception.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { Operation } from "../../types/domain";
 import type {
   OperationShift,
@@ -18,8 +18,8 @@ import {
   isDayEnabled,
   resolveShiftScheduleForDate,
   resolveVersionForDate,
-} from "../../utils/operation-shift-version-resolver";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+} from "../../utils/operations/operation-shift-version-resolver";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { buildMultiShiftWorkdaySnapshot } from "../workdays/multi-shift-workday-snapshot";
 
 export type ReconcileShiftWorkdayInput = {

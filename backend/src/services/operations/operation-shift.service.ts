@@ -1,13 +1,13 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
-import { companyRepository } from "../../repositories/company.repository";
-import { companyShiftTemplateRepository } from "../../repositories/company-shift-template.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationShiftExceptionRepository } from "../../repositories/operation-shift-exception.repository";
-import { operationShiftRepository } from "../../repositories/operation-shift.repository";
-import { operationShiftVersionRepository } from "../../repositories/operation-shift-version.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { companyShiftTemplateRepository } from "../../repositories/companies/company-shift-template.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationShiftExceptionRepository } from "../../repositories/operations/operation-shift-exception.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
 import type {
   CompanyShiftTemplate,
   CreateCompanyShiftTemplateInput,
@@ -17,20 +17,20 @@ import type {
   OperationShiftWithVersions,
   UpdateCompanyShiftTemplateInput,
 } from "../../types/operation-shift";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
-import { normalizeShiftCode } from "../../utils/shift-code";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
+import { normalizeShiftCode } from "../../utils/operations/shift-code";
 import {
   assertEffectiveRange,
   assertShiftTimesDistinct,
   normalizeShiftTime,
   ShiftTimeError,
-} from "../../utils/shift-time";
+} from "../../utils/operations/shift-time";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 import {
   isDayEnabled,
   resolveShiftScheduleForDate,
   type ResolvedShiftScheduleForDate,
-} from "../../utils/operation-shift-version-resolver";
+} from "../../utils/operations/operation-shift-version-resolver";
 import {
   acquireTransactionAppLock,
   operationShiftExceptionLockResource,

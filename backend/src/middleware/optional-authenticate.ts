@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../errors/app-error";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { authService, isSessionValid } from "../services/identity/auth.service";
 
 /** Attaches auth when Bearer token is present; does not require it. */

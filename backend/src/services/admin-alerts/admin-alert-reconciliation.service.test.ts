@@ -32,7 +32,7 @@ describe("adminAlertReconciliationService", () => {
 
   it("materializes missing pending absence obligations", async () => {
     const { adminAlertContextRepository } = await import(
-      "../../repositories/admin-alert-context.repository"
+      "../../repositories/admin-alerts/admin-alert-context.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
     const { adminAlertReconciliationService } = await import(
@@ -57,7 +57,7 @@ describe("adminAlertReconciliationService", () => {
 
   it("counts only newly enqueued obligations as recovered", async () => {
     const { adminAlertContextRepository } = await import(
-      "../../repositories/admin-alert-context.repository"
+      "../../repositories/admin-alerts/admin-alert-context.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
     const { adminAlertReconciliationService } = await import(
@@ -82,7 +82,7 @@ describe("adminAlertReconciliationService", () => {
 
   it("reconcileAll aggregates all obligation kinds", async () => {
     const { adminAlertContextRepository } = await import(
-      "../../repositories/admin-alert-context.repository"
+      "../../repositories/admin-alerts/admin-alert-context.repository"
     );
     const { adminAlertService } = await import("./admin-alert.service");
     const { adminAlertReconciliationService } = await import(

@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import { getPool, initializeDatabase } from "../../database/connection";
-import { absenceWorkdaySyncJobRepository } from "../../repositories/absence-workday-sync-job.repository";
+import { absenceWorkdaySyncJobRepository } from "../../repositories/absence/absence-workday-sync-job.repository";
 
 const canRun =
   process.env.RUN_DB_INTEGRATION_TESTS === "true" &&

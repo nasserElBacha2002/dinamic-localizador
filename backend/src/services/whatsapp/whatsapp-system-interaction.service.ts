@@ -7,7 +7,7 @@ import type { WhatsAppSystemInteractionCategory } from "../../constants/whatsapp
 import {
   WHATSAPP_SYSTEM_INTERACTION_TERMINAL_STATUSES,
 } from "../../constants/whatsapp-turn-classification";
-import { whatsappSystemInteractionRepository } from "../../repositories/whatsapp-system-interaction.repository";
+import { whatsappSystemInteractionRepository } from "../../repositories/whatsapp/whatsapp-system-interaction.repository";
 import type { SystemInteractionContext } from "../../types/whatsapp-turn-classification";
 import { isAttendanceConfirmationWindowOpen } from "../../utils/attendance-confirmation-validity";
 import { systemLogger } from "../../utils/system-logs/logger";

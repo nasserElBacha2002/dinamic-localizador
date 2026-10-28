@@ -10,8 +10,8 @@ import {
 } from "../../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
-import { employeeCategoryRepository } from "../../repositories/employee-category.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { employeeCategoryRepository } from "../../repositories/employees/employee-category.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { employeeCategoryService } from "./employee-category.service";
 import { employeeDeactivationService } from "./employee-deactivation.service";
 import { employeeService } from "./employee.service";

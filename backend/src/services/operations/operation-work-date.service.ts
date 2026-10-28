@@ -1,8 +1,8 @@
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 
 /**

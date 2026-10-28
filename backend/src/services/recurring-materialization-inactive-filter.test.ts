@@ -7,7 +7,7 @@ describe("recurring materialization inactive employee protection", () => {
   it("filters inactive employees in overlapping assignment SQL", () => {
     const repoPath = join(
       process.cwd(),
-      "src/repositories/operation-employee.repository.ts",
+      "src/repositories/operations/operation-employee.repository.ts",
     );
     const source = readFileSync(repoPath, "utf8");
     assert.match(source, /listOverlappingForOperationInDateRange/);

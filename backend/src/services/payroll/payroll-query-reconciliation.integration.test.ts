@@ -4,7 +4,7 @@ import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import { getPool } from "../../database/connection";
-import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll-receipt-query-delivery.repository";
+import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
 import { setAuditBeforeInsertHookForTests } from "../../repositories/audit.repository";
 import {
   describeDatabaseIntegration,

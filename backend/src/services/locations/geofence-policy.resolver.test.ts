@@ -11,7 +11,7 @@ describe("geofencePolicyResolver", () => {
   });
 
   it("prefers service radius then company margin", async () => {
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { geofencePolicyResolver } = await import("./geofence-policy.resolver");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => ({
@@ -28,7 +28,7 @@ describe("geofencePolicyResolver", () => {
   });
 
   it("uses company default radius when service radius is 0", async () => {
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { geofencePolicyResolver } = await import("./geofence-policy.resolver");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => ({
@@ -45,7 +45,7 @@ describe("geofencePolicyResolver", () => {
   });
 
   it("fails closed on repository errors", async () => {
-    const { companySettingsRepository } = await import("../../repositories/company-settings.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
     const { geofencePolicyResolver } = await import("./geofence-policy.resolver");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => {

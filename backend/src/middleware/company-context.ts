@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { resolvePermissionsForRole } from "../constants/company-permissions";
 import { AppError } from "../errors/app-error";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { companyContextService } from "../services/companies/company-context.service";
 import { platformAdminService } from "../services/companies/platform-admin.service";
 import type { AuthTokenPayload } from "../types/auth";

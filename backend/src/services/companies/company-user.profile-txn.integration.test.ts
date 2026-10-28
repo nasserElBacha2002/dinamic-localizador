@@ -24,9 +24,9 @@ describeDatabaseIntegration("company user profile transaction & authz", () => {
 
   it("rejects cross-company profile writes and leaves no persisted changes", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { deleteCompanyCascade } = await import("../../test-helpers/integration-cleanup");
@@ -122,9 +122,9 @@ describeDatabaseIntegration("company user profile transaction & authz", () => {
 
   it("rolls back name/email when phone write fails inside the same transaction", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { deleteCompanyCascade } = await import("../../test-helpers/integration-cleanup");
     const sql = (await import("mssql")).default;
@@ -202,9 +202,9 @@ describeDatabaseIntegration("company user profile transaction & authz", () => {
 
   it("refreshes actor role under lock so a demoted actor cannot inactivate", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { deleteCompanyCascade } = await import("../../test-helpers/integration-cleanup");
@@ -304,9 +304,9 @@ describeDatabaseIntegration("company user profile transaction & authz", () => {
 
   it("enforces UQ_users_email under concurrent self email updates", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { deleteCompanyCascade } = await import("../../test-helpers/integration-cleanup");
@@ -413,9 +413,9 @@ describeDatabaseIntegration("company user profile transaction & authz", () => {
 
   it("allows self profile update and blocks self deactivation against persisted state", async () => {
     const { getPool } = await import("../../database/connection");
-    const { userRepository } = await import("../../repositories/user.repository");
+    const { userRepository } = await import("../../repositories/identity/user.repository");
     const { userCompanyMembershipRepository } = await import(
-      "../../repositories/user-company-membership.repository"
+      "../../repositories/companies/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
     const { deleteCompanyCascade } = await import("../../test-helpers/integration-cleanup");

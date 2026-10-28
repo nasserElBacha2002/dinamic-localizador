@@ -22,13 +22,13 @@ describe("attendanceThresholdAlertService.evaluateEmployee", () => {
 
   it("baselines first evaluation without alerting even when BELOW", async () => {
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { attendanceAlertMetricsRepository } = await import(
-      "../../repositories/attendance-alert-metrics.repository"
+      "../../repositories/attendance/attendance-alert-metrics.repository"
     );
     const { attendanceAlertStateRepository } = await import(
-      "../../repositories/attendance-alert-state.repository"
+      "../../repositories/attendance/attendance-alert-state.repository"
     );
     const { attendanceThresholdAlertService } = await import(
       "./attendance-threshold-alert.service"
@@ -71,13 +71,13 @@ describe("attendanceThresholdAlertService.evaluateEmployee", () => {
 
   it("alerts on ABOVE → BELOW crossing and skips stay-below", async () => {
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { attendanceAlertMetricsRepository } = await import(
-      "../../repositories/attendance-alert-metrics.repository"
+      "../../repositories/attendance/attendance-alert-metrics.repository"
     );
     const { attendanceAlertStateRepository } = await import(
-      "../../repositories/attendance-alert-state.repository"
+      "../../repositories/attendance/attendance-alert-state.repository"
     );
     const { attendanceThresholdAlertService } = await import(
       "./attendance-threshold-alert.service"
@@ -175,13 +175,13 @@ describe("attendanceThresholdAlertService.evaluateEmployee", () => {
 
   it("skips WhatsApp during cooldown on technical re-cross", async () => {
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { attendanceAlertMetricsRepository } = await import(
-      "../../repositories/attendance-alert-metrics.repository"
+      "../../repositories/attendance/attendance-alert-metrics.repository"
     );
     const { attendanceAlertStateRepository } = await import(
-      "../../repositories/attendance-alert-state.repository"
+      "../../repositories/attendance/attendance-alert-state.repository"
     );
     const { attendanceThresholdAlertService } = await import(
       "./attendance-threshold-alert.service"
@@ -243,13 +243,13 @@ describe("attendanceThresholdAlertService.evaluateEmployee", () => {
 
   it("rebaselines on config version mismatch without alert", async () => {
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { attendanceAlertMetricsRepository } = await import(
-      "../../repositories/attendance-alert-metrics.repository"
+      "../../repositories/attendance/attendance-alert-metrics.repository"
     );
     const { attendanceAlertStateRepository } = await import(
-      "../../repositories/attendance-alert-state.repository"
+      "../../repositories/attendance/attendance-alert-state.repository"
     );
     const { attendanceThresholdAlertService } = await import(
       "./attendance-threshold-alert.service"

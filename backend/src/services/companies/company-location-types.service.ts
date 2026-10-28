@@ -1,7 +1,7 @@
 import { roleHasPermission } from "../../constants/company-permissions";
 import { AppError } from "../../errors/app-error";
-import { companyLocationTypesRepository } from "../../repositories/company-location-types.repository";
-import { companyRepository } from "../../repositories/company.repository";
+import { companyLocationTypesRepository } from "../../repositories/companies/company-location-types.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
 import { clientRepository } from "../../repositories/client.repository";
 import type {
   CreateCompanyLocationTypeInput,
@@ -10,8 +10,8 @@ import type {
 } from "../../schemas/company-location-type.schema";
 import { buildPaginationMeta } from "../../utils/pagination";
 import type { CompanyLocationType, CompanyMembershipSummary } from "../../types/company";
-import { isLocationTypeAssignableToService } from "../../utils/location-type-client-scope";
-import { normalizeLocationTypeCode } from "../../utils/location-type-code";
+import { isLocationTypeAssignableToService } from "../../utils/locations/location-type-client-scope";
+import { normalizeLocationTypeCode } from "../../utils/locations/location-type-code";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 
 const assertActiveCompany = async (companyId: string): Promise<void> => {

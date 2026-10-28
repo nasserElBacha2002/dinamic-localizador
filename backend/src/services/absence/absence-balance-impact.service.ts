@@ -1,7 +1,7 @@
 import sql from "mssql";
 import type { AbsenceRequest } from "../../types/absence";
 import type { LedgerActor, YearQuantity } from "../../types/absence-balance-ledger";
-import { resolveYearAllocations } from "../../utils/absence-year-allocations";
+import { resolveYearAllocations } from "../../utils/absence/absence-year-allocations";
 import { absenceBalanceLedgerService } from "./absence-balance-ledger.service";
 
 type RequestBalanceRef = Pick<

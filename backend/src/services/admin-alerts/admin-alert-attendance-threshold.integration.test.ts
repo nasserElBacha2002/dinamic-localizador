@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { companyAlertRecipientRepository } from "../../repositories/company-alert-recipient.repository";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { attendanceAlertStateRepository } from "../../repositories/attendance-alert-state.repository";
-import { employeeRepository } from "../../repositories/employee.repository";
+import { companyAlertRecipientRepository } from "../../repositories/companies/company-alert-recipient.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { attendanceAlertStateRepository } from "../../repositories/attendance/attendance-alert-state.repository";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import {
@@ -189,7 +189,7 @@ describeDatabaseIntegration("admin alert attendance threshold phase D", () => {
   it("queue claim is exclusive under concurrent workers", async () => {
     const { companyId, employeeId } = await seed();
     const { attendanceAlertEvaluationQueueRepository } = await import(
-      "../../repositories/attendance-alert-state.repository"
+      "../../repositories/attendance/attendance-alert-state.repository"
     );
 
     await attendanceAlertEvaluationQueueRepository.markDirty(companyId, employeeId);

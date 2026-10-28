@@ -1,8 +1,8 @@
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import { getPool } from "../../database/connection";
-import { absenceAttachmentRepository } from "../../repositories/absence-attachment.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceAttachmentRepository } from "../../repositories/absence/absence-attachment.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import type { AbsenceRequestAttachmentDto } from "../../types/absence-attachment";
 import { toAbsenceAttachmentDto } from "../../types/absence-attachment";
 import { absenceAttachmentMetrics } from "../../utils/absence-attachments/metrics";

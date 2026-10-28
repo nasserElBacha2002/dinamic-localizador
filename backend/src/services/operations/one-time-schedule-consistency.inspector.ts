@@ -1,14 +1,14 @@
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
-import { operationEmployeeRepository } from "../../repositories/operation-employee.repository";
-import { operationRepository } from "../../repositories/operation.repository";
-import { operationWorkdayRepository } from "../../repositories/operation-workday.repository";
-import { employeeWorkdayRepository } from "../../repositories/employee-workday.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import { getPool } from "../../database/connection";
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
 import type { Operation } from "../../types/domain";
 import type { OperationWorkday } from "../../types/workday";
-import { resolveOperationTimezone } from "../../utils/operation-timezone";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 
 export type OneTimeConsistencyStatus =

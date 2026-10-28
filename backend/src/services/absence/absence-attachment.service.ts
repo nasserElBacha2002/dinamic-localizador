@@ -1,6 +1,6 @@
 import { AppError } from "../../errors/app-error";
-import { absenceAttachmentRepository } from "../../repositories/absence-attachment.repository";
-import { absenceRequestRepository } from "../../repositories/absence-request.repository";
+import { absenceAttachmentRepository } from "../../repositories/absence/absence-attachment.repository";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import type { AbsenceRequestAttachmentDto } from "../../types/absence-attachment";
 import { toAbsenceAttachmentDto } from "../../types/absence-attachment";
 import { attachmentCleanupService } from "../attachments/attachment-cleanup.service";

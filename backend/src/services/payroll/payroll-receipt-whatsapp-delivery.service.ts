@@ -5,10 +5,10 @@ import {
   isSimulationActive,
   recordSimulationArtifact,
   setTechnicalDetail,
-} from "../../utils/bot-runtime-context";
+} from "../../utils/bot/bot-runtime-context";
 import { classifyTwilioOutboundError } from "../../utils/twilio-error-classifier";
 import { twilioOutboundService } from "../whatsapp/twilio-outbound.service";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import type { PayrollReceipt } from "../../types/payroll-receipt";
 import { whatsappTurnClassificationShadowService } from "../whatsapp/whatsapp-turn-classification-shadow.service";
 import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";

@@ -1,13 +1,13 @@
-import { companyWorkScheduleRepository } from "../../repositories/company-work-schedule.repository";
-import { operationScheduleRepository } from "../../repositories/operation-schedule.repository";
+import { companyWorkScheduleRepository } from "../../repositories/companies/company-work-schedule.repository";
+import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
 import type { OperationWithService } from "../../types/domain";
 import type { CompanyWorkSchedule, OperationScheduleSummary } from "../../types/schedule";
 import { recurringScheduleService } from "./recurring-schedule.service";
 import {
   assertRecurringOperationScheduleExists,
   assertRecurringScheduleConsistency,
-} from "../../utils/recurring-schedule-consistency";
-import { buildScheduleSummaryLabel } from "../../utils/weekly-schedule";
+} from "../../utils/operations/recurring-schedule-consistency";
+import { buildScheduleSummaryLabel } from "../../utils/operations/weekly-schedule";
 
 export const operationScheduleSummaryService = {
   async buildSummariesForOperations(

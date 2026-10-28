@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
-import { companySettingsRepository } from "../../repositories/company-settings.repository";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { operationScheduleModeTransitionService } from "../operations/operation-schedule-mode-transition.service";
 import { workdayMaterializationService } from "./workday-materialization.service";
-import { operationRepository } from "../../repositories/operation.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
-import { companyRepository } from "../../repositories/company.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
 import { employeeShiftIntervalOverlap } from "../../utils/employee-shift-interval-overlap";
 import { isMutableForExceptionRestore } from "../operations/operation-shift-workday-reconcile.service";
 

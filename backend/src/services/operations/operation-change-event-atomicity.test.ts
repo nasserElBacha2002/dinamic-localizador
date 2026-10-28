@@ -4,7 +4,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import { setTestPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
-import { setOperationChangeEventBeforeInsertHookForTests } from "../../repositories/operation-change-event.repository";
+import { setOperationChangeEventBeforeInsertHookForTests } from "../../repositories/operations/operation-change-event.repository";
 
 const COMPANY_ID = "00000000-0000-4000-8000-000000000001";
 const OPERATION_ID = "00000000-0000-4000-8000-000000000002";
@@ -86,9 +86,9 @@ describe("operationService change-event transactional rollback", () => {
       throw new Error("injected change-event failure");
     });
 
-    const { operationRepository } = await import("../../repositories/operation.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
     const { companySettingsRepository } = await import(
-      "../../repositories/company-settings.repository"
+      "../../repositories/companies/company-settings.repository"
     );
     const { auditService } = await import("../audit.service");
     const { operationService } = await import("./operation.service");
@@ -123,8 +123,8 @@ describe("operationAssignmentService coverage validation", () => {
 
   it("rejects coverage when replacedAssignmentId is missing", async () => {
     setupUnitTestEnv();
-    const { operationRepository } = await import("../../repositories/operation.repository");
-    const { employeeRepository } = await import("../../repositories/employee.repository");
+    const { operationRepository } = await import("../../repositories/operations/operation.repository");
+    const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { operationWorkDateService } = await import("./operation-work-date.service");
     const { operationAssignmentService } = await import("./operation-assignment.service");
 
@@ -180,17 +180,17 @@ describe("operationAssignmentService coverage validation", () => {
       FakeTransaction as unknown as typeof sql.Transaction;
 
     try {
-      const { operationRepository } = await import("../../repositories/operation.repository");
-      const { employeeRepository } = await import("../../repositories/employee.repository");
+      const { operationRepository } = await import("../../repositories/operations/operation.repository");
+      const { employeeRepository } = await import("../../repositories/employees/employee.repository");
       const { operationWorkDateService } = await import("./operation-work-date.service");
       const { companySettingsRepository } = await import(
-        "../../repositories/company-settings.repository"
+        "../../repositories/companies/company-settings.repository"
       );
       const { employeeDeactivationRepository } = await import(
-        "../../repositories/employee-deactivation.repository"
+        "../../repositories/employees/employee-deactivation.repository"
       );
       const { operationEmployeeRepository } = await import(
-        "../../repositories/operation-employee.repository"
+        "../../repositories/operations/operation-employee.repository"
       );
       const { operationAssignmentService } = await import("./operation-assignment.service");
 

@@ -1,5 +1,5 @@
 import type { MessageCostFlowLabel, MessageCostKind } from "../../constants/whatsapp-message-cost";
-import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp-message-cost-ledger.repository";
+import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 import { maskPhoneNumberForLog } from "../../utils/phone";
 
 export interface RecordOutboundMessageCostInput {

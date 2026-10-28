@@ -12,14 +12,14 @@ import {
   SENT_PERSISTENCE_UNKNOWN_ERROR,
 } from "../../constants/attendance-notification";
 import { AppError } from "../../errors/app-error";
-import { attendanceNotificationRepository } from "../../repositories/attendance-notification.repository";
-import { companyRepository } from "../../repositories/company.repository";
-import { operationRepository } from "../../repositories/operation.repository";
+import { attendanceNotificationRepository } from "../../repositories/admin-alerts/attendance-notification.repository";
+import { companyRepository } from "../../repositories/companies/company.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
 import type { AttendanceReminderCandidate } from "../../types/attendance-notification";
-import { buildAttendanceReminderTemplateVariables } from "../../utils/attendance-reminder-template";
+import { buildAttendanceReminderTemplateVariables } from "../../utils/attendance/attendance-reminder-template";
 import { assertSingleScheduleModeOrReject } from "../../utils/operation-schedule-mode-guard";
 import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
-import { buildOperationStartDueWindow, buildReminderDueWindow } from "../../utils/reminder-time-window";
+import { buildOperationStartDueWindow, buildReminderDueWindow } from "../../utils/attendance/reminder-time-window";
 import { countCandidatesByOperationKind } from "../../utils/workday-reminder-eligibility";
 import {
   botSessionService,
@@ -27,7 +27,7 @@ import {
 } from "../bot/bot-session.service";
 import { twilioOutboundService } from "../whatsapp/twilio-outbound.service";
 import { whatsappFlowTraceService } from "../whatsapp/whatsapp-flow-trace.service";
-import { whatsappMessageRepository } from "../../repositories/whatsapp-message.repository";
+import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { normalizePhoneNumber } from "../../utils/phone";
 import { logWhatsAppNotificationEvent } from "../../utils/whatsapp-notification-observability";

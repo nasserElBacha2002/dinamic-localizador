@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { WhatsappResultCode } from "../constants/whatsapp-observability";
-import type { FlowTraceHandle } from "../services/whatsapp-flow-trace.service";
+import type { FlowTraceHandle } from "../services/whatsapp/whatsapp-flow-trace.service";
 
 export interface BotFlowResultMeta {
   flowType?: string;

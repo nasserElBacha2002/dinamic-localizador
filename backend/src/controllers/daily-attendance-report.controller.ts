@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { AppError } from "../errors/app-error";
-import { dailyAttendanceReportService } from "../services/daily-attendance-report.service";
+import { dailyAttendanceReportService } from "../services/reports/daily-attendance-report.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const triggerDailyAttendanceReportSchema = z.object({

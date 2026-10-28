@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { absenceCalendarService } from "../services/absence-calendar.service";
+import { absenceCalendarService } from "../services/absence/absence-calendar.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const absenceCalendarController = {

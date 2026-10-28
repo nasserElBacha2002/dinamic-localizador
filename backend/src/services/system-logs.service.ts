@@ -9,7 +9,7 @@ import {
 } from "../constants/system-logs";
 import { systemRuntimeLogRepository } from "../repositories/system-runtime-log.repository";
 import type { SystemLogsListQuery } from "../schemas/system-logs.schema";
-import { platformAuditService } from "./platform-audit.service";
+import { platformAuditService } from "./companies/platform-audit.service";
 import { systemLogger } from "../utils/system-logs/logger";
 import {
   toSystemRuntimeLogDetail,

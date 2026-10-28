@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env";
 import { ATTENDANCE_NOTIFICATION_TYPES } from "../constants/attendance-notification";
 import { AppError } from "../errors/app-error";
-import { attendanceReminderService } from "../services/attendance-reminder.service";
+import { attendanceReminderService } from "../services/attendance/attendance-reminder.service";
 import { requirePermission } from "../middleware/company-context";
 import { runAttendanceReminderJobOnce } from "../jobs/attendance-reminder.job";
 import { requireRequestCompanyId } from "../utils/request-company";

@@ -10,9 +10,9 @@ import {
 import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
-import { operationAssignmentService } from "../services/operation-assignment.service";
-import { operationService } from "../services/operation.service";
-import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
+import { operationAssignmentService } from "../services/operations/operation-assignment.service";
+import { operationService } from "../services/operations/operation.service";
+import { recurringWorkdayMaterializationService } from "../services/workdays/recurring-workday-materialization.service";
 import { WEEKDAYS } from "../constants/weekday";
 import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 

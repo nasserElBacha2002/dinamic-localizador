@@ -1,0 +1,942 @@
+import sql from "mssql";
+import { getPool } from "../../database/connection";
+import { AppError } from "../../errors/app-error";
+import { botSessionRepository } from "../../repositories/bot-session.repository";
+import type {
+  BotSession,
+  BotSessionContext,
+  BotSessionMenuOptionKey,
+  BotSessionState,
+  OperationSelectionOption,
+  WorkdaySessionSelectionOption,
+} from "../../types/twilio.types";
+import {
+  buildSessionExpiresAt,
+  isSessionActive,
+  isSessionExpiredByTime,
+} from "../../utils/bot-session-expiration";
+import { getSessionTtlMinutes } from "../../utils/bot-runtime-settings-scope";
+import { isPhysicalAttendanceSessionState } from "../../utils/bot-session-states";
+
+export type SessionSelectionResult =
+  | { kind: "ok"; session: BotSession }
+  | { kind: "expired" }
+  | { kind: "invalid" };
+
+/** Distinct outcomes for confirmation-response session creation (never collapse to null). */
+export type AttendanceConfirmationSessionCreateResult =
+  | { status: "CREATED"; session: BotSession }
+  | {
+      status: "BLOCKED_BY_PHYSICAL_ATTENDANCE";
+      activeSessionId: string;
+      activeState: BotSessionState;
+    }
+  | { status: "ACTIVE_SESSION_CONFLICT" };
+
+const buildExpiresAt = (): Date => buildSessionExpiresAt(getSessionTtlMinutes());
+
+export type FailedSessionAttemptResult =
+  | { kind: "retry"; session: BotSession; attempt: number }
+  | { kind: "max_attempts"; session: BotSession; attempt: number }
+  | { kind: "completed" | "cancelled" | "expired"; session: BotSession }
+  | { kind: "conflict"; session: BotSession | null };
+
+const parseContext = (contextJson: string | null): BotSessionContext => {
+  if (!contextJson) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(contextJson) as BotSessionContext;
+  } catch {
+    return {};
+  }
+};
+
+const runInTransaction = async <T>(operation: (transaction: sql.Transaction) => Promise<T>): Promise<T> => {
+  const pool = getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    const result = await operation(transaction);
+    await transaction.commit();
+    return result;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+};
+
+const prepareForNewSession = async (
+  companyId: string,
+  employeeId: string,
+  phoneNumber: string,
+  transaction: sql.Transaction,
+): Promise<void> => {
+  const expiredCount = await botSessionRepository.expireStaleSessionsForParticipant(
+    companyId,
+    employeeId,
+    phoneNumber,
+    transaction,
+  );
+  const cancelledCount = await botSessionRepository.cancelValidActiveSessions(
+    companyId,
+    employeeId,
+    phoneNumber,
+    transaction,
+  );
+
+  if (expiredCount > 0) {
+    console.info("[bot-session] stale sessions expired before new flow", {
+      employeeId,
+      phoneNumber,
+      expiredCount,
+    });
+  }
+
+  if (cancelledCount > 0) {
+    console.info("[bot-session] active sessions cancelled before new flow", {
+      employeeId,
+      phoneNumber,
+      cancelledCount,
+    });
+  }
+};
+
+export const botSessionService = {
+  parseContext,
+  buildExpiresAt,
+
+  async getActiveSessionByPhone(companyId: string, phoneNumber: string): Promise<BotSession | null> {
+    return runInTransaction(async (transaction) => {
+      const valid = await botSessionRepository.findValidActiveByPhone(companyId, phoneNumber, transaction);
+      if (valid) {
+        return valid;
+      }
+
+      const stale = await botSessionRepository.findStaleActiveByPhone(companyId, phoneNumber, transaction);
+      if (!stale) {
+        return null;
+      }
+
+      const expired = await botSessionRepository.expireSessionById(companyId, stale.id, transaction);
+      if (expired) {
+        console.info("[bot-session] session expired lazily", {
+          sessionId: stale.id,
+          phoneNumber,
+        });
+      }
+
+      return null;
+    });
+  },
+
+  async getLatestSessionByPhone(companyId: string, phoneNumber: string): Promise<BotSession | null> {
+    return botSessionRepository.findLatestByPhone(companyId, phoneNumber);
+  },
+
+  async getSessionResolutionByPhone(companyId: string, phoneNumber: string): Promise<{
+    activeSession: BotSession | null;
+    recentlyExpired: boolean;
+  }> {
+    const activeSession = await this.getActiveSessionByPhone(companyId, phoneNumber);
+    if (activeSession) {
+      return { activeSession, recentlyExpired: false };
+    }
+
+    const latest = await botSessionRepository.findLatestByPhone(companyId, phoneNumber);
+    return {
+      activeSession: null,
+      recentlyExpired: latest?.state === "EXPIRED",
+    };
+  },
+
+  async expireSession(companyId: string, sessionId: string): Promise<boolean> {
+    const expired = await botSessionRepository.expireSessionById(companyId, sessionId);
+    if (expired) {
+      console.info("[bot-session] session expired explicitly", { sessionId });
+    }
+    return expired;
+  },
+
+  async createWaitingLocationSession(
+    companyId: string,
+    input: {
+    employeeId: string;
+    phoneNumber: string;
+    operationId: string;
+    employeeWorkdayId: string;
+  }): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: input.operationId,
+            employeeWorkdayId: input.employeeWorkdayId,
+            attendanceRecordId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_LOCATION",
+            intent: "CHECK_IN",
+            contextJson: null,
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] waiting location session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        console.warn("[bot-session] active session conflict while creating waiting location", {
+          employeeId: input.employeeId,
+          phoneNumber: input.phoneNumber,
+        });
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async createOperationSelectionSession(
+    companyId: string,
+    input: {
+    employeeId: string;
+    phoneNumber: string;
+    options: WorkdaySessionSelectionOption[];
+    pendingLocation?: BotSessionContext["pendingLocation"];
+  }): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        const context: BotSessionContext = {
+          workdayOptions: input.options,
+          ...(input.pendingLocation ? { pendingLocation: input.pendingLocation } : {}),
+        };
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: null,
+            employeeWorkdayId: null,
+            attendanceRecordId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_OPERATION_SELECTION",
+            intent: "CHECK_IN",
+            contextJson: JSON.stringify(context),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] workday selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        console.warn("[bot-session] active session conflict while creating selection session", {
+          employeeId: input.employeeId,
+          phoneNumber: input.phoneNumber,
+        });
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async selectOperationAndRenewExpiration(
+    companyId: string,
+    sessionId: string,
+    input: {
+      operationId: string;
+      employeeWorkdayId: string;
+    },
+  ): Promise<SessionSelectionResult> {
+    return runInTransaction(async (transaction) => {
+      const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
+      if (!valid) {
+        const stale = await botSessionRepository.findStaleActiveById(companyId, sessionId, transaction);
+        if (stale) {
+          await botSessionRepository.expireSessionById(companyId, stale.id, transaction);
+          console.info("[bot-session] selection attempted on expired session", {
+            sessionId: stale.id,
+          });
+        }
+        return { kind: "expired" };
+      }
+
+      if (valid.state !== "WAITING_OPERATION_SELECTION") {
+        return { kind: "invalid" };
+      }
+
+      const renewedExpiresAt = buildExpiresAt();
+      const updated = await botSessionRepository.updateSession(
+        companyId,
+        sessionId,
+        {
+          operationId: input.operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          attendanceRecordId: null,
+          state: "WAITING_LOCATION",
+          intent: "CHECK_IN",
+          contextJson: null,
+          failedAttempts: 0,
+          expiresAt: renewedExpiresAt,
+        },
+        transaction,
+      );
+
+      if (!updated) {
+        return { kind: "invalid" };
+      }
+
+      console.info("[bot-session] session renewed after workday selection", {
+        sessionId: updated.id,
+        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        expiresAt: updated.expiresAt,
+      });
+
+      return { kind: "ok", session: updated };
+    });
+  },
+
+  async createWaitingCheckoutLocationSession(
+    companyId: string,
+    input: {
+    employeeId: string;
+    phoneNumber: string;
+    operationId: string;
+    employeeWorkdayId: string;
+    attendanceRecordId?: string | null;
+    checkoutWithoutArrival?: boolean;
+    pendingLocation?: BotSessionContext["pendingLocation"];
+  }): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: input.operationId,
+            employeeWorkdayId: input.employeeWorkdayId,
+            attendanceRecordId: input.attendanceRecordId ?? null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_CHECKOUT_LOCATION",
+            intent: "CHECK_OUT",
+            contextJson:
+              input.checkoutWithoutArrival || input.pendingLocation
+                ? JSON.stringify({
+                    ...(input.checkoutWithoutArrival
+                      ? { checkoutWithoutArrival: true }
+                      : {}),
+                    ...(input.pendingLocation
+                      ? { pendingLocation: input.pendingLocation }
+                      : {}),
+                  } satisfies BotSessionContext)
+                : null,
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] waiting checkout location session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        attendanceRecordId: input.attendanceRecordId ?? null,
+        checkoutWithoutArrival: Boolean(input.checkoutWithoutArrival),
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async createCheckoutOperationSelectionSession(
+    companyId: string,
+    input: {
+    employeeId: string;
+    phoneNumber: string;
+    options: WorkdaySessionSelectionOption[];
+    pendingLocation?: BotSessionContext["pendingLocation"];
+  }): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        const context: BotSessionContext = {
+          workdayOptions: input.options,
+          ...(input.pendingLocation ? { pendingLocation: input.pendingLocation } : {}),
+        };
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: null,
+            employeeWorkdayId: null,
+            attendanceRecordId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_CHECKOUT_OPERATION_SELECTION",
+            intent: "CHECK_OUT",
+            contextJson: JSON.stringify(context),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] checkout workday selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async selectCheckoutOperationAndRenewExpiration(
+    companyId: string,
+    sessionId: string,
+    input: {
+      operationId: string;
+      employeeWorkdayId: string;
+      attendanceRecordId?: string | null;
+      checkoutWithoutArrival?: boolean;
+    },
+  ): Promise<SessionSelectionResult> {
+    return runInTransaction(async (transaction) => {
+      const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
+      if (!valid) {
+        const stale = await botSessionRepository.findStaleActiveById(companyId, sessionId, transaction);
+        if (stale) {
+          await botSessionRepository.expireSessionById(companyId, stale.id, transaction);
+        }
+        return { kind: "expired" };
+      }
+
+      // Mixed location-first selection uses WAITING_OPERATION_SELECTION with attendanceAction tags.
+      if (
+        valid.state !== "WAITING_CHECKOUT_OPERATION_SELECTION" &&
+        valid.state !== "WAITING_OPERATION_SELECTION"
+      ) {
+        return { kind: "invalid" };
+      }
+
+      const renewedExpiresAt = buildExpiresAt();
+      const updated = await botSessionRepository.updateSession(
+        companyId,
+        sessionId,
+        {
+          operationId: input.operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          attendanceRecordId: input.attendanceRecordId ?? null,
+          state: "WAITING_CHECKOUT_LOCATION",
+          intent: "CHECK_OUT",
+          contextJson: input.checkoutWithoutArrival
+            ? JSON.stringify({ checkoutWithoutArrival: true })
+            : null,
+          failedAttempts: 0,
+          expiresAt: renewedExpiresAt,
+        },
+        transaction,
+      );
+
+      if (!updated) {
+        return { kind: "invalid" };
+      }
+
+      return { kind: "ok", session: updated };
+    });
+  },
+
+  async createConfirmAttendanceSelectionSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      options: OperationSelectionOption[];
+    },
+  ): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_CONFIRM_ATTENDANCE_SELECTION",
+            intent: "CONFIRM_ATTENDANCE",
+            contextJson: JSON.stringify({ operationOptions: input.options }),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] confirm attendance selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async createUnavailabilitySelectionSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      options: OperationSelectionOption[];
+    },
+  ): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_UNAVAILABILITY_SELECTION",
+            intent: "REPORT_UNAVAILABILITY",
+            contextJson: JSON.stringify({ operationOptions: input.options }),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] unavailability selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async createAttendanceConfirmationResponseSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      operationId: string;
+      notificationId: string;
+      scheduleVersion: number;
+      /** Business validity end (exclusive). Stored in context; session TTL stays conversational. */
+      scheduledStart: string | Date;
+    },
+  ): Promise<AttendanceConfirmationSessionCreateResult> {
+    const validUntil = new Date(input.scheduledStart);
+    if (!Number.isFinite(validUntil.getTime())) {
+      throw new AppError(
+        500,
+        "INVALID_CONFIRMATION_VALID_UNTIL",
+        "scheduledStart inválido para sesión de confirmación de asistencia",
+      );
+    }
+
+    try {
+      const result = await runInTransaction(async (transaction) => {
+        const active = await botSessionRepository.findValidActiveByPhone(
+          companyId,
+          input.phoneNumber,
+          transaction,
+        );
+        if (active && isPhysicalAttendanceSessionState(active.state)) {
+          console.info(
+            "[bot-session] skipped confirmation response session — physical attendance session active",
+            {
+              employeeId: input.employeeId,
+              operationId: input.operationId,
+              activeSessionId: active.id,
+              activeState: active.state,
+            },
+          );
+          return {
+            status: "BLOCKED_BY_PHYSICAL_ATTENDANCE" as const,
+            activeSessionId: active.id,
+            activeState: active.state,
+          };
+        }
+
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        const session = await botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: input.operationId,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
+            intent: "ATTENDANCE_CONFIRMATION_RESPONSE",
+            contextJson: JSON.stringify({
+              attendanceConfirmation: {
+                operationId: input.operationId,
+                notificationId: input.notificationId,
+                scheduleVersion: input.scheduleVersion,
+                validUntil: validUntil.toISOString(),
+              },
+            }),
+            // Conversational TTL only — business window lives in durable notification+assignment.
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+        return { status: "CREATED" as const, session };
+      });
+
+      if (result.status === "CREATED") {
+        console.info("[bot-session] attendance confirmation response session created", {
+          event: "ATTENDANCE_CONFIRMATION_RESPONSE_SESSION_CREATED",
+          sessionId: result.session.id,
+          employeeId: input.employeeId,
+          operationId: input.operationId,
+          scheduleVersion: input.scheduleVersion,
+          confirmationValidUntil: validUntil.toISOString(),
+          expiresAt: result.session.expiresAt,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        console.info(
+          "[bot-session] skipped confirmation response session because active session conflict",
+          {
+            employeeId: input.employeeId,
+            operationId: input.operationId,
+            reason: "ACTIVE_SESSION_CONFLICT",
+          },
+        );
+        return { status: "ACTIVE_SESSION_CONFLICT" };
+      }
+
+      throw error;
+    }
+  },
+
+  async completeSession(
+    companyId: string,
+    sessionId: string,
+    transaction?: sql.Transaction,
+    expectedSession?: BotSession,
+  ): Promise<boolean> {
+    const updated = await botSessionRepository.updateSession(
+      companyId,
+      sessionId,
+      {
+        state: "COMPLETED",
+        expectedVersion: expectedSession?.sessionVersion,
+        expectedState: expectedSession?.state,
+      },
+      transaction,
+    );
+    console.info("[bot-session] session completed", { sessionId });
+    return updated !== null;
+  },
+
+  async cancelSession(
+    companyId: string,
+    sessionId: string,
+    expectedSession?: BotSession,
+  ): Promise<boolean> {
+    const updated = await botSessionRepository.updateSession(companyId, sessionId, {
+      state: "CANCELLED",
+      expectedVersion: expectedSession?.sessionVersion,
+      expectedState: expectedSession?.state,
+    });
+    console.info("[bot-session] session cancelled", { sessionId });
+    return updated !== null;
+  },
+
+  async createAbsenceSession(
+    companyId: string,
+    input: {
+    employeeId: string;
+    phoneNumber: string;
+    state: import("../../types/twilio.types").BotSessionState;
+    contextJson: string;
+  }): Promise<BotSession> {
+    const session = await runInTransaction(async (transaction) => {
+      await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+      return botSessionRepository.create(
+        {
+          companyId,
+          employeeId: input.employeeId,
+          operationId: null,
+          phoneNumber: input.phoneNumber,
+          state: input.state,
+          intent: "ABSENCE",
+          contextJson: input.contextJson,
+          expiresAt: buildExpiresAt(),
+        },
+        transaction,
+      );
+    });
+
+    console.info("[bot-session] absence session created", {
+      sessionId: session.id,
+      employeeId: input.employeeId,
+      state: input.state,
+    });
+
+    return session;
+  },
+
+  async createPayrollReceiptPeriodSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+    },
+  ): Promise<BotSession> {
+    const session = await runInTransaction(async (transaction) => {
+      await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+      return botSessionRepository.create(
+        {
+          companyId,
+          employeeId: input.employeeId,
+          operationId: null,
+          phoneNumber: input.phoneNumber,
+          state: "WAITING_PAYROLL_RECEIPT_PERIOD",
+          intent: "PAYROLL_RECEIPT",
+          contextJson: null,
+          expiresAt: buildExpiresAt(),
+        },
+        transaction,
+      );
+    });
+
+    console.info("[bot-session] payroll receipt period session created", {
+      sessionId: session.id,
+      employeeId: input.employeeId,
+    });
+
+    return session;
+  },
+
+  async updatePayrollReceiptSessionContext(
+    companyId: string,
+    sessionId: string,
+    payrollReceiptQuery: { year: number; month: number },
+  ): Promise<BotSession | null> {
+    return botSessionRepository.updateSession(companyId, sessionId, {
+      state: "WAITING_PAYROLL_RECEIPT_PERIOD",
+      contextJson: JSON.stringify({
+        payrollReceiptQuery,
+      } satisfies BotSessionContext),
+      failedAttempts: 0,
+      expiresAt: buildExpiresAt(),
+    });
+  },
+
+  async createMenuSelectionSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      options: BotSessionMenuOptionKey[];
+    },
+  ): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: null,
+            employeeWorkdayId: null,
+            attendanceRecordId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_MENU_SELECTION",
+            intent: "MENU",
+            contextJson: JSON.stringify({
+              menuOptions: input.options,
+            } satisfies BotSessionContext),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+      console.info("[bot-session] menu selection session created", {
+        companyId,
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        optionCount: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        const active = await this.getActiveSessionByPhone(companyId, input.phoneNumber);
+        if (active?.state === "WAITING_MENU_SELECTION") {
+          console.info("[bot-session] concurrent menu creation converged", {
+            companyId,
+            sessionId: active.id,
+            employeeId: input.employeeId,
+          });
+          return active;
+        }
+      }
+      throw error;
+    }
+  },
+
+  async recordFailedAttempt(
+    companyId: string,
+    session: BotSession,
+    messageSid: string,
+    maxFailedAttempts: number,
+  ): Promise<FailedSessionAttemptResult> {
+    const persisted = await botSessionRepository.recordFailedAttempt({
+      companyId,
+      sessionId: session.id,
+      expectedVersion: session.sessionVersion,
+      messageSid,
+      maxFailedAttempts,
+      expiresAt: buildExpiresAt(),
+    });
+    if (persisted.kind === "missing") {
+      console.warn("[bot-session] failed-attempt transition conflict", {
+        companyId,
+        sessionId: session.id,
+        messageSid,
+        expectedVersion: session.sessionVersion,
+      });
+      return { kind: "conflict", session: null };
+    }
+
+    const updated = persisted.session;
+    if (updated.state === "COMPLETED") {
+      return { kind: "completed", session: updated };
+    }
+    if (updated.state === "CANCELLED") {
+      return updated.failedAttempts >= maxFailedAttempts
+        ? { kind: "max_attempts", session: updated, attempt: updated.failedAttempts }
+        : { kind: "cancelled", session: updated };
+    }
+    if (
+      updated.state === "EXPIRED" ||
+      new Date(updated.expiresAt).getTime() <= Date.now()
+    ) {
+      return { kind: "expired", session: updated };
+    }
+    if (persisted.kind === "cas_conflict") {
+      return { kind: "conflict", session: updated };
+    }
+
+    console.info("[bot-session] invalid contextual input", {
+      companyId,
+      sessionId: session.id,
+      messageSid,
+      state: session.state,
+      attempt: updated.failedAttempts,
+      maxReached: false,
+    });
+    return { kind: "retry", session: updated, attempt: updated.failedAttempts };
+  },
+
+  async updateAbsenceSession(
+    companyId: string,
+    sessionId: string,
+    input: {
+      state: import("../../types/twilio.types").BotSessionState;
+      contextJson: string;
+    },
+  ): Promise<BotSession | null> {
+    return botSessionRepository.updateSession(companyId, sessionId, {
+      state: input.state,
+      contextJson: input.contextJson,
+      expiresAt: buildExpiresAt(),
+    });
+  },
+
+  isActive(session: BotSession, now = new Date()): boolean {
+    return isSessionActive(session, now);
+  },
+
+  isExpired(session: BotSession, now = new Date()): boolean {
+    return isSessionExpiredByTime(session, now);
+  },
+};

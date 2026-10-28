@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { companyUserService } from "../services/company-user.service";
+import { companyUserService } from "../services/companies/company-user.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 const readCorrelationId = (req: Request): string | null => {

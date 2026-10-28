@@ -1,6 +1,6 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS } from "../../constants/operation-import";
-import { operationImportService } from "../../services/operation-import.service";
+import { operationImportService } from "../../services/operations/operation-import.service";
 import { auditService } from "../../services/audit.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { DEFAULT_IMPORT_MAX_ROWS } from "../constants";

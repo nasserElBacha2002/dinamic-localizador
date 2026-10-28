@@ -3,7 +3,7 @@ import type {
   ListLocationZonesQuery,
   SearchLocationZonesQuery,
 } from "../schemas/location-zone.schema";
-import { locationZoneService } from "../services/location-zone.service";
+import { locationZoneService } from "../services/locations/location-zone.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const locationZoneController = {

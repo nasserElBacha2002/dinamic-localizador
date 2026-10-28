@@ -1,6 +1,6 @@
 import { env } from "../config/env";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
-import { dailyAttendanceReportService } from "../services/daily-attendance-report.service";
+import { dailyAttendanceReportService } from "../services/reports/daily-attendance-report.service";
 import { assertDailyReportAudienceSchemaReady } from "../utils/daily-attendance-report-schema-guard";
 
 let intervalHandle: NodeJS.Timeout | null = null;

@@ -15,7 +15,7 @@ import {
   isValidReportEmail,
   normalizeReportEmail,
 } from "./daily-attendance-report-email";
-import { buildDailyAttendanceReportEmail } from "../services/daily-attendance-report-email.builder";
+import { buildDailyAttendanceReportEmail } from "../services/reports/daily-attendance-report-email.builder";
 import type { DailyAttendanceReportPayload } from "../types/daily-attendance-report";
 
 describe("daily-attendance-report-time", () => {

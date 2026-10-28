@@ -1,0 +1,464 @@
+import { createHash } from "node:crypto";
+import { AppError } from "../../errors/app-error";
+import { listAssignableCompanyRoles, listInvitableCompanyRoles } from "../../constants/company-role-hierarchy";
+import { companyRepository } from "../../repositories/company.repository";
+import { userCompanyMembershipRepository } from "../../repositories/user-company-membership.repository";
+import { userRepository } from "../../repositories/user.repository";
+import type {
+  CreateCompanyUserInput,
+  ListCompanyUsersQuery,
+  UpdateCompanyUserInput,
+} from "../../schemas/company-user.schema";
+import type { CompanyRole } from "../../types/company";
+import type { CompanyUserDto } from "../../types/company-user";
+import { buildPaginationMeta } from "../../utils/pagination";
+import { logAuditSafe } from "../../utils/audit-post-commit";
+import { normalizeEmail } from "../../utils/password";
+import { normalizePhoneNumber } from "../../utils/phone";
+import { auditService } from "../audit.service";
+import {
+  assertCanAssignRoleOnInvitation,
+  assertMembershipMutationAllowed,
+  assertPersonalProfileMutationAllowed,
+} from "./company-user.guards";
+import { userInvitationService } from "../identity/user-invitation.service";
+import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../../utils/sql-server-errors";
+
+const toIsoString = (value: Date | string | null | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+};
+
+const mapCompanyUserDto = (
+  row: Record<string, unknown>,
+  includePlatformAdminFlag: boolean,
+): CompanyUserDto => ({
+  userId: String(row.user_id),
+  name: String(row.name),
+  email: String(row.email),
+  phoneNumber: row.phone_number ? String(row.phone_number) : null,
+  globalRole: String(row.global_role),
+  ...(includePlatformAdminFlag
+    ? { isPlatformAdmin: Boolean(row.is_platform_admin) }
+    : {}),
+  membershipId: String(row.membership_id),
+  companyId: String(row.company_id),
+  companyRole: String(row.company_role) as CompanyRole,
+  membershipStatus: String(row.membership_status) as CompanyUserDto["membershipStatus"],
+  isDefault: Boolean(row.is_default),
+  createdAt: toIsoString(row.created_at as Date | string) ?? "",
+  updatedAt: toIsoString(row.updated_at as Date | string) ?? "",
+  lastLoginAt: toIsoString(row.last_login_at as Date | string | null),
+});
+
+const assertActiveCompany = async (companyId: string): Promise<void> => {
+  const company = await companyRepository.findById(companyId);
+  if (!company || company.status !== "ACTIVE") {
+    throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa no encontrada.");
+  }
+};
+
+const assertTargetUserManageable = async (
+  targetUserId: string,
+  requesterIsPlatformAdmin: boolean,
+): Promise<void> => {
+  const targetUser = await userRepository.findById(targetUserId);
+  if (!targetUser) {
+    throw new AppError(404, "USER_NOT_FOUND", "Usuario no encontrado.");
+  }
+
+  if (targetUser.isPlatformAdmin && !requesterIsPlatformAdmin) {
+    throw new AppError(
+      403,
+      "PLATFORM_ADMIN_PROTECTED",
+      "No podés modificar a un superadministrador de plataforma.",
+    );
+  }
+};
+
+const sanitizeMembershipAuditSnapshot = (input: {
+  role?: CompanyRole;
+  status?: string;
+  isDefault?: boolean;
+}): Record<string, unknown> => {
+  const snapshot: Record<string, unknown> = {};
+  if (input.role !== undefined) snapshot.role = input.role;
+  if (input.status !== undefined) snapshot.status = input.status;
+  if (input.isDefault !== undefined) snapshot.isDefault = input.isDefault;
+  return snapshot;
+};
+
+const invitationEntityIdFromEmail = (email: string): string =>
+  createHash("sha256").update(normalizeEmail(email)).digest("hex").slice(0, 32);
+
+const logCompanyUserAudit = async (input: {
+  companyId: string;
+  actorUserId: string;
+  entityType: "company_user_membership" | "user_invitation";
+  entityId: string;
+  action: string;
+  result: "ALLOWED" | "DENIED";
+  reason?: string | null;
+  modificationType: string;
+  previousData?: Record<string, unknown> | null;
+  newData?: Record<string, unknown> | null;
+  correlationId?: string | null;
+  targetUserId?: string;
+}): Promise<void> => {
+  await logAuditSafe("company-user-management", async () => {
+    await auditService.log(input.companyId, {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      action: input.action,
+      userId: input.actorUserId,
+      reason: input.reason ?? null,
+      previousData: input.previousData ?? null,
+      newData: {
+        ...(input.newData ?? {}),
+        result: input.result,
+        modificationType: input.modificationType,
+        actorUserId: input.actorUserId,
+        ...(input.targetUserId ? { targetUserId: input.targetUserId } : {}),
+        companyId: input.companyId,
+        ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+      },
+    });
+  });
+};
+
+const resolveModificationType = (input: UpdateCompanyUserInput): string => {
+  const parts: string[] = [];
+  if (input.name !== undefined) parts.push("name");
+  if (input.email !== undefined) parts.push("email");
+  if (input.role !== undefined) parts.push("role");
+  if (input.status !== undefined) parts.push("status");
+  if (input.isDefault !== undefined) parts.push("isDefault");
+  if (input.phoneNumber !== undefined) parts.push("phoneNumber");
+  return parts.length > 0 ? parts.join(",") : "membership_update";
+};
+
+const hasMembershipFields = (input: UpdateCompanyUserInput): boolean =>
+  input.role !== undefined || input.status !== undefined || input.isDefault !== undefined;
+
+const hasProfileFields = (input: UpdateCompanyUserInput): boolean =>
+  input.name !== undefined || input.email !== undefined || input.phoneNumber !== undefined;
+
+/**
+ * Company users domain mutations:
+ * - PATCH /companies/:id/users/:userId (profile + membership)
+ * - PATCH /companies/:id/users/:userId/deactivate (ACTIVE → INACTIVE only)
+ * Password updates remain auth/script-only.
+ */
+export const companyUserService = {
+  async list(
+    companyId: string,
+    query: ListCompanyUsersQuery,
+    requesterIsPlatformAdmin: boolean,
+  ): Promise<{ data: CompanyUserDto[]; meta: ReturnType<typeof buildPaginationMeta> }> {
+    await assertActiveCompany(companyId);
+
+    const result = await userCompanyMembershipRepository.listByCompany(companyId, query);
+    return {
+      data: result.items.map((row) => mapCompanyUserDto(row, requesterIsPlatformAdmin)),
+      meta: buildPaginationMeta(query.page, query.limit, result.total),
+    };
+  },
+
+  async getById(
+    companyId: string,
+    userId: string,
+    requesterIsPlatformAdmin: boolean,
+  ): Promise<CompanyUserDto> {
+    await assertActiveCompany(companyId);
+    const row = await userCompanyMembershipRepository.findCompanyUserRow(companyId, userId);
+    if (!row) {
+      throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
+    }
+
+    return mapCompanyUserDto(row, requesterIsPlatformAdmin);
+  },
+
+  async create(
+    companyId: string,
+    input: CreateCompanyUserInput,
+    requesterUserId: string,
+    requesterIsPlatformAdmin: boolean,
+    requesterCompanyRole?: CompanyRole,
+  ): Promise<{ data: { invitationId: string; email: string; status: string; expiresAt: string; emailSent: boolean }; message: string }> {
+    await assertActiveCompany(companyId);
+
+    try {
+      assertCanAssignRoleOnInvitation(requesterCompanyRole, input.role, requesterIsPlatformAdmin);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 403) {
+        await logCompanyUserAudit({
+          companyId,
+          actorUserId: requesterUserId,
+          entityType: "user_invitation",
+          entityId: invitationEntityIdFromEmail(input.email),
+          action: "company_user_invite_denied",
+          result: "DENIED",
+          reason: error.code,
+          modificationType: "invite_role",
+          newData: { invitedRole: input.role },
+        });
+      }
+      throw error;
+    }
+
+    // OWNER (and platform admin) may invite another OWNER; mirrors invitation policy.
+    const canAssignOwner =
+      requesterIsPlatformAdmin || requesterCompanyRole === "OWNER";
+    const result = await userInvitationService.issueInvitation({
+      companyId,
+      email: input.email,
+      role: input.role,
+      inviteeName: input.name,
+      invitedByUserId: requesterUserId,
+      origin: "MANUAL",
+      canAssignOwner,
+    });
+
+    await logCompanyUserAudit({
+      companyId,
+      actorUserId: requesterUserId,
+      entityType: "user_invitation",
+      entityId: result.invitation.id,
+      action: "company_user_invite_allowed",
+      result: "ALLOWED",
+      modificationType: "invite_role",
+      newData: {
+        invitationId: result.invitation.id,
+        invitedRole: input.role,
+      },
+    });
+
+    return {
+      data: {
+        invitationId: result.invitation.id,
+        email: result.invitation.emailNormalized,
+        status: result.invitation.status,
+        expiresAt: result.invitation.expiresAt,
+        emailSent: result.emailSent,
+      },
+      message: result.message,
+    };
+  },
+
+  async update(
+    companyId: string,
+    userId: string,
+    input: UpdateCompanyUserInput,
+    requesterUserId: string,
+    requesterIsPlatformAdmin: boolean,
+    _requesterCompanyRole?: CompanyRole,
+    correlationId?: string | null,
+  ): Promise<CompanyUserDto> {
+    const modificationType = resolveModificationType(input);
+    const membershipPatch = {
+      ...(input.role !== undefined ? { role: input.role } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
+    };
+    const touchingMembership = hasMembershipFields(input);
+    const touchingProfile = hasProfileFields(input);
+
+    if (!touchingMembership && !touchingProfile) {
+      throw new AppError(400, "EMPTY_UPDATE", "Debe enviar al menos un campo para actualizar.");
+    }
+
+    await assertActiveCompany(companyId);
+    await assertTargetUserManageable(userId, requesterIsPlatformAdmin);
+
+    let normalizedPhone: string | null | undefined;
+    if (input.phoneNumber !== undefined) {
+      const rawPhone = input.phoneNumber;
+      if (rawPhone == null || rawPhone.trim() === "") {
+        normalizedPhone = null;
+      } else {
+        try {
+          normalizedPhone = normalizePhoneNumber(rawPhone);
+        } catch {
+          throw new AppError(
+            400,
+            "INVALID_PHONE",
+            "El teléfono debe estar en formato E.164 (ej. +5491112345678).",
+          );
+        }
+      }
+    }
+
+    const nextName = input.name;
+    let nextEmail: string | undefined;
+    if (input.email !== undefined) {
+      nextEmail = normalizeEmail(input.email);
+      const existingEmailOwner = await userRepository.findByEmail(nextEmail);
+      if (existingEmailOwner && existingEmailOwner.id !== userId) {
+        throw new AppError(
+          409,
+          "EMAIL_ALREADY_EXISTS",
+          "Ya existe un usuario con ese email.",
+        );
+      }
+    }
+
+    const profilePatch = {
+      ...(nextName !== undefined ? { name: nextName } : {}),
+      ...(nextEmail !== undefined ? { email: nextEmail } : {}),
+      ...(normalizedPhone !== undefined ? { phoneNumber: normalizedPhone } : {}),
+    };
+
+    let previousSnapshot: Record<string, unknown> = {};
+
+    try {
+      const result = await userCompanyMembershipRepository.applyCompanyUserUpdateWithGuards(
+        companyId,
+        userId,
+        requesterUserId,
+        {
+          ...(touchingMembership ? { membership: membershipPatch } : {}),
+          ...(touchingProfile ? { profile: profilePatch } : {}),
+        },
+        ({ existing, actorRole, actorIsPlatformAdmin }) => {
+          previousSnapshot = sanitizeMembershipAuditSnapshot({
+            role: existing.role,
+            status: existing.status,
+            isDefault: existing.isDefault,
+          });
+
+          if (touchingProfile) {
+            assertPersonalProfileMutationAllowed({
+              targetUserId: userId,
+              requesterUserId,
+              actorIsPlatformAdmin,
+            });
+          }
+
+          if (touchingMembership) {
+            // Actor role is re-read under lock for this companyId (not request snapshot).
+            assertMembershipMutationAllowed({
+              targetUserId: userId,
+              requesterUserId,
+              requesterCompanyRole: actorRole,
+              requesterIsPlatformAdmin: actorIsPlatformAdmin,
+              existing,
+              update: membershipPatch,
+            });
+          }
+        },
+        async ({ transaction, row: lockedRow, actorIsPlatformAdmin }) => {
+          const dtoPreview = mapCompanyUserDto(
+            {
+              ...lockedRow,
+              ...(nextName !== undefined ? { name: nextName } : {}),
+              ...(nextEmail !== undefined ? { email: nextEmail } : {}),
+              ...(normalizedPhone !== undefined ? { phone_number: normalizedPhone } : {}),
+            },
+            actorIsPlatformAdmin,
+          );
+          await auditService.log(
+            companyId,
+            {
+              entityType: "company_user_membership",
+              entityId: userId,
+              action: "company_user_update_allowed",
+              userId: requesterUserId,
+              reason: null,
+              previousData: previousSnapshot,
+              newData: {
+                ...sanitizeMembershipAuditSnapshot({
+                  role: dtoPreview.companyRole,
+                  status: dtoPreview.membershipStatus,
+                  isDefault: dtoPreview.isDefault,
+                }),
+                ...(nextName !== undefined ? { name: nextName } : {}),
+                ...(nextEmail !== undefined ? { email: nextEmail } : {}),
+                ...(normalizedPhone !== undefined ? { phoneNumber: normalizedPhone } : {}),
+                result: "ALLOWED",
+                modificationType,
+                actorUserId: requesterUserId,
+                targetUserId: userId,
+                companyId,
+                ...(correlationId ? { correlationId } : {}),
+              },
+            },
+            transaction,
+          );
+        },
+      );
+
+      let row = result.row;
+      if (nextName !== undefined) row = { ...row, name: nextName };
+      if (nextEmail !== undefined) row = { ...row, email: nextEmail };
+      if (normalizedPhone !== undefined) row = { ...row, phone_number: normalizedPhone };
+      return mapCompanyUserDto(row, result.actorIsPlatformAdmin);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        const constraint = getDuplicateKeyConstraint(error);
+        if (!constraint || constraint.includes("UQ_users_email") || /users.*email/i.test(constraint)) {
+          throw new AppError(
+            409,
+            "EMAIL_ALREADY_EXISTS",
+            "Ya existe un usuario con ese email.",
+          );
+        }
+      }
+      if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
+        await logCompanyUserAudit({
+          companyId,
+          actorUserId: requesterUserId,
+          entityType: "company_user_membership",
+          entityId: userId,
+          targetUserId: userId,
+          action: "company_user_update_denied",
+          result: "DENIED",
+          reason: error.code,
+          modificationType,
+          previousData: previousSnapshot,
+          newData: sanitizeMembershipAuditSnapshot(input),
+          correlationId,
+        });
+      }
+      throw error;
+    }
+  },
+
+  async deactivate(
+    companyId: string,
+    userId: string,
+    requesterUserId: string,
+    requesterIsPlatformAdmin: boolean,
+    requesterCompanyRole?: CompanyRole,
+    correlationId?: string | null,
+  ): Promise<CompanyUserDto> {
+    return this.update(
+      companyId,
+      userId,
+      { status: "INACTIVE" },
+      requesterUserId,
+      requesterIsPlatformAdmin,
+      requesterCompanyRole,
+      correlationId,
+    );
+  },
+
+  /** Capabilities for UI — backend remains authority on enforcement. */
+  resolveRoleCapabilities(
+    requesterCompanyRole: CompanyRole | undefined,
+    requesterIsPlatformAdmin: boolean,
+  ): { assignableRoles: CompanyRole[]; invitableRoles: CompanyRole[] } {
+    return {
+      assignableRoles: listAssignableCompanyRoles(
+        requesterCompanyRole,
+        requesterIsPlatformAdmin,
+      ),
+      invitableRoles: listInvitableCompanyRoles(
+        requesterCompanyRole,
+        requesterIsPlatformAdmin,
+      ),
+    };
+  },
+};

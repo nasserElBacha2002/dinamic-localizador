@@ -10,8 +10,8 @@
 import sql from "mssql";
 import { connectDatabase, closeDatabase, getPool } from "../database/connection";
 import { auditService } from "../services/audit.service";
-import { absenceAttachmentService } from "../services/absence-attachment.service";
-import { isGcsConfigured } from "../services/attachment-storage";
+import { absenceAttachmentService } from "../services/absence/absence-attachment.service";
+import { isGcsConfigured } from "../services/attachments/storage";
 
 const parseCompanyId = (): string => {
   const arg = process.argv.find((item) => item.startsWith("--company="));

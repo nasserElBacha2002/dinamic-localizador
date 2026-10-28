@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { DateTime } from "luxon";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { companyOperationalDefaultsResolver } from "../../services/company-operational-defaults.resolver";
+import { companyOperationalDefaultsResolver } from "../../services/companies/company-operational-defaults.resolver";
 import {
   combineAttendanceValidation,
   evaluateGeofence,

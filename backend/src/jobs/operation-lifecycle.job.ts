@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { operationLifecycleService } from "../services/operation-lifecycle.service";
+import { operationLifecycleService } from "../services/operations/operation-lifecycle.service";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;

@@ -4,7 +4,7 @@ import express from "express";
 import { authenticate } from "../middleware/authenticate";
 import { errorHandler } from "../middleware/error-handler";
 import { userRepository } from "../repositories/user.repository";
-import { payrollQueryReconciliationService } from "../services/payroll-query-reconciliation.service";
+import { payrollQueryReconciliationService } from "../services/payroll/payroll-query-reconciliation.service";
 import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { platformCompanyRouter } from "./platform-company.routes";

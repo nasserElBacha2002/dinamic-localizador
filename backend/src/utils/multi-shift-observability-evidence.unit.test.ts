@@ -24,7 +24,7 @@ describe("multi-shift observability and SAFE consumer evidence", () => {
   it("every observability action has at least one producer in source", () => {
     const sources = [
       readFileSync(join(ROOT, "services/bot/check-in-attendance.flow.ts"), "utf8"),
-      readFileSync(join(ROOT, "services/attendance-reminder.service.ts"), "utf8"),
+      readFileSync(join(ROOT, "services/attendance/attendance-reminder.service.ts"), "utf8"),
     ].join("\n");
 
     for (const action of OBSERVABILITY_ACTIONS) {
@@ -38,7 +38,7 @@ describe("multi-shift observability and SAFE consumer evidence", () => {
 
   it("SAFE coverage consumer is backed by COVERAGE_SHIFT_MISMATCH guard", () => {
     const assignment = readFileSync(
-      join(ROOT, "services/operation-assignment.service.ts"),
+      join(ROOT, "services/operations/operation-assignment.service.ts"),
       "utf8",
     );
     assert.match(assignment, /COVERAGE_SHIFT_MISMATCH/);
@@ -50,7 +50,7 @@ describe("multi-shift observability and SAFE consumer evidence", () => {
   });
 
   it("SAFE reminder consumer is backed by employee_workday claim path", () => {
-    const reminder = readFileSync(join(ROOT, "services/attendance-reminder.service.ts"), "utf8");
+    const reminder = readFileSync(join(ROOT, "services/attendance/attendance-reminder.service.ts"), "utf8");
     const repo = readFileSync(
       join(ROOT, "repositories/attendance-notification.repository.ts"),
       "utf8",

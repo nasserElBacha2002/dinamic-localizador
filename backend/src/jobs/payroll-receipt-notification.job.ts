@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { payrollReceiptNotificationService } from "../services/payroll-receipt-notification.service";
+import { payrollReceiptNotificationService } from "../services/payroll/payroll-receipt-notification.service";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;

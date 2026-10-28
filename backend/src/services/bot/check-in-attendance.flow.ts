@@ -9,16 +9,16 @@ import { getObservabilityTrace } from "../../utils/whatsapp-observability-scope"
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
-import { companyModuleService } from "../company-module.service";
+import { companyModuleService } from "../companies/company-module.service";
 import {
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
-} from "../whatsapp-module-gate";
+} from "../whatsapp/whatsapp-module-gate";
 import { buildCheckInValidation } from "./bot-attendance-runtime";
-import { botSessionService } from "../bot-session.service";
-import { recordInvalidContextualInput } from "../contextual-session-retry.service";
-import { employeeWorkdayAttendanceCommand } from "../employee-workday-attendance.command";
-import { employeeWorkdayAvailabilityService } from "../employee-workday-availability.service";
+import { botSessionService } from "./bot-session.service";
+import { recordInvalidContextualInput } from "./contextual-session-retry.service";
+import { employeeWorkdayAttendanceCommand } from "../attendance/employee-workday-attendance.command";
+import { employeeWorkdayAvailabilityService } from "../workdays/employee-workday-availability.service";
 import {
   isActiveAttendanceDuplicateKeyError,
   isAttendanceSourceMessageSidDuplicateKeyError,

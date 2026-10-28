@@ -1,0 +1,231 @@
+import { resolveOperationOptionsFromSessionContext } from "../../../utils/legacy-operation-session-context";
+import { botSessionService } from "../../bot/bot-session.service";
+import { employeeWorkdayService } from "../../workdays/employee-workday.service";
+import { INVALID_SELECTION_MESSAGE } from "../../bot/bot-response.builder";
+import { getAssignmentConfirmationModuleBlockedMessage } from "../whatsapp-module-gate";
+import { isAssignmentSelectionSessionState } from "../../../utils/bot-session-states";
+import { parseOptionalAssignmentSelection } from "../../../utils/assignment-intent";
+import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import {
+  isValidOperationSelection,
+  parseOperationSelectionIndex,
+} from "../../bot/bot-operation.selector";
+import { logModuleBlocked } from "./module-session-gate";
+import { recordInvalidContextualInput } from "../../bot/contextual-session-retry.service";
+import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
+import type { BotSession } from "../../../types/twilio.types";
+import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
+
+const respond = (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+  message: string,
+  resultCode: string = WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW,
+): Promise<string> =>
+  handlers.respond(ctx.companyId, {
+    message,
+    employeeId: ctx.employeeId,
+    phoneFrom: ctx.phoneTo,
+    phoneTo: ctx.phoneFrom,
+    resultCode,
+    flowType: "CONFIRMATION",
+  });
+
+const completeSelectionSession = async (
+  companyId: string,
+  session: BotSession,
+): Promise<void> => {
+  await botSessionService.completeSession(companyId, session.id, undefined, session);
+};
+
+export const handleActiveAssignmentSelectionSession = async (
+  ctx: WhatsAppRouterContext,
+  session: BotSession,
+  handlers: WhatsAppRouterHandlers,
+): Promise<string | null> => {
+  if (!isAssignmentSelectionSessionState(session.state)) {
+    return null;
+  }
+
+  const selection = parseOperationSelectionIndex(ctx.body);
+  const options = resolveOperationOptionsFromSessionContext(botSessionService.parseContext(session.contextJson)) ?? [];
+
+  if (!isValidOperationSelection(selection, options.length)) {
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: INVALID_SELECTION_MESSAGE,
+    });
+    return respond(
+      ctx,
+      handlers,
+      retry.message,
+      retry.kind === "retry"
+        ? WHATSAPP_RESULT_CODES.INVALID_SELECTION
+        : WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW,
+    );
+  }
+
+  const selected = options[selection - 1];
+  if (session.state === "WAITING_CONFIRM_ATTENDANCE_SELECTION") {
+    const result = await employeeWorkdayService.confirmAssignment(
+      ctx.companyId,
+      ctx.employeeId!,
+      selected.operationId,
+    );
+    if (result.kind === "ok") {
+      await completeSelectionSession(ctx.companyId, session);
+    }
+    return respond(ctx, handlers, result.message);
+  }
+
+  const result = await employeeWorkdayService.markAssignmentUnavailable(
+    ctx.companyId,
+    ctx.employeeId!,
+    selected.operationId,
+    selected.employeeWorkdayId,
+  );
+  if (result.kind === "ok") {
+    await completeSelectionSession(ctx.companyId, session);
+    return respond(ctx, handlers, result.message, WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW);
+  }
+
+  // Stale option (not_found/past): consume a contextual retry like out-of-range input.
+  // Session stays open while retries remain so another listed option can still be chosen.
+  const retry = await recordInvalidContextualInput({
+    companyId: ctx.companyId,
+    session,
+    messageSid: ctx.payload.MessageSid,
+    retryMessage: result.message,
+  });
+  return respond(
+    ctx,
+    handlers,
+    retry.message,
+    retry.kind === "retry"
+      ? WHATSAPP_RESULT_CODES.INVALID_SELECTION
+      : WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW,
+  );
+};
+
+const handleAssignmentSelectionFlow = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+  assignments: Awaited<ReturnType<typeof employeeWorkdayService.listConfirmableAssignments>>,
+  options: {
+    emptyMessage: string;
+    applyToAssignment: (
+      companyId: string,
+      employeeId: string,
+      operationId: string,
+      employeeWorkdayId?: string | null,
+    ) => Promise<{ message: string }>;
+    createSelectionSession: (selectionOptions: ReturnType<typeof employeeWorkdayService.mapToSelectionOptions>) => Promise<void>;
+    buildSelectionPrompt: (items: typeof assignments) => string;
+  },
+): Promise<string> => {
+  if (assignments.length === 0) {
+    return respond(ctx, handlers, options.emptyMessage);
+  }
+
+  const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
+  if (explicitSelection !== null) {
+    if (!isValidOperationSelection(explicitSelection, assignments.length)) {
+      return respond(ctx, handlers, INVALID_SELECTION_MESSAGE, WHATSAPP_RESULT_CODES.INVALID_SELECTION);
+    }
+
+    const selected = assignments[explicitSelection - 1];
+    const result = await options.applyToAssignment(
+      ctx.companyId,
+      ctx.employeeId!,
+      selected.operationId,
+      selected.employeeWorkdayId,
+    );
+    return respond(ctx, handlers, result.message);
+  }
+
+  if (assignments.length === 1) {
+    const result = await options.applyToAssignment(
+      ctx.companyId,
+      ctx.employeeId!,
+      assignments[0].operationId,
+      assignments[0].employeeWorkdayId,
+    );
+    return respond(ctx, handlers, result.message);
+  }
+
+  await options.createSelectionSession(employeeWorkdayService.mapToSelectionOptions(assignments));
+  return respond(ctx, handlers, options.buildSelectionPrompt(assignments));
+};
+
+export const handleConfirmAttendanceIntent = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+): Promise<string> => {
+  setLastDetectedIntent("confirm-attendance");
+  const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
+  if (blockedMessage) {
+    logModuleBlocked(ctx.companyId, "operations");
+    return respond(ctx, handlers, blockedMessage, WHATSAPP_RESULT_CODES.MODULE_DISABLED);
+  }
+
+  const assignments = await employeeWorkdayService.listConfirmableAssignments(
+    ctx.companyId,
+    ctx.employeeId!,
+  );
+
+  return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
+    emptyMessage: employeeWorkdayService.noConfirmableMessage,
+    applyToAssignment: async (companyId, employeeId, operationId) => {
+      const result = await employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId);
+      return { message: result.message };
+    },
+    createSelectionSession: async (selectionOptions) => {
+      await botSessionService.createConfirmAttendanceSelectionSession(ctx.companyId, {
+        employeeId: ctx.employeeId!,
+        phoneNumber: ctx.phoneFrom,
+        options: selectionOptions,
+      });
+    },
+    buildSelectionPrompt: (items) => employeeWorkdayService.buildConfirmSelectionPrompt(items),
+  });
+};
+
+export const handleUnavailabilityIntent = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+): Promise<string> => {
+  setLastDetectedIntent("report-unavailability");
+  const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
+  if (blockedMessage) {
+    logModuleBlocked(ctx.companyId, "operations");
+    return respond(ctx, handlers, blockedMessage, WHATSAPP_RESULT_CODES.MODULE_DISABLED);
+  }
+
+  const assignments = await employeeWorkdayService.listUnavailabilityAssignments(
+    ctx.companyId,
+    ctx.employeeId!,
+  );
+
+  return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
+    emptyMessage: employeeWorkdayService.noUnavailabilityMessage,
+    applyToAssignment: async (companyId, employeeId, operationId, employeeWorkdayId) => {
+      const result = await employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        operationId,
+        employeeWorkdayId,
+      );
+      return { message: result.message };
+    },
+    createSelectionSession: async (selectionOptions) => {
+      await botSessionService.createUnavailabilitySelectionSession(ctx.companyId, {
+        employeeId: ctx.employeeId!,
+        phoneNumber: ctx.phoneFrom,
+        options: selectionOptions,
+      });
+    },
+    buildSelectionPrompt: (items) => employeeWorkdayService.buildUnavailabilitySelectionPrompt(items),
+  });
+};

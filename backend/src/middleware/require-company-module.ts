@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { CompanyModuleKey } from "../constants/company-modules";
-import { companyModuleService } from "../services/company-module.service";
+import { companyModuleService } from "../services/companies/company-module.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 declare module "express-serve-static-core" {

@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 
 import { clientService } from "../services/client.service";
-import { companyLocationTypesService } from "../services/company-location-types.service";
-import { employeeClientService } from "../services/employee-client.service";
+import { companyLocationTypesService } from "../services/companies/company-location-types.service";
+import { employeeClientService } from "../services/employees/employee-client.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const clientController = {

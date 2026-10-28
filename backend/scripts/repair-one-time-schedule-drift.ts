@@ -1,7 +1,7 @@
 import sql from "mssql";
 import { connectDatabase, closeDatabase, getPool } from "../src/database/connection";
-import { oneTimeScheduleConsistencyInspector } from "../src/services/one-time-schedule-consistency.inspector";
-import { oneTimeScheduleRepairService } from "../src/services/one-time-operation-schedule-reconciliation.service";
+import { oneTimeScheduleConsistencyInspector } from "../src/services/operations/one-time-schedule-consistency.inspector";
+import { oneTimeScheduleRepairService } from "../src/services/operations/one-time-operation-schedule-reconciliation.service";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

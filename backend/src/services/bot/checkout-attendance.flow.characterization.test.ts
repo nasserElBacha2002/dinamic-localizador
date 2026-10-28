@@ -15,7 +15,7 @@ import {
   runWithRoutingResultScope,
 } from "../../utils/whatsapp-routing-result";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
-import type { CheckoutWriteFields } from "../employee-workday-checkout.command";
+import type { CheckoutWriteFields } from "../workdays/employee-workday-checkout.command";
 
 const companyId = "00000000-0000-4000-8000-0000000000c1";
 const employeeId = "00000000-0000-4000-8000-0000000000c2";
@@ -150,11 +150,11 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
     const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
 
     let capturedFields: CheckoutWriteFields | null = null;
@@ -209,11 +209,11 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
     const { attendanceRepository } = await import("../../repositories/attendance.repository");
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
 
     let capturedFields: CheckoutWriteFields | null = null;
@@ -267,10 +267,10 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext } = await import("../../utils/bot-runtime-context");
 
     let registerCalls = 0;
@@ -335,10 +335,10 @@ describe("checkout-attendance flow characterization (4C wiring)", () => {
     setupUnitTestEnv();
     const { processLocationCheckout } = await import("./checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "../employee-workday-availability.service"
+      "../workdays/employee-workday-availability.service"
     );
-    const { employeeWorkdayCheckoutCommand } = await import("../employee-workday-checkout.command");
-    const { botSessionService } = await import("../bot-session.service");
+    const { employeeWorkdayCheckoutCommand } = await import("../workdays/employee-workday-checkout.command");
+    const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import(
       "../../utils/bot-runtime-context"
     );

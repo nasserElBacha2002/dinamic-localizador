@@ -5,7 +5,7 @@ import path from "node:path";
 
 describe("employee creationMode import policy", () => {
   it("exposes explicit interactive|import creationMode (not skipNotifications)", () => {
-    const servicePath = path.resolve(__dirname, "../services/employee.service.ts");
+    const servicePath = path.resolve(__dirname, "../services/employees/employee.service.ts");
     const source = readFileSync(servicePath, "utf8");
     assert.match(source, /export type EmployeeCreationMode = "interactive" \| "import"/);
     assert.match(source, /creationMode === "import"/);

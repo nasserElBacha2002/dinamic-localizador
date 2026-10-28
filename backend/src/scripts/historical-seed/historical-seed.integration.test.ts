@@ -11,9 +11,9 @@ import {
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
-import { employeeService } from "../../services/employee.service";
-import { individualRecommendationService } from "../../services/individual-recommendation.service";
-import { serviceService } from "../../services/service.service";
+import { employeeService } from "../../services/employees/employee.service";
+import { individualRecommendationService } from "../../services/recommendation/individual-recommendation.service";
+import { serviceService } from "../../services/locations/service.service";
 import { cleanupHistoricalSeed } from "./cleanup";
 import {
   assertBatchNotExists,

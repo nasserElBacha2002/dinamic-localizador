@@ -55,8 +55,8 @@ const ALLOWED_LEGACY_REFERENCES: Record<string, RegExp[]> = {
   "backend/src/routes/api-route-aliases.test.ts": [
     /legacyRoute|legacyPath|concat\(|\/invent|\/stor/,
   ],
-  "backend/src/services/whatsapp-router/whatsapp-router.service.test.ts": [/doesNotMatch.*inventario/],
-  "backend/src/services/whatsapp-bot.service.ts": [/UX_attendance_records_inventory/],
+  "backend/src/services/whatsapp/router/whatsapp-router.service.test.ts": [/doesNotMatch.*inventario/],
+  "backend/src/services/whatsapp/whatsapp-bot.service.ts": [/UX_attendance_records_inventory/],
   "frontend/src/pages/settings/company-settings-operational.test.ts": [/doesNotMatch.*Inventarios/, /STORE_FORMATS/],
   "frontend/src/design-system/filters/FilterLookupInput.tsx": [/store=\{/],
 };

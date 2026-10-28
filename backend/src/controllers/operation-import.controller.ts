@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { operationImportService } from "../services/operation-import.service";
+import { operationImportService } from "../services/operations/operation-import.service";
 import type { OperationImportConfirmInput, OperationImportPreviewInput } from "../schemas/operation-import.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 

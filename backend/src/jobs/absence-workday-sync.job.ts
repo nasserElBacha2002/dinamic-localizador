@@ -1,4 +1,4 @@
-import { absenceWorkdaySyncService } from "../services/absence-workday-sync.service";
+import { absenceWorkdaySyncService } from "../services/absence/absence-workday-sync.service";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 const JOB_INTERVAL_MS = 60_000;

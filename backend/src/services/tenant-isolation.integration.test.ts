@@ -7,7 +7,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
-import { companyContextService } from "./company-context.service";
+import { companyContextService } from "./companies/company-context.service";
 import { employeeRepository } from "../repositories/employee.repository";
 import { serviceRepository } from "../repositories/service.repository";
 import { operationRepository } from "../repositories/operation.repository";

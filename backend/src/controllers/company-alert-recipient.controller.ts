@@ -94,7 +94,7 @@ export const companyAlertRecipientController = {
         phoneNumber: resolved.phoneNumber,
         displayName: resolved.displayName,
       });
-      const { adminAlertCutoverService } = await import("../services/admin-alert-cutover.service");
+      const { adminAlertCutoverService } = await import("../services/admin-alerts/admin-alert-cutover.service");
       await adminAlertCutoverService.tryAutoCutoverToDailyEmail({
         companyId,
         actorUserId: req.auth?.userId ?? "system:alert-recipient",

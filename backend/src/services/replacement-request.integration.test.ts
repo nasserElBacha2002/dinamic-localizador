@@ -13,7 +13,7 @@ import { after, afterEach, before, it, mock } from "node:test";
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
-import { individualRecommendationService } from "./individual-recommendation.service";
+import { individualRecommendationService } from "./recommendation/individual-recommendation.service";
 import { replacementRequestService } from "./replacement-request.service";
 import {
   createIntegrationFixtureTracker,

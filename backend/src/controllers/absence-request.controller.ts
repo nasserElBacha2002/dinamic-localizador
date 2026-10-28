@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { absenceRequestService } from "../services/absence-request.service";
-import { absenceReviewService } from "../services/absence-review.service";
-import { absenceOperationImpactService } from "../services/absence-operation-impact.service";
+import { absenceRequestService } from "../services/absence/absence-request.service";
+import { absenceReviewService } from "../services/absence/absence-review.service";
+import { absenceOperationImpactService } from "../services/absence/absence-operation-impact.service";
 import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import type { ResolveAbsenceOperationalConflictInput } from "../schemas/absence-request.schema";

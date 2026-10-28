@@ -21,9 +21,9 @@ import { AppError } from "../errors/app-error";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
-import { absenceRequestService } from "./absence-request.service";
-import { attendanceService } from "./attendance.service";
-import { operationAssignmentService } from "./operation-assignment.service";
+import { absenceRequestService } from "./absence/absence-request.service";
+import { attendanceService } from "./attendance/attendance.service";
+import { operationAssignmentService } from "./operations/operation-assignment.service";
 import { hashPassword, normalizeEmail } from "../utils/password";
 
 const uniqueCompanyName = (): string =>

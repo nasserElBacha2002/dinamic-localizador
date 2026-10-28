@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { userRepository } from "../repositories/user.repository";
-import { platformAdminService } from "../services/platform-admin.service";
+import { platformAdminService } from "../services/companies/platform-admin.service";
 
 export const requirePlatformAdmin = async (
   req: Request,

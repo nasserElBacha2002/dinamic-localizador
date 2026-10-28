@@ -1,0 +1,22 @@
+import type { DailyAttendanceReportPayload } from "../../types/daily-attendance-report";
+import { escapeHtml } from "../../utils/daily-attendance-report-email";
+import { getAttendanceIncidentLabel, getAttendanceIncidentPriority } from "../../utils/attendance-report-presentation";
+
+const labels: Record<string, string> = { MISSING_CHECKIN: "No registró llegada", MISSING_CHECKOUT: "No registró salida", LATE: "Llegó tarde", EARLY_LEAVE: "Salida anticipada", UNAVAILABLE: "Avisó que no asistiría", PENDING_REVIEW: "Pendiente de revisión", REJECTED: "Asistencia rechazada", OUTSIDE_GEOFENCE: "Fuera de geocerca", CONFIRMED_BUT_ABSENT: "Confirmó asistencia pero faltó", UNANNOUNCED_ABSENCE: "Falta sin aviso", INCOMPLETE: "Jornada abierta" };
+const priority: Record<string, number> = { REJECTED: 1, PENDING_REVIEW: 2, OUTSIDE_GEOFENCE: 3, CONFIRMED_BUT_ABSENT: 4, UNANNOUNCED_ABSENCE: 5, MISSING_CHECKIN: 6, MISSING_CHECKOUT: 7, EARLY_LEAVE: 8, LATE: 9, UNAVAILABLE: 10 };
+
+export const buildDailyAttendanceReportEmail = (payload: DailyAttendanceReportPayload) => {
+  const t = payload.totals;
+  const incidents = [...payload.incidents].sort((a, b) => getAttendanceIncidentPriority(a.kind) - getAttendanceIncidentPriority(b.kind) || (priority[a.kind] ?? 99) - (priority[b.kind] ?? 99) || a.employeeName.localeCompare(b.employeeName) || a.serviceName.localeCompare(b.serviceName));
+  const grouped = new Map<string, string[]>();
+  for (const i of incidents) { const key = `${i.employeeName} — ${i.serviceName}`; const list = grouped.get(key) ?? []; list.push(getAttendanceIncidentLabel(i.kind)); grouped.set(key, list); }
+  const absence = t.absentWorkdays;
+  const incidentSummary = payload.totalIncidentCount > incidents.length
+    ? `Mostrando ${incidents.length} de ${payload.totalIncidentCount}`
+    : `Total: ${payload.totalIncidentCount}`;
+  const text = ["Reporte diario de asistencia", `Fecha: ${payload.reportDate}`, `Zona horaria: ${payload.timezoneId}`, "", "Resumen", `- Jornadas: ${t.scheduledWorkdays} · Presentes: ${t.presentWorkdays} · Ausentes: ${absence} · Justificadas: ${t.justifiedWorkdays}`, `- Tardanzas: ${t.lateCount} · Sin llegada: ${t.missingCheckinCount} · Sin salida: ${t.missingCheckoutCount}`, `- Avisó que no asistiría: ${t.unavailableCount} · Confirmó y faltó: ${t.confirmedButAbsentWorkdays} · Falta sin aviso: ${t.unannouncedAbsenceWorkdays}`, `- Pendientes de revisión: ${t.pendingReviewAttendances} · Rechazadas: ${t.rejectedAttendances} · Fuera de geocerca: ${t.outsideGeofenceAttendances}`, "", `Incidencias importantes (${incidentSummary})`, ...(incidents.length ? incidents.slice(0, 20).map((i) => `- ${labels[i.kind] ?? i.detail}: ${i.employeeName} — ${i.serviceName}`) : ["No se detectaron incidencias relevantes."]), "", "Empleados que requieren atención", ...(grouped.size ? [...grouped].slice(0, 10).map(([k, v]) => `- ${k}: ${[...new Set(v)].join(", ")}`) : ["No hay empleados con incidencias relevantes."]), "", "El detalle completo está en el archivo XLSX adjunto."].join("\n");
+  const groupedHtml = [...grouped].slice(0, 10).map(([key, values]) => `<li><strong>${escapeHtml(key)}</strong>: ${escapeHtml([...new Set(values)].join(", "))}</li>`).join("");
+  const incidentHtml = incidents.length ? incidents.slice(0, 20).map((i) => `<li>${escapeHtml(labels[i.kind] ?? i.detail)} — ${escapeHtml(i.employeeName)} (${escapeHtml(i.serviceName)})</li>`).join("") : "<li>No se detectaron incidencias relevantes.</li>";
+  const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#202124;line-height:1.45"><h1>Reporte diario de asistencia</h1><p><strong>${escapeHtml(payload.companyName)}</strong><br>Fecha: ${escapeHtml(payload.reportDate)} · Zona horaria: ${escapeHtml(payload.timezoneId)}</p><h2>Resumen</h2><p>${t.scheduledWorkdays} jornadas · ${t.presentWorkdays} presentes · ${absence} ausencias · ${t.justifiedWorkdays} justificadas · ${t.lateCount} tardanzas · ${t.missingCheckinCount} sin llegada · ${t.missingCheckoutCount} sin salida</p><h2>Incidencias importantes</h2><p><strong>${escapeHtml(incidentSummary)}</strong></p><ul>${incidentHtml}</ul><h2>Empleados que requieren atención</h2><ul>${groupedHtml || "<li>No hay empleados con incidencias relevantes.</li>"}</ul><p>El detalle completo está en el archivo XLSX adjunto.</p></body></html>`;
+  return { subject: `Reporte diario de asistencia ${payload.reportDate} — ${payload.companyName}`, text, html };
+};

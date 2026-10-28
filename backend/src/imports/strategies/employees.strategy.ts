@@ -8,7 +8,7 @@ import { auditService } from "../../services/audit.service";
 import {
   employeeService,
   type CreateEmployeeForImportInput,
-} from "../../services/employee.service";
+} from "../../services/employees/employee.service";
 import {
   buildImportClientLookup,
   importClientRowErrors,

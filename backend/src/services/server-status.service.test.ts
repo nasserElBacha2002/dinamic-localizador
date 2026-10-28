@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it, mock } from "node:test";
 import { dbProbe } from "../database/db-probe";
-import { attachmentStorageHealthProbe } from "./attachment-storage/storage-health";
+import { attachmentStorageHealthProbe } from "./attachments/storage/storage-health";
 import { env } from "../config/env";
 import { serverStatusService } from "./server-status.service";
 

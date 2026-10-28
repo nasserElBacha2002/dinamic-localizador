@@ -12,7 +12,7 @@ import { getPool } from "../database/connection";
 import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
-import { serviceService } from "../services/service.service";
+import { serviceService } from "./locations/service.service";
 import { serviceRepository } from "../repositories/service.repository";
 import { userRepository } from "../repositories/user.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";

@@ -11,8 +11,8 @@ import {
 import { runOutboundPersistAfterCommitHookForTests } from "../../utils/checkout-transaction-hooks";
 import { setRoutingResult } from "../../utils/whatsapp-routing-result";
 import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
-import { whatsappUsageQuotaService } from "../whatsapp-usage-quota.service";
-import { whatsappFlowTraceService } from "../whatsapp-flow-trace.service";
+import { whatsappUsageQuotaService } from "../whatsapp/whatsapp-usage-quota.service";
+import { whatsappFlowTraceService } from "../whatsapp/whatsapp-flow-trace.service";
 
 export const buildTwiml = (message: string): string => {
   const response = new twilio.twiml.MessagingResponse();

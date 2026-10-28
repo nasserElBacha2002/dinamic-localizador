@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { userRepository } from "../repositories/user.repository";
-import { platformCompanyService } from "../services/platform-company.service";
+import { platformCompanyService } from "../services/companies/platform-company.service";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
 
 /**

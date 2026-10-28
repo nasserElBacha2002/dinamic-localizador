@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   }
 
   const { connectDatabase, closeDatabase } = await import("../database/connection");
-  const { whatsappRetentionService } = await import("../services/whatsapp-retention.service");
+  const { whatsappRetentionService } = await import("../services/whatsapp/whatsapp-retention.service");
 
   await connectDatabase();
   try {

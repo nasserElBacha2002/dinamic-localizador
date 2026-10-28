@@ -34,7 +34,7 @@ describe("legacy import templates without Cliente column", () => {
     setupUnitTestEnv();
     const { serviceRepository } = await import("../repositories/service.repository");
     const { companyLocationTypesService } = await import(
-      "../services/company-location-types.service"
+      "../services/companies/company-location-types.service"
     );
     mock.method(serviceRepository, "findExistingNames", async () => new Map());
     mock.method(companyLocationTypesService, "listLocationTypes", async () => []);
@@ -57,7 +57,7 @@ describe("services import client column", () => {
     const { clientRepository } = await import("../repositories/client.repository");
     const { serviceRepository } = await import("../repositories/service.repository");
     const { companyLocationTypesService } = await import(
-      "../services/company-location-types.service"
+      "../services/companies/company-location-types.service"
     );
 
     mock.method(serviceRepository, "findExistingNames", async () => new Map());
@@ -107,7 +107,7 @@ describe("services import client column", () => {
     const { clientRepository } = await import("../repositories/client.repository");
     const { serviceRepository } = await import("../repositories/service.repository");
     const { companyLocationTypesService } = await import(
-      "../services/company-location-types.service"
+      "../services/companies/company-location-types.service"
     );
 
     mock.method(serviceRepository, "findExistingNames", async () => new Map());

@@ -230,7 +230,7 @@ describe("Company modules permissions", () => {
       "utf8",
     );
     const serviceFile = readFileSync(
-      join(process.cwd(), "../backend/src/services/company-module.service.ts"),
+      join(process.cwd(), "../backend/src/services/companies/company-module.service.ts"),
       "utf8",
     );
 

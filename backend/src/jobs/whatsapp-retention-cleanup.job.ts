@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { whatsappRetentionService } from "../services/whatsapp-retention.service";
+import { whatsappRetentionService } from "../services/whatsapp/whatsapp-retention.service";
 
 const JOB_INTERVAL_MS = env.WHATSAPP_RETENTION_CLEANUP_INTERVAL_MS;
 

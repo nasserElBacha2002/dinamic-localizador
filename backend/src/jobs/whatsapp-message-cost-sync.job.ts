@@ -1,6 +1,6 @@
 import { env } from "../config/env";
-import { whatsappMessageCostReconcileService } from "../services/whatsapp-message-cost-reconcile.service";
-import { whatsappMessageCostSyncService } from "../services/whatsapp-message-cost-sync.service";
+import { whatsappMessageCostReconcileService } from "../services/whatsapp/whatsapp-message-cost-reconcile.service";
+import { whatsappMessageCostSyncService } from "../services/whatsapp/whatsapp-message-cost-sync.service";
 import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;

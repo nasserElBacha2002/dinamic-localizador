@@ -18,7 +18,7 @@ import {
 } from "../database/run-migrations";
 import { AppError } from "../errors/app-error";
 import { listHybridShiftScheduleStates } from "../repositories/operation-shift-audit.repository";
-import { operationShiftFoundationService } from "../services/operation-shift-foundation.service";
+import { operationShiftFoundationService } from "../services/operations/operation-shift-foundation.service";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 
 const ROOT = join(process.cwd(), "..");

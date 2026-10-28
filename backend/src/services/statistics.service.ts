@@ -2,7 +2,7 @@ import type { StatisticsFilters, StatisticsTableQuery } from "../schemas/statist
 import { MAX_STATISTICS_EXPORT_ROWS } from "../schemas/statistics.schema";
 import { statisticsRepository } from "../repositories/statistics.repository";
 import { operationalIncidentStatisticsRepository } from "../repositories/operational-incident-statistics.repository";
-import { companyOperationalSettingsService } from "./company-operational-settings.service";
+import { companyOperationalSettingsService } from "./companies/company-operational-settings.service";
 import type {
   AttendanceStatisticsPeriodComparison,
   AttendanceStatisticsSummary,

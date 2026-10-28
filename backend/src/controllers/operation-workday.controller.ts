@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { operationWorkdayService } from "../services/operation-workday.service";
-import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
+import { operationWorkdayService } from "../services/operations/operation-workday.service";
+import { recurringWorkdayMaterializationService } from "../services/workdays/recurring-workday-materialization.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const operationWorkdayController = {

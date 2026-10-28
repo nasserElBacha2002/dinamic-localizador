@@ -6,9 +6,9 @@ export const mockAdminAlertSideEffects = async (): Promise<void> => {
     "../repositories/admin-alert-context.repository"
   );
   const { employeeRepository } = await import("../repositories/employee.repository");
-  const { adminAlertService } = await import("../services/admin-alert.service");
+  const { adminAlertService } = await import("../services/admin-alerts/admin-alert.service");
   const { adminAlertMissingCheckinService } = await import(
-    "../services/admin-alert-missing-checkin.service"
+    "../services/admin-alerts/admin-alert-missing-checkin.service"
   );
 
   mock.method(adminAlertContextRepository, "getAssignmentScheduleVersion", async () => 1);
@@ -29,12 +29,12 @@ export const mockAdminAlertSideEffects = async (): Promise<void> => {
   }));
   mock.method(adminAlertMissingCheckinService, "emitForCompletedOperation", async () => undefined);
   mock.method(
-    (await import("../services/admin-alert-absence-pending.service")).adminAlertAbsencePendingService,
+    (await import("../services/admin-alerts/admin-alert-absence-pending.service")).adminAlertAbsencePendingService,
     "emitForPendingWhatsappRequest",
     async () => undefined,
   );
   const { attendanceThresholdAlertService } = await import(
-    "../services/attendance-threshold-alert.service"
+    "../services/admin-alerts/attendance-threshold-alert.service"
   );
   mock.method(attendanceThresholdAlertService, "markEmployeeDirty", async () => undefined);
   const { replacementRequestService } = await import("../services/replacement-request.service");

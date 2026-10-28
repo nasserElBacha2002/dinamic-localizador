@@ -10,7 +10,7 @@ import {
 import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { attendanceRepository } from "../repositories/attendance.repository";
-import { attendanceService } from "../services/attendance.service";
+import { attendanceService } from "../services/attendance/attendance.service";
 import { attendanceAuthoritativeClock } from "../utils/attendance-authoritative-clock";
 
 const uuid = (): string => randomUUID();

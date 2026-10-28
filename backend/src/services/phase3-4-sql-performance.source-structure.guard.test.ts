@@ -29,7 +29,7 @@ describe("phase3-4 sql performance source guards", () => {
 
   it("cost reconcile uses sargable SID anti-join branches", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/services/whatsapp-message-cost-reconcile.service.ts"),
+      resolve(process.cwd(), "src/services/whatsapp/whatsapp-message-cost-reconcile.service.ts"),
       "utf8",
     );
     assert.match(source, /l\.provider_message_sid = m\.provider_message_sid/);
@@ -51,7 +51,7 @@ describe("phase3-4 sql performance source guards", () => {
 
   it("attendance reminders probe SENT_RECOVERY before per-company UPDATE", () => {
     const service = readFileSync(
-      resolve(process.cwd(), "src/services/attendance-reminder.service.ts"),
+      resolve(process.cwd(), "src/services/attendance/attendance-reminder.service.ts"),
       "utf8",
     );
     const repo = readFileSync(

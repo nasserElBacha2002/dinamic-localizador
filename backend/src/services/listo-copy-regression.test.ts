@@ -11,7 +11,7 @@ import { join } from "node:path";
 describe("post-delivery confirmation removed from payroll receipt query", () => {
   it("period-query service has no success confirmation copy helpers", () => {
     const source = readFileSync(
-      join(__dirname, "payroll-receipt-period-query.service.ts"),
+      join(__dirname, "payroll/payroll-receipt-period-query.service.ts"),
       "utf8",
     );
     assert.doesNotMatch(source, /\bListo\b/);
@@ -23,7 +23,7 @@ describe("post-delivery confirmation removed from payroll receipt query", () => 
 
   it("handler returns empty message on completed delivery path", () => {
     const source = readFileSync(
-      join(__dirname, "whatsapp-router/payroll-receipt.handler.ts"),
+      join(__dirname, "whatsapp/router/payroll-receipt.handler.ts"),
       "utf8",
     );
     assert.doesNotMatch(source, /\bListo\b/);

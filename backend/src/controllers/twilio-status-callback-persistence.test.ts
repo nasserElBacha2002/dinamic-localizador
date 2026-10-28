@@ -8,7 +8,7 @@ describe("twilio status callback persistence semantics", () => {
     const { env } = await import("../config/env");
     Object.assign(env, { WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: true });
 
-    const { whatsappFlowTraceService } = await import("../services/whatsapp-flow-trace.service");
+    const { whatsappFlowTraceService } = await import("../services/whatsapp/whatsapp-flow-trace.service");
     mock.method(whatsappFlowTraceService, "recordProviderStatus", async () => {
       throw new Error("SQL_DOWN");
     });
@@ -41,7 +41,7 @@ describe("twilio status callback persistence semantics", () => {
     const { env } = await import("../config/env");
     Object.assign(env, { WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: true });
 
-    const { whatsappFlowTraceService } = await import("../services/whatsapp-flow-trace.service");
+    const { whatsappFlowTraceService } = await import("../services/whatsapp/whatsapp-flow-trace.service");
     mock.method(whatsappFlowTraceService, "recordProviderStatus", async () => ({
       created: true,
       messageId: "m1",

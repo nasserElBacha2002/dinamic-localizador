@@ -1,8 +1,8 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
-import { individualRecommendationService } from "./individual-recommendation.service";
-import { employeeAvailabilityService } from "./employee-availability.service";
+import { individualRecommendationService } from "./recommendation/individual-recommendation.service";
+import { employeeAvailabilityService } from "./employees/employee-availability.service";
 import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
 import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";

@@ -20,7 +20,7 @@ describe("recurring workday materialization job handler", () => {
     ]);
 
     const { recurringWorkdayMaterializationService } = await import(
-      "../services/recurring-workday-materialization.service"
+      "../services/workdays/recurring-workday-materialization.service"
     );
 
     let materializeCalls = 0;
@@ -60,7 +60,7 @@ describe("recurring workday materialization job handler", () => {
     setupUnitTestEnv();
 
     const { recurringWorkdayMaterializationService } = await import(
-      "../services/recurring-workday-materialization.service"
+      "../services/workdays/recurring-workday-materialization.service"
     );
     let called = 0;
     mock.method(recurringWorkdayMaterializationService, "runScheduledTick", async () => {
@@ -94,7 +94,7 @@ describe("whatsapp quota policy load semantics (4B.2)", () => {
       whatsappQuotaDailyTurns: 10,
     }));
 
-    const { whatsappUsageQuotaService } = await import("../services/whatsapp-usage-quota.service");
+    const { whatsappUsageQuotaService } = await import("../services/whatsapp/whatsapp-usage-quota.service");
     const resolved = await whatsappUsageQuotaService.resolvePolicy("company-1");
     assert.equal(resolved.kind, "configured");
     if (resolved.kind === "configured") {
@@ -109,7 +109,7 @@ describe("whatsapp quota policy load semantics (4B.2)", () => {
     const { companySettingsRepository } = await import("../repositories/company-settings.repository");
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);
 
-    const { whatsappUsageQuotaService } = await import("../services/whatsapp-usage-quota.service");
+    const { whatsappUsageQuotaService } = await import("../services/whatsapp/whatsapp-usage-quota.service");
     const resolved = await whatsappUsageQuotaService.resolvePolicy("company-1");
     assert.equal(resolved.kind, "defaulted");
     if (resolved.kind === "defaulted") {
@@ -125,7 +125,7 @@ describe("whatsapp quota policy load semantics (4B.2)", () => {
       throw new Error("DB timeout");
     });
 
-    const { whatsappUsageQuotaService } = await import("../services/whatsapp-usage-quota.service");
+    const { whatsappUsageQuotaService } = await import("../services/whatsapp/whatsapp-usage-quota.service");
     const resolved = await whatsappUsageQuotaService.resolvePolicy("company-1");
     assert.equal(resolved.kind, "error");
 

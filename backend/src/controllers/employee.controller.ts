@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import { employeeService } from "../services/employee.service";
-import { employeeDeactivationService } from "../services/employee-deactivation.service";
-import { employeeAvailabilityService } from "../services/employee-availability.service";
-import { employeeOperationsService } from "../services/employee-operations.service";
-import { employeeClientService } from "../services/employee-client.service";
+import { employeeService } from "../services/employees/employee.service";
+import { employeeDeactivationService } from "../services/employees/employee-deactivation.service";
+import { employeeAvailabilityService } from "../services/employees/employee-availability.service";
+import { employeeOperationsService } from "../services/employees/employee-operations.service";
+import { employeeClientService } from "../services/employees/employee-client.service";
 import type { ListEmployeeOperationsQuery } from "../schemas/employee.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 import { projectEmployeeForRole } from "../utils/employee-residence-privacy";

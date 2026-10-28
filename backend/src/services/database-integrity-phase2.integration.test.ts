@@ -20,10 +20,10 @@ import { AppError } from "../errors/app-error";
 import { setAuditBeforeInsertHookForTests } from "../repositories/audit.repository";
 import { userInvitationRepository } from "../repositories/user-invitation.repository";
 import { userRepository } from "../repositories/user.repository";
-import { attendanceService } from "./attendance.service";
-import { companyUserService } from "./company-user.service";
-import { operationAssignmentService } from "./operation-assignment.service";
-import { userInvitationService } from "./user-invitation.service";
+import { attendanceService } from "./attendance/attendance.service";
+import { companyUserService } from "./companies/company-user.service";
+import { operationAssignmentService } from "./operations/operation-assignment.service";
+import { userInvitationService } from "./identity/user-invitation.service";
 import { generateInvitationToken, hashInvitationToken } from "../utils/invitation-token";
 import { hashPassword, normalizeEmail } from "../utils/password";
 

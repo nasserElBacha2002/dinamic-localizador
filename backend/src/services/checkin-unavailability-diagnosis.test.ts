@@ -12,7 +12,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
   it("reports WORKDAY_NOT_ACTIVE from nearby candidate diagnostics", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityService } = await import(
-      "./employee-workday-availability.service"
+      "./workdays/employee-workday-availability.service"
     );
 
     mock.method(
@@ -60,7 +60,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
   it("propagates repository failures so the bot can catch them", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityService } = await import(
-      "./employee-workday-availability.service"
+      "./workdays/employee-workday-availability.service"
     );
 
     mock.method(

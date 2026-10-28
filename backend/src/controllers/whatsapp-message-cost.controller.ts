@@ -4,7 +4,7 @@ import type {
   MessageCostMonthQuery,
   MessageCostResyncBody,
 } from "../schemas/whatsapp-message-cost.schema";
-import { whatsappMessageCostQueryService } from "../services/whatsapp-message-cost-query.service";
+import { whatsappMessageCostQueryService } from "../services/whatsapp/whatsapp-message-cost-query.service";
 
 export const whatsappMessageCostController = {
   async getMonthlySummary(req: Request, res: Response): Promise<void> {

@@ -1,0 +1,159 @@
+import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
+import {
+  ACTIVE_ATTENDANCE_FLOW_MESSAGE,
+  LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
+  WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
+} from "../../bot/bot-response.builder";
+import { isAbsenceSessionState } from "../../../utils/bot-session-states";
+import { isCheckoutIntent } from "../../../utils/intent";
+import { setLastDetectedIntent } from "../../../utils/bot-runtime-context";
+import { getAttendanceModuleBlockedMessage } from "../whatsapp-module-gate";
+import { botSessionService } from "../../bot/bot-session.service";
+import { logModuleBlocked } from "./module-session-gate";
+import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
+import type { BotSession } from "../../../types/twilio.types";
+import { recordInvalidContextualInput } from "../../bot/contextual-session-retry.service";
+
+export const handleActiveCheckoutTextSession = async (
+  ctx: WhatsAppRouterContext,
+  session: BotSession,
+  handlers: WhatsAppRouterHandlers,
+): Promise<string | null> => {
+  if (session.state === "WAITING_CHECKOUT_OPERATION_SELECTION") {
+    return handlers.handleCheckoutOperationSelection({
+      companyId: ctx.companyId,
+      session,
+      body: ctx.body,
+      employeeId: ctx.employeeId!,
+      phoneFrom: ctx.phoneFrom,
+      phoneTo: ctx.phoneTo,
+      messageSid: ctx.payload.MessageSid,
+    });
+  }
+
+  if (session.state === "WAITING_CHECKOUT_LOCATION") {
+    const context = botSessionService.parseContext(session.contextJson);
+    if (
+      context.pendingLocation &&
+      isCheckoutIntent(ctx.body) &&
+      session.employeeWorkdayId &&
+      session.operationId
+    ) {
+      return handlers.processLocationCheckout({
+        companyId: ctx.companyId,
+        session,
+        employeeId: ctx.employeeId!,
+        employeeWorkdayId: session.employeeWorkdayId,
+        attendanceRecordId: session.attendanceRecordId,
+        operationId: session.operationId,
+        latitude: context.pendingLocation.latitude,
+        longitude: context.pendingLocation.longitude,
+        messageSid: context.pendingLocation.messageSid,
+        phoneFrom: ctx.phoneFrom,
+        phoneTo: ctx.phoneTo,
+        eventAt: new Date(context.pendingLocation.receivedAt),
+        checkoutWithoutArrival: Boolean(context.checkoutWithoutArrival),
+      });
+    }
+
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
+    });
+    return handlers.respond(ctx.companyId, {
+      message: retry.message,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.LOCATION_REQUIRED,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  return null;
+};
+
+export const handleCheckoutIntent = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+  session: BotSession | null,
+): Promise<string> => {
+  setLastDetectedIntent("checkout");
+  const blockedMessage = getAttendanceModuleBlockedMessage(ctx.moduleStates);
+  if (blockedMessage) {
+    logModuleBlocked(ctx.companyId, "attendance");
+    return handlers.respond(ctx.companyId, {
+      message: blockedMessage,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  if (session && isAbsenceSessionState(session.state)) {
+    return handlers.respond(ctx.companyId, {
+      message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  return handlers.startCheckout({
+    companyId: ctx.companyId,
+    employeeId: ctx.employeeId!,
+    phoneFrom: ctx.phoneFrom,
+    phoneTo: ctx.phoneTo,
+    messageSid: ctx.payload.MessageSid,
+  });
+};
+
+export const handleCheckoutLocation = async (
+  ctx: WhatsAppRouterContext,
+  session: BotSession,
+  handlers: WhatsAppRouterHandlers,
+): Promise<string | null> => {
+  if (session.state === "WAITING_CHECKOUT_OPERATION_SELECTION") {
+    return handlers.respond(ctx.companyId, {
+      message: LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  if (
+    session.state !== "WAITING_CHECKOUT_LOCATION" ||
+    !session.employeeWorkdayId ||
+    !session.operationId
+  ) {
+    return null;
+  }
+
+  const context = botSessionService.parseContext(session.contextJson);
+  const checkoutWithoutArrival =
+    Boolean(context.checkoutWithoutArrival) || !session.attendanceRecordId;
+
+  return handlers.processLocationCheckout({
+    companyId: ctx.companyId,
+    session,
+    employeeId: ctx.employeeId!,
+    employeeWorkdayId: session.employeeWorkdayId,
+    attendanceRecordId: session.attendanceRecordId,
+    operationId: session.operationId,
+    latitude: Number(ctx.payload.Latitude),
+    longitude: Number(ctx.payload.Longitude),
+    messageSid: ctx.payload.MessageSid,
+    phoneFrom: ctx.phoneFrom,
+    phoneTo: ctx.phoneTo,
+    checkoutWithoutArrival,
+  });
+};

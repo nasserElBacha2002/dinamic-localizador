@@ -58,7 +58,7 @@ describe("phase6 bot flow behavioral characterization", () => {
     setupUnitTestEnv();
     const { startCheckIn } = await import("./bot/check-in-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "./employee-workday-availability.service"
+      "./workdays/employee-workday-availability.service"
     );
     const { runWithBotRuntimeContext } = await import("../utils/bot-runtime-context");
 
@@ -84,7 +84,7 @@ describe("phase6 bot flow behavioral characterization", () => {
   it("invalid checkout selection returns INVALID_SELECTION (I)", async () => {
     setupUnitTestEnv();
     const { handleCheckoutOperationSelection } = await import("./bot/checkout-attendance.flow");
-    const { botSessionService } = await import("./bot-session.service");
+    const { botSessionService } = await import("./bot/bot-session.service");
     const { runWithBotRuntimeContext } = await import("../utils/bot-runtime-context");
     mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
       kind: "retry" as const,
@@ -130,9 +130,9 @@ describe("phase6 bot flow behavioral characterization", () => {
     setupUnitTestEnv();
     const { processCheckoutWithoutLocation } = await import("./bot/checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
-      "./employee-workday-availability.service"
+      "./workdays/employee-workday-availability.service"
     );
-    const { botSessionService } = await import("./bot-session.service");
+    const { botSessionService } = await import("./bot/bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import(
       "../utils/bot-runtime-context"
     );

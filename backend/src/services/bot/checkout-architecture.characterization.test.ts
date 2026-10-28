@@ -11,7 +11,7 @@ import {
   classifyReminderSendOutcome,
   emptyReminderKindCounts,
   mergeReminderKindCounts,
-} from "../attendance-reminder-outcomes";
+} from "../attendance/attendance-reminder-outcomes";
 
 describe("resolveCheckoutWhatsAppResultCode", () => {
   it("maps CHECKOUT_REJECTED to outside-radius observability code", () => {

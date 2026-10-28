@@ -17,12 +17,12 @@ import {
   buildCheckoutValidation,
   buildCheckoutValidationWithoutLocation,
 } from "./bot-attendance-runtime";
-import { botSessionService } from "../bot-session.service";
-import { recordInvalidContextualInput } from "../contextual-session-retry.service";
+import { botSessionService } from "./bot-session.service";
+import { recordInvalidContextualInput } from "./contextual-session-retry.service";
 import {
   CheckoutCommandError,
   employeeWorkdayCheckoutCommand,
-} from "../employee-workday-checkout.command";
+} from "../workdays/employee-workday-checkout.command";
 import {
   buildCheckoutWorkdaySelectionPrompt,
   buildCheckoutLocationRequestMessage,

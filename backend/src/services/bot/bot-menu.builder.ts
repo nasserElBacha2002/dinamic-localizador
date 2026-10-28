@@ -14,7 +14,7 @@ import {
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
   getPayrollReceiptsModuleBlockedMessage,
-} from "../whatsapp-module-gate";
+} from "../whatsapp/whatsapp-module-gate";
 import {
   buildAvailableMenuOptions,
   formatMenuOptionsLines,

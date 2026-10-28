@@ -1,8 +1,8 @@
 import { Alert, Stack, Switch, Text } from "@mantine/core";
 import { useState } from "react";
-import { SettingsDialog } from "./SettingsDialog";
-import { useCompanySettings, useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
-import { getApiErrorMessage } from "../../../utils/errors";
+import { SettingsDialog } from "../SettingsDialog";
+import { useCompanySettings, useUpdateCompanySettings } from "../../../../hooks/useCompanySettings";
+import { getApiErrorMessage } from "../../../../utils/errors";
 
 interface Props {
   opened: boolean;

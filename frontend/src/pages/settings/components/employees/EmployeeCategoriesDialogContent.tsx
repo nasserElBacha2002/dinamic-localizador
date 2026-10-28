@@ -1,12 +1,12 @@
 import { Alert, Button, Group, ScrollArea, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert } from "../../../design-system";
+import { FormErrorAlert } from "../../../../design-system";
 import {
   useCreateEmployeeCategory,
   useUpdateEmployeeCategory,
-} from "../../../hooks/useEmployeeCategories";
-import type { EmployeeCategory } from "../../../types/employee-category";
-import { getApiErrorMessage } from "../../../utils/errors";
+} from "../../../../hooks/useEmployeeCategories";
+import type { EmployeeCategory } from "../../../../types/employee-category";
+import { getApiErrorMessage } from "../../../../utils/errors";
 
 interface EmployeeCategoriesDialogContentProps {
   categories: EmployeeCategory[];

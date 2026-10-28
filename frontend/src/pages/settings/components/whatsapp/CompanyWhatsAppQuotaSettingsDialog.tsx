@@ -11,23 +11,23 @@ import {
   Text,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormGrid } from "../../../design-system";
-import { useUpdateWhatsAppQuotaSettings } from "../../../hooks/useWhatsAppQuotaSettings";
+import { FormGrid } from "../../../../design-system";
+import { useUpdateWhatsAppQuotaSettings } from "../../../../hooks/useWhatsAppQuotaSettings";
 import type {
   WhatsAppQuotaFormValues,
   WhatsAppQuotaSettings,
-} from "../../../types/whatsapp-quota-settings";
-import { getApiErrorMessage } from "../../../utils/errors";
+} from "../../../../types/whatsapp-quota-settings";
+import { getApiErrorMessage } from "../../../../utils/errors";
 import {
   effectiveModeReasonLabel,
   modeDescription,
   toWhatsAppQuotaFormValues,
   validateWhatsAppQuotaForm,
   whatsappQuotaFormEqual,
-} from "../../../utils/whatsapp-quota-settings";
-import { SettingsDialog } from "./SettingsDialog";
-import { SettingsDialogSection } from "./SettingsDialogSection";
-import { SettingsFormField } from "./SettingsFormField";
+} from "../../../../utils/whatsapp-quota-settings";
+import { SettingsDialog } from "../SettingsDialog";
+import { SettingsDialogSection } from "../SettingsDialogSection";
+import { SettingsFormField } from "../SettingsFormField";
 
 const MODE_OPTIONS = [
   { value: "OFF", label: "OFF — desactivado" },

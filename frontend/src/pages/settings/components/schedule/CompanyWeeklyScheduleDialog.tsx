@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import {
   getCanonicalOperationTimezone,
-} from "../../../constants/operation-timezones";
-import { useUpdateCompanyWorkSchedule } from "../../../hooks/useCompanyWorkSchedule";
-import type { CompanyWorkSchedule, WeeklyScheduleDay } from "../../../types/schedule";
-import { getApiErrorMessage } from "../../../utils/errors";
+} from "../../../../constants/operation-timezones";
+import { useUpdateCompanyWorkSchedule } from "../../../../hooks/useCompanyWorkSchedule";
+import type { CompanyWorkSchedule, WeeklyScheduleDay } from "../../../../types/schedule";
+import { getApiErrorMessage } from "../../../../utils/errors";
 import { CompanyWeeklyScheduleDialogContent } from "./CompanyWeeklyScheduleDialogContent";
-import { SettingsDialog } from "./SettingsDialog";
+import { SettingsDialog } from "../SettingsDialog";
 
 interface CompanyWeeklyScheduleDialogProps {
   opened: boolean;

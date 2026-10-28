@@ -11,17 +11,17 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert } from "../../../design-system";
+import { FormErrorAlert } from "../../../../design-system";
 import {
   useCompanyAlertRecipients,
   useCreateCompanyAlertRecipient,
   useDeleteCompanyAlertRecipient,
   useUpdateCompanyAlertRecipient,
-} from "../../../hooks/useCompanyAlertRecipients";
-import { useCompanyUsers } from "../../../hooks/useCompanyUsers";
-import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
-import type { CompanySettings } from "../../../types/company-settings";
-import { getApiErrorMessage } from "../../../utils/errors";
+} from "../../../../hooks/useCompanyAlertRecipients";
+import { useCompanyUsers } from "../../../../hooks/useCompanyUsers";
+import { useUpdateCompanySettings } from "../../../../hooks/useCompanySettings";
+import type { CompanySettings } from "../../../../types/company-settings";
+import { getApiErrorMessage } from "../../../../utils/errors";
 
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 

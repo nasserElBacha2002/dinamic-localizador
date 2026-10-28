@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
-import type { EmployeeCategory } from "../../../types/employee-category";
-import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
+import type { EmployeeCategory } from "../../../../types/employee-category";
+import { SettingsResponsiveModal } from "../SettingsResponsiveModal";
 import { EmployeeCategoriesDialogContent } from "./EmployeeCategoriesDialogContent";
 
 interface EmployeeCategoriesDialogProps {

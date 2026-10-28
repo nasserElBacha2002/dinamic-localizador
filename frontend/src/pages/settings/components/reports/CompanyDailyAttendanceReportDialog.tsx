@@ -15,17 +15,17 @@ import {
   Title,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormGrid, ResponsiveModal } from "../../../design-system";
-import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
+import { FormGrid, ResponsiveModal } from "../../../../design-system";
+import { useUpdateCompanySettings } from "../../../../hooks/useCompanySettings";
 import {
   useCompanyReportEmailRecipients,
   useCreateCompanyReportEmailRecipient,
   useDeleteCompanyReportEmailRecipient,
   useUpdateCompanyReportEmailRecipient,
-} from "../../../hooks/useCompanyReportEmailRecipients";
-import type { CompanySettings } from "../../../types/company-settings";
-import { getApiErrorMessage } from "../../../utils/errors";
-import { SettingsFormField } from "./SettingsFormField";
+} from "../../../../hooks/useCompanyReportEmailRecipients";
+import type { CompanySettings } from "../../../../types/company-settings";
+import { getApiErrorMessage } from "../../../../utils/errors";
+import { SettingsFormField } from "../SettingsFormField";
 
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 

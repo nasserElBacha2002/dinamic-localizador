@@ -1,11 +1,11 @@
 import { Select, Stack } from "@mantine/core";
 import { useMemo } from "react";
-import { WeeklyScheduleEditor } from "../../../components/schedules/WeeklyScheduleEditor";
+import { WeeklyScheduleEditor } from "../../../../components/schedules/WeeklyScheduleEditor";
 import {
   getCanonicalOperationTimezone,
   getOperationTimezoneOptions,
-} from "../../../constants/operation-timezones";
-import type { WeeklyScheduleDay } from "../../../types/schedule";
+} from "../../../../constants/operation-timezones";
+import type { WeeklyScheduleDay } from "../../../../types/schedule";
 
 interface CompanyWeeklyScheduleDialogContentProps {
   timezone: string;

@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 describe("Company operational tolerance labels", () => {
   it("shows one channel-neutral field for each timing concept", () => {
     const formFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/OperationalSettingsForm.tsx"),
       "utf8",
     );
 

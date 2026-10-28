@@ -12,18 +12,18 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert, StatusBadge } from "../../../design-system";
-import classes from "../settings-visual.module.css";
-import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
+import { FormErrorAlert, StatusBadge } from "../../../../design-system";
+import classes from "../../settings-visual.module.css";
+import { SettingsResponsiveModal } from "../SettingsResponsiveModal";
 import {
   useCreateShiftTemplate,
   useDeactivateShiftTemplate,
   useShiftTemplates,
   useUpdateShiftTemplate,
-} from "../../../hooks/useShiftTemplates";
-import type { CompanyShiftTemplate } from "../../../types/operation-shift";
-import { getApiErrorMessage } from "../../../utils/errors";
-import { isOvernightShift } from "../../../utils/operation-shift-payload";
+} from "../../../../hooks/useShiftTemplates";
+import type { CompanyShiftTemplate } from "../../../../types/operation-shift";
+import { getApiErrorMessage } from "../../../../utils/errors";
+import { isOvernightShift } from "../../../../utils/operation-shift-payload";
 import { OperationTimeInput } from "./OperationTimeInput";
 
 interface CompanyShiftTemplatesDialogProps {

@@ -3,10 +3,10 @@ import { useMemo } from "react";
 import {
   getCanonicalOperationTimezone,
   getOperationTimezoneOptions,
-} from "../../../constants/operation-timezones";
-import { FormGrid } from "../../../design-system";
-import type { OperationalSettingsFormValues } from "../../../utils/company-settings-validation";
-import { SettingsFormField } from "./SettingsFormField";
+} from "../../../../constants/operation-timezones";
+import { FormGrid } from "../../../../design-system";
+import type { OperationalSettingsFormValues } from "../../../../utils/company-settings-validation";
+import { SettingsFormField } from "../SettingsFormField";
 import { OperationTimeInput } from "./OperationTimeInput";
 
 const numberInputProps = {

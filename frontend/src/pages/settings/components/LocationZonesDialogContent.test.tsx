@@ -130,10 +130,10 @@ import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, before, beforeEach, describe, it } from "node:test";
 import React from "react";
 
-let LocationZonesDialogContent: typeof import("./LocationZonesDialogContent").LocationZonesDialogContent;
+let LocationZonesDialogContent: typeof import("./locations/LocationZonesDialogContent").LocationZonesDialogContent;
 
 before(async () => {
-  ({ LocationZonesDialogContent } = await import("./LocationZonesDialogContent"));
+  ({ LocationZonesDialogContent } = await import("./locations/LocationZonesDialogContent"));
 });
 
 beforeEach(() => {

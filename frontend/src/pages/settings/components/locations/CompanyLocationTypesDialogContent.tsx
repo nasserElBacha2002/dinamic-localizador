@@ -1,13 +1,13 @@
 import { Button, Group, ScrollArea, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { FormErrorAlert } from "../../../design-system";
+import { FormErrorAlert } from "../../../../design-system";
 import {
   useCreateCompanyLocationType,
   useDisableCompanyLocationType,
   useUpdateCompanyLocationType,
-} from "../../../hooks/useCompanyLocationTypes";
-import type { CompanyLocationType } from "../../../types/company-location-type";
-import { getApiErrorMessage } from "../../../utils/errors";
+} from "../../../../hooks/useCompanyLocationTypes";
+import type { CompanyLocationType } from "../../../../types/company-location-type";
+import { getApiErrorMessage } from "../../../../utils/errors";
 
 interface CompanyLocationTypesDialogContentProps {
   locationTypes: CompanyLocationType[];

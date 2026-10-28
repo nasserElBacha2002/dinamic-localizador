@@ -14,29 +14,29 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useDeferredValue, useMemo, useState } from "react";
-import { FormErrorAlert } from "../../../design-system";
+import { FormErrorAlert } from "../../../../design-system";
 import {
   useCreateLocationZone,
   useGeocodeLocationZone,
   useLocationZonesGeocodingSummary,
   useSearchLocationZones,
   useUpdateLocationZone,
-} from "../../../hooks/useLocationZones";
-import type { LocationZone } from "../../../types/location-zone";
+} from "../../../../hooks/useLocationZones";
+import type { LocationZone } from "../../../../types/location-zone";
 import {
   localityCapitalHint,
   SUGGESTED_LOCALITY_LABELS,
-} from "../../../utils/canonical-locality";
-import { getApiErrorMessage } from "../../../utils/errors";
-import { friendlyGeocodingErrorMessage } from "../../../utils/geocoding-error-message";
+} from "../../../../utils/canonical-locality";
+import { getApiErrorMessage } from "../../../../utils/errors";
+import { friendlyGeocodingErrorMessage } from "../../../../utils/geocoding-error-message";
 import {
   filterZonesByGeocodingStatus,
   geocodingStatusColor,
   geocodingStatusLabel,
   type GeocodingStatusFilter,
   summarizeActiveZoneGeocoding,
-} from "../../../utils/location-zone-geocoding-ui";
-import { normalizeLocationZoneName } from "../../../utils/normalize-location-zone-name";
+} from "../../../../utils/location-zone-geocoding-ui";
+import { normalizeLocationZoneName } from "../../../../utils/normalize-location-zone-name";
 import { buildLocationZoneEditPayload } from "./location-zone-edit-payload";
 
 interface LocationZonesDialogContentProps {

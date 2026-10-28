@@ -1,6 +1,6 @@
 import { TextInput } from "@mantine/core";
 import type { ReactNode } from "react";
-import { normalizeOperationTimeValue } from "../../../utils/operation-time";
+import { normalizeOperationTimeValue } from "../../../../utils/operation-time";
 
 export interface OperationTimeInputProps {
   value: string;

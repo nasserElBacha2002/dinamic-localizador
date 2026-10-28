@@ -1,14 +1,14 @@
 import { Alert, Select, Stack, Table, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { useAbsenceCalendars } from "../../../hooks/useAbsenceCalendar";
-import { useAbsenceTypes, useUpdateAbsenceType } from "../../../hooks/useAbsences";
-import type { AbsenceAttachmentPolicy } from "../../../types/absence";
+import { useAbsenceCalendars } from "../../../../hooks/useAbsenceCalendar";
+import { useAbsenceTypes, useUpdateAbsenceType } from "../../../../hooks/useAbsences";
+import type { AbsenceAttachmentPolicy } from "../../../../types/absence";
 import {
   absenceAttachmentPolicyLabels,
   absenceTypeLabels,
-} from "../../../utils/absence-labels";
-import { getApiErrorMessage } from "../../../utils/errors";
-import { SettingsDialog } from "./SettingsDialog";
+} from "../../../../utils/absence-labels";
+import { getApiErrorMessage } from "../../../../utils/errors";
+import { SettingsDialog } from "../SettingsDialog";
 
 interface CompanyAbsenceTypePolicyDialogProps {
   opened: boolean;

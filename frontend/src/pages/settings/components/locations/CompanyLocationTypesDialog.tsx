@@ -1,7 +1,7 @@
 import { Button, Group } from "@mantine/core";
-import { ResponsiveModal } from "../../../design-system";
+import { ResponsiveModal } from "../../../../design-system";
 import { CompanyLocationTypesDialogContent } from "./CompanyLocationTypesDialogContent";
-import type { CompanyLocationType } from "../../../types/company-location-type";
+import type { CompanyLocationType } from "../../../../types/company-location-type";
 
 interface CompanyLocationTypesDialogProps {
   opened: boolean;

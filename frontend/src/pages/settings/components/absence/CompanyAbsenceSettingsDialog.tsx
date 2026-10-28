@@ -1,9 +1,9 @@
 import { NumberInput, ScrollArea, Stack, Switch, Table, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
-import type { CompanyAbsenceSetting } from "../../../types/company-absence-settings";
-import { SettingsDialog } from "./SettingsDialog";
-import { useUpdateCompanyAbsenceSettings } from "../../../hooks/useCompanyAbsenceSettings";
-import { getApiErrorMessage } from "../../../utils/errors";
+import type { CompanyAbsenceSetting } from "../../../../types/company-absence-settings";
+import { SettingsDialog } from "../SettingsDialog";
+import { useUpdateCompanyAbsenceSettings } from "../../../../hooks/useCompanyAbsenceSettings";
+import { getApiErrorMessage } from "../../../../utils/errors";
 
 type DraftSetting = {
   absenceTypeCode: string;

@@ -19,6 +19,8 @@ frontend/.env
 # Local AI agent instructions (do not publish)
 AGENTS.md
 **/AGENTS.md
+# Versioned backend folder convention (phase 8 of the modularization audit).
+!backend/AGENTS.md
 
 # Phase audit: never version recursive/full workspace diffs (keep markdown inventories)
 audit-evidence/**/diff.txt
@@ -48,6 +50,9 @@ backend/reports/
 !backend/src/repositories/reports/**
 !backend/src/utils/reports/
 !backend/src/utils/reports/**
+# Settings dialogs, not generated artifacts (reports/ matches any directory).
+!frontend/src/pages/settings/components/reports/
+!frontend/src/pages/settings/components/reports/**
 
 # Local git review artifacts (Cursor commands)
 review/

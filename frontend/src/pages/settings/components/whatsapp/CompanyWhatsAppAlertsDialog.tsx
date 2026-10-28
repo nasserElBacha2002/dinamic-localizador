@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
-import type { CompanySettings } from "../../../types/company-settings";
-import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
+import type { CompanySettings } from "../../../../types/company-settings";
+import { SettingsResponsiveModal } from "../SettingsResponsiveModal";
 import { CompanyWhatsAppAlertsDialogContent } from "./CompanyWhatsAppAlertsDialogContent";
 
 interface CompanyWhatsAppAlertsDialogProps {

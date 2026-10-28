@@ -45,11 +45,11 @@ describe("company settings frontend module", () => {
       "utf8",
     );
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
     const formFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/OperationalSettingsForm.tsx"),
       "utf8",
     );
 
@@ -97,7 +97,7 @@ describe("company settings frontend module", () => {
 
   it("calls updateCompanySettings from operational dialog", () => {
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
+      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
     assert.match(dialogFile, /useUpdateCompanySettings/);

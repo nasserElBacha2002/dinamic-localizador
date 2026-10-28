@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
-import type { LocationZone } from "../../../types/location-zone";
-import { SettingsResponsiveModal } from "./SettingsResponsiveModal";
+import type { LocationZone } from "../../../../types/location-zone";
+import { SettingsResponsiveModal } from "../SettingsResponsiveModal";
 import { LocationZonesDialogContent } from "./LocationZonesDialogContent";
 
 interface LocationZonesDialogProps {

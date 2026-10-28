@@ -30,7 +30,7 @@ import {
   toCompanySettingsFormValues,
   toCompanySettingsUpdateInput,
 } from "../../utils/company-settings-validation";
-import { OperationTimeInput } from "../settings/components/OperationTimeInput";
+import { OperationTimeInput } from "../settings/components/schedule/OperationTimeInput";
 import { SettingsFormField } from "../settings/components/SettingsFormField";
 import {
   countCreateCompanyFieldErrors,

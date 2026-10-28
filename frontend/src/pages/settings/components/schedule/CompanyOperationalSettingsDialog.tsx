@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react";
-import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
-import type { CompanySettings } from "../../../types/company-settings";
+import { useUpdateCompanySettings } from "../../../../hooks/useCompanySettings";
+import type { CompanySettings } from "../../../../types/company-settings";
 import {
   operationalSettingsEqual,
   toOperationalSettingsFormValues,
   toOperationalSettingsUpdateInput,
   validateOperationalSettingsForm,
   type OperationalSettingsFormValues,
-} from "../../../utils/company-settings-validation";
-import { getApiErrorMessage } from "../../../utils/errors";
+} from "../../../../utils/company-settings-validation";
+import { getApiErrorMessage } from "../../../../utils/errors";
 import { OperationalSettingsForm } from "./OperationalSettingsForm";
-import { SettingsDialog } from "./SettingsDialog";
+import { SettingsDialog } from "../SettingsDialog";
 
 interface CompanyOperationalSettingsDialogProps {
   opened: boolean;

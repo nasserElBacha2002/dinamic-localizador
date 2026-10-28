@@ -21,10 +21,10 @@ import {
   useUpdateAbsenceCalendar,
   useUpdateAbsenceCalendarDate,
   useBootstrapDefaultAbsenceCalendar,
-} from "../../../hooks/useAbsenceCalendar";
-import { useCompanySettings, useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
-import { getApiErrorMessage } from "../../../utils/errors";
-import { SettingsDialog } from "./SettingsDialog";
+} from "../../../../hooks/useAbsenceCalendar";
+import { useCompanySettings, useUpdateCompanySettings } from "../../../../hooks/useCompanySettings";
+import { getApiErrorMessage } from "../../../../utils/errors";
+import { SettingsDialog } from "../SettingsDialog";
 
 const DATE_TYPE_OPTIONS = [
   { value: "HOLIDAY", label: "Feriado" },

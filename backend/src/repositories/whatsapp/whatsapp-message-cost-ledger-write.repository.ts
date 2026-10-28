@@ -1,6 +1,6 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp-observability";
+import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp/whatsapp-observability";
 import {
   mapLedgerRow,
   type InsertCostLedgerInput,

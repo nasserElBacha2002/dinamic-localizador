@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { maskPhoneNumberForLog } from "./phone";
+import { maskPhoneNumberForLog } from "../phone";
 
 const SENSITIVE_KEYS = new Set([
   "authtoken",

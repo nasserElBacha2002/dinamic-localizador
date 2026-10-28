@@ -14,7 +14,7 @@ import {
   isAbsenceCancelIntent,
   isAffirmativeConfirmation,
   isNegativeConfirmation,
-} from "../../utils/absence-intent";
+} from "../../utils/absence/absence-intent";
 import { formatAbsenceDateDisplay } from "../../utils/absence-date";
 import { absenceCalendarService } from "./absence-calendar.service";
 import { parseSpanishDateInput } from "../bot/bot-date.parser";
@@ -23,7 +23,7 @@ import {
   resolveAbsenceKindSnapshot,
   type AbsenceKindOptionKey,
 } from "../bot/absence-kind-options";
-import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../../utils/bot-session-states";
+import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../../utils/bot/bot-session-states";
 
 type RespondFn = (input: {
   message: string;

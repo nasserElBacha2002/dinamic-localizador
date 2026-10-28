@@ -23,7 +23,7 @@ import {
   pickProjectedProviderStatus,
   sanitizeObservabilityPayload,
   truncateJson,
-} from "../../utils/whatsapp-observability";
+} from "../../utils/whatsapp/whatsapp-observability";
 import {
   decryptPhoneForObservability,
   encryptPhoneForObservability,

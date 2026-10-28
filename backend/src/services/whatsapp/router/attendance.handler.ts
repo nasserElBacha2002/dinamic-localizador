@@ -4,7 +4,7 @@ import {
   LOCATION_DURING_SELECTION_MESSAGE,
   WAITING_LOCATION_TEXT_MESSAGE,
 } from "../../bot/bot-response.builder";
-import { isAbsenceSessionState } from "../../../utils/bot-session-states";
+import { isAbsenceSessionState } from "../../../utils/bot/bot-session-states";
 import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import { getCheckInModuleBlockedMessage } from "../whatsapp-module-gate";
 import { logModuleBlocked } from "./module-session-gate";

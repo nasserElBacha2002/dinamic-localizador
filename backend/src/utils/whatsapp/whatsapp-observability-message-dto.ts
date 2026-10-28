@@ -1,5 +1,5 @@
 import type { WhatsAppMessage } from "../../types/twilio.types";
-import { maskPhoneForObservability } from "../whatsapp-observability";
+import { maskPhoneForObservability } from "./whatsapp-observability";
 
 export interface ObservabilityMessageDtoOptions {
   revealPhone?: boolean;

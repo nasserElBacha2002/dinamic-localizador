@@ -12,7 +12,7 @@ import type {
 import {
   buildNormalizedIncidentRate,
   buildRateDelta,
-} from "../utils/attendance-statistics-metrics";
+} from "../utils/attendance/attendance-statistics-metrics";
 import { buildActionExceptions } from "../utils/statistics/statistics-action-exceptions";
 import { buildPaginationMeta } from "../utils/pagination";
 import { resolveOperationTimezone } from "../utils/operations/operation-timezone";

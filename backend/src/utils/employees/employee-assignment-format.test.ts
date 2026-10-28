@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
+import type { EmployeeAssignedOperation } from "../../types/employee-assignment-query";
 import {
   buildGoogleMapsSearchUrl,
   formatAssignmentAddress,

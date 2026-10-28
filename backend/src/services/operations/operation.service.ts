@@ -29,7 +29,7 @@ import { recurringScheduleService } from "./recurring-schedule.service";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
-import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../../utils/operation-status";
+import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../../utils/operations/operation-status";
 import { isActiveOperationDuplicateError } from "../../utils/operations/active-operation-duplicate-errors";
 import { isOperationStartInPast } from "../../utils/operations/operation-lifecycle";
 import { operationLifecycleService } from "./operation-lifecycle.service";

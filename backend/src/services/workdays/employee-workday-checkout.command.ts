@@ -4,11 +4,11 @@ import { attendanceRepository } from "../../repositories/attendance/attendance.r
 import { botSessionRepository } from "../../repositories/whatsapp/bot-session.repository";
 import type { AttendanceRecord } from "../../types/domain";
 import type { CheckoutStatus } from "../../constants/checkout-status";
-import { runCheckoutWithoutLocationBeforeCommitHookForTests } from "../../utils/checkout-transaction-hooks";
+import { runCheckoutWithoutLocationBeforeCommitHookForTests } from "../../utils/attendance/checkout-transaction-hooks";
 import {
   isActiveAttendanceDuplicateKeyError,
   isAttendanceCheckoutMessageSidDuplicateKeyError,
-} from "../../utils/attendance-duplicate-errors";
+} from "../../utils/attendance/attendance-duplicate-errors";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
 import { getSimulationSessionId } from "../../utils/bot/bot-runtime-context";
 

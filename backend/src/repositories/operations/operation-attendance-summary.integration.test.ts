@@ -14,7 +14,7 @@ import { operationAssignmentService } from "../../services/operations/operation-
 import { operationService } from "../../services/operations/operation.service";
 import { recurringWorkdayMaterializationService } from "../../services/workdays/recurring-workday-materialization.service";
 import { WEEKDAYS } from "../../constants/weekday";
-import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;

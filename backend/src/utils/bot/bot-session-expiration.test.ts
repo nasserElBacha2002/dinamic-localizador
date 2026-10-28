@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { BotSessionState } from "../types/twilio.types";
+import type { BotSessionState } from "../../types/twilio.types.ts";
 import {
   ACTIVE_SESSION_STATES,
   buildSessionExpiresAt,

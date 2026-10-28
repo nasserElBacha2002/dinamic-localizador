@@ -5,7 +5,7 @@ import {
   isWithinCheckInAvailabilityWindow,
   resolveCheckInCandidateRange,
 } from "./resolve-check-in-availability-window";
-import { buildRecurringExpectedInstants } from "../recurring-workday-instant";
+import { buildRecurringExpectedInstants } from "../workdays/recurring-workday-instant";
 
 describe("evaluateCheckInWindow policy", () => {
   const schedule = {

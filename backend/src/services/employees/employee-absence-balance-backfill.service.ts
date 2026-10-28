@@ -7,7 +7,7 @@ import { companyRepository } from "../../repositories/companies/company.reposito
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { companyAbsenceSettingsService } from "../companies/company-absence-settings.service";
-import { getCurrentYearInTimezone } from "../../utils/operational-year";
+import { getCurrentYearInTimezone } from "../../utils/absence/operational-year";
 
 export type EmployeeAbsenceBalanceBackfillOptions = {
   companyId?: string;

@@ -9,7 +9,7 @@ import { operationWorkdayRepository } from "../../repositories/operations/operat
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { WEEKDAYS } from "../../constants/weekday";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 import type { OperationWorkday } from "../../types/workday";
 import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";

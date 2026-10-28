@@ -9,8 +9,8 @@ import type { EmployeeWorkdayAbsenceContext } from "../../types/employee-workday
 import {
   getAbsenceDateRangeForWorkday,
   resolveEffectiveAbsenceForWorkday,
-} from "../../utils/absence-workday-coverage";
-import { deriveEmployeeWorkdayState } from "../../utils/derive-employee-workday-state";
+} from "../../utils/absence/absence-workday-coverage";
+import { deriveEmployeeWorkdayState } from "../../utils/attendance/derive-employee-workday-state";
 import { buildPaginationMeta } from "../../utils/pagination";
 import type { ListOperationWorkdaysQuery } from "../../schemas/operation-workday.schema";
 

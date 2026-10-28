@@ -8,9 +8,9 @@ import {
   isSimulationActive,
   setLastBotResponse,
 } from "../../utils/bot/bot-runtime-context";
-import { runOutboundPersistAfterCommitHookForTests } from "../../utils/checkout-transaction-hooks";
+import { runOutboundPersistAfterCommitHookForTests } from "../../utils/attendance/checkout-transaction-hooks";
 import { setRoutingResult } from "../../utils/whatsapp/whatsapp-routing-result";
-import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
+import { getQuotaTurnScope } from "../../utils/whatsapp/whatsapp-quota-turn-scope";
 import { whatsappUsageQuotaService } from "../whatsapp/whatsapp-usage-quota.service";
 import { whatsappFlowTraceService } from "../whatsapp/whatsapp-flow-trace.service";
 

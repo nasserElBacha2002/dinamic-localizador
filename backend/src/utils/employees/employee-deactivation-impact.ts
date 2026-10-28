@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import type { OperationKind } from "../../constants/operation-kind";
 import type { OperationStatus } from "../../types/domain";
-import { addDaysToDateIso } from "../recurring-workday-instant";
+import { addDaysToDateIso } from "../workdays/recurring-workday-instant";
 
 export interface DeactivationWorkdaySnapshot {
   employeeWorkdayId: string;

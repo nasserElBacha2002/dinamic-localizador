@@ -1,5 +1,5 @@
 import type { CheckoutStatus } from "../../constants/checkout-status";
-import type { GeofenceEvaluation } from "../attendance-validation";
+import type { GeofenceEvaluation } from "./attendance-validation";
 
 export interface CheckoutTimeEvaluation {
   checkoutStatus: CheckoutStatus;

@@ -19,7 +19,7 @@ import {
   runWithBotRuntimeContext,
 } from "../../utils/bot/bot-runtime-context";
 import { normalizeWhatsAppPhone } from "../../utils/phone";
-import { extractMessageFromTwiml } from "../../utils/twiml-message";
+import { extractMessageFromTwiml } from "../../utils/whatsapp/twiml-message";
 import { whatsappBotService } from "../whatsapp/whatsapp-bot.service";
 import { whatsappCompanyContextService } from "../whatsapp/whatsapp-company-context.service";
 import { botSessionService } from "./bot-session.service";

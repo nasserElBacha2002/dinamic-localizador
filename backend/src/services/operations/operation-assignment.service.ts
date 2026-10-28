@@ -13,9 +13,9 @@ import type { OperationEmployeeAssignment } from "../../types/domain";
 import {
   isAssignmentActiveOnWorkDate,
   resolveAssignmentLifecycleState,
-} from "../../utils/assignment-period";
+} from "../../utils/operations/assignment-period";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
-import { isOperationAssignable } from "../../utils/operation-status";
+import { isOperationAssignable } from "../../utils/operations/operation-status";
 import { safeRollback } from "../../utils/safe-transaction";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { operationWorkDateService } from "./operation-work-date.service";

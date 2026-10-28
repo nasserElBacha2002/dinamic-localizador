@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Employee, OperationEmployeeAssignment } from "../../types/domain";
 import type { WorkTeamMember } from "../../types/work-team";
-import { assignmentPeriodsOverlap } from "../../utils/assignment-period";
+import { assignmentPeriodsOverlap } from "../../utils/operations/assignment-period";
 import { classifyPreviewEmployees } from "./work-team-assignment.service";
 
 const employee = (id: string, active = true): Employee => ({

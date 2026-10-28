@@ -4,7 +4,7 @@ import { absenceOperationalImpactRepository } from "../../repositories/absence/a
 import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import { employeeRepository } from "../../repositories/employees/employee.repository";
 import type { EmployeeAbsenceAvailabilityStatus } from "../../types/absence-operational-impact";
-import { isWorkdayCoveredByAbsence } from "../../utils/absence-workday-coverage";
+import { isWorkdayCoveredByAbsence } from "../../utils/absence/absence-workday-coverage";
 import { absenceOperationalImpactQueryService } from "../absence/absence-operational-impact-query.service";
 
 export type EmployeeAvailabilityQuery = {

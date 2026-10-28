@@ -1,5 +1,5 @@
-import { AppError } from "../errors/app-error";
-import type { OperationScheduleMode } from "../constants/operation-schedule-mode";
+import { AppError } from "../../errors/app-error";
+import type { OperationScheduleMode } from "../../constants/operation-schedule-mode";
 
 /**
  * Phase 1 boundary: productive writes must not create hybrid SINGLE/MULTI states.

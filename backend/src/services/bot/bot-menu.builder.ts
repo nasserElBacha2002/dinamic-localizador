@@ -7,7 +7,7 @@ import {
   isCheckInSessionState,
   isCheckoutSessionState,
   isPayrollReceiptSessionState,
-} from "../../utils/bot-session-states";
+} from "../../utils/bot/bot-session-states";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,

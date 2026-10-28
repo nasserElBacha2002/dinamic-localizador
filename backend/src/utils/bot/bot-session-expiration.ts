@@ -1,4 +1,4 @@
-import type { BotSessionState } from "../types/twilio.types";
+import type { BotSessionState } from "../../types/twilio.types.ts";
 import { ACTIVE_BOT_SESSION_STATES } from "./bot-session-states";
 
 export const ACTIVE_SESSION_STATES = ACTIVE_BOT_SESSION_STATES satisfies readonly BotSessionState[];

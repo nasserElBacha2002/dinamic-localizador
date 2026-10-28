@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { AppError } from "../errors/app-error";
+import { AppError } from "../../errors/app-error";
 
 const pad2 = (value: number): string => String(value).padStart(2, "0");
 

@@ -1,4 +1,4 @@
-import { matchesDuplicateKeyConstraint } from "./sql-server-errors";
+import { matchesDuplicateKeyConstraint } from "../sql-server-errors";
 
 /**
  * Current unique indexes for one active real / simulation attendance per workday.

@@ -1,4 +1,4 @@
-import { normalizeIntentText, parseOperationSelection } from "./intent";
+import { normalizeIntentText, parseOperationSelection } from "../intent";
 
 const WORKDAY_KEYWORDS = [
   "mi jornada",

@@ -9,7 +9,7 @@ import {
 } from "../../utils/admin-alert/attendance-threshold";
 import { buildAttendanceThresholdDedupKey } from "../../utils/admin-alert/dedup-keys";
 import { buildAdminOperationalAlertTemplateVariables } from "../../utils/admin-alert/template-variables";
-import { calculateAttendanceRate } from "../../utils/attendance-statistics-metrics";
+import { calculateAttendanceRate } from "../../utils/attendance/attendance-statistics-metrics";
 
 describe("attendance threshold formula alignment", () => {
   it("matches statistics rate for classic samples", () => {

@@ -3,7 +3,7 @@ import type { AssignmentConfirmationStatus } from "../../constants/assignment-co
 import { getPool } from "../../database/connection";
 import type { OperationalStatus } from "../../types/auth";
 import type { AttendanceRecord, Employee, Operation, Service } from "../../types/domain";
-import { CONFIRMATION_STATUS_SQL } from "../../utils/employee-workday-statistics-projection";
+import { CONFIRMATION_STATUS_SQL } from "../../utils/workdays/employee-workday-statistics-projection";
 import { getPagination } from "../../utils/pagination";
 import { mapOperationAttendanceSummaryRow } from "../../utils/operations/operation-attendance-summary.mapper";
 import { resolveAttendanceSummaryWorkday } from "../../utils/operations/operation-attendance-workday-resolver";

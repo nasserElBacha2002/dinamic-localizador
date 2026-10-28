@@ -12,7 +12,7 @@ import { payrollReceiptMetrics } from "../../utils/payroll-receipts/metrics";
 import {
   classifyTwilioOutboundError,
   isAmbiguousTwilioSendFailure,
-} from "../../utils/twilio-error-classifier";
+} from "../../utils/whatsapp/twilio-error-classifier";
 import { twilioOutboundService } from "../whatsapp/twilio-outbound.service";
 import { whatsappTurnClassificationShadowService } from "../whatsapp/whatsapp-turn-classification-shadow.service";
 

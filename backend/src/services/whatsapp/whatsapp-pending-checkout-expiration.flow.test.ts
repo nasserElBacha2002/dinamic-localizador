@@ -3,7 +3,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 import type { BotSession } from "../../types/twilio.types";
 import type { EmployeeWorkdayCheckoutCandidate } from "../../types/employee-workday-availability";
-import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../../utils/bot/bot-runtime-settings-scope";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import {
   NO_CHECKOUT_OPERATION_MESSAGE,

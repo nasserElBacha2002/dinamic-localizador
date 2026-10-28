@@ -18,7 +18,7 @@ import { userRepository } from "../../repositories/identity/user.repository";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { hashPassword } from "../../utils/password";
-import { getCurrentYearInTimezone } from "../../utils/operational-year";
+import { getCurrentYearInTimezone } from "../../utils/absence/operational-year";
 
 const TEST_OWNER_EMAIL = "integration-absence-settings-owner@test.local";
 

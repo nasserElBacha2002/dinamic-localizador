@@ -25,7 +25,7 @@ import {
   buildEmployeeWorkdayStatisticsCte,
   buildEmployeeWorkdayStatisticsFilters,
   buildStatisticsWhereFromFilters,
-} from "../../utils/employee-workday-statistics-projection";
+} from "../../utils/workdays/employee-workday-statistics-projection";
 
 const toNumber = (value: unknown): number => Number(value ?? 0);
 

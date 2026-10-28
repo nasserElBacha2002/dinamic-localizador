@@ -1,4 +1,4 @@
-import type { PeriodMetricDelta } from "../types/statistics";
+import type { PeriodMetricDelta } from "../../types/statistics";
 
 export type { PeriodMetricDelta };
 

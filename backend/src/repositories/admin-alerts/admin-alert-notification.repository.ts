@@ -13,7 +13,7 @@ import type {
   AdminAlertNotificationSendAttempt,
 } from "../../types/admin-alert";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
-import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp-observability";
+import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp/whatsapp-observability";
 
 const requestFrom = (transaction?: sql.Transaction) =>
   transaction ? new sql.Request(transaction) : getPool().request();

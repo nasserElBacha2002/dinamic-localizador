@@ -9,7 +9,7 @@ import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 import type { BotSession } from "../../types/twilio.types";
 import type { EmployeeWorkdayCheckoutCandidate } from "../../types/employee-workday-availability";
 import type { AttendanceRecord } from "../../types/domain";
-import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../../utils/bot/bot-runtime-settings-scope";
 import {
   getRoutingResult,
   runWithRoutingResultScope,

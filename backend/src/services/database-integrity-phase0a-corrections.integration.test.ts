@@ -30,11 +30,11 @@ import { processCheckoutWithoutLocation } from "./bot/checkout-attendance.flow";
 import { employeeWorkdayAvailabilityService } from "./workdays/employee-workday-availability.service";
 import { attendanceRepository } from "../repositories/attendance/attendance.repository";
 import { runWithBotRuntimeContext } from "../utils/bot/bot-runtime-context";
-import { runWithBotRuntimeSettings } from "../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../utils/bot/bot-runtime-settings-scope";
 import {
   setCheckoutWithoutLocationBeforeCommitHookForTests,
   setOutboundPersistAfterCommitHookForTests,
-} from "../utils/checkout-transaction-hooks";
+} from "../utils/attendance/checkout-transaction-hooks";
 import type { BotRuntimeSettings } from "../types/bot-runtime-settings";
 
 const uniqueCompanyName = (): string =>

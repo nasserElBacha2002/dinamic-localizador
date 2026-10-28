@@ -14,7 +14,7 @@ import { operationShiftService } from "../operations/operation-shift.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 describeDatabaseIntegration("multi-shift materialization + exceptions (SQL)", () => {

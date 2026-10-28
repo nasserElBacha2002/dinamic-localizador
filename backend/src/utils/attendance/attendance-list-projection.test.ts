@@ -10,7 +10,7 @@ import {
   punctualityStatusFilterClause,
   STARTED_WORKDAY_SQL,
 } from "./attendance-list-projection";
-import { EFFECTIVE_STATE_SQL } from "../employee-workday-statistics-projection";
+import { EFFECTIVE_STATE_SQL } from "../workdays/employee-workday-statistics-projection";
 
 const ID_A = "11111111-1111-4111-8111-111111111111";
 const ID_B = "22222222-2222-4222-8222-222222222222";

@@ -1,5 +1,5 @@
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../../utils/bot-session-expiration";
-import { isCheckoutSessionState } from "../../../utils/bot-session-states";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../../utils/bot/bot-session-expiration";
+import { isCheckoutSessionState } from "../../../utils/bot/bot-session-states";
 import { InvalidCoordinatesError } from "../../../utils/haversine";
 import { parseOperationSelection } from "../../../utils/intent";
 import { maskPhoneNumberForLog } from "../../../utils/phone";
@@ -21,7 +21,7 @@ import {
   UNPARSEABLE_MESSAGE,
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "../../bot/bot-response.builder";
-import { logWhatsAppAttendanceEvent } from "../../../utils/whatsapp-notification-observability";
+import { logWhatsAppAttendanceEvent } from "../../../utils/whatsapp/whatsapp-notification-observability";
 import { twilioWebhookPayloadToUnknownRecord } from "../../../utils/whatsapp/twilio-webhook-payload";
 import {
   handleActiveAbsenceSession,
@@ -58,7 +58,7 @@ import {
   isAssignmentSelectionSessionState,
   isMenuSessionState,
   isPayrollReceiptSessionState,
-} from "../../../utils/bot-session-states";
+} from "../../../utils/bot/bot-session-states";
 import { botSessionService } from "../../bot/bot-session.service";
 import {
   resolveWhatsAppTextTurn,

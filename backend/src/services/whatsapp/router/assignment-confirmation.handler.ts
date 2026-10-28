@@ -3,8 +3,8 @@ import { botSessionService } from "../../bot/bot-session.service";
 import { employeeWorkdayService } from "../../workdays/employee-workday.service";
 import { INVALID_SELECTION_MESSAGE } from "../../bot/bot-response.builder";
 import { getAssignmentConfirmationModuleBlockedMessage } from "../whatsapp-module-gate";
-import { isAssignmentSelectionSessionState } from "../../../utils/bot-session-states";
-import { parseOptionalAssignmentSelection } from "../../../utils/assignment-intent";
+import { isAssignmentSelectionSessionState } from "../../../utils/bot/bot-session-states";
+import { parseOptionalAssignmentSelection } from "../../../utils/operations/assignment-intent";
 import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import {
   isValidOperationSelection,

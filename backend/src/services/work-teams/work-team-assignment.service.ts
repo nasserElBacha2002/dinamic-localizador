@@ -16,10 +16,10 @@ import type {
 import type { Employee, OperationEmployeeAssignment } from "../../types/domain";
 import type { WorkTeam, WorkTeamMember } from "../../types/work-team";
 import type { OperationScheduleMode } from "../../constants/operation-schedule-mode";
-import { assignmentPeriodsOverlap } from "../../utils/assignment-period";
+import { assignmentPeriodsOverlap } from "../../utils/operations/assignment-period";
 import { logAuditSafe } from "../../utils/audit-post-commit";
-import { isOperationAssignable } from "../../utils/operation-status";
-import { assertAssignmentShiftMatchesScheduleMode } from "../../utils/operation-schedule-mode-guard";
+import { isOperationAssignable } from "../../utils/operations/operation-status";
+import { assertAssignmentShiftMatchesScheduleMode } from "../../utils/operations/operation-schedule-mode-guard";
 import { safeRollback } from "../../utils/safe-transaction";
 import {
   hashWorkTeamMembers,

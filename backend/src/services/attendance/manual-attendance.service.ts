@@ -17,9 +17,9 @@ import type {
 import type { AttendanceRecordWithRelations, PunctualityStatus } from "../../types/domain";
 import type { EmployeeWorkday, OperationWorkday } from "../../types/workday";
 import type { CheckoutStatus } from "../../constants/checkout-status";
-import { evaluatePunctuality } from "../../utils/attendance-validation";
+import { evaluatePunctuality } from "../../utils/attendance/attendance-validation";
 import { evaluateCheckoutTime } from "../../utils/attendance/checkout-validation";
-import { isActiveAttendanceDuplicateKeyError } from "../../utils/attendance-duplicate-errors";
+import { isActiveAttendanceDuplicateKeyError } from "../../utils/attendance/attendance-duplicate-errors";
 import { assertOccurredAtCompatibleWithWorkday } from "../../utils/attendance/manual-attendance-temporal";
 import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 import { auditService } from "../audit.service";

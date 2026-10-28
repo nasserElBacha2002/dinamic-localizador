@@ -17,7 +17,7 @@ import {
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { buildAbsencePendingDedupKey } from "../../utils/admin-alert/dedup-keys";
 import { formatAbsenceRequestPeriodDisplay } from "../../utils/admin-alert/request-template-variables";
-import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 
 const uniqueCompanyName = (): string =>
   `Admin Alert Absence ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

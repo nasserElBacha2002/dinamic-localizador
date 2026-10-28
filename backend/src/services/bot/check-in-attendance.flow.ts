@@ -3,12 +3,12 @@
  * Mixed selection sessions may hand off to checkout flow processors.
  */
 import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
-import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot-runtime-settings-scope";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot/bot-session-expiration";
+import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot/bot-runtime-settings-scope";
 import { getObservabilityTrace } from "../../utils/whatsapp/whatsapp-observability-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
-import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
-import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp/whatsapp-notification-observability";
+import { logMultiShiftAttendanceEvent } from "../../utils/workdays/multi-shift-attendance-observability";
 import { companyModuleService } from "../companies/company-module.service";
 import {
   getAttendanceModuleBlockedMessage,
@@ -23,7 +23,7 @@ import {
   isActiveAttendanceDuplicateKeyError,
   isAttendanceSourceMessageSidDuplicateKeyError,
   isLegacyInventoryActiveAttendanceDuplicateKeyError,
-} from "../../utils/attendance-duplicate-errors";
+} from "../../utils/attendance/attendance-duplicate-errors";
 import {
   buildArrivalRegisteredMessage,
   buildCheckoutLocationRequestMessage,

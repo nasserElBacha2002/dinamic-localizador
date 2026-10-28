@@ -1,6 +1,6 @@
 import type { Operation } from "../../types/domain";
 import type { OperationWorkday } from "../../types/workday";
-import type { OperationStatus } from "../operation-status";
+import type { OperationStatus } from "../operations/operation-status";
 import { getOperationEffectiveEnd, resolveLifecycleOperationStatus } from "../operations/operation-lifecycle";
 
 /** ACTIVE workday still future or in progress at `at`. */

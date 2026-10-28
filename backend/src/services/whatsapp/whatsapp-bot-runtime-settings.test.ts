@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
-import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../../utils/bot/bot-runtime-settings-scope";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 
 const companyId = "00000000-0000-4000-8000-000000000001";

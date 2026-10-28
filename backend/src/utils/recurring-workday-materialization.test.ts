@@ -5,7 +5,7 @@ import {
   addDaysToDateIso,
   buildRecurringExpectedInstants,
   buildUtcInstantFromLocalWorkDateTime,
-} from "./recurring-workday-instant";
+} from "./workdays/recurring-workday-instant";
 import { computeMaterializationRange, iterateDateIsoRange } from "./workdays/recurring-workday-range";
 
 describe("recurring-workday-instant", () => {

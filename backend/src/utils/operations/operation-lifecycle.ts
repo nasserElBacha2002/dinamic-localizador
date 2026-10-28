@@ -1,5 +1,5 @@
 import type { Operation } from "../../types/domain";
-import type { OperationStatus } from "../operation-status";
+import type { OperationStatus } from "./operation-status";
 
 /**
  * Effective clock end for ONE_TIME lifecycle.

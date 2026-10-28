@@ -6,7 +6,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
-import { isAbsenceCancelIntent } from "../../utils/absence-intent";
+import { isAbsenceCancelIntent } from "../../utils/absence/absence-intent";
 
 describe("absence request stabilization", () => {
   it("recognizes global cancel intent for active bot sessions", () => {

@@ -3,9 +3,9 @@ import { formatPayrollReceiptPeriod } from "../../utils/payroll-receipts/period-
 import { payrollReceiptRepository } from "../../repositories/payroll/payroll-receipt.repository";
 import { payrollReceiptQueryDeliveryRepository } from "../../repositories/payroll/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
-import { resolveBotSessionScope } from "../../utils/bot-session-scope";
+import { resolveBotSessionScope } from "../../utils/bot/bot-session-scope";
 import { normalizePhoneNumber } from "../../utils/phone";
-import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
+import { getQuotaTurnScope } from "../../utils/whatsapp/whatsapp-quota-turn-scope";
 import { whatsappUsageQuotaService } from "../whatsapp/whatsapp-usage-quota.service";
 
 export type PayrollReceiptPeriodQueryResult =

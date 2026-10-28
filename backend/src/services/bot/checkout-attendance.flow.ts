@@ -4,15 +4,15 @@
  * this module only orchestrates chat (selection, validation, simulation, responses).
  */
 import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
-import { formatLocalTime } from "../../utils/attendance-validation";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot/bot-session-expiration";
+import { formatLocalTime } from "../../utils/attendance/attendance-validation";
 import {
   getBotOperationTimezone,
   getBotRuntimeSettings,
   getRequireCheckoutLocation,
-} from "../../utils/bot-runtime-settings-scope";
+} from "../../utils/bot/bot-runtime-settings-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
-import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp/whatsapp-notification-observability";
 import {
   buildCheckoutValidation,
   buildCheckoutValidationWithoutLocation,

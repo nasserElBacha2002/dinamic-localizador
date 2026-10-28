@@ -12,7 +12,7 @@ import { employeeWorkdayRepository } from "../../repositories/workdays/employee-
 import type { AffectedOperationWarning } from "../../types/absence";
 import type { AbsenceOperationalImpactResult } from "../../types/absence-operational-impact";
 import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../../utils/absence-date";
-import { isWorkdayCoveredByAbsence } from "../../utils/absence-workday-coverage";
+import { isWorkdayCoveredByAbsence } from "../../utils/absence/absence-workday-coverage";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 
 const rangesOverlap = (

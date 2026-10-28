@@ -4,7 +4,7 @@ import {
   evaluatePunctuality,
   type AttendanceValidationResult,
 } from "./attendance-validation";
-import { calculateDistanceMeters } from "./haversine";
+import { calculateDistanceMeters } from "../haversine";
 
 export type AttendanceCheckInGeofencePolicy = {
   /** Effective allowed radius (service override already applied when > 0). */

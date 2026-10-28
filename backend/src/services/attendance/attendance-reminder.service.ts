@@ -17,8 +17,8 @@ import { companyRepository } from "../../repositories/companies/company.reposito
 import { operationRepository } from "../../repositories/operations/operation.repository";
 import type { AttendanceReminderCandidate } from "../../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../../utils/attendance/attendance-reminder-template";
-import { assertSingleScheduleModeOrReject } from "../../utils/operation-schedule-mode-guard";
-import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
+import { assertSingleScheduleModeOrReject } from "../../utils/operations/operation-schedule-mode-guard";
+import { logMultiShiftAttendanceEvent } from "../../utils/workdays/multi-shift-attendance-observability";
 import { buildOperationStartDueWindow, buildReminderDueWindow } from "../../utils/attendance/reminder-time-window";
 import { countCandidatesByOperationKind } from "../../utils/workday-reminder-eligibility";
 import {
@@ -30,14 +30,14 @@ import { whatsappFlowTraceService } from "../whatsapp/whatsapp-flow-trace.servic
 import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { normalizePhoneNumber } from "../../utils/phone";
-import { logWhatsAppNotificationEvent } from "../../utils/whatsapp-notification-observability";
+import { logWhatsAppNotificationEvent } from "../../utils/whatsapp/whatsapp-notification-observability";
 import type { BotSession } from "../../types/twilio.types";
 import { whatsappSystemInteractionService } from "../whatsapp/whatsapp-system-interaction.service";
 import { whatsappTurnClassificationShadowService } from "../whatsapp/whatsapp-turn-classification-shadow.service";
 import {
   classifyTwilioOutboundError,
   isAmbiguousTwilioSendFailure,
-} from "../../utils/twilio-error-classifier";
+} from "../../utils/whatsapp/twilio-error-classifier";
 import {
   classifyReminderSendOutcome,
   emptyReminderKindCounts,

@@ -13,7 +13,7 @@ import type {
   TransitionToSingleInput,
 } from "../../types/operation-shift";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { normalizeShiftCode } from "../../utils/operations/shift-code";
 import {

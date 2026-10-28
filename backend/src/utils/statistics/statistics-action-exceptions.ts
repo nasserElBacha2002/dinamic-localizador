@@ -3,7 +3,7 @@ import type {
   StatisticsActionExceptionItem,
   StatisticsActionExceptionKey,
 } from "../../types/statistics";
-import { roundRate } from "../attendance-statistics-metrics";
+import { roundRate } from "../attendance/attendance-statistics-metrics";
 
 export type {
   StatisticsActionExceptionItem,

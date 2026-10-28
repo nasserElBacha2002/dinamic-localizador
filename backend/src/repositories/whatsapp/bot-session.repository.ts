@@ -3,13 +3,13 @@ import { getPool } from "../../database/connection";
 import type { BotSession, BotSessionState } from "../../types/twilio.types";
 import {
   ACTIVE_BOT_SESSION_STATES_SQL,
-} from "../../utils/bot-session-states";
+} from "../../utils/bot/bot-session-states";
 import {
   applyBotSessionScope,
   getBotSessionCreateFlags,
   resolveBotSessionScope,
   type BotSessionScope,
-} from "../../utils/bot-session-scope";
+} from "../../utils/bot/bot-session-scope";
 import { mapBotSessionRow } from "../../utils/row-mappers";
 
 const ACTIVE_STATE_SQL = ACTIVE_BOT_SESSION_STATES_SQL;

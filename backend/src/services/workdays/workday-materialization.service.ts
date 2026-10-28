@@ -6,7 +6,7 @@ import { operationEmployeeRepository } from "../../repositories/operations/opera
 import { operationRepository } from "../../repositories/operations/operation.repository";
 import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { EmployeeWorkday, OperationWorkday } from "../../types/workday";
-import { isAssignmentActiveOnWorkDate } from "../../utils/assignment-period";
+import { isAssignmentActiveOnWorkDate } from "../../utils/operations/assignment-period";
 import { isRecoverableCancelledExpectation } from "../../utils/workdays/employee-workday-recovery";
 import { operationWorkdayResolver } from "../operations/operation-workday-resolver";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";

@@ -1,4 +1,4 @@
-import type { AssignmentLifecycleState } from "../constants/assignment-lifecycle";
+import type { AssignmentLifecycleState } from "../../constants/assignment-lifecycle";
 
 const OPEN_ENDED_SENTINEL = "9999-12-31";
 

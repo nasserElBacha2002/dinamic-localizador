@@ -12,7 +12,7 @@ import {
   calculateAbsenceRate,
   calculateAttendanceRate,
   calculatePunctualityRate,
-} from "../../utils/attendance-statistics-metrics";
+} from "../../utils/attendance/attendance-statistics-metrics";
 import { toDateOnlyString } from "../../utils/row-mappers";
 
 const emptyMetrics = (): MonthlyAttendanceMetrics => ({

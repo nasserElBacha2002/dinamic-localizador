@@ -5,9 +5,9 @@ import {
   calculatePunctualityRate,
   deriveWorkdayStateCounts,
   type WorkdayStateCounts,
-} from "../attendance-statistics-metrics";
-import { deriveEmployeeWorkdayState } from "../derive-employee-workday-state";
-import { selectCanonicalProductionAttendance } from "../statistics-canonical-attendance";
+} from "../attendance/attendance-statistics-metrics";
+import { deriveEmployeeWorkdayState } from "../attendance/derive-employee-workday-state";
+import { selectCanonicalProductionAttendance } from "./statistics-canonical-attendance";
 
 export interface AnalyticalWorkdayInput {
   employeeWorkdayId: string;

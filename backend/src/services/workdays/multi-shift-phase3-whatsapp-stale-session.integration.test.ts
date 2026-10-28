@@ -22,14 +22,14 @@ import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 import type { BotSession } from "../../types/twilio.types";
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import type { WhatsAppInboundContext } from "../../types/whatsapp-company-context";
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot/bot-session-expiration";
 import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
-import { extractMessageFromTwiml } from "../../utils/twiml-message";
+import { extractMessageFromTwiml } from "../../utils/whatsapp/twiml-message";
 import {
   DUPLICATE_MESSAGE_SID_RESPONSE,
   WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
 } from "../bot/bot-response.builder";
-import { formatBotWorkdaySelectionLines, formatWorkdayScheduleLine } from "../../utils/employee-assignment-format";
+import { formatBotWorkdaySelectionLines, formatWorkdayScheduleLine } from "../../utils/employees/employee-assignment-format";
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { operationScheduleModeTransitionService } from "../operations/operation-schedule-mode-transition.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";

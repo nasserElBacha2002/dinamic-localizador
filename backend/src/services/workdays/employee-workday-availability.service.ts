@@ -8,14 +8,14 @@ import type {
   EmployeeWorkdayCheckoutCandidate,
   WorkdaySelectionOption,
 } from "../../types/employee-workday-availability";
-import { formatServiceReferenceFromFields } from "../../utils/format-service-reference";
+import { formatServiceReferenceFromFields } from "../../utils/operations/format-service-reference";
 import {
   evaluateCheckInWindow,
   isWithinCheckInAvailabilityWindow,
   resolveCheckInCandidateRange,
 } from "../../utils/attendance/resolve-check-in-availability-window";
 import { getSimulationSessionId } from "../../utils/bot/bot-runtime-context";
-import { getPendingOperationExpirationHours } from "../../utils/bot-runtime-settings-scope";
+import { getPendingOperationExpirationHours } from "../../utils/bot/bot-runtime-settings-scope";
 import {
   isPendingCheckoutEligible,
   resolveCheckoutEligibilityEndAt,

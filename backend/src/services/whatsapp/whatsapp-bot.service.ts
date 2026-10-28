@@ -10,10 +10,10 @@ import {
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import { botSessionService } from "../bot/bot-session.service";
 import type { WhatsAppInboundContext } from "../../types/whatsapp-company-context";
-import { isWithinOperationWindow } from "../../utils/attendance-validation";
+import { isWithinOperationWindow } from "../../utils/attendance/attendance-validation";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../../utils/phone";
-import { extractMessageFromTwiml } from "../../utils/twiml-message";
-import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
+import { extractMessageFromTwiml } from "../../utils/whatsapp/twiml-message";
+import { runWithBotRuntimeSettings } from "../../utils/bot/bot-runtime-settings-scope";
 import {
   getObservabilityFlowResult,
   getObservabilityTrace,
@@ -39,7 +39,7 @@ import {
 } from "./whatsapp-turn-routing.resolver";
 import { whatsappTurnClassificationService } from "./whatsapp-turn-classification.service";
 import { whatsappUsageQuotaService } from "./whatsapp-usage-quota.service";
-import { runWithQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
+import { runWithQuotaTurnScope } from "../../utils/whatsapp/whatsapp-quota-turn-scope";
 import { resolveDayPeriod } from "../../utils/whatsapp/whatsapp-quota-periods";
 import {
   DUPLICATE_MESSAGE_SID_RESPONSE,

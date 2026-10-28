@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatBotWorkdaySelectionLines, formatWorkdayScheduleLine } from "../../utils/employee-assignment-format";
+import { formatBotWorkdaySelectionLines, formatWorkdayScheduleLine } from "../../utils/employees/employee-assignment-format";
 import {
   resolveMultiShiftOneTimeLifecycleStatus,
   hasActiveFutureOrInProgressWorkday,

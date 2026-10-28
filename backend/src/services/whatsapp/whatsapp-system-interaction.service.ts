@@ -9,7 +9,7 @@ import {
 } from "../../constants/whatsapp-turn-classification";
 import { whatsappSystemInteractionRepository } from "../../repositories/whatsapp/whatsapp-system-interaction.repository";
 import type { SystemInteractionContext } from "../../types/whatsapp-turn-classification";
-import { isAttendanceConfirmationWindowOpen } from "../../utils/attendance-confirmation-validity";
+import { isAttendanceConfirmationWindowOpen } from "../../utils/attendance/attendance-confirmation-validity";
 import { systemLogger } from "../../utils/system-logs/logger";
 import { systemInteractionMatchesCriticalReply } from "./whatsapp-turn-classification.service";
 import type { TurnClassificationInput } from "../../types/whatsapp-turn-classification";

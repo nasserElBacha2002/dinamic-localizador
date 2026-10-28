@@ -17,12 +17,12 @@ import { auditService } from "../audit.service";
 import { geofencePolicyResolver } from "../locations/geofence-policy.resolver";
 import { workdayMaterializationService } from "../workdays/workday-materialization.service";
 import { serviceRepository } from "../../repositories/locations/service.repository";
-import { evaluateAttendanceCheckIn } from "../../utils/evaluate-attendance-check-in";
+import { evaluateAttendanceCheckIn } from "../../utils/attendance/evaluate-attendance-check-in";
 import { attendanceAuthoritativeClock } from "../../utils/attendance/attendance-authoritative-clock";
 import { buildCsv } from "../../utils/csv";
 import { buildPaginationMeta } from "../../utils/pagination";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../../utils/sql-server-errors";
-import { isActiveAttendanceDuplicateKeyError, isAttendanceSourceMessageSidDuplicateKeyError } from "../../utils/attendance-duplicate-errors";
+import { isActiveAttendanceDuplicateKeyError, isAttendanceSourceMessageSidDuplicateKeyError } from "../../utils/attendance/attendance-duplicate-errors";
 import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 import { systemLogger } from "../../utils/system-logs/logger";
 

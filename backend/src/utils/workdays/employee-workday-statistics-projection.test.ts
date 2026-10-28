@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { deriveEmployeeWorkdayState } from "./derive-employee-workday-state";
+import { deriveEmployeeWorkdayState } from "../attendance/derive-employee-workday-state";
 import {
   buildEmployeeWorkdayStatisticsFilters,
   CONFIRMATION_STATUS_SQL,
@@ -34,12 +34,12 @@ describe("employee-workday-statistics-projection contract", () => {
     "utf8",
   );
   const projectionSource = readFileSync(
-    join(process.cwd(), "src/utils/employee-workday-statistics-projection.ts"),
+    join(process.cwd(), "src/utils/workdays/employee-workday-statistics-projection.ts"),
     "utf8",
   );
 
   const canonicalSource = readFileSync(
-    join(process.cwd(), "src/utils/statistics-canonical-attendance.ts"),
+    join(process.cwd(), "src/utils/statistics/statistics-canonical-attendance.ts"),
     "utf8",
   );
 

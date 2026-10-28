@@ -11,7 +11,7 @@ import { whatsappConversationRepository } from "./whatsapp-conversation.reposito
 import { whatsappFlowExecutionRepository } from "./whatsapp-flow-execution.repository";
 import { whatsappMessageRepository } from "./whatsapp-message.repository";
 import { whatsappProviderEventRepository } from "./whatsapp-provider-event.repository";
-import { maskPhoneForObservability } from "../../utils/whatsapp-observability";
+import { maskPhoneForObservability } from "../../utils/whatsapp/whatsapp-observability";
 
 export interface ConversationListFilters extends ConversationListFilterCriteria {
   page: number;

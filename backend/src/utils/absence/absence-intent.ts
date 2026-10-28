@@ -1,4 +1,4 @@
-import { normalizeIntentText } from "./intent";
+import { normalizeIntentText } from "../intent";
 
 export type AbsenceIntentMatch = {
   code:

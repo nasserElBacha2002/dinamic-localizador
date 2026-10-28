@@ -12,7 +12,7 @@ import {
   applyPersistedAbsenceDeltas,
   resolveWorkdayAbsenceDeltas,
 } from "../../utils/absence/resolve-workday-absence-deltas";
-import { getAbsenceDateRangeForWorkday } from "../../utils/absence-workday-coverage";
+import { getAbsenceDateRangeForWorkday } from "../../utils/absence/absence-workday-coverage";
 
 const getDateRangeBounds = (workdays: EmployeeWorkdayWithSchedule[]): {
   dateFrom: string;

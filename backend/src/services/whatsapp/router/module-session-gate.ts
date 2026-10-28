@@ -5,7 +5,7 @@ import {
   isAssignmentSelectionSessionState,
   isCheckInSessionState,
   isCheckoutSessionState,
-} from "../../../utils/bot-session-states";
+} from "../../../utils/bot/bot-session-states";
 import { getModuleBlockedMessageForSessionState } from "../../bot/bot-menu.builder";
 import type { WhatsAppRouterHandlers, WhatsAppRouterRespondInput } from "./whatsapp-router.types";
 

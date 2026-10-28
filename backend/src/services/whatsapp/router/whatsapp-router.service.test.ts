@@ -21,7 +21,7 @@ import {
   buildGreetingMessage,
   NO_ACTIVE_FLOW_CANCEL_PREFIX,
 } from "../../bot/bot-menu.builder";
-import { EXPIRED_SESSION_USER_MESSAGE } from "../../../utils/bot-session-expiration";
+import { EXPIRED_SESSION_USER_MESSAGE } from "../../../utils/bot/bot-session-expiration";
 import { InvalidCoordinatesError } from "../../../utils/haversine";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 
@@ -2716,7 +2716,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     const { employeeWorkdayService } = await import("../../workdays/employee-workday.service");
     const { botSessionService } = await import("../../bot/bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
-    const { PAST_ASSIGNMENT_MESSAGE } = await import("../../../utils/employee-assignment-format");
+    const { PAST_ASSIGNMENT_MESSAGE } = await import("../../../utils/employees/employee-assignment-format");
     const { handlers } = createMockHandlers();
     let completeCalls = 0;
     let failedAttemptCalls = 0;

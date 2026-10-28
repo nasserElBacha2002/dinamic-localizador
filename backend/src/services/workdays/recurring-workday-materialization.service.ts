@@ -21,7 +21,7 @@ import {
 import type { OperationShift, OperationShiftVersion } from "../../types/operation-shift";
 import type { EffectiveRecurringSchedule, ResolvedScheduleDay } from "../../types/schedule";
 import type { EmployeeWorkday, OperationWorkday } from "../../types/workday";
-import { isAssignmentActiveOnWorkDate } from "../../utils/assignment-period";
+import { isAssignmentActiveOnWorkDate } from "../../utils/operations/assignment-period";
 import {
   isDayEnabled,
   resolveShiftScheduleForDate,
@@ -29,7 +29,7 @@ import {
 } from "../../utils/operations/operation-shift-version-resolver";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { recurringScheduleResolver } from "../../utils/operations/recurring-schedule-resolver";
-import { buildRecurringExpectedInstants } from "../../utils/recurring-workday-instant";
+import { buildRecurringExpectedInstants } from "../../utils/workdays/recurring-workday-instant";
 import {
   computeMaterializationRange,
   iterateDateIsoRange,

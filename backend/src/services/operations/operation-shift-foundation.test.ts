@@ -14,7 +14,7 @@ import {
 import {
   assertAssignmentShiftMatchesScheduleMode,
   assertWorkdayShiftMatchesScheduleMode,
-} from "../../utils/operation-schedule-mode-guard";
+} from "../../utils/operations/operation-schedule-mode-guard";
 import { DEFAULT_OPERATION_SCHEDULE_MODE, isOperationScheduleMode } from "../../constants/operation-schedule-mode";
 import { AppError } from "../../errors/app-error";
 

@@ -3,7 +3,7 @@ import { operationRepository } from "../../repositories/operations/operation.rep
 import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
 import type { Operation } from "../../types/domain";
 import type { OperationWorkday } from "../../types/workday";
-import { canTransitionOperationLifecycleStatus } from "../../utils/operation-status";
+import { canTransitionOperationLifecycleStatus } from "../../utils/operations/operation-status";
 import {
   hasActiveFutureOrInProgressWorkday,
   resolveOperationLifecycleStatusForMode,

@@ -11,15 +11,15 @@ import {
   assertValidAssignmentDateRange,
   assignmentPeriodsOverlap,
   isAssignmentActiveOnWorkDate,
-} from "../../utils/assignment-period";
+} from "../../utils/operations/assignment-period";
 import {
   employeeShiftIntervalOverlap,
   type CrossOperationShiftOverlapWarning,
-} from "../../utils/employee-shift-interval-overlap";
-import { assertAssignmentShiftMatchesScheduleMode } from "../../utils/operation-schedule-mode-guard";
+} from "../../utils/employees/employee-shift-interval-overlap";
+import { assertAssignmentShiftMatchesScheduleMode } from "../../utils/operations/operation-schedule-mode-guard";
 import { resolveVersionForDate } from "../../utils/operations/operation-shift-version-resolver";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
-import { addDaysToDateIso, compareDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso, compareDateIso } from "../../utils/workdays/recurring-workday-instant";
 import { workdayMaterializationService } from "../workdays/workday-materialization.service";
 
 export type AssignEmployeeInTransactionOutcome =

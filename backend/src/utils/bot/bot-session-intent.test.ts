@@ -5,7 +5,7 @@ import {
   isExplicitIntentCompatibleWithSession,
   isIntentStateCompatible,
 } from "./bot-session-intent";
-import { ACTIVE_BOT_SESSION_STATES } from "../bot-session-states";
+import { ACTIVE_BOT_SESSION_STATES } from "./bot-session-states";
 
 describe("bot session intent authority", () => {
   it("defines one compatible intent for every active state", () => {

@@ -19,7 +19,7 @@ frontend/.env
 # Local AI agent instructions (do not publish)
 AGENTS.md
 **/AGENTS.md
-# Versioned backend folder convention (phase 8 of the modularization audit).
+# Versioned backend folder convention.
 !backend/AGENTS.md
 
 # Phase audit: never version recursive/full workspace diffs (keep markdown inventories)

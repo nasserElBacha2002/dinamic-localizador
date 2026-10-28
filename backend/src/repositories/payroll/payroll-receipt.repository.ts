@@ -21,7 +21,7 @@ import {
   applyBotSessionScope,
   resolveBotSessionScope,
   type BotSessionScope,
-} from "../../utils/bot-session-scope";
+} from "../../utils/bot/bot-session-scope";
 
 const toIso = (value: Date | string | null | undefined): string | null => {
   if (value == null) {

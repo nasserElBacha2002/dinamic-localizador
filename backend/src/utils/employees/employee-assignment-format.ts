@@ -1,9 +1,9 @@
-import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
-import type { PunctualityStatus } from "../types/domain";
-import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
-import type { ServiceReferenceFields } from "./format-service-reference";
-import { formatServiceReferenceFromFields } from "./format-service-reference";
-import { formatLocalTime, punctualityLabel } from "./attendance-validation";
+import type { AssignmentConfirmationStatus } from "../../constants/assignment-confirmation";
+import type { PunctualityStatus } from "../../types/domain";
+import type { EmployeeAssignedOperation } from "../../types/employee-assignment-query";
+import type { ServiceReferenceFields } from "../operations/format-service-reference";
+import { formatServiceReferenceFromFields } from "../operations/format-service-reference";
+import { formatLocalTime, punctualityLabel } from "../attendance/attendance-validation";
 
 export const NO_TODAY_ASSIGNMENTS_MESSAGE = "No tenés trabajos asignados para hoy.";
 export const NO_UPCOMING_ASSIGNMENTS_MESSAGE = "No tenés próximos trabajos asignados.";

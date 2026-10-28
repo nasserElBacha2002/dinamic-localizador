@@ -8,11 +8,11 @@ import {
   resolveAbsenceKindSelection,
   resolveAbsenceKindSnapshot,
 } from "../../bot/absence-kind-options";
-import { detectAbsenceTypeCode } from "../../../utils/absence-intent";
+import { detectAbsenceTypeCode } from "../../../utils/absence/absence-intent";
 import {
   isAbsenceKindSelectionSessionState,
   isAbsenceSessionState,
-} from "../../../utils/bot-session-states";
+} from "../../../utils/bot/bot-session-states";
 import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
 import {
   getAbsenceModuleBlockedMessage,

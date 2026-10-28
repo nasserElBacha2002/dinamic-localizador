@@ -12,7 +12,7 @@ import {
   type IndividualEmployeeRecommendationResponse,
 } from "../../types/recommendation";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
-import { isOperationAssignable } from "../../utils/operation-status";
+import { isOperationAssignable } from "../../utils/operations/operation-status";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
 import { operationWorkDateService } from "../operations/operation-work-date.service";
 import {

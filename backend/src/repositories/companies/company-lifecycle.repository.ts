@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { ACTIVE_BOT_SESSION_STATES_SQL } from "../../utils/bot-session-states";
+import { ACTIVE_BOT_SESSION_STATES_SQL } from "../../utils/bot/bot-session-states";
 
 export type CompanyLifecycleEventInput = {
   companyId: string;

@@ -14,7 +14,7 @@ describe("monthly attendance report repository", () => {
   });
 
   it("preserves one-row-per-employee-workday cardinality for confirmation status", () => {
-    const projection = readFileSync(join(process.cwd(), "src/utils/employee-workday-statistics-projection.ts"), "utf8");
+    const projection = readFileSync(join(process.cwd(), "src/utils/workdays/employee-workday-statistics-projection.ts"), "utf8");
     const migration = readFileSync(join(process.cwd(), "../database/migrations/040_temporal_operation_assignments.sql"), "utf8");
     assert.match(projection, /LEFT JOIN operation_assignments oa[\s\S]*?oa\.id = ew\.operation_assignment_id[\s\S]*?oa\.company_id = ew\.company_id/);
     assert.match(migration, /CONSTRAINT PK_operation_assignments PRIMARY KEY \(id\)/);

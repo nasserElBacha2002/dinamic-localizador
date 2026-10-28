@@ -14,7 +14,7 @@ import { employeeRepository } from "../../repositories/employees/employee.reposi
 import { companyAbsenceSettingsService } from "../companies/company-absence-settings.service";
 import { employeeAbsenceBalanceBackfillService } from "./employee-absence-balance-backfill.service";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
-import { getCurrentYearInTimezone } from "../../utils/operational-year";
+import { getCurrentYearInTimezone } from "../../utils/absence/operational-year";
 
 const uniqueCompanyName = (): string =>
   `Backfill Co ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

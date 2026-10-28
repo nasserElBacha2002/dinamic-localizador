@@ -12,13 +12,13 @@ import type {
   AttendanceNotification,
   AttendanceReminderCandidate,
 } from "../../types/attendance-notification";
-import type { AttendanceConfirmationReplyTarget } from "../../utils/attendance-confirmation-validity";
+import type { AttendanceConfirmationReplyTarget } from "../../utils/attendance/attendance-confirmation-validity";
 import {
   isAttendanceConfirmationWindowOpen,
   mapConfirmationReplyTargetKind,
-} from "../../utils/attendance-confirmation-validity";
+} from "../../utils/attendance/attendance-confirmation-validity";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
-import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp-observability";
+import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp/whatsapp-observability";
 
 const mapNotificationRow = (row: Record<string, unknown>): AttendanceNotification => ({
   id: String(row.id),

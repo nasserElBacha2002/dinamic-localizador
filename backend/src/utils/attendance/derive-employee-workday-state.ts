@@ -1,5 +1,5 @@
-import type { DerivedEmployeeWorkdayState } from "../types/employee-workday-state";
-import type { EmployeeWorkday } from "../types/workday";
+import type { DerivedEmployeeWorkdayState } from "../../types/employee-workday-state";
+import type { EmployeeWorkday } from "../../types/workday";
 
 export const isAttendanceOpportunityOpen = (input: {
   expectedStartAt: string;

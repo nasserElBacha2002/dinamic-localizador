@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../../errors/app-error";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
-import { evaluateAttendanceCheckIn } from "../../utils/evaluate-attendance-check-in";
-import { evaluateGeofence } from "../../utils/attendance-validation";
+import { evaluateAttendanceCheckIn } from "../../utils/attendance/evaluate-attendance-check-in";
+import { evaluateGeofence } from "../../utils/attendance/attendance-validation";
 import { calculateDistanceMeters } from "../../utils/haversine";
 
 setupUnitTestEnv();

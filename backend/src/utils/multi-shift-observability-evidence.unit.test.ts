@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   MULTI_SHIFT_CONSUMER_AUDIT,
 } from "./workdays/multi-shift-consumer-audit";
-import type { MultiShiftAttendanceLogAction } from "../utils/multi-shift-attendance-observability";
+import type { MultiShiftAttendanceLogAction } from "./workdays/multi-shift-attendance-observability";
 
 const ROOT = join(process.cwd(), "src");
 

@@ -8,10 +8,10 @@ import {
   EFFECTIVE_STATE_SQL,
   ON_TIME_WORKDAY_SQL,
   WORKED_MINUTES_SQL,
-} from "../../utils/employee-workday-statistics-projection";
+} from "../../utils/workdays/employee-workday-statistics-projection";
 import { buildAnalyticalProjectionRow } from "../../utils/statistics/statistics-projection-contract";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
-import { runWithBotRuntimeSettings } from "../../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../../utils/bot/bot-runtime-settings-scope";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 import {
   buildCheckoutRegisteredMessage,
@@ -187,7 +187,7 @@ describe("checkout without prior arrival", () => {
     );
     const { botSessionService } = await import("../bot/bot-session.service");
     const { startCheckout } = await import("../bot/checkout-attendance.flow");
-    const { extractMessageFromTwiml } = await import("../../utils/twiml-message");
+    const { extractMessageFromTwiml } = await import("../../utils/whatsapp/twiml-message");
     const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
@@ -239,7 +239,7 @@ describe("checkout without prior arrival", () => {
       "../workdays/employee-workday-availability.service"
     );
     const { startCheckout } = await import("../bot/checkout-attendance.flow");
-    const { extractMessageFromTwiml } = await import("../../utils/twiml-message");
+    const { extractMessageFromTwiml } = await import("../../utils/whatsapp/twiml-message");
     const { runWithBotRuntimeContext } = await import("../../utils/bot/bot-runtime-context");
 
     mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);

@@ -327,7 +327,7 @@ describe("employeeAbsenceBalanceBackfillService", () => {
     const { employeeAbsenceBalanceBackfillService } = await import(
       "./employee-absence-balance-backfill.service"
     );
-    const { getCurrentYearInTimezone } = await import("../../utils/operational-year");
+    const { getCurrentYearInTimezone } = await import("../../utils/absence/operational-year");
 
     mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(companyAbsenceSettingsService, "ensureAbsenceCatalogForCompany", async () => undefined);

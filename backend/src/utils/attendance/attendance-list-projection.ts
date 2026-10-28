@@ -9,8 +9,8 @@ import type {
   AttendanceRecord,
   AttendanceRecordWithRelations,
 } from "../../types/domain";
-import { CANONICAL_ATTENDANCE_ORDER_BY } from "../statistics-canonical-attendance";
-import { EFFECTIVE_STATE_SQL, OPEN_ATTENDANCE_WORKDAY_SQL } from "../employee-workday-statistics-projection";
+import { CANONICAL_ATTENDANCE_ORDER_BY } from "../statistics/statistics-canonical-attendance";
+import { EFFECTIVE_STATE_SQL, OPEN_ATTENDANCE_WORKDAY_SQL } from "../workdays/employee-workday-statistics-projection";
 import { mapAttendanceWithRelationsRow } from "../row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../sql-list-query";
 import { createUuidInFilter } from "../sql-uuid-in-filter";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { assignmentPeriodsOverlap } from "../../utils/assignment-period";
+import { assignmentPeriodsOverlap } from "../../utils/operations/assignment-period";
 import { classifyPreviewEmployees } from "../work-teams/work-team-assignment.service";
 import type { WorkTeamMember } from "../../types/work-team";
 import type { OperationEmployeeAssignment } from "../../types/domain";

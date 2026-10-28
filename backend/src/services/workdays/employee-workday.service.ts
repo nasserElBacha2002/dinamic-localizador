@@ -9,7 +9,7 @@ import { buildUnavailableDedupKey, buildUnavailableWorkdayDedupKey } from "../..
 import { emitAdminAlertSafely } from "../admin-alerts/admin-alert-emit.helpers";
 import type { OperationSelectionOption } from "../../types/twilio.types";
 import { getBotNow } from "../../utils/bot/bot-runtime-context";
-import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
+import { getBotOperationTimezone } from "../../utils/bot/bot-runtime-settings-scope";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
 import {
   formatAssignmentDateTimeLine,
@@ -22,7 +22,7 @@ import {
   NO_UNAVAILABILITY_ASSIGNMENTS_MESSAGE,
   NO_UPCOMING_ASSIGNMENTS_MESSAGE,
   PAST_ASSIGNMENT_MESSAGE,
-} from "../../utils/employee-assignment-format";
+} from "../../utils/employees/employee-assignment-format";
 import type { AssignmentConfirmationStatus } from "../../constants/assignment-confirmation";
 import type { PunctualityStatus } from "../../types/domain";
 

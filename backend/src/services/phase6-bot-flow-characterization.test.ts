@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import type { BotRuntimeSettings } from "../types/bot-runtime-settings";
-import { runWithBotRuntimeSettings } from "../utils/bot-runtime-settings-scope";
+import { runWithBotRuntimeSettings } from "../utils/bot/bot-runtime-settings-scope";
 import {
   getObservabilityFlowResult,
   runWithObservabilityTrace,

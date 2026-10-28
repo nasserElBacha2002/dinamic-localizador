@@ -10,7 +10,7 @@ import { companyRepository } from "../../repositories/companies/company.reposito
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import type { UpdateCompanyAbsenceSettingsInput } from "../../schemas/company-absence-settings.schema";
 import type { CompanyMembershipSummary } from "../../types/company";
-import { getCurrentYearInTimezone } from "../../utils/operational-year";
+import { getCurrentYearInTimezone } from "../../utils/absence/operational-year";
 
 export type CompanyAbsenceSettingView = {
   absenceTypeCode: string;

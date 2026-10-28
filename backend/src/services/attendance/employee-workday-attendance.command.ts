@@ -11,7 +11,7 @@ import {
 } from "../../types/absence-operational-impact";
 import type { AttendanceRecord } from "../../types/domain";
 import type { EmployeeWorkdayCheckInCandidate } from "../../types/employee-workday-availability";
-import type { AttendanceValidationResult } from "../../utils/attendance-validation";
+import type { AttendanceValidationResult } from "../../utils/attendance/attendance-validation";
 import { isWithinCheckInAvailabilityWindow } from "../../utils/attendance/resolve-check-in-availability-window";
 import { getSimulationSessionId } from "../../utils/bot/bot-runtime-context";
 import { absenceOperationalImpactQueryService } from "../absence/absence-operational-impact-query.service";

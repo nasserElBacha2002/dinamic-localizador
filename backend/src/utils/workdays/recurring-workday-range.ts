@@ -1,5 +1,5 @@
 import { getDateIsoInTimezone } from "../absence-date";
-import { addDaysToDateIso, compareDateIso } from "../recurring-workday-instant";
+import { addDaysToDateIso, compareDateIso } from "./recurring-workday-instant";
 
 export const computeMaterializationRange = (input: {
   timezone: string;

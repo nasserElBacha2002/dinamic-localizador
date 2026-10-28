@@ -5,7 +5,7 @@
  */
 import type { Operation } from "../../types/domain";
 import { logAdminAlertEvent } from "../../utils/admin-alert/observability";
-import { assertSingleScheduleModeOrReject } from "../../utils/operation-schedule-mode-guard";
+import { assertSingleScheduleModeOrReject } from "../../utils/operations/operation-schedule-mode-guard";
 import { markMissingCheckinEmployeesDirtyForThreshold } from "./attendance-threshold-completed-operation.service";
 
 export const adminAlertMissingCheckinService = {

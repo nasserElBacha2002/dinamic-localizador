@@ -3,7 +3,7 @@ import type {
   OperationShiftDateException,
   OperationShiftVersion,
 } from "../../types/operation-shift";
-import { buildRecurringExpectedInstants } from "../recurring-workday-instant";
+import { buildRecurringExpectedInstants } from "../workdays/recurring-workday-instant";
 
 export type ResolvedShiftScheduleForDate = {
   startTime: string;

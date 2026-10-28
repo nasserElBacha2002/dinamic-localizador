@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { WHATSAPP_PROVIDER_STATUS_RANK } from "../../constants/whatsapp-observability";
-import { pickProjectedProviderStatus } from "../../utils/whatsapp-observability";
+import { pickProjectedProviderStatus } from "../../utils/whatsapp/whatsapp-observability";
 
 describe("message cost provider status monotonicity", () => {
   it("rejects regressions used by cost ledger updates", () => {

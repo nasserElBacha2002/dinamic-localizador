@@ -13,7 +13,7 @@ import { absenceTypeRepository } from "../../repositories/absence/absence-type.r
 import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { AppError } from "../../errors/app-error";
 import { getTodayAbsenceDateIso } from "../../utils/absence-date";
-import { addDaysToDateIso } from "../../utils/recurring-workday-instant";
+import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 import { absenceBalanceLedgerService } from "./absence-balance-ledger.service";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceReviewService } from "./absence-review.service";

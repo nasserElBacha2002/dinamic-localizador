@@ -8,7 +8,7 @@ import {
 import {
   assertAssignmentShiftMatchesScheduleMode,
   assertWorkdayShiftMatchesScheduleMode,
-} from "../../utils/operation-schedule-mode-guard";
+} from "../../utils/operations/operation-schedule-mode-guard";
 
 const resolveScheduleMode = (raw: unknown): OperationScheduleMode => {
   const value = raw == null ? DEFAULT_OPERATION_SCHEDULE_MODE : String(raw);

@@ -7,7 +7,7 @@ import { runWithBotRuntimeContext } from "../../utils/bot/bot-runtime-context";
 import {
   NO_TODAY_ASSIGNMENTS_MESSAGE,
   NO_UPCOMING_ASSIGNMENTS_MESSAGE,
-} from "../../utils/employee-assignment-format";
+} from "../../utils/employees/employee-assignment-format";
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const employeeId = "00000000-0000-4000-8000-000000000002";
@@ -302,7 +302,7 @@ describe("employeeWorkdayService", () => {
       "../../repositories/employees/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
-    const { PAST_ASSIGNMENT_MESSAGE } = await import("../../utils/employee-assignment-format");
+    const { PAST_ASSIGNMENT_MESSAGE } = await import("../../utils/employees/employee-assignment-format");
 
     const futureOneTime = assignment({
       operationKind: "ONE_TIME",

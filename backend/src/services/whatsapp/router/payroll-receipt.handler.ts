@@ -6,7 +6,7 @@ import { isGlobalCancelCommand } from "../../../utils/intent";
 import { parsePayrollReceiptPeriodMessage } from "../../../utils/payroll-receipts/period-parser";
 import { payrollReceiptMetrics } from "../../../utils/payroll-receipts/metrics";
 import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
-import { isPayrollReceiptSessionState } from "../../../utils/bot-session-states";
+import { isPayrollReceiptSessionState } from "../../../utils/bot/bot-session-states";
 import { logModuleBlocked } from "./module-session-gate";
 import type { BotSession } from "../../../types/twilio.types";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";

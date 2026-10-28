@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { WhatsAppQuotaPolicy } from "../types/whatsapp-usage-quota";
+import type { WhatsAppQuotaPolicy } from "../../types/whatsapp-usage-quota";
 
 export type WhatsAppQuotaTurnScope = {
   companyId: string;

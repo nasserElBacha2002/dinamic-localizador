@@ -1,5 +1,5 @@
 import { calculateDistanceMeters } from "../../utils/haversine";
-import { evaluateGeofence } from "../../utils/attendance-validation";
+import { evaluateGeofence } from "../../utils/attendance/attendance-validation";
 import { geofencePolicyResolver } from "./geofence-policy.resolver";
 
 export const geolocationService = {

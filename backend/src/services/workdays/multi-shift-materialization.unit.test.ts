@@ -3,13 +3,13 @@ import { describe, it } from "node:test";
 import { AppError } from "../../errors/app-error";
 import {
   assertSingleScheduleModeOrReject,
-} from "../../utils/operation-schedule-mode-guard";
+} from "../../utils/operations/operation-schedule-mode-guard";
 import {
   isDayEnabled,
   resolveShiftScheduleForDate,
   resolveVersionForDate,
 } from "../../utils/operations/operation-shift-version-resolver";
-import { employeeShiftIntervalOverlap } from "../../utils/employee-shift-interval-overlap";
+import { employeeShiftIntervalOverlap } from "../../utils/employees/employee-shift-interval-overlap";
 import type { OperationShiftVersion } from "../../types/operation-shift";
 import type { OperationWorkday } from "../../types/workday";
 

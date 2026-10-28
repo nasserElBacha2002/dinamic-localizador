@@ -7,7 +7,7 @@ import {
   combineAttendanceValidation,
   evaluateGeofence,
   evaluatePunctuality,
-} from "../../utils/attendance-validation";
+} from "../../utils/attendance/attendance-validation";
 import { normalizeWorkTeamName } from "../../utils/work-teams/work-team-name";
 import { seedBatchMarkerSqlPredicate } from "./cleanup";
 import { randomPointWithinRadius } from "./geo";

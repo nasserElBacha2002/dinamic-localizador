@@ -1,4 +1,4 @@
-import type { BotSessionState } from "../types/twilio.types";
+import type { BotSessionState } from "../../types/twilio.types.ts";
 
 export const ACTIVE_BOT_SESSION_STATES = [
   "WAITING_MENU_SELECTION",

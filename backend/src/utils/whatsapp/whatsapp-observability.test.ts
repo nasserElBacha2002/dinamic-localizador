@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { WHATSAPP_PROVIDER_STATUS_RANK } from "../constants/whatsapp-observability";
+import { WHATSAPP_PROVIDER_STATUS_RANK } from "../../constants/whatsapp-observability";
 import {
   buildProviderEventKey,
   createCorrelationId,
@@ -10,7 +10,7 @@ import {
   pickProjectedProviderStatus,
   sanitizeObservabilityPayload,
   truncateJson,
-} from "../utils/whatsapp-observability";
+} from "./whatsapp-observability";
 
 describe("whatsapp-observability utils", () => {
   it("creates unique correlation ids", () => {

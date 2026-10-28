@@ -4,14 +4,14 @@ import { employeeWorkdayService } from "../../workdays/employee-workday.service"
 import {
   formatAssignmentDateTimeLine,
   formatAssignmentServiceReference,
-} from "../../../utils/employee-assignment-format";
+} from "../../../utils/employees/employee-assignment-format";
 import { companyOperationalSettingsService } from "../../companies/company-operational-settings.service";
 import {
   parseAttendanceConfirmationReply,
   type AttendanceConfirmationReplyIntent,
 } from "../../../utils/attendance/attendance-confirmation-reply";
-import { isAttendanceConfirmationResponseSessionState } from "../../../utils/bot-session-states";
-import { CONFIRMATION_EXPIRED_USER_MESSAGE } from "../../../utils/attendance-confirmation-validity";
+import { isAttendanceConfirmationResponseSessionState } from "../../../utils/bot/bot-session-states";
+import { CONFIRMATION_EXPIRED_USER_MESSAGE } from "../../../utils/attendance/attendance-confirmation-validity";
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
 import { attendanceNotificationRepository } from "../../../repositories/admin-alerts/attendance-notification.repository";
 import { getBotNow } from "../../../utils/bot/bot-runtime-context";

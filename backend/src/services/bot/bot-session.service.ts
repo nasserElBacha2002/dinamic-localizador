@@ -14,9 +14,9 @@ import {
   buildSessionExpiresAt,
   isSessionActive,
   isSessionExpiredByTime,
-} from "../../utils/bot-session-expiration";
-import { getSessionTtlMinutes } from "../../utils/bot-runtime-settings-scope";
-import { isPhysicalAttendanceSessionState } from "../../utils/bot-session-states";
+} from "../../utils/bot/bot-session-expiration";
+import { getSessionTtlMinutes } from "../../utils/bot/bot-runtime-settings-scope";
+import { isPhysicalAttendanceSessionState } from "../../utils/bot/bot-session-states";
 
 export type SessionSelectionResult =
   | { kind: "ok"; session: BotSession }

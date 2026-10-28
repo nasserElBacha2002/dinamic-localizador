@@ -8,13 +8,13 @@ import type {
   DailyAttendanceReportWorkday,
 } from "../../types/daily-attendance-report";
 import { classifyDailyAttendanceReportRow } from "../../utils/reports/daily-attendance-report-classify";
-import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../../utils/statistics-canonical-attendance";
+import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../../utils/statistics/statistics-canonical-attendance";
 import {
   CONFIRMATION_STATUS_SQL,
   EFFECTIVE_STATE_SQL,
   WORKED_MINUTES_SQL,
   OVERTIME_MINUTES_SQL,
-} from "../../utils/employee-workday-statistics-projection";
+} from "../../utils/workdays/employee-workday-statistics-projection";
 import { toDateOnlyString } from "../../utils/row-mappers";
 
 const MAX_INCIDENTS = 40;

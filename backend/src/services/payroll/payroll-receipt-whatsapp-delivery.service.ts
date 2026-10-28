@@ -6,12 +6,12 @@ import {
   recordSimulationArtifact,
   setTechnicalDetail,
 } from "../../utils/bot/bot-runtime-context";
-import { classifyTwilioOutboundError } from "../../utils/twilio-error-classifier";
+import { classifyTwilioOutboundError } from "../../utils/whatsapp/twilio-error-classifier";
 import { twilioOutboundService } from "../whatsapp/twilio-outbound.service";
 import { whatsappMessageRepository } from "../../repositories/whatsapp/whatsapp-message.repository";
 import type { PayrollReceipt } from "../../types/payroll-receipt";
 import { whatsappTurnClassificationShadowService } from "../whatsapp/whatsapp-turn-classification-shadow.service";
-import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
+import { getQuotaTurnScope } from "../../utils/whatsapp/whatsapp-quota-turn-scope";
 import { whatsappUsageQuotaService } from "../whatsapp/whatsapp-usage-quota.service";
 
 export type PayrollReceiptDeliveryResult =

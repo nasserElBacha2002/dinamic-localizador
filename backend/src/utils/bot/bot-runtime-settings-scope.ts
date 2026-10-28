@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
-import { env } from "../config/env";
-import type { BotRuntimeSettings } from "../types/bot-runtime-settings";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
+import { env } from "../../config/env";
+import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
 
 const botRuntimeSettingsStorage = new AsyncLocalStorage<BotRuntimeSettings>();
 

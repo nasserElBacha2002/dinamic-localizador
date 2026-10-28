@@ -5,8 +5,8 @@ import type {
   AdminAlertTemplatePayload,
 } from "../../types/admin-alert";
 import { isAdminAlertRequestPayload } from "../../types/admin-alert";
-import { formatLocalTime } from "../attendance-validation";
-import { formatServiceReferenceFromFields } from "../format-service-reference";
+import { formatLocalTime } from "../attendance/attendance-validation";
+import { formatServiceReferenceFromFields } from "../operations/format-service-reference";
 import { buildAdminRequestAlertTemplateVariables } from "./request-template-variables";
 
 const EMPTY_CONTEXT = "—";

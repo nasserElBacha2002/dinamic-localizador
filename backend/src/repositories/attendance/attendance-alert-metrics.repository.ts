@@ -1,7 +1,7 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { EFFECTIVE_STATE_SQL } from "../../utils/employee-workday-statistics-projection";
-import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../../utils/statistics-canonical-attendance";
+import { EFFECTIVE_STATE_SQL } from "../../utils/workdays/employee-workday-statistics-projection";
+import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "../../utils/statistics/statistics-canonical-attendance";
 import {
   calculatePreciseAttendanceRate,
   formatAttendanceRateForDisplay,

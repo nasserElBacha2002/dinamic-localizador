@@ -4,7 +4,7 @@ import {
   buildEmployeeWorkdayStatisticsCte,
   buildEmployeeWorkdayStatisticsFilters,
   buildStatisticsWhereFromFilters,
-} from "../../utils/employee-workday-statistics-projection";
+} from "../../utils/workdays/employee-workday-statistics-projection";
 import type { StatisticsFilters } from "../../schemas/statistics.schema";
 
 export type MonthlyAttendanceReportRow = {

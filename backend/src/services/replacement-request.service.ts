@@ -8,8 +8,8 @@ import { adminAlertNotificationRepository } from "../repositories/admin-alerts/a
 import { operationEmployeeRepository } from "../repositories/operations/operation-employee.repository";
 import { employeeWorkdayRepository } from "../repositories/workdays/employee-workday.repository";
 import { auditService } from "./audit.service";
-import { formatServiceReferenceFromFields } from "../utils/format-service-reference";
-import { formatLocalTime } from "../utils/attendance-validation";
+import { formatServiceReferenceFromFields } from "../utils/operations/format-service-reference";
+import { formatLocalTime } from "../utils/attendance/attendance-validation";
 import { companySettingsRepository } from "../repositories/companies/company-settings.repository";
 import { toDateOnlyString } from "../utils/row-mappers";
 

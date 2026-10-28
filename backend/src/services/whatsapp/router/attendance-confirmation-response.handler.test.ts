@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { setupUnitTestEnv } from "../../../test-helpers/unit-test-env";
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
-import { CONFIRMATION_EXPIRED_USER_MESSAGE } from "../../../utils/attendance-confirmation-validity";
+import { CONFIRMATION_EXPIRED_USER_MESSAGE } from "../../../utils/attendance/attendance-confirmation-validity";
 import { runWithBotRuntimeContext, type BotRuntimeContext } from "../../../utils/bot/bot-runtime-context";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../../types/twilio.types";

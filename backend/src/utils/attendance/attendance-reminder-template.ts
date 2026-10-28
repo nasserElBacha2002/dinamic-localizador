@@ -1,7 +1,7 @@
 import type { AttendanceNotificationType } from "../../constants/attendance-notification";
 import type { AttendanceReminderCandidate } from "../../types/attendance-notification";
-import { formatLocalTime } from "../attendance-validation";
-import { formatServiceReferenceFromFields } from "../format-service-reference";
+import { formatLocalTime } from "./attendance-validation";
+import { formatServiceReferenceFromFields } from "../operations/format-service-reference";
 
 const formatLocalDate = (iso: string, timeZone: string): string =>
   new Intl.DateTimeFormat("es-AR", {

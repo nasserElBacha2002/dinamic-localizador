@@ -3,10 +3,10 @@ import { describe, it } from "node:test";
 import {
   calculateAttendanceRate,
   deriveWorkdayStateCounts,
-} from "./attendance-statistics-metrics";
-import { deriveEmployeeWorkdayState } from "./derive-employee-workday-state";
+} from "./attendance/attendance-statistics-metrics";
+import { deriveEmployeeWorkdayState } from "./attendance/derive-employee-workday-state";
 import { normalizeStatisticsFilters } from "./statistics/statistics-display-labels";
-import { selectCanonicalProductionAttendance } from "./statistics-canonical-attendance";
+import { selectCanonicalProductionAttendance } from "./statistics/statistics-canonical-attendance";
 import {
   aggregateCompanyAttendanceRate,
   aggregateProjectionSummary,

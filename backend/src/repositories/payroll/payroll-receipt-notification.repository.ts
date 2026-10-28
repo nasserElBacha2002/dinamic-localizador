@@ -13,7 +13,7 @@ import type {
 } from "../../types/payroll-receipt-notification";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 import { payrollReceiptMetrics } from "../../utils/payroll-receipts/metrics";
-import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp-observability";
+import { monotonicProviderStatusAdvanceSql } from "../../utils/whatsapp/whatsapp-observability";
 
 const requestFrom = (transaction?: sql.Transaction) =>
   transaction ? new sql.Request(transaction) : getPool().request();

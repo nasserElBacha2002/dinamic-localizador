@@ -12,6 +12,10 @@ import { getPool } from "../../database/connection";
 import { attendanceRepository } from "./attendance.repository";
 import { attendanceService } from "../../services/attendance/attendance.service";
 import { attendanceAuthoritativeClock } from "../../utils/attendance/attendance-authoritative-clock";
+import type { AttendanceListItem } from "../../utils/attendance/attendance-list-projection";
+
+const showsOperationalAbsentBadge = (row: AttendanceListItem): boolean =>
+  row.hasAttendanceRecord === false && row.effectiveState === "ABSENT";
 
 const uuid = (): string => randomUUID();
 
@@ -183,10 +187,13 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
     receivedAt: Date | null;
     checkoutAt?: Date | null;
     punctualityStatus: string;
+    validationStatus?: string;
+    locationStatus?: string;
     isSimulation?: boolean;
     simulationSessionId?: string | null;
   }) {
     const pool = getPool();
+    const checkoutOnly = input.receivedAt == null;
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -196,6 +203,8 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
       .input("receivedAt", sql.DateTime2, input.receivedAt)
       .input("checkoutAt", sql.DateTime2, input.checkoutAt ?? null)
       .input("punctualityStatus", sql.NVarChar(30), input.punctualityStatus)
+      .input("validationStatus", sql.NVarChar(30), input.validationStatus ?? "VALID")
+      .input("locationStatus", sql.NVarChar(30), input.locationStatus ?? "INSIDE_GEOFENCE")
       .input("isSimulation", sql.Bit, input.isSimulation ? 1 : 0)
       .input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId ?? null)
       .query(`
@@ -209,8 +218,8 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
         OUTPUT INSERTED.id INTO @inserted (id)
         VALUES (
           @companyId, @operationId, @employeeId, @employeeWorkdayId,
-          -34.6, -58.4, 10,
-          N'VALID', N'INSIDE_GEOFENCE', @punctualityStatus,
+          ${checkoutOnly ? "NULL, NULL, NULL" : "-34.6, -58.4, 10"},
+          @validationStatus, @locationStatus, @punctualityStatus,
           @receivedAt, @checkoutAt, @isSimulation, @simulationSessionId, N'WHATSAPP'
         );
         SELECT id FROM @inserted;
@@ -553,6 +562,141 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
     });
     assert.equal(missingCheckout.items.length, 1);
     assert.equal(missingCheckout.items[0]?.employeeWorkdayId, startedOpenCheckout.employeeWorkdayId);
+  });
+
+  it("validationStatus ABSENT returns exactly rows with operational absent badge", async () => {
+    const baseStart = new Date("2031-06-10T12:00:00.000Z");
+    const baseEnd = new Date("2031-06-10T20:00:00.000Z");
+
+    const stillExpected = await seedWorkday({
+      employeeName: "FilterExpected",
+      expectedStart: baseStart,
+      expectedEnd: baseEnd,
+      lateToleranceMinutes: 120,
+    });
+
+    const absent = await seedWorkday({
+      employeeName: "FilterAbsent",
+      expectedStart: baseStart,
+      expectedEnd: baseEnd,
+      lateToleranceMinutes: 5,
+    });
+    clockNow = new Date(absent.expectedEnd.getTime() + 15 * 60_000);
+
+    const withArrival = await seedWorkday({
+      employeeName: "FilterArrival",
+      expectedStart: baseStart,
+      expectedEnd: baseEnd,
+    });
+    await insertAttendance({
+      ...withArrival,
+      receivedAt: new Date(withArrival.expectedStart.getTime()),
+      punctualityStatus: "ON_TIME",
+    });
+
+    const openCheckout = await seedWorkday({
+      employeeName: "FilterOpenCheckout",
+      expectedStart: baseStart,
+      expectedEnd: baseEnd,
+    });
+    await insertAttendance({
+      ...openCheckout,
+      receivedAt: new Date(openCheckout.expectedStart.getTime()),
+      checkoutAt: null,
+      punctualityStatus: "ON_TIME",
+    });
+
+    const exitOnly = await seedWorkday({
+      employeeName: "FilterExitOnly",
+      expectedStart: baseStart,
+      expectedEnd: baseEnd,
+    });
+    await insertAttendance({
+      ...exitOnly,
+      receivedAt: null,
+      checkoutAt: new Date(exitOnly.expectedEnd.getTime()),
+      punctualityStatus: "NOT_RECORDED",
+      validationStatus: "REJECTED",
+      locationStatus: "NOT_RECORDED",
+    });
+
+    const justified = await seedWorkday({
+      employeeName: "FilterJustified",
+      expectedStart: baseStart,
+      expectedEnd: baseEnd,
+      expectationStatus: "JUSTIFIED",
+    });
+
+    const employeeIds = [
+      absent.employeeId,
+      stillExpected.employeeId,
+      withArrival.employeeId,
+      openCheckout.employeeId,
+      exitOnly.employeeId,
+      justified.employeeId,
+    ];
+
+    const allListed = await attendanceRepository.list(companyId, {
+      page: 1,
+      limit: 100,
+      operationIds: [],
+      employeeIds,
+      serviceIds: [],
+    });
+
+    const exitOnlyRow = allListed.items.find(
+      (row) => row.employeeWorkdayId === exitOnly.employeeWorkdayId,
+    );
+    assert.ok(exitOnlyRow);
+    assert.equal(exitOnlyRow?.hasAttendanceRecord, true);
+    assert.equal(showsOperationalAbsentBadge(exitOnlyRow!), false);
+
+    const absentFiltered = await attendanceRepository.list(companyId, {
+      page: 1,
+      limit: 100,
+      operationIds: [],
+      employeeIds,
+      serviceIds: [],
+      validationStatus: "ABSENT",
+    });
+
+    assert.ok(absentFiltered.items.length >= 1);
+    assert.ok(
+      absentFiltered.items.every((row) => showsOperationalAbsentBadge(row)),
+      "every ABSENT-filter row must match badge rule",
+    );
+    assert.ok(
+      absentFiltered.items.some((row) => row.employeeWorkdayId === absent.employeeWorkdayId),
+    );
+    assert.equal(
+      absentFiltered.items.some((row) => row.employeeWorkdayId === stillExpected.employeeWorkdayId),
+      false,
+    );
+    assert.equal(
+      absentFiltered.items.some((row) => row.employeeWorkdayId === withArrival.employeeWorkdayId),
+      false,
+    );
+    assert.equal(
+      absentFiltered.items.some((row) => row.employeeWorkdayId === openCheckout.employeeWorkdayId),
+      false,
+    );
+    assert.equal(
+      absentFiltered.items.some((row) => row.employeeWorkdayId === exitOnly.employeeWorkdayId),
+      false,
+    );
+    assert.equal(
+      absentFiltered.items.some((row) => row.employeeWorkdayId === justified.employeeWorkdayId),
+      false,
+    );
+
+    const cleared = await attendanceRepository.list(companyId, {
+      page: 1,
+      limit: 100,
+      operationIds: [],
+      employeeIds: [absent.employeeId, stillExpected.employeeId],
+      serviceIds: [],
+    });
+    assert.ok(cleared.items.length >= 2);
   });
 
   it("reports production attendances without employee_workday_id (preflight)", async () => {

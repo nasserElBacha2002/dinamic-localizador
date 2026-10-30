@@ -30,7 +30,7 @@ export const mockAdminAlertSideEffects = async (): Promise<void> => {
   mock.method(adminAlertMissingCheckinService, "emitForCompletedOperation", async () => undefined);
   mock.method(
     (await import("../services/admin-alerts/admin-alert-absence-pending.service")).adminAlertAbsencePendingService,
-    "emitForPendingWhatsappRequest",
+    "emitOperationalForCreatedRequest",
     async () => undefined,
   );
   const { attendanceThresholdAlertService } = await import(

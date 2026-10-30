@@ -14,7 +14,8 @@ export type AbsenceOperationalSummaryLabel =
   | "Planificación resuelta"
   | "Requiere revisión"
   | "Rechazada"
-  | "Cancelada";
+  | "Cancelada"
+  | "Evaluando planificación";
 
 export type AbsencePlanningRow = {
   key: string;
@@ -46,69 +47,205 @@ export function conflictTypeHumanLabel(conflictType: string): string {
   return conflictTypeLabels[conflictType] ?? "Conflicto de planificación";
 }
 
-export function hasUncoveredWorkdays(impact: AbsenceOperationalImpact | null | undefined): boolean {
-  if (!impact) {
+export function findOperationForWorkday(
+  impact: AbsenceOperationalImpact,
+  operationId: string | null | undefined,
+  assignmentId?: string | null,
+) {
+  if (!operationId) {
+    return undefined;
+  }
+  if (assignmentId) {
+    const byAssignment = impact.operations.find(
+      (operation) =>
+        operation.operationId === operationId && operation.assignmentId === assignmentId,
+    );
+    if (byAssignment) {
+      return byAssignment;
+    }
+  }
+  const matches = impact.operations.filter((operation) => operation.operationId === operationId);
+  if (matches.length === 1) {
+    return matches[0];
+  }
+  return undefined;
+}
+
+export function conflictMatchesWorkday(
+  conflict: AbsenceOperationalConflict,
+  workday: AbsenceOperationalImpact["workdays"][number],
+  assignmentId: string | null,
+): boolean {
+  if (
+    conflict.employeeWorkdayId &&
+    conflict.employeeWorkdayId === workday.employeeWorkdayId
+  ) {
+    return true;
+  }
+  if (!workday.operationId || conflict.operationId !== workday.operationId) {
     return false;
   }
-  return impact.workdays.some((workday) => !workday.covered);
+  if (conflict.assignmentId && assignmentId) {
+    return conflict.assignmentId === assignmentId;
+  }
+  if (conflict.assignmentId && !assignmentId) {
+    return false;
+  }
+  return true;
+}
+
+export function findOpenAssignmentVacancyConflict(
+  impact: AbsenceOperationalImpact,
+  workday: AbsenceOperationalImpact["workdays"][number],
+  assignmentId: string | null,
+): AbsenceOperationalConflict | null {
+  return (
+    impact.openConflicts.find(
+      (conflict) =>
+        conflict.status === "OPEN" &&
+        conflict.conflictType === "ASSIGNMENT_DURING_ABSENCE" &&
+        !conflict.replacementEmployeeId &&
+        Boolean(conflict.operationId) &&
+        conflictMatchesWorkday(conflict, workday, assignmentId),
+    ) ?? null
+  );
+}
+
+export function deriveWorkdayNeedsCoverage(
+  impact: AbsenceOperationalImpact,
+  requestStatus: AbsenceRequestStatus,
+  workday: AbsenceOperationalImpact["workdays"][number],
+  operation: AbsenceOperationalImpact["operations"][number] | undefined,
+): boolean {
+  if (typeof workday.needsCoverage === "boolean") {
+    if (requestStatus !== "APPROVED" || !impact.featureEnabled) {
+      return false;
+    }
+    return workday.needsCoverage;
+  }
+
+  if (requestStatus !== "APPROVED" || !impact.featureEnabled) {
+    return false;
+  }
+  if (!workday.operationId) {
+    return false;
+  }
+  if (operation?.operationStatus === "CANCELLED") {
+    return false;
+  }
+
+  return findOpenAssignmentVacancyConflict(
+    impact,
+    workday,
+    operation?.assignmentId ?? null,
+  ) != null;
+}
+
+export function deriveWorkdayHasOperationalReplacement(
+  workday: AbsenceOperationalImpact["workdays"][number],
+): boolean {
+  return workday.hasOperationalReplacement === true;
+}
+
+export function impactHasWorkdaysNeedingCoverage(
+  impact: AbsenceOperationalImpact | null | undefined,
+  requestStatus: AbsenceRequestStatus,
+): boolean {
+  if (!impact || !impact.featureEnabled || requestStatus !== "APPROVED") {
+    return false;
+  }
+  return impact.workdays.some((workday) => {
+    const operation = findOperationForWorkday(
+      impact,
+      workday.operationId,
+      workday.operationAssignmentId ?? null,
+    );
+    return deriveWorkdayNeedsCoverage(impact, requestStatus, workday, operation);
+  });
 }
 
 export function selectPrimaryCoverageOperationId(
   impact: AbsenceOperationalImpact | null | undefined,
+  requestStatus: AbsenceRequestStatus,
 ): string | null {
-  if (!impact || !hasUncoveredWorkdays(impact)) {
+  if (!impact || !impactHasWorkdaysNeedingCoverage(impact, requestStatus)) {
     return null;
   }
 
-  const uncovered = impact.workdays.find((workday) => !workday.covered && workday.operationId);
-  if (uncovered?.operationId) {
-    return uncovered.operationId;
+  for (const workday of impact.workdays) {
+    const operation = findOperationForWorkday(
+      impact,
+      workday.operationId,
+      workday.operationAssignmentId ?? null,
+    );
+    if (
+      deriveWorkdayNeedsCoverage(impact, requestStatus, workday, operation) &&
+      workday.operationId
+    ) {
+      return workday.operationId;
+    }
   }
 
-  const operationRow = impact.operations[0];
-  return operationRow?.operationId ?? null;
+  return null;
 }
 
 export function shouldOfferCoverageAction(
   requestStatus: AbsenceRequestStatus,
   impact: AbsenceOperationalImpact | null | undefined,
 ): boolean {
-  return requestStatus === "APPROVED" && hasUncoveredWorkdays(impact);
+  return impactHasWorkdaysNeedingCoverage(impact, requestStatus);
 }
 
 export function buildAbsencePlanningRows(
   impact: AbsenceOperationalImpact,
   requestStatus: AbsenceRequestStatus,
 ): AbsencePlanningRow[] {
-  const conflictsByOperation = groupOpenConflictsByOperation(impact.openConflicts);
+  return impact.workdays.map((workday) => {
+    const operation = findOperationForWorkday(
+      impact,
+      workday.operationId,
+      workday.operationAssignmentId ?? null,
+    );
+    const assignmentId = operation?.assignmentId ?? workday.operationAssignmentId ?? "";
+    const needsCoverage = deriveWorkdayNeedsCoverage(
+      impact,
+      requestStatus,
+      workday,
+      operation,
+    );
+    const openConflict =
+      findOpenAssignmentVacancyConflict(impact, workday, operation?.assignmentId ?? null) ??
+      impact.openConflicts.find((conflict) =>
+        conflictMatchesWorkday(conflict, workday, operation?.assignmentId ?? null),
+      ) ??
+      null;
 
-  return impact.operations.map((operation) => {
-    const workday = pickWorkdayForOperation(impact, operation.operationId, operation.assignmentId);
-    const openConflict = conflictsByOperation.get(operation.operationId)?.[0] ?? null;
-    const needsCoverage =
-      requestStatus === "APPROVED" && workday != null && !workday.covered;
+    const operationId = workday.operationId ?? operation?.operationId ?? "";
+    const serviceId = workday.serviceId ?? operation?.serviceId ?? "";
+    const serviceName = operation?.serviceName ?? "—";
+    const operationStatus = operation?.operationStatus ?? "—";
 
     return {
-      key: `${operation.operationId}:${operation.assignmentId}`,
-      operationId: operation.operationId,
-      serviceId: operation.serviceId,
-      serviceName: operation.serviceName,
-      workDate: workday?.workDate ?? operation.scheduledStart.slice(0, 10),
-      shiftLabel: operation.categoryName,
-      operationStatus: operation.operationStatus,
+      key: workday.employeeWorkdayId,
+      operationId,
+      serviceId,
+      serviceName,
+      workDate: workday.workDate,
+      shiftLabel: operation?.categoryName ?? null,
+      operationStatus,
       operationStatusLabel:
-        operationStatusLabels[operation.operationStatus as keyof typeof operationStatusLabels] ??
-        operation.operationStatus,
+        operationStatusLabels[operationStatus as keyof typeof operationStatusLabels] ??
+        operationStatus,
       situationLabel: deriveSituationLabel({
         requestStatus,
         needsCoverage,
         openConflict,
-        workdayCovered: workday?.covered ?? null,
-        hasAttendancePresence: workday?.hasAttendancePresence ?? false,
+        hasOperationalReplacement: deriveWorkdayHasOperationalReplacement(workday),
+        hasAttendancePresence: workday.hasAttendancePresence,
       }),
       needsCoverage,
       hasOpenConflict: Boolean(openConflict),
-      assignmentId: operation.assignmentId,
+      assignmentId,
     };
   });
 }
@@ -116,12 +253,14 @@ export function buildAbsencePlanningRows(
 export function deriveAbsenceOperationalSummary(input: {
   requestStatus: AbsenceRequestStatus;
   impact: AbsenceOperationalImpact | null | undefined;
+  impactLoading?: boolean;
+  impactError?: boolean;
 }): {
   label: AbsenceOperationalSummaryLabel;
   tone: StatusBadgeTone;
   nextStep: string;
 } {
-  const { requestStatus, impact } = input;
+  const { requestStatus, impact, impactLoading, impactError } = input;
 
   if (requestStatus === "PENDING") {
     return {
@@ -155,6 +294,22 @@ export function deriveAbsenceOperationalSummary(input: {
     };
   }
 
+  if (impactLoading) {
+    return {
+      label: "Evaluando planificación",
+      tone: "neutral",
+      nextStep: "Evaluando planificación…",
+    };
+  }
+
+  if (impactError) {
+    return {
+      label: "Requiere revisión",
+      tone: "warning",
+      nextStep: "No se pudo evaluar la planificación afectada.",
+    };
+  }
+
   if (!impact || (impact.affectedOperations === 0 && impact.affectedWorkdays === 0)) {
     return {
       label: "Sin impacto operativo",
@@ -163,7 +318,7 @@ export function deriveAbsenceOperationalSummary(input: {
     };
   }
 
-  if (hasUncoveredWorkdays(impact)) {
+  if (impactHasWorkdaysNeedingCoverage(impact, requestStatus)) {
     return {
       label: "Requiere cobertura",
       tone: "warning",
@@ -187,41 +342,11 @@ export function deriveAbsenceOperationalSummary(input: {
   };
 }
 
-function groupOpenConflictsByOperation(
-  conflicts: AbsenceOperationalConflict[],
-): Map<string, AbsenceOperationalConflict[]> {
-  const map = new Map<string, AbsenceOperationalConflict[]>();
-  for (const conflict of conflicts) {
-    if (!conflict.operationId) {
-      continue;
-    }
-    const list = map.get(conflict.operationId) ?? [];
-    list.push(conflict);
-    map.set(conflict.operationId, list);
-  }
-  return map;
-}
-
-function pickWorkdayForOperation(
-  impact: AbsenceOperationalImpact,
-  operationId: string,
-  assignmentId: string,
-) {
-  return (
-    impact.workdays.find(
-      (workday) => workday.operationId === operationId && workday.employeeWorkdayId,
-    ) ??
-    impact.workdays.find((workday) => workday.operationId === operationId) ??
-    impact.workdays.find((workday) => workday.employeeWorkdayId === assignmentId) ??
-    null
-  );
-}
-
 function deriveSituationLabel(input: {
   requestStatus: AbsenceRequestStatus;
   needsCoverage: boolean;
   openConflict: AbsenceOperationalConflict | null;
-  workdayCovered: boolean | null;
+  hasOperationalReplacement: boolean;
   hasAttendancePresence: boolean;
 }): string {
   if (input.requestStatus !== "APPROVED") {
@@ -239,12 +364,12 @@ function deriveSituationLabel(input: {
     return "Asistencia registrada — revisar";
   }
 
-  if (input.openConflict) {
-    return conflictTypeHumanLabel(input.openConflict.conflictType);
+  if (input.hasOperationalReplacement) {
+    return "Jornada cubierta";
   }
 
-  if (input.workdayCovered === true) {
-    return "Jornada cubierta";
+  if (input.openConflict) {
+    return conflictTypeHumanLabel(input.openConflict.conflictType);
   }
 
   return "Sin pendientes";

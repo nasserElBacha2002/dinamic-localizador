@@ -4,20 +4,17 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { absenceKeys } from "../../api/absence-query-keys";
-import { AbsenceAttachmentsSection } from "../../components/absences/AbsenceAttachmentsSection";
 import { AbsenceOperationalImpactSection } from "../../components/absences/AbsenceOperationalImpactSection";
+import { AbsenceRequestSummarySection } from "../../components/absences/AbsenceRequestSummarySection";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
-import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
-import { EntityLink } from "../../components/entity-link";
+import { EmployeeAbsenceCollaboratorHistorySection } from "../../components/absences/EmployeeAbsenceCollaboratorHistorySection";
 import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
 import {
-  DetailFieldGrid,
   ErrorState,
   LoadingState,
   PageHeader,
   ResponsiveModal,
   SectionCard,
-  StatusBadge,
 } from "../../design-system";
 import {
   useAbsenceOperationalImpact,
@@ -31,20 +28,8 @@ import {
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import { terminology } from "../../domain/terminology";
-import {
-  absenceEventTypeLabels,
-  absenceRequestedViaLabels,
-  absenceStatusLabels,
-  absenceTypeLabels,
-  formatAbsenceDate,
-} from "../../utils/absence-labels";
-import { formatDateTime } from "../../utils/dates";
+import { absenceTypeLabels } from "../../utils/absence-labels";
 import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
-import { absenceStatusTone } from "../../utils/absence-status-display";
-import { hasPermission } from "../../utils/permissions";
-import { AbsenceNeedsInfoEditor } from "./AbsenceNeedsInfoEditor";
-import { AbsenceReviewActions } from "./AbsenceReviewActions";
 import { absenceConflictUserMessage } from "./absence-conflict-message";
 import {
   buildApprovalImpactPreviewText,
@@ -53,6 +38,9 @@ import {
   selectPrimaryCoverageOperationId,
   shouldOfferCoverageAction,
 } from "./absence-detail-planning";
+import { hasPermission } from "../../utils/permissions";
+import { AbsenceNeedsInfoEditor } from "./AbsenceNeedsInfoEditor";
+import { AbsenceReviewActions } from "./AbsenceReviewActions";
 import {
   canAdminEditNeedsInfo,
   canShowAbsenceReviewActions,
@@ -117,6 +105,11 @@ export function AbsenceDetailPage() {
     permissionsQuery.data?.permissions,
     "absences:review",
   );
+  const canViewAttachments = canManageAttachments;
+  const canReadAttendance = hasPermission(
+    permissionsQuery.data?.permissions,
+    "attendance:read",
+  );
   const attachmentType = typesQuery.data?.find((type) => type.id === detail.absenceTypeId);
   const attachmentPolicy =
     attachmentType?.attachmentPolicy ??
@@ -130,8 +123,13 @@ export function AbsenceDetailPage() {
   const operationalSummary = deriveAbsenceOperationalSummary({
     requestStatus: detail.status,
     impact: impactQuery.data,
+    impactLoading: impactQuery.isLoading,
+    impactError: impactQuery.isError,
   });
-  const primaryCoverageOperationId = selectPrimaryCoverageOperationId(impactQuery.data);
+  const primaryCoverageOperationId = selectPrimaryCoverageOperationId(
+    impactQuery.data,
+    detail.status,
+  );
   const coverageHref =
     canManageOperations &&
     shouldOfferCoverageAction(detail.status, impactQuery.data) &&
@@ -255,48 +253,16 @@ export function AbsenceDetailPage() {
         </Alert>
       ) : null}
 
-      <SectionCard title="Situación">
-        <Stack gap="sm">
-          <Group gap="sm" wrap="wrap">
-            <StatusBadge
-              label={absenceStatusLabels[detail.status]}
-              tone={absenceStatusTone(detail.status)}
-              variant="light"
-            />
-            <StatusBadge
-              label={operationalSummary.label}
-              tone={operationalSummary.tone}
-              variant="light"
-            />
-          </Group>
-          <DetailFieldGrid
-            fields={[
-              {
-                label: terminology.worker.singular,
-                value: (
-                  <EntityLink
-                    entityType="employee"
-                    entityId={detail.employee?.id ?? detail.employeeId}
-                    label={detail.employee.name}
-                  />
-                ),
-              },
-              { label: "Tipo", value: absenceTypeLabel },
-              {
-                label: "Período",
-                value: `${formatAbsenceDate(detail.startDate)} – ${formatAbsenceDate(detail.endDate)}`,
-              },
-            ]}
-          />
-          <Text size="sm">{operationalSummary.nextStep}</Text>
-          {shouldOfferCoverageAction(detail.status, impactQuery.data) && !canManageOperations ? (
-            <Text size="sm" c="dimmed">
-              Hay jornadas sin cubrir. Un responsable con permisos operativos debe asignar la
-              cobertura desde la operación afectada.
-            </Text>
-          ) : null}
-        </Stack>
-      </SectionCard>
+      <AbsenceRequestSummarySection
+        detail={detail}
+        absenceTypeLabel={absenceTypeLabel}
+        operationalSummary={operationalSummary}
+        impact={impactQuery.data}
+        canManageOperations={canManageOperations}
+        attachmentPolicy={attachmentPolicy}
+        canViewAttachments={canViewAttachments}
+        canManageAttachments={canManageAttachments}
+      />
 
       {canEditNeedsInfo ? (
         <AbsenceNeedsInfoEditor
@@ -313,53 +279,6 @@ export function AbsenceDetailPage() {
         />
       ) : null}
 
-      <AbsenceAttachmentsSection
-        requestId={detail.id}
-        requestStatus={detail.status}
-        attachmentPolicy={attachmentPolicy}
-        canManage={canManageAttachments}
-      />
-
-      <SectionCard title="Detalle de la solicitud">
-        <DetailFieldGrid
-          fields={[
-            {
-              label: terminology.worker.singular,
-              value: (
-                <EntityLink
-                  entityType="employee"
-                  entityId={detail.employee?.id ?? detail.employeeId}
-                  label={`${detail.employee.name} (${detail.employee.phoneNumber})`}
-                />
-              ),
-            },
-            { label: "Tipo", value: absenceTypeLabel },
-            { label: "Inicio", value: formatAbsenceDate(detail.startDate) },
-            { label: "Fin", value: formatAbsenceDate(detail.endDate) },
-            { label: "Días", value: detail.totalDays },
-            { label: "Motivo", value: detail.reason },
-            {
-              label: "Estado",
-              value: (
-                <StatusBadge
-                  label={absenceStatusLabels[detail.status]}
-                  tone={absenceStatusTone(detail.status)}
-                  variant="light"
-                />
-              ),
-            },
-            { label: "Origen", value: absenceRequestedViaLabels[detail.requestedVia] },
-            { label: "Creada", value: formatDateTime(detail.createdAt) },
-            { label: "Revisada por", value: detail.reviewerName ?? "—" },
-            {
-              label: "Revisada el",
-              value: detail.reviewedAt ? formatDateTime(detail.reviewedAt) : "—",
-            },
-            { label: "Comentario de revisión", value: detail.reviewComment ?? "—" },
-          ]}
-        />
-      </SectionCard>
-
       <AbsenceOperationalImpactSection requestId={detail.id} requestStatus={detail.status} />
 
       <SectionCard title="Saldo del empleado">
@@ -367,7 +286,9 @@ export function AbsenceDetailPage() {
           employeeId={detail.employeeId}
           year={balanceYear}
           balanceImpact={detail.balanceImpact}
+          currentAbsenceTypeId={detail.absenceTypeId}
           showEdit={canUpdateBalance}
+          collapseFullBalance
           onBalanceSaved={() => {
             if (id) {
               void queryClient.invalidateQueries({
@@ -378,23 +299,13 @@ export function AbsenceDetailPage() {
         />
       </SectionCard>
 
-      <SectionCard title={`Historial del empleado (${balanceYear})`}>
-        <EmployeeAbsenceHistoryTable employeeId={detail.employeeId} year={balanceYear} />
-      </SectionCard>
-
-      <SectionCard title="Historial">
-        <Stack gap="xs">
-          {detail.events.map((event) => (
-            <Text key={event.id} size="sm">
-              {formatDateTime(event.createdAt)} ·{" "}
-              {absenceEventTypeLabels[event.eventType as keyof typeof absenceEventTypeLabels] ??
-                event.eventType}
-              {event.performerName ? ` · ${event.performerName}` : ""}
-              {event.comment ? ` · ${event.comment}` : ""}
-            </Text>
-          ))}
-        </Stack>
-      </SectionCard>
+      <EmployeeAbsenceCollaboratorHistorySection
+        employeeId={detail.employeeId}
+        year={balanceYear}
+        events={detail.events}
+        currentRequestId={detail.id}
+        canReadAttendance={canReadAttendance}
+      />
 
       <ResponsiveModal
         opened={rejectOpen}

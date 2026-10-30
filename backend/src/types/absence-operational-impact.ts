@@ -63,9 +63,16 @@ export type AbsenceOperationalWorkdayImpact = {
   workDate: string;
   operationId: string | null;
   serviceId: string | null;
+  /** Jornada alcanzada por el rango de la ausencia (no implica reemplazo operativo). */
   covered: boolean;
   hasAttendancePresence: boolean;
   conflictCode: "ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE" | null;
+  /** Vacante operativa pendiente (conflicto OPEN de asignación sin reemplazo). */
+  needsCoverage: boolean;
+  /** Reemplazo operativo registrado (conflicto RESUELTO con ASSIGN_REPLACEMENT). */
+  hasOperationalReplacement: boolean;
+  /** Asignación de planificación vinculada a la jornada (desambiguación multi-turno). */
+  operationAssignmentId?: string | null;
 };
 
 export type AbsenceOperationalAssignmentImpact = {

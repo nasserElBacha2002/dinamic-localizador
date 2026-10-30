@@ -38,6 +38,39 @@ export const operationCoverageEventRepository = {
     return Boolean(result.recordset?.[0]);
   },
 
+  async listCoveredReplacedAssignmentIds(
+    companyId: string,
+    replacedAssignmentIds: string[],
+  ): Promise<Set<string>> {
+    if (replacedAssignmentIds.length === 0) {
+      return new Set();
+    }
+    const pool = getPool();
+    const covered = new Set<string>();
+    const chunkSize = 100;
+    for (let offset = 0; offset < replacedAssignmentIds.length; offset += chunkSize) {
+      const chunk = replacedAssignmentIds.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const paramNames = chunk.map((id, index) => {
+        const param = `replacedAssignmentId${index}`;
+        request.input(param, sql.UniqueIdentifier, id);
+        return `@${param}`;
+      });
+      const result = await request.query(`
+        SELECT replaced_assignment_id
+        FROM operation_coverage_events
+        WHERE company_id = @companyId
+          AND replaced_assignment_id IN (${paramNames.join(", ")})
+      `);
+      for (const row of result.recordset) {
+        if (row.replaced_assignment_id) {
+          covered.add(String(row.replaced_assignment_id));
+        }
+      }
+    }
+    return covered;
+  },
+
   async insert(
     input: InsertCoverageEventInput,
     transaction?: sql.Transaction,

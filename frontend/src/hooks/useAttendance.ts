@@ -47,8 +47,8 @@ async function invalidateManualAttendanceQueries(
   ]);
 }
 
-export function useAttendanceRecords(filters: AttendanceFilters) {
-  const { companyId, enabled } = useOperationalQueryEnabled();
+export function useAttendanceRecords(filters: AttendanceFilters, queryEnabled = true) {
+  const { companyId, enabled } = useOperationalQueryEnabled(queryEnabled);
 
   return useQuery({
     queryKey: attendanceKeys.list(companyId, filters),

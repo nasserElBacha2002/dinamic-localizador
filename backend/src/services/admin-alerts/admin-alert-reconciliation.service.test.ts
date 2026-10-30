@@ -44,6 +44,11 @@ describe("adminAlertReconciliationService", () => {
       "listMissingPendingAbsenceObligations",
       async () => [sampleObligation],
     );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingCreatedAbsenceOperationalObligations",
+      async () => [],
+    );
     mock.method(adminAlertService, "enqueueObligation", async () => ({
       enqueued: 1,
       dedupSkipped: 0,
@@ -68,6 +73,11 @@ describe("adminAlertReconciliationService", () => {
       adminAlertContextRepository,
       "listMissingPendingAbsenceObligations",
       async () => [sampleObligation],
+    );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingCreatedAbsenceOperationalObligations",
+      async () => [],
     );
     mock.method(adminAlertService, "enqueueObligation", async () => ({
       enqueued: 0,
@@ -99,6 +109,11 @@ describe("adminAlertReconciliationService", () => {
       adminAlertContextRepository,
       "listMissingPendingAbsenceObligations",
       async () => [sampleObligation],
+    );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingCreatedAbsenceOperationalObligations",
+      async () => [],
     );
     mock.method(adminAlertService, "enqueueObligation", async () => ({
       enqueued: 1,

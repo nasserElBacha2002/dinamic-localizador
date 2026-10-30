@@ -9,7 +9,7 @@ describe("adminAlertAbsencePendingService", () => {
     mock.restoreAll();
   });
 
-  it("emits ABSENCE_REQUEST_PENDING with REQUEST category and dedup key", async () => {
+  it("emits OPERATIONAL alert with creation dedup key and truthful status", async () => {
     const { adminAlertService } = await import("./admin-alert.service");
     const { adminAlertAbsencePendingService } = await import(
       "./admin-alert-absence-pending.service"
@@ -21,7 +21,7 @@ describe("adminAlertAbsencePendingService", () => {
       return { enqueued: 1, dedupSkipped: 0, recipientSkipped: 0 };
     });
 
-    await adminAlertAbsencePendingService.emitForPendingWhatsappRequest({
+    await adminAlertAbsencePendingService.emitOperationalForCreatedRequest({
       companyId: "company-1",
       requestId: "req-1",
       employeeId: "emp-1",
@@ -29,17 +29,18 @@ describe("adminAlertAbsencePendingService", () => {
       absenceTypeName: "Vacaciones",
       startDate: "2026-09-01",
       endDate: "2026-09-07",
+      totalDays: 5,
+      initialStatus: "APPROVED",
     });
 
     assert.ok(captured);
     assert.equal(captured!.type, "ABSENCE_REQUEST_PENDING");
-    assert.equal(captured!.category, "REQUEST");
-    assert.equal(captured!.severity, "INFO");
-    assert.equal(captured!.absenceRequestId, "req-1");
-    assert.equal(captured!.deduplicationKey, "absence-pending:req-1");
-    const payload = captured!.payload as Record<string, string>;
-    assert.equal(payload.employeeName, "Juan Pérez");
-    assert.equal(payload.absenceTypeName, "Vacaciones");
+    assert.equal(captured!.category, "OPERATIONAL");
+    assert.equal(captured!.deduplicationKey, "absence-created:operational:req-1");
+    const payload = captured!.payload as Record<string, unknown>;
+    assert.equal(payload.absenceTotalDays, 5);
+    assert.equal(payload.absenceStatusLabel, "Aprobada");
+    assert.match(String(payload.absenceDetailUrl), /\/absences\/req-1$/);
     assert.doesNotMatch(JSON.stringify(payload), /reason|attachment|certificado|descripción/i);
   });
 });

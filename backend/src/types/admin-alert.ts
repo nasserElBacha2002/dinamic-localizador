@@ -74,6 +74,13 @@ export type AdminAlertOperationalTemplatePayload = {
   /** Dynamic attendance alerts — display helpers (minutes, already computed). */
   minutesUntilStart?: number;
   minutesLate?: number;
+  /** ABSENCE_REQUEST_PENDING (operational template). */
+  absenceTypeName?: string | null;
+  absenceStartDate?: string | null;
+  absenceEndDate?: string | null;
+  absenceTotalDays?: number | null;
+  absenceStatusLabel?: string | null;
+  absenceDetailUrl?: string | null;
 };
 
 /** Request admin alerts (admin_request_alert template). Phase C: absence pending review. */

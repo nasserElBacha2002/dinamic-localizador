@@ -1,8 +1,11 @@
-import { ABSENCE_REQUEST_PENDING_STATUS_LABEL } from "../../constants/admin-alert";
-import { buildAbsencePendingDedupKey } from "../../utils/admin-alert/dedup-keys";
+import {
+  buildAbsenceCreatedOperationalDedupKey,
+} from "../../utils/admin-alert/dedup-keys";
+import { buildAbsenceRequestAdminUrl } from "../../utils/admin-alert/absence-request-admin-url";
+import { resolveAbsenceRequestAlertStatusLabel } from "../../utils/admin-alert/absence-request-alert-status";
 import { emitAdminAlertSafely } from "./admin-alert-emit.helpers";
 
-export type EmitPendingAbsenceAdminAlertInput = {
+export type EmitCreatedAbsenceAdminAlertInput = {
   companyId: string;
   requestId: string;
   employeeId: string;
@@ -10,31 +13,40 @@ export type EmitPendingAbsenceAdminAlertInput = {
   absenceTypeName: string;
   startDate: string;
   endDate: string;
+  totalDays?: number | null;
+  /** Status immediately after successful creation (PENDING or APPROVED on auto-approve). */
+  initialStatus: string;
 };
 
 export const adminAlertAbsencePendingService = {
-  async emitForPendingWhatsappRequest(
-    input: EmitPendingAbsenceAdminAlertInput,
+  /**
+   * Canonical operational alert for every new absence request (Subfase 2.5).
+   * receiveOperationalAlerts + admin_operational_alert template.
+   */
+  async emitOperationalForCreatedRequest(
+    input: EmitCreatedAbsenceAdminAlertInput,
   ): Promise<void> {
     await emitAdminAlertSafely(
       {
         companyId: input.companyId,
         type: "ABSENCE_REQUEST_PENDING",
-        category: "REQUEST",
+        category: "OPERATIONAL",
         severity: "INFO",
         employeeId: input.employeeId,
         absenceRequestId: input.requestId,
-        deduplicationKey: buildAbsencePendingDedupKey(input.requestId),
+        deduplicationKey: buildAbsenceCreatedOperationalDedupKey(input.requestId),
         occurredAt: new Date(),
         payload: {
           employeeName: input.employeeName,
           absenceTypeName: input.absenceTypeName,
-          startDate: input.startDate,
-          endDate: input.endDate,
-          statusLabel: ABSENCE_REQUEST_PENDING_STATUS_LABEL,
+          absenceStartDate: input.startDate,
+          absenceEndDate: input.endDate,
+          absenceTotalDays: input.totalDays ?? null,
+          absenceStatusLabel: resolveAbsenceRequestAlertStatusLabel(input.initialStatus),
+          absenceDetailUrl: buildAbsenceRequestAdminUrl(input.requestId),
         },
       },
-      "absence-request-pending",
+      "absence-request-created-operational",
     );
   },
 };

@@ -28,6 +28,17 @@ export function attendanceListRowKey(row: AttendanceRecordWithRelations): string
   return `att:${row.id}`;
 }
 
+/** Same rule as the validation column badge for operational no-show rows. */
+export function attendanceListIsAbsentClassification(row: AttendanceRecordWithRelations): boolean {
+  return row.hasAttendanceRecord === false && row.effectiveState === "ABSENT";
+}
+
+export const attendanceValidationStatusFilterOptions = (): { value: string; label: string }[] => [
+  { value: "", label: "Todas" },
+  ...Object.entries(validationStatusLabels).map(([value, label]) => ({ value, label })),
+  { value: "ABSENT", label: employeeWorkdayEffectiveStateLabels.ABSENT },
+];
+
 export function attendanceListDetailPath(row: AttendanceRecordWithRelations): string {
   if (row.hasAttendanceRecord === false && row.employeeWorkdayId) {
     return `/attendance/workdays/${row.employeeWorkdayId}`;
@@ -42,6 +53,9 @@ export function attendanceListDetailPath(row: AttendanceRecordWithRelations): st
 }
 
 export function attendanceListValidationLabel(row: AttendanceRecordWithRelations): string {
+  if (attendanceListIsAbsentClassification(row)) {
+    return employeeWorkdayEffectiveStateLabels.ABSENT;
+  }
   if (row.hasAttendanceRecord === false && row.effectiveState) {
     return employeeWorkdayEffectiveStateLabels[row.effectiveState] ?? row.effectiveState;
   }
@@ -66,6 +80,9 @@ export function attendanceListLocationLabel(row: AttendanceRecordWithRelations):
 }
 
 export function attendanceListValidationTone(row: AttendanceRecordWithRelations) {
+  if (attendanceListIsAbsentClassification(row)) {
+    return attendanceEffectiveStateTone("ABSENT");
+  }
   if (row.hasAttendanceRecord === false && row.effectiveState) {
     return attendanceEffectiveStateTone(row.effectiveState);
   }

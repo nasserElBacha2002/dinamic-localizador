@@ -202,7 +202,12 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /LocationZonesDialog/);
     assert.match(pageFile, /CompanyWeeklyScheduleDialog/);
     assert.match(pageFile, /setOpenDialog\("operational"\)/);
-    assert.match(pageFile, /setOpenDialog\("absences"\)/);
+    assert.match(pageFile, /openDialog === "absences"/);
+    const panelFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/absence/CompanyAbsenceSettingsTabPanel.tsx"),
+      "utf8",
+    );
+    assert.match(panelFile, /onOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationZones"\)/);
     assert.match(pageFile, /setOpenDialog\("workSchedule"\)/);
     assert.doesNotMatch(pageFile, /CompanyWeeklyScheduleSection/);

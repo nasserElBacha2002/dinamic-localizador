@@ -52,6 +52,9 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
     permissionsQuery.data?.permissions,
     "operations:manage",
   );
+  const canViewOperations =
+    canManageOperations ||
+    hasPermission(permissionsQuery.data?.permissions, "operations:read");
 
   const [selectedConflictId, setSelectedConflictId] = useState<string | null>(null);
   const [resolutionCode, setResolutionCode] =
@@ -80,10 +83,44 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
 
   const impact = impactQuery.data;
   const planningRows = buildAbsencePlanningRows(impact, requestStatus);
+  const effectiveConflictId =
+    selectedConflictId ?? impact.openConflicts[0]?.id ?? null;
   const showEmptyPlanning =
     planningRows.length === 0 &&
     impact.affectedOperations === 0 &&
     impact.affectedWorkdays === 0;
+
+  const renderPlanningAction = (row: AbsencePlanningRow) => {
+    if (row.needsCoverage && canManageOperations && row.operationId) {
+      return (
+        <Button
+          component={RouterLink}
+          to={buildOperationCoverageHref(row.operationId)}
+          size="compact-xs"
+          variant="light"
+        >
+          Cubrir jornada
+        </Button>
+      );
+    }
+    if (canViewOperations && row.operationId) {
+      return (
+        <Button
+          component={RouterLink}
+          to={buildOperationCoverageHref(row.operationId)}
+          size="compact-xs"
+          variant="subtle"
+        >
+          Ver operación
+        </Button>
+      );
+    }
+    return (
+      <Text size="sm" c="dimmed">
+        —
+      </Text>
+    );
+  };
 
   const planningColumns: DataTableColumn<AbsencePlanningRow>[] = [
     {
@@ -116,30 +153,7 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
     {
       key: "action",
       header: "Acción",
-      render: (row) => {
-        if (row.needsCoverage && canManageOperations) {
-          return (
-            <Button
-              component={RouterLink}
-              to={buildOperationCoverageHref(row.operationId)}
-              size="compact-xs"
-              variant="light"
-            >
-              Cubrir jornada
-            </Button>
-          );
-        }
-        return (
-          <Button
-            component={RouterLink}
-            to={buildOperationCoverageHref(row.operationId)}
-            size="compact-xs"
-            variant="subtle"
-          >
-            Ver operación
-          </Button>
-        );
-      },
+      render: (row) => renderPlanningAction(row),
     },
   ];
 
@@ -169,25 +183,7 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
       {
         key: "action",
         label: "Acción",
-        render: (row) =>
-          row.needsCoverage && canManageOperations ? (
-            <Button
-              component={RouterLink}
-              to={buildOperationCoverageHref(row.operationId)}
-              size="compact-xs"
-            >
-              Cubrir jornada
-            </Button>
-          ) : (
-            <Button
-              component={RouterLink}
-              to={buildOperationCoverageHref(row.operationId)}
-              size="compact-xs"
-              variant="subtle"
-            >
-              Ver operación
-            </Button>
-          ),
+        render: (row) => renderPlanningAction(row),
         visibility: "always",
       },
     ],
@@ -256,7 +252,7 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
                       value: conflict.id,
                       label: conflictTypeHumanLabel(conflict.conflictType),
                     }))}
-                    value={selectedConflictId ?? impact.openConflicts[0]?.id ?? null}
+                    value={effectiveConflictId}
                     onChange={(value) => {
                       setSelectedConflictId(value);
                       setCommandId(newCommandId());
@@ -284,19 +280,18 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
                   <Button
                     loading={resolveMutation.isPending}
                     disabled={
-                      !selectedConflictId ||
+                      !effectiveConflictId ||
                       resolutionReason.trim().length < 3 ||
                       impact.openConflicts.length === 0
                     }
                     onClick={() => {
-                      const conflictId = selectedConflictId ?? impact.openConflicts[0]?.id ?? null;
-                      if (!conflictId) {
+                      if (!effectiveConflictId) {
                         return;
                       }
                       setResolveError(null);
                       void resolveMutation
                         .mutateAsync({
-                          conflictId,
+                          conflictId: effectiveConflictId,
                           resolutionCode,
                           resolutionReason: resolutionReason.trim(),
                           commandId,

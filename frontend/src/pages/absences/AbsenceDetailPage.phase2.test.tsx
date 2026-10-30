@@ -54,16 +54,18 @@ const operationalImpact = {
       workDate: "2026-08-01",
       operationId: OPERATION_ID,
       serviceId: "svc-1",
-      covered: false,
+      covered: true,
       hasAttendancePresence: false,
       conflictCode: null,
+      needsCoverage: true,
+      hasOperationalReplacement: false,
     },
   ],
   openConflicts: [
     {
       id: "conf-1",
       absenceRequestId: REQUEST_ID,
-      conflictType: "OPERATION_AFFECTED" as const,
+      conflictType: "ASSIGNMENT_DURING_ABSENCE" as const,
       severity: "WARNING" as const,
       status: "OPEN" as const,
       operationId: OPERATION_ID,
@@ -96,6 +98,7 @@ const noImpact = {
 };
 
 let impactOverride: typeof operationalImpact | null = null;
+let impactLoadPromise: Promise<typeof operationalImpact> | null = null;
 
 function buildRequest() {
   return {
@@ -169,7 +172,12 @@ mockApiModule(
   "api/absences.api",
   {
     getAbsenceRequestById: async () => buildRequest(),
-    getAbsenceOperationalImpact: async () => impactOverride ?? operationalImpact,
+    getAbsenceOperationalImpact: async () => {
+      if (impactLoadPromise) {
+        return impactLoadPromise;
+      }
+      return impactOverride ?? operationalImpact;
+    },
     getAbsenceTypes: async () => [
       {
         id: "type-1",
@@ -212,6 +220,7 @@ beforeEach(() => {
   membershipPermissions = ["absences:read", "absences:review", "operations:manage"];
   requestStatus = "PENDING";
   impactOverride = null;
+  impactLoadPromise = null;
 });
 
 afterEach(() => {
@@ -261,6 +270,25 @@ describe("AbsenceDetailPage phase 2 planning UX", () => {
 
   it("without operations:manage user does not get executable coverage CTA", async () => {
     requestStatus = "APPROVED";
+    membershipPermissions = ["absences:read", "absences:review", "operations:read"];
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+        <Route path="/operations/:id" element={<div>Detalle operación</div>} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Requiere cobertura"));
+    });
+    assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
+    assert.ok(view.getByRole("link", { name: /Ver operación/i }));
+    assert.match(view.container.textContent ?? "", /responsable con permisos operativos/i);
+  });
+
+  it("without operations read/manage does not link to operation detail", async () => {
+    requestStatus = "APPROVED";
     membershipPermissions = ["absences:read", "absences:review"];
     const view = renderPage(
       <Routes>
@@ -273,8 +301,7 @@ describe("AbsenceDetailPage phase 2 planning UX", () => {
       assert.ok(view.getByText("Requiere cobertura"));
     });
     assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
-    assert.ok(view.getByRole("link", { name: /Ver operación/i }));
-    assert.match(view.container.textContent ?? "", /responsable con permisos operativos/i);
+    assert.equal(view.queryByRole("link", { name: /Ver operación/i }), null);
   });
 
   it("absence without impact shows clear state and no coverage CTA", async () => {
@@ -294,29 +321,26 @@ describe("AbsenceDetailPage phase 2 planning UX", () => {
     assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
   });
 
-  it("lists multiple affected workdays in a single planning section", async () => {
+  it("lists two workdays for the same operation in planning", async () => {
     requestStatus = "APPROVED";
     impactOverride = {
       ...operationalImpact,
-      affectedOperations: 2,
       affectedWorkdays: 2,
-      operations: [
-        operationalImpact.operations[0]!,
-        {
-          ...operationalImpact.operations[0]!,
-          assignmentId: "asg-2",
-          operationId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-          scheduledStart: "2026-08-02T08:00:00.000Z",
-          scheduledEnd: "2026-08-02T17:00:00.000Z",
-        },
-      ],
       workdays: [
         operationalImpact.workdays[0]!,
         {
           ...operationalImpact.workdays[0]!,
           employeeWorkdayId: "wd-2",
           workDate: "2026-08-02",
-          operationId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          needsCoverage: true,
+        },
+      ],
+      openConflicts: [
+        operationalImpact.openConflicts[0]!,
+        {
+          ...operationalImpact.openConflicts[0]!,
+          id: "conf-2",
+          employeeWorkdayId: "wd-2",
         },
       ],
     };
@@ -324,6 +348,7 @@ describe("AbsenceDetailPage phase 2 planning UX", () => {
     const view = renderPage(
       <Routes>
         <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+        <Route path="/operations/:id" element={<div>Detalle operación</div>} />
       </Routes>,
       { route: `/absences/${REQUEST_ID}` },
     );
@@ -335,7 +360,8 @@ describe("AbsenceDetailPage phase 2 planning UX", () => {
       );
     });
     assert.equal(view.getAllByRole("link", { name: /Cubrir jornada/i }).length, 3);
-    assert.equal(view.queryAllByText("Impacto operativo").length, 0);
+    assert.match(view.container.textContent ?? "", /01\/08\/2026/);
+    assert.match(view.container.textContent ?? "", /02\/08\/2026/);
   });
 
   it("approval preview keeps impact summary without technical codes", async () => {
@@ -357,5 +383,169 @@ describe("AbsenceDetailPage phase 2 planning UX", () => {
     const modal = await view.findByRole("dialog");
     assert.ok(within(modal).getByText(/1 jornada afectada/i));
     assert.doesNotMatch(modal.textContent ?? "", /reconciliationStatus/i);
+  });
+
+  it("pending request does not show Cubrir jornada", async () => {
+    requestStatus = "PENDING";
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => assert.ok(view.getByText("Pendiente de aprobación")));
+    assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
+  });
+
+  it("does not offer coverage when operational feature is disabled", async () => {
+    requestStatus = "APPROVED";
+    impactOverride = {
+      ...operationalImpact,
+      featureEnabled: false,
+      openConflicts: [],
+      requiresManualAction: false,
+      workdays: [
+        {
+          ...operationalImpact.workdays[0]!,
+          needsCoverage: false,
+        },
+      ],
+    };
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => {
+      assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
+    });
+  });
+
+  it("does not offer coverage for cancelled operations", async () => {
+    requestStatus = "APPROVED";
+    impactOverride = {
+      ...operationalImpact,
+      operations: [
+        {
+          ...operationalImpact.operations[0]!,
+          operationStatus: "CANCELLED",
+        },
+      ],
+      workdays: [
+        {
+          ...operationalImpact.workdays[0]!,
+          needsCoverage: false,
+        },
+      ],
+      openConflicts: [],
+      requiresManualAction: false,
+    };
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => {
+      assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
+    });
+  });
+
+  it("does not offer coverage when workday has no operation id", async () => {
+    requestStatus = "APPROVED";
+    impactOverride = {
+      ...operationalImpact,
+      workdays: [
+        {
+          ...operationalImpact.workdays[0]!,
+          operationId: null,
+          needsCoverage: false,
+        },
+      ],
+      openConflicts: [],
+      requiresManualAction: false,
+    };
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => {
+      assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
+    });
+  });
+
+  it("does not offer coverage when replacement already exists", async () => {
+    requestStatus = "APPROVED";
+    impactOverride = {
+      ...operationalImpact,
+      workdays: [
+        {
+          ...operationalImpact.workdays[0]!,
+          needsCoverage: false,
+          hasOperationalReplacement: true,
+        },
+      ],
+      openConflicts: [],
+      requiresManualAction: false,
+    };
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => {
+      assert.equal(view.queryByRole("link", { name: /Cubrir jornada/i }), null);
+      assert.ok(view.getByText("Jornada cubierta"));
+    });
+  });
+
+  it("shows evaluating planning while impact is loading", async () => {
+    requestStatus = "APPROVED";
+    let resolveImpact!: (value: typeof operationalImpact) => void;
+    impactLoadPromise = new Promise((resolve) => {
+      resolveImpact = resolve;
+    });
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Evaluando planificación"));
+    });
+    assert.equal(view.queryByText("Sin impacto operativo"), null);
+    resolveImpact(operationalImpact);
+    impactLoadPromise = null;
+  });
+
+  it("allows advanced conflict resolution without re-selecting the first conflict", async () => {
+    requestStatus = "APPROVED";
+    const user = userEvent.setup({ document: globalThis.document });
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+      </Routes>,
+      { route: `/absences/${REQUEST_ID}` },
+    );
+
+    await waitFor(() => assert.ok(view.getByText("Resolución avanzada de conflictos")));
+    await user.click(view.getByText("Resolución avanzada de conflictos"));
+    await user.type(
+      view.getByLabelText("Motivo de la resolución"),
+      "Se mantiene dotación reducida",
+    );
+    const submit = view.getByRole("button", { name: /Registrar resolución/i });
+    assert.equal(submit.hasAttribute("disabled"), false);
   });
 });

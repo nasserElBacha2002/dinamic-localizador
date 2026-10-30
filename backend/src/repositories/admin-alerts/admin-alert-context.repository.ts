@@ -1,6 +1,8 @@
 import sql from "mssql";
 import { ABSENCE_REQUEST_PENDING_STATUS_LABEL } from "../../constants/admin-alert";
 import { getPool } from "../../database/connection";
+import { buildAbsenceRequestAdminUrl } from "../../utils/admin-alert/absence-request-admin-url";
+import { resolveAbsenceRequestAlertStatusLabel } from "../../utils/admin-alert/absence-request-alert-status";
 import type {
   AdminAlertOutboxObligation,
   AdminAlertRequestTemplatePayload,
@@ -278,6 +280,104 @@ export const adminAlertContextRepository = {
         } satisfies AdminAlertRequestTemplatePayload,
       };
     });
+  },
+
+  async listMissingCreatedAbsenceOperationalObligations(
+    batchSize = 50,
+  ): Promise<AdminAlertOutboxObligation[]> {
+    const result = await getPool()
+      .request()
+      .input("batchSize", sql.Int, batchSize)
+      .query(`
+        SELECT TOP (@batchSize)
+          ar.company_id,
+          car.id AS recipient_id,
+          car.phone_number AS recipient_phone,
+          ar.id AS request_id,
+          ar.employee_id,
+          ar.status AS request_status,
+          e.name AS employee_name,
+          at.name AS absence_type_name,
+          ar.start_date,
+          ar.end_date,
+          ar.total_days,
+          ar.created_at AS occurred_at,
+          CONCAT(
+            N'absence-created:operational:',
+            LOWER(CONVERT(NVARCHAR(36), ar.id))
+          ) AS deduplication_key
+        FROM absence_requests ar
+        INNER JOIN company_settings cs
+          ON cs.company_id = ar.company_id
+          AND cs.admin_alerts_enabled = 1
+          AND cs.admin_alerts_enabled_at IS NOT NULL
+        INNER JOIN company_alert_recipients car
+          ON car.company_id = ar.company_id
+          AND car.is_enabled = 1
+          AND car.receive_operational_alerts = 1
+          AND car.created_at <= ar.created_at
+        INNER JOIN employees e
+          ON e.id = ar.employee_id AND e.company_id = ar.company_id
+        INNER JOIN absence_types at
+          ON at.id = ar.absence_type_id AND at.company_id = ar.company_id
+        WHERE ar.created_at >= cs.admin_alerts_enabled_at
+          AND NOT EXISTS (
+            SELECT 1
+            FROM whatsapp_admin_alert_notifications n
+            WHERE n.company_id = ar.company_id
+              AND n.recipient_id = car.id
+              AND n.deduplication_key = CONCAT(
+                N'absence-created:operational:',
+                LOWER(CONVERT(NVARCHAR(36), ar.id))
+              )
+          )
+        ORDER BY ar.created_at ASC, ar.id ASC, car.id ASC
+      `);
+
+    return result.recordset.map((row) => {
+      const record = row as Record<string, unknown>;
+      const requestId = String(record.request_id);
+      const startDate = String(record.start_date).slice(0, 10);
+      const endDate = String(record.end_date).slice(0, 10);
+      const totalDaysRaw = record.total_days;
+      const totalDays =
+        totalDaysRaw == null || totalDaysRaw === ""
+          ? null
+          : Number(totalDaysRaw);
+      const requestStatus = String(record.request_status);
+      return {
+        companyId: String(record.company_id),
+        recipientId: String(record.recipient_id),
+        recipientPhone: String(record.recipient_phone),
+        alertType: "ABSENCE_REQUEST_PENDING" as const,
+        category: "OPERATIONAL" as const,
+        severity: "INFO" as const,
+        employeeId: String(record.employee_id),
+        operationId: null,
+        absenceRequestId: requestId,
+        assignmentId: null,
+        employeeWorkdayId: null,
+        deduplicationKey: String(record.deduplication_key),
+        occurredAt: toIso(record.occurred_at as Date | string),
+        dueAt: toIso(record.occurred_at as Date | string),
+        payload: {
+          employeeName: String(record.employee_name),
+          absenceTypeName: String(record.absence_type_name),
+          absenceStartDate: startDate,
+          absenceEndDate: endDate,
+          absenceTotalDays: Number.isFinite(totalDays) ? totalDays : null,
+          absenceStatusLabel: resolveAbsenceRequestAlertStatusLabel(requestStatus),
+          absenceDetailUrl: buildAbsenceRequestAdminUrl(requestId),
+        },
+      };
+    });
+  },
+
+  /** @deprecated Prefer listMissingCreatedAbsenceOperationalObligations */
+  async listMissingPendingAbsenceOperationalObligations(
+    batchSize = 50,
+  ): Promise<AdminAlertOutboxObligation[]> {
+    return this.listMissingCreatedAbsenceOperationalObligations(batchSize);
   },
 
   async listMissingMissingCheckinObligations(

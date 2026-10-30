@@ -13,8 +13,8 @@ describe("absence operational conflict atomic resolution", () => {
     assert.equal(source.includes("operationAssignmentService.assignEmployee("), false);
   });
 
-  it("uses assignEmployeeInTransaction inside resolve path", () => {
-    assert.match(source, /assignEmployeeInTransaction/);
+  it("uses coverEmployeeWorkdayInTransaction inside resolve path", () => {
+    assert.match(source, /coverEmployeeWorkdayInTransaction/);
   });
 
   it("uses cancelAssignmentInSharedTransaction for CANCEL_ASSIGNMENT", () => {

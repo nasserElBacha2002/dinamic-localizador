@@ -33,7 +33,7 @@ mockApiModule(
 import assert from "node:assert/strict";
 import { cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, before, describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { renderPage, clearActiveTestQueryClients } from "../../test/render-page";
 import { EmployeeAbsenceBalanceCard } from "./EmployeeAbsenceBalanceCard";

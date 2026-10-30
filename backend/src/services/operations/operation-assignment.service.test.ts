@@ -8,7 +8,6 @@ const companyId = "00000000-0000-4000-8000-000000000001";
 const operationId = "00000000-0000-4000-8000-000000000002";
 const employeeId = "00000000-0000-4000-8000-000000000003";
 const replacedAssignmentId = "00000000-0000-4000-8000-000000000004";
-const morningShiftId = "00000000-0000-4000-8000-0000000000aa";
 const afternoonShiftId = "00000000-0000-4000-8000-0000000000bb";
 
 describe("operationAssignmentService", () => {
@@ -55,39 +54,14 @@ describe("operationAssignmentService", () => {
     );
   });
 
-  it("coverage shift mismatch rejects before prepare (no materialization spy calls)", async () => {
+  it("coverage requires employee workday before cover service (shift inherited from replaced assignment)", async () => {
     setupUnitTestEnv();
-    setTestPool({ connected: true } as sql.ConnectionPool);
-
-    const OriginalTransaction = sql.Transaction;
-    class FakeTransaction {
-      async begin(): Promise<void> {
-        return undefined;
-      }
-      async commit(): Promise<void> {
-        return undefined;
-      }
-      async rollback(): Promise<void> {
-        return undefined;
-      }
-    }
-    (sql as { Transaction: typeof sql.Transaction }).Transaction =
-      FakeTransaction as unknown as typeof sql.Transaction;
-    restores.push(() => {
-      (sql as { Transaction: typeof sql.Transaction }).Transaction = OriginalTransaction;
-    });
-
     const { operationRepository } = await import("../../repositories/operations/operation.repository");
     const { employeeRepository } = await import("../../repositories/employees/employee.repository");
-    const { operationEmployeeRepository } = await import(
-      "../../repositories/operations/operation-employee.repository"
-    );
-    const { operationWorkDateService } = await import("./operation-work-date.service");
-    const { operationShiftRepository } = await import("../../repositories/operations/operation-shift.repository");
-    const { recurringWorkdayMaterializationService } = await import(
-      "../workdays/recurring-workday-materialization.service"
-    );
     const { operationAssignmentService } = await import("./operation-assignment.service");
+    const { employeeWorkdayCoverageService } = await import(
+      "../absence/employee-workday-coverage.service"
+    );
     const { AppError } = await import("../../errors/app-error");
 
     mock.method(operationRepository, "findById", async () => ({
@@ -95,31 +69,14 @@ describe("operationAssignmentService", () => {
       status: "SCHEDULED",
       operationKind: "ONE_TIME",
       scheduleMode: "MULTI_SHIFT",
-      scheduledStart: "2026-07-10T08:00:00.000Z",
     }));
     mock.method(employeeRepository, "findById", async () => ({
       id: employeeId,
       active: true,
     }));
-    mock.method(operationWorkDateService, "resolveOperationWorkDate", async () => "2026-07-10");
-    mock.method(operationEmployeeRepository, "findById", async () => ({
-      id: replacedAssignmentId,
-      operationId,
-      employeeId: "00000000-0000-4000-8000-000000000099",
-      operationShiftId: morningShiftId,
-      cancelledAt: null,
-    }));
-
-    const prepareSpy = mock.method(operationShiftRepository, "findByIdForOperation", async () => {
-      throw new Error("prepare should not run on coverage mismatch");
+    const coverSpy = mock.method(employeeWorkdayCoverageService, "coverEmployeeWorkday", async () => {
+      throw new Error("coverEmployeeWorkday should not run without workday context");
     });
-    mock.method(
-      recurringWorkdayMaterializationService,
-      "materializeMultiShiftOperationHorizon",
-      async () => {
-        throw new Error("materialize should not run on coverage mismatch");
-      },
-    );
 
     await assert.rejects(
       () =>
@@ -130,15 +87,11 @@ describe("operationAssignmentService", () => {
         }),
       (error: unknown) => {
         assert.ok(error instanceof AppError);
-        assert.equal(error.code, "COVERAGE_SHIFT_MISMATCH");
+        assert.equal(error.code, "EMPLOYEE_WORKDAY_REQUIRED");
         return true;
       },
     );
 
-    assert.equal(
-      prepareSpy.mock.callCount(),
-      0,
-      "mismatch must reject before prepareOneTimeMultiShiftAssignment",
-    );
+    assert.equal(coverSpy.mock.callCount(), 0);
   });
 });

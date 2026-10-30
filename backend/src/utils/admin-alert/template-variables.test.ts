@@ -85,6 +85,25 @@ describe("buildAdminOperationalAlertTemplateVariables", () => {
     assert.match(vars["3"], /MessageSid: SM1/);
     assert.equal(vars["4"], "—");
   });
+
+  it("builds ABSENCE_REQUEST_PENDING operational copy with period and days", () => {
+    const vars = buildAdminOperationalAlertTemplateVariables("ABSENCE_REQUEST_PENDING", {
+      employeeName: "Juan Pérez",
+      absenceTypeName: "Vacaciones",
+      absenceStartDate: "2026-09-01",
+      absenceEndDate: "2026-09-07",
+      absenceTotalDays: 5,
+      absenceStatusLabel: "Pendiente de revisión",
+      absenceDetailUrl: "http://localhost:5173/absences/req-1",
+    });
+
+    assert.equal(vars["1"], "Nueva solicitud de ausencia");
+    assert.equal(vars["2"], "Juan Pérez");
+    assert.match(vars["3"], /Vacaciones/);
+    assert.match(vars["3"], /5 días/);
+    assert.match(vars["3"], /Pendiente de revisión/);
+    assert.match(vars["4"], /\/absences\/req-1/);
+  });
 });
 
 describe("buildAdminAlertTemplateVariables REQUEST", () => {

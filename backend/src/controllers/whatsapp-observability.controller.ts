@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import type { ObservabilityListMessagesQuery } from "../schemas/whatsapp-observability.schema";
-import { whatsappObservabilityService } from "../services/whatsapp-observability.service";
+import { whatsappObservabilityService } from "../services/whatsapp/whatsapp-observability.service";
 
 export const whatsappObservabilityController = {
   async listConversations(req: Request, res: Response) {

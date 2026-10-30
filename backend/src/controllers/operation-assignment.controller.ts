@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { operationAssignmentService } from "../services/operation-assignment.service";
+import { operationAssignmentService } from "../services/operations/operation-assignment.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const operationAssignmentController = {
@@ -17,6 +17,10 @@ export const operationAssignmentController = {
         replacedAssignmentId: req.body.replacedAssignmentId,
         replacedEmployeeId: req.body.replacedEmployeeId,
         coverageReason: req.body.coverageReason,
+        employeeWorkdayId: req.body.employeeWorkdayId,
+        absenceRequestId: req.body.absenceRequestId,
+        absenceConflictId: req.body.absenceConflictId,
+        coverageCommandId: req.body.coverageCommandId,
       },
       req.auth?.userId ?? null,
     );

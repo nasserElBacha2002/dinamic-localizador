@@ -5,6 +5,7 @@ import {
   attendanceListCheckoutLocationStatus,
   attendanceListDetailPath,
   attendanceListEventStatusesLabel,
+  attendanceListIsAbsentClassification,
   attendanceListLocationEvents,
   attendanceListLocationTone,
   attendanceListPunctualityEvents,
@@ -13,6 +14,7 @@ import {
   attendanceListRowKey,
   attendanceListValidationLabel,
   attendanceListValidationTone,
+  attendanceValidationStatusFilterOptions,
 } from "./attendance-list-display";
 
 const baseRow = {
@@ -144,8 +146,44 @@ describe("attendance-list-display", () => {
       effectiveState: "ABSENT" as const,
       punctualityStatus: "NOT_RECORDED" as const,
     };
+    const expected = {
+      ...baseRow,
+      hasAttendanceRecord: false,
+      effectiveState: "EXPECTED" as const,
+      validationStatus: null,
+      punctualityStatus: "NOT_RECORDED" as const,
+    };
     assert.equal(attendanceListValidationLabel(absent), "Ausente");
     assert.notEqual(attendanceListValidationLabel(absent), "Pendiente");
+    assert.equal(attendanceListIsAbsentClassification(absent), true);
+    assert.equal(attendanceListIsAbsentClassification(expected), false);
+    assert.equal(attendanceListIsAbsentClassification(baseRow), false);
+  });
+
+  it("exposes Ausente in validation status filter options", () => {
+    const options = attendanceValidationStatusFilterOptions();
+    assert.ok(options.some((option) => option.value === "ABSENT" && option.label === "Ausente"));
+    assert.ok(options.some((option) => option.value === "" && option.label === "Todas"));
+    assert.ok(options.some((option) => option.value === "VALID"));
+    assert.equal(
+      options.filter((option) => option.value === "ABSENT").length,
+      1,
+    );
+  });
+
+  it("does not classify arrival-only or exit-only punches as absent", () => {
+    const arrivalOnly = { ...baseRow, checkoutAt: null };
+    assert.equal(attendanceListIsAbsentClassification(arrivalOnly), false);
+
+    const exitOnly = {
+      ...baseRow,
+      receivedAt: null,
+      locationStatus: "NOT_RECORDED" as const,
+      punctualityStatus: "NOT_RECORDED" as const,
+      checkoutAt: "2026-09-30T19:00:00.000Z",
+      checkoutStatus: "CHECKOUT_REJECTED" as const,
+    };
+    assert.equal(attendanceListIsAbsentClassification(exitOnly), false);
   });
 
   it("shows arrival and checkout location without dropping either event", () => {

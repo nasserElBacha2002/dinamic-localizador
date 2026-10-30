@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { absenceTypeService } from "../services/absence-type.service";
+import { absenceTypeService } from "../services/absence/absence-type.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const absenceTypeController = {

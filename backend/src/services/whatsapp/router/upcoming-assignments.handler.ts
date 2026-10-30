@@ -1,0 +1,39 @@
+import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
+import { employeeWorkdayService } from "../../workdays/employee-workday.service";
+import { getUpcomingAssignmentsModuleBlockedMessage } from "../whatsapp-module-gate";
+import { logModuleBlocked } from "./module-session-gate";
+import { setLastDetectedIntent } from "../../../utils/bot/bot-runtime-context";
+import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
+
+export const handleUpcomingAssignmentsIntent = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+): Promise<string> => {
+  setLastDetectedIntent("upcoming-assignments");
+  const blockedMessage = getUpcomingAssignmentsModuleBlockedMessage(ctx.moduleStates);
+  if (blockedMessage) {
+    logModuleBlocked(ctx.companyId, "operations");
+    return handlers.respond(ctx.companyId, {
+      message: blockedMessage,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "UPCOMING_ASSIGNMENTS",
+    });
+  }
+
+  const message = await employeeWorkdayService.buildUpcomingAssignmentsMessage(
+    ctx.companyId,
+    ctx.employeeId!,
+  );
+
+  return handlers.respond(ctx.companyId, {
+    message,
+    employeeId: ctx.employeeId,
+    phoneFrom: ctx.phoneTo,
+    phoneTo: ctx.phoneFrom,
+    resultCode: WHATSAPP_RESULT_CODES.UPCOMING_ASSIGNMENTS_COMPLETED,
+    flowType: "UPCOMING_ASSIGNMENTS",
+  });
+};

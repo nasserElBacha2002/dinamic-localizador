@@ -3,15 +3,15 @@ import { describe, it } from "node:test";
 import {
   calculateAttendanceRate,
   deriveWorkdayStateCounts,
-} from "./attendance-statistics-metrics";
-import { deriveEmployeeWorkdayState } from "./derive-employee-workday-state";
-import { normalizeStatisticsFilters } from "./statistics-display-labels";
-import { selectCanonicalProductionAttendance } from "./statistics-canonical-attendance";
+} from "./attendance/attendance-statistics-metrics";
+import { deriveEmployeeWorkdayState } from "./attendance/derive-employee-workday-state";
+import { normalizeStatisticsFilters } from "./statistics/statistics-display-labels";
+import { selectCanonicalProductionAttendance } from "./statistics/statistics-canonical-attendance";
 import {
   aggregateCompanyAttendanceRate,
   aggregateProjectionSummary,
   buildAnalyticalProjectionRow,
-} from "./statistics-projection-contract";
+} from "./statistics/statistics-projection-contract";
 
 const scheduleForDate = (workDate: string) => ({
   expectedStartAt: `${workDate}T12:00:00.000Z`,

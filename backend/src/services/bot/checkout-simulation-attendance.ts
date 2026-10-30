@@ -1,5 +1,5 @@
 import type { AttendanceRecord } from "../../types/domain";
-import type { VirtualAttendanceRecord } from "../../utils/bot-runtime-context";
+import type { VirtualAttendanceRecord } from "../../utils/bot/bot-runtime-context";
 
 /**
  * Hydrates a durable-shaped AttendanceRecord from a dry-run virtual check-in.

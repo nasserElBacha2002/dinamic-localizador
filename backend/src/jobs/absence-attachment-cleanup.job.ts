@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { absenceAttachmentService } from "../services/absence-attachment.service";
+import { absenceAttachmentService } from "../services/absence/absence-attachment.service";
 
 const JOB_INTERVAL_MS = 120_000;
 

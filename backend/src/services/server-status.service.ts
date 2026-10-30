@@ -1,7 +1,7 @@
 import { env } from "../config/env";
 import { dbProbe } from "../database/db-probe";
 import type { PlatformServerStatusDto } from "../schemas/platform-server-status.schema";
-import { attachmentStorageHealthProbe } from "./attachment-storage/storage-health";
+import { attachmentStorageHealthProbe } from "./attachments/storage/storage-health";
 import { raceTimeout } from "../utils/race-timeout";
 
 export type PlatformServerStatus = PlatformServerStatusDto;

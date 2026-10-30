@@ -1,5 +1,5 @@
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
-import { OPERATIONAL_LOCATION_COMPANY_NAME_UNIQUE_INDEX } from "../utils/service-name-duplicate-errors";
+import { OPERATIONAL_LOCATION_COMPANY_NAME_UNIQUE_INDEX } from "../utils/operations/service-name-duplicate-errors";
 
 const errorMessage = (error: unknown): string => {
   if (error instanceof Error) {

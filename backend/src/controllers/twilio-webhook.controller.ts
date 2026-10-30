@@ -2,10 +2,10 @@ import type { Request, Response } from "express";
 import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
 import { twilioWebhookSchema } from "../schemas/twilio-webhook.schema";
-import { whatsappBotService } from "../services/whatsapp-bot.service";
-import { whatsappCompanyContextService } from "../services/whatsapp-company-context.service";
-import { whatsappFlowTraceService } from "../services/whatsapp-flow-trace.service";
-import { whatsappMessageCostLedgerRepository } from "../repositories/whatsapp-message-cost-ledger.repository";
+import { whatsappBotService } from "../services/whatsapp/whatsapp-bot.service";
+import { whatsappCompanyContextService } from "../services/whatsapp/whatsapp-company-context.service";
+import { whatsappFlowTraceService } from "../services/whatsapp/whatsapp-flow-trace.service";
+import { whatsappMessageCostLedgerRepository } from "../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { tryNormalizeWhatsAppPhone } from "../utils/phone";
 

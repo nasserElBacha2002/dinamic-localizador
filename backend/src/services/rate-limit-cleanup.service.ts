@@ -1,7 +1,7 @@
 import { env } from "../config/env";
 import { RATE_LIMIT_CLEANUP_LOCK_RESOURCE } from "../constants/rate-limit-cleanup";
 import { getRateLimitStore } from "../middleware/rate-limit";
-import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
+import { withDedicatedSessionAppLock } from "../utils/whatsapp/whatsapp-retention-lock";
 
 export const rateLimitCleanupService = {
   /**

@@ -3,7 +3,7 @@ import {
   canonicalizeLocationZoneLocality,
   normalizeLocationZoneLocality,
   normalizeLocationZoneName,
-} from "../utils/normalize-location-zone-name";
+} from "../utils/locations/normalize-location-zone-name";
 
 /**
  * Canonical CABA / GBA geographic zones (matches migration 110_seed_caba_gba_location_zones.sql).

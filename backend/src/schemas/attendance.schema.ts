@@ -3,6 +3,9 @@ import { dateRangeSchema, paginationQuerySchema } from "./common.schema";
 import { mergeLegacySingularId, assertWithinMultiFilterLimit, uuidIdListSchema } from "./uuid-id-list";
 
 const validationStatusSchema = z.enum(["VALID", "PENDING_REVIEW", "REJECTED"]);
+/** Filter-only values for list queries (not persisted on attendance_records). */
+const listValidationStatusFilterSchema = validationStatusSchema.or(z.literal("ABSENT"));
+/** Deploy order: backend with ABSENT list filter must roll out before frontend that sends validationStatus=ABSENT. */
 const locationStatusSchema = z.enum([
   "INSIDE_GEOFENCE",
   "OUTSIDE_GEOFENCE",
@@ -102,7 +105,7 @@ export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSc
   operationIds: uuidIdListSchema.optional(),
   employeeIds: uuidIdListSchema.optional(),
   serviceIds: uuidIdListSchema.optional(),
-  validationStatus: validationStatusSchema.optional(),
+  validationStatus: listValidationStatusFilterSchema.optional(),
   locationStatus: locationStatusSchema.optional(),
   punctualityStatus: punctualityStatusSchema.optional(),
   checkoutStatus: z

@@ -1,16 +1,16 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { AppError } from "../../errors/app-error";
-import { serviceRepository } from "../../repositories/service.repository";
-import type { ServiceWriteInput } from "../../repositories/service.repository";
+import { serviceRepository } from "../../repositories/locations/service.repository";
+import type { ServiceWriteInput } from "../../repositories/locations/service.repository";
 import { createServiceSchema, type CreateServiceInput } from "../../schemas/service.schema";
 import { auditService } from "../../services/audit.service";
-import { companyLocationTypesService } from "../../services/company-location-types.service";
+import { companyLocationTypesService } from "../../services/companies/company-location-types.service";
 import {
   buildImportClientLookup,
   importClientRowErrors,
   loadImportClientsByIds,
 } from "../resolve-import-client";
-import { locationZoneService } from "../../services/location-zone.service";
+import { locationZoneService } from "../../services/locations/location-zone.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import {
   markInFileDuplicates,

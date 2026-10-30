@@ -20,6 +20,14 @@ export function useLandingDocumentMeta() {
     upsertMeta("og:title", LANDING_SEO.title, true);
     upsertMeta("og:description", LANDING_SEO.description, true);
     upsertMeta("og:type", "website", true);
+    upsertMeta("og:url", LANDING_SEO.canonicalUrl, true);
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", LANDING_SEO.canonicalUrl);
 
     return () => {
       document.title = previousTitle;

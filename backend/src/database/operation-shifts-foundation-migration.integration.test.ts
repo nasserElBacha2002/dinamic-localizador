@@ -17,9 +17,9 @@ import {
   splitBatches,
 } from "../database/run-migrations";
 import { AppError } from "../errors/app-error";
-import { listHybridShiftScheduleStates } from "../repositories/operation-shift-audit.repository";
-import { operationShiftFoundationService } from "../services/operation-shift-foundation.service";
-import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
+import { listHybridShiftScheduleStates } from "../repositories/operations/operation-shift-audit.repository";
+import { operationShiftFoundationService } from "../services/operations/operation-shift-foundation.service";
+import { operationWorkdayRepository } from "../repositories/operations/operation-workday.repository";
 
 const ROOT = join(process.cwd(), "..");
 const MIGRATION_127 = join(ROOT, "database/migrations/127_operation_shifts_foundation.sql");

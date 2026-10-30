@@ -1,7 +1,7 @@
 import { Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useMemo, useState, useCallback } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -51,12 +51,31 @@ import { operationStatusLabels } from "../../utils/labels";
 import { canAccessModuleRoute } from "../../utils/company-modules";
 import { buildOperationAttendanceHref } from "../../utils/statistics-deep-links";
 import { operationStatusTone } from "../../utils/operation-status-display";
+import { parseOperationCoverageSearchParams, stripOperationCoverageDeepLinkParams } from "../../utils/operation-coverage-deeplink";
 
 const DEFAULT_OPERATION_TIMEZONE = "America/Argentina/Buenos_Aires";
 
 export function OperationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const coverageDeepLink = useMemo(
+    () => parseOperationCoverageSearchParams(searchParams),
+    [searchParams],
+  );
   const navigate = useNavigate();
+  const clearCoverageDeepLinkFromUrl = useCallback(() => {
+    const current = new URLSearchParams(location.search);
+    if (!parseOperationCoverageSearchParams(current)) {
+      return;
+    }
+    const nextParams = stripOperationCoverageDeepLinkParams(current);
+    const search = nextParams.toString();
+    navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : "" },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
   const companySettingsQuery = useCompanySettings(Boolean(id));
@@ -82,7 +101,10 @@ export function OperationDetailPage() {
     isRecurring ? operation?.id : undefined,
     { page: 1, limit: 90 },
   );
-  const teamWorkdayOptions = teamWorkdaysQuery.data?.data ?? [];
+  const teamWorkdayOptions = useMemo(
+    () => teamWorkdaysQuery.data?.data ?? [],
+    [teamWorkdaysQuery.data?.data],
+  );
   const teamWorkday = useMemo(() => {
     if (!isRecurring) {
       return null;
@@ -95,8 +117,23 @@ export function OperationDetailPage() {
       return teamWorkdayOverride;
     }
 
+    if (coverageDeepLink?.workDate) {
+      const matched = teamWorkdayOptions.find(
+        (workday) => workday.workDate === coverageDeepLink.workDate,
+      );
+      if (matched) {
+        return { workdayId: matched.id, workDate: matched.workDate };
+      }
+    }
+
     return pickDefaultTeamWorkday(teamWorkdayOptions, operationalToday);
-  }, [isRecurring, teamWorkdayOverride, teamWorkdayOptions, operationalToday]);
+  }, [
+    isRecurring,
+    teamWorkdayOverride,
+    teamWorkdayOptions,
+    operationalToday,
+    coverageDeepLink,
+  ]);
 
   const showFeedback = (message: string, severity: "success" | "error" = "success") => {
     notifications.show({ color: severity === "error" ? "red" : "green", message });
@@ -312,6 +349,8 @@ export function OperationDetailPage() {
               selectedWorkday={teamWorkday}
               onWorkdayChange={setTeamWorkdayOverride}
               onFeedback={(message, severity) => showFeedback(message, severity)}
+              coverageDeepLink={coverageDeepLink}
+              onCoverageDeepLinkConsumed={clearCoverageDeepLinkFromUrl}
             />
           </Box>
         </Box>

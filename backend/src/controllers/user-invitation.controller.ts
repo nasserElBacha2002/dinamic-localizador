@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { userInvitationService } from "../services/user-invitation.service";
+import { userInvitationService } from "../services/identity/user-invitation.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 import type { AcceptInvitationInput, CreateInvitationInput, DeclineInvitationInput } from "../schemas/user-invitation.schema";
 import type { CompanyRole } from "../types/company";

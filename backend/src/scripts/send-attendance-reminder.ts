@@ -1,6 +1,6 @@
 import { connectDatabase, closeDatabase } from "../database/connection";
-import { attendanceReminderService } from "../services/attendance-reminder.service";
-import { companyContextService } from "../services/company-context.service";
+import { attendanceReminderService } from "../services/attendance/attendance-reminder.service";
+import { companyContextService } from "../services/companies/company-context.service";
 import type { AttendanceNotificationType } from "../constants/attendance-notification";
 import { ATTENDANCE_NOTIFICATION_TYPES } from "../constants/attendance-notification";
 

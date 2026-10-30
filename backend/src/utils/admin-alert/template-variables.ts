@@ -5,9 +5,13 @@ import type {
   AdminAlertTemplatePayload,
 } from "../../types/admin-alert";
 import { isAdminAlertRequestPayload } from "../../types/admin-alert";
-import { formatLocalTime } from "../attendance-validation";
-import { formatServiceReferenceFromFields } from "../format-service-reference";
-import { buildAdminRequestAlertTemplateVariables } from "./request-template-variables";
+import { formatLocalTime } from "../attendance/attendance-validation";
+import { formatServiceReferenceFromFields } from "../operations/format-service-reference";
+import {
+  buildAdminRequestAlertTemplateVariables,
+  formatAbsenceRequestPeriodDisplay,
+} from "./request-template-variables";
+import { ABSENCE_REQUEST_PENDING_STATUS_LABEL } from "../../constants/admin-alert";
 
 const EMPTY_CONTEXT = "—";
 
@@ -166,9 +170,10 @@ const alertCopyByType: Record<
     context: formatOperationContext,
   },
   ABSENCE_REQUEST_PENDING: {
-    title: "Solicitud pendiente",
-    detail: () => EMPTY_CONTEXT,
-    context: () => EMPTY_CONTEXT,
+    title: "Nueva solicitud de ausencia",
+    detail: (payload) => formatAbsencePendingOperationalDetail(payload),
+    context: (payload) =>
+      payload.absenceDetailUrl?.trim() ? payload.absenceDetailUrl.trim() : EMPTY_CONTEXT,
   },
   ATTENDANCE_THRESHOLD_CROSSED: {
     title: "Asistencia baja",
@@ -180,6 +185,35 @@ const alertCopyByType: Record<
 const sanitizeVariable = (value: string): string => {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : EMPTY_CONTEXT;
+};
+
+const formatAbsencePendingDays = (totalDays: number): string => {
+  if (Number.isInteger(totalDays)) {
+    return `${totalDays} ${totalDays === 1 ? "día" : "días"}`;
+  }
+  return `${totalDays.toLocaleString("es-AR", { maximumFractionDigits: 1 })} días`;
+};
+
+export const formatAbsencePendingOperationalDetail = (
+  payload: AdminAlertOperationalTemplatePayload,
+): string => {
+  const parts: string[] = [];
+  const typeName = payload.absenceTypeName?.trim();
+  if (typeName) {
+    parts.push(typeName);
+  }
+  const start = payload.absenceStartDate?.trim();
+  const end = payload.absenceEndDate?.trim();
+  if (start && end) {
+    parts.push(formatAbsenceRequestPeriodDisplay(start, end));
+  }
+  if (payload.absenceTotalDays != null && Number.isFinite(Number(payload.absenceTotalDays))) {
+    parts.push(formatAbsencePendingDays(Number(payload.absenceTotalDays)));
+  }
+  parts.push(
+    payload.absenceStatusLabel?.trim() || ABSENCE_REQUEST_PENDING_STATUS_LABEL,
+  );
+  return parts.length > 0 ? parts.join(" · ") : EMPTY_CONTEXT;
 };
 
 /**
@@ -200,10 +234,10 @@ export const buildAdminOperationalAlertTemplateVariables = (
 };
 
 export const resolveTemplateCategoryForBuild = (
-  alertType: AdminAlertType,
+  _alertType: AdminAlertType,
   category: AdminAlertTemplateCategory,
 ): "operational" | "request" => {
-  if (category === "REQUEST" || alertType === "ABSENCE_REQUEST_PENDING") {
+  if (category === "REQUEST") {
     return "request";
   }
   return "operational";

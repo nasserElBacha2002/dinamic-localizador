@@ -17,17 +17,17 @@ import {
   calculateConsolidatedCoverageRate,
   calculatePunctualityRate,
   hasSufficientSample,
-} from "../utils/attendance-statistics-metrics";
-import { buildActionExceptions } from "../utils/statistics-action-exceptions";
+} from "../utils/attendance/attendance-statistics-metrics";
+import { buildActionExceptions } from "../utils/statistics/statistics-action-exceptions";
 import {
   applyEmployeeWorkdayStatisticsFilters,
   buildEmployeeWorkdayStatisticsCte,
   buildEmployeeWorkdayStatisticsFilters,
   buildStatisticsWhereFromFilters,
-} from "../utils/employee-workday-statistics-projection";
+} from "../utils/workdays/employee-workday-statistics-projection";
 import { toDateOnlyString } from "../utils/row-mappers";
 import type { StatisticsRankingMode } from "../schemas/statistics.schema";
-import { emptyOperationalIncidentSummary } from "../utils/operational-incident-statistics";
+import { emptyOperationalIncidentSummary } from "../utils/statistics/operational-incident-statistics";
 
 const toNumber = (value: unknown): number => Number(value ?? 0);
 

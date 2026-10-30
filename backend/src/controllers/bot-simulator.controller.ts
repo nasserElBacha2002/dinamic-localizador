@@ -4,7 +4,7 @@ import {
   sendBotSimulationLocationSchema,
   sendBotSimulationMessageSchema,
 } from "../schemas/bot-simulator.schema";
-import { botSimulatorService } from "../services/bot-simulator.service";
+import { botSimulatorService } from "../services/bot/bot-simulator.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const botSimulatorController = {

@@ -11,7 +11,7 @@
  */
 import { config } from "dotenv";
 import { closeDatabase, connectDatabase } from "../database/connection";
-import { locationZoneGeocodingService } from "../services/location-zone-geocoding.service";
+import { locationZoneGeocodingService } from "../services/locations/location-zone-geocoding.service";
 import { resolveGoogleMapsApiKey } from "../utils/service-reconciliation/env";
 
 config();

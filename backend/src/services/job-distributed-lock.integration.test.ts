@@ -16,7 +16,7 @@ import {
 import {
   acquireDedicatedSessionAppLockForTests,
   withDedicatedSessionAppLock,
-} from "../utils/whatsapp-retention-lock";
+} from "../utils/whatsapp/whatsapp-retention-lock";
 
 describeDatabaseIntegration("phase-4b job distributed locks (SQL)", () => {
   before(async () => {

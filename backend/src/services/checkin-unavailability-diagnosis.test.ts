@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
-import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { employeeWorkdayAvailabilityRepository } from "../repositories/workdays/employee-workday-availability.repository";
+import { companySettingsRepository } from "../repositories/companies/company-settings.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
 describe("diagnoseCheckInUnavailability best-effort", () => {
@@ -12,7 +12,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
   it("reports WORKDAY_NOT_ACTIVE from nearby candidate diagnostics", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityService } = await import(
-      "./employee-workday-availability.service"
+      "./workdays/employee-workday-availability.service"
     );
 
     mock.method(
@@ -60,7 +60,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
   it("propagates repository failures so the bot can catch them", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityService } = await import(
-      "./employee-workday-availability.service"
+      "./workdays/employee-workday-availability.service"
     );
 
     mock.method(

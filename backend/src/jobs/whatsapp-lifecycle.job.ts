@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { whatsappLifecycleService } from "../services/whatsapp-lifecycle.service";
+import { whatsappLifecycleService } from "../services/whatsapp/whatsapp-lifecycle.service";
 
 const JOB_INTERVAL_MS = env.WHATSAPP_LIFECYCLE_JOB_INTERVAL_MS;
 

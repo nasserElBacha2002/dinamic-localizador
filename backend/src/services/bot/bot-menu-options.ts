@@ -8,7 +8,7 @@ import {
   getPayrollReceiptsModuleBlockedMessage,
   getUpcomingAssignmentsModuleBlockedMessage,
   getWorkdayModuleBlockedMessage,
-} from "../whatsapp-module-gate";
+} from "../whatsapp/whatsapp-module-gate";
 import { parseOperationSelection } from "../../utils/intent";
 
 export type BotMenuOptionKey = BotSessionMenuOptionKey;

@@ -12,6 +12,10 @@ export const assignEmployeeSchema = z
     replacedAssignmentId: z.string().uuid().nullable().optional(),
     replacedEmployeeId: z.string().uuid().nullable().optional(),
     coverageReason: z.string().trim().max(500).nullable().optional(),
+    employeeWorkdayId: z.string().uuid().nullable().optional(),
+    absenceRequestId: z.string().uuid().nullable().optional(),
+    absenceConflictId: z.string().uuid().nullable().optional(),
+    coverageCommandId: z.string().trim().min(8).max(120).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.asCoverage === true && !data.replacedAssignmentId) {
@@ -19,6 +23,13 @@ export const assignEmployeeSchema = z
         code: z.ZodIssueCode.custom,
         message: "La cobertura manual requiere replacedAssignmentId",
         path: ["replacedAssignmentId"],
+      });
+    }
+    if (data.absenceRequestId && !data.coverageCommandId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "coverageCommandId es obligatorio cuando se reconcilia una ausencia",
+        path: ["coverageCommandId"],
       });
     }
   });

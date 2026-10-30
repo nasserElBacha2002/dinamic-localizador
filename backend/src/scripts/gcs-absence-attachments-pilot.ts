@@ -12,7 +12,7 @@ import { resolveGoogleApplicationCredentialsPath } from "../config/resolve-gcp-c
 import {
   GoogleCloudStorageAttachmentStorage,
   isGcsConfigured,
-} from "../services/attachment-storage";
+} from "../services/attachments/storage";
 
 resolveGoogleApplicationCredentialsPath();
 

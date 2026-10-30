@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { authService } from "../services/auth.service";
-import { passwordResetService } from "../services/password-reset.service";
-import { twoFactorService } from "../services/two-factor.service";
+import { authService } from "../services/identity/auth.service";
+import { passwordResetService } from "../services/identity/password-reset.service";
+import { twoFactorService } from "../services/identity/two-factor.service";
 
 export const authController = {
   async login(req: Request, res: Response) {

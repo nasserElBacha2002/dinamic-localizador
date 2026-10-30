@@ -55,12 +55,12 @@
     "luxon": "^3.7.2",
     "morgan": "^1.12.0",
     "mssql": "^12.1.0",
-    "multer": "^2.3.0",
-    "nodemailer": "^10.0.13",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.2.1",
     "otpauth": "^9.5.1",
     "twilio": "^6.0.2",
     "xlsx": "npm:@e965/xlsx@0.20.3",
-    "zod": "^4.1.11"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -85,6 +85,9 @@
     "axios": "1.20.0",
     "brace-expansion": "5.0.12",
     "uuid": "^11.1.1",
-    "qs": "6.16.0"
+    "qs": "6.17.0",
+    "follow-redirects": "1.16.2",
+    "body-parser": "2.4.0",
+    "@azure/msal-node": "7.1.2"
   }
 }

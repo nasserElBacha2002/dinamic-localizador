@@ -1,0 +1,1220 @@
+import sql from "mssql";
+import { getPool } from "../../database/connection";
+import { AppError } from "../../errors/app-error";
+import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { getDateIsoInTimezone } from "../../utils/absence-date";
+import { employeeRepository } from "../../repositories/employees/employee.repository";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { operationEmployeeRepository } from "../../repositories/operations/operation-employee.repository";
+import { operationRepository } from "../../repositories/operations/operation.repository";
+import { operationWorkdayRepository } from "../../repositories/operations/operation-workday.repository";
+import type { OperationEmployeeAssignment } from "../../types/domain";
+import {
+  isAssignmentActiveOnWorkDate,
+  resolveAssignmentLifecycleState,
+} from "../../utils/operations/assignment-period";
+import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
+import { isOperationAssignable } from "../../utils/operations/operation-status";
+import { safeRollback } from "../../utils/safe-transaction";
+import { logAuditSafe } from "../../utils/audit-post-commit";
+import { operationWorkDateService } from "./operation-work-date.service";
+import { operationAssignmentCore } from "./operation-assignment-core.service";
+import { auditService } from "../audit.service";
+import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
+import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import type { CoverageEventSourceType } from "../../repositories/operations/operation-coverage-event.repository";
+import { operationChangeEventRepository } from "../../repositories/operations/operation-change-event.repository";
+import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
+import { resolveOperationOperationalDate } from "../../utils/operations/operation-change-events";
+import { employeeWorkdayCoverageService } from "../absence/employee-workday-coverage.service";
+
+const withLifecycleState = (
+  assignment: OperationEmployeeAssignment,
+  referenceDate: string,
+): OperationEmployeeAssignment => {
+  if (assignment.cancelledAt) {
+    return { ...assignment, lifecycleState: undefined };
+  }
+
+  const lifecycleState = resolveAssignmentLifecycleState(
+    {
+      validFrom: assignment.validFrom,
+      validUntil: assignment.validUntil,
+      cancelledAt: assignment.cancelledAt,
+    },
+    referenceDate,
+  );
+
+  return {
+    ...assignment,
+    lifecycleState: lifecycleState ?? undefined,
+  };
+};
+
+const resolveLifecycleReferenceDate = async (
+  companyId: string,
+  operationId: string,
+  operationKind: string,
+): Promise<string> => {
+  if (operationKind === "ONE_TIME") {
+    return operationWorkDateService.resolveOperationWorkDate(companyId, operationId);
+  }
+
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  const timezone = resolveOperationTimezone(settings?.operationTimezone);
+  return getDateIsoInTimezone(new Date(), timezone);
+};
+
+const reconcileEmployeeWorkdaysOutsideAssignment = async (
+  companyId: string,
+  transaction: sql.Transaction,
+  assignment: OperationEmployeeAssignment,
+): Promise<void> => {
+  const workdays = await employeeWorkdayRepository.listByAssignmentInTransaction(
+    companyId,
+    transaction,
+    assignment.id,
+  );
+
+  for (const workday of workdays) {
+    const operationWorkday = await operationWorkdayRepository.findById(
+      companyId,
+      workday.operationWorkdayId,
+    );
+    if (!operationWorkday) {
+      continue;
+    }
+
+    const stillActive = isAssignmentActiveOnWorkDate({
+      validFrom: assignment.validFrom,
+      validUntil: assignment.validUntil,
+      workDate: operationWorkday.workDate,
+      cancelledAt: assignment.cancelledAt,
+    });
+
+    if (stillActive) {
+      continue;
+    }
+
+    const hasAttendance = await employeeWorkdayRepository.hasAttendanceInTransaction(
+      companyId,
+      transaction,
+      workday.id,
+    );
+    if (hasAttendance) {
+      throw new AppError(
+        409,
+        "ASSIGNMENT_ATTENDANCE_CONFLICT",
+        "No se puede modificar la vigencia porque existen registros de asistencia asociados fuera del nuevo período",
+      );
+    }
+
+    if (workday.expectationStatus === "EXPECTED") {
+      await employeeWorkdayRepository.cancelExpectationInTransaction(
+        companyId,
+        transaction,
+        workday.id,
+        "ASSIGNMENT",
+      );
+    }
+  }
+};
+
+/**
+ * Ensures the ONE_TIME MULTI_SHIFT operation_workday for the target shift exists
+ * before the assignment TX starts.
+ *
+ * Runs outside the assignment transaction on purpose: materialization opens its own
+ * short transactions and must not nest a second connection while employee/assignment
+ * locks are held. Materialization is idempotent (upsert by work_date+shift); if the
+ * later assignment TX rolls back, residual operation_workdays are expected base state
+ * for that date — not coverage/assignment side effects. Assignment, employee_workdays,
+ * coverage events and change events remain fully transactional.
+ */
+const prepareOneTimeMultiShiftAssignment = async (
+  companyId: string,
+  operationId: string,
+  operationWorkDate: string,
+  operationShiftId: string,
+): Promise<void> => {
+  const shift = await operationShiftRepository.findByIdForOperation(
+    companyId,
+    operationId,
+    operationShiftId,
+  );
+  if (!shift || !shift.isActive) {
+    throw new AppError(
+      404,
+      "OPERATION_SHIFT_NOT_FOUND",
+      "El turno no pertenece a esta operación o no está activo",
+    );
+  }
+
+  await recurringWorkdayMaterializationService.materializeMultiShiftOperationHorizon(
+    companyId,
+    operationId,
+    { rangeStart: operationWorkDate, rangeEnd: operationWorkDate },
+  );
+};
+
+const cancelExpectedEmployeeWorkdaysForAssignment = async (
+  companyId: string,
+  transaction: sql.Transaction,
+  assignmentId: string,
+): Promise<void> => {
+  const workdays = await employeeWorkdayRepository.listByAssignmentInTransaction(
+    companyId,
+    transaction,
+    assignmentId,
+  );
+
+  // Reject destructive cancellation if ANY workday of this assignment already
+  // has attendance, regardless of its current expectation status. This keeps
+  // historical attendance intact; recurring assignments must be ended instead.
+  for (const workday of workdays) {
+    const hasAttendance = await employeeWorkdayRepository.hasAttendanceInTransaction(
+      companyId,
+      transaction,
+      workday.id,
+    );
+    if (hasAttendance) {
+      throw new AppError(
+        409,
+        "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+        "No se puede cancelar la asignación porque ya existe asistencia registrada",
+      );
+    }
+  }
+
+  for (const workday of workdays) {
+    if (workday.expectationStatus !== "EXPECTED") {
+      continue;
+    }
+
+    await employeeWorkdayRepository.cancelExpectationInTransaction(
+      companyId,
+      transaction,
+      workday.id,
+      "ASSIGNMENT",
+    );
+  }
+};
+
+const resolveCompanyOperationTimezone = async (companyId: string): Promise<string> => {
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  return resolveOperationTimezone(settings?.operationTimezone);
+};
+
+const insertHumanAssignmentChangeEvent = async (
+  input: {
+    companyId: string;
+    operationId: string;
+    operationalDate: string;
+    changedFields: string[];
+    actorUserId?: string | null;
+    reason: string;
+  },
+  transaction: sql.Transaction,
+): Promise<void> => {
+  await operationChangeEventRepository.insert(
+    {
+      companyId: input.companyId,
+      operationId: input.operationId,
+      operationalDate: input.operationalDate,
+      changeAction: "ASSIGNMENT_CHANGE",
+      changedFields: input.changedFields,
+      actorUserId: input.actorUserId ?? null,
+      source: "HUMAN_API",
+      reason: input.reason,
+    },
+    transaction,
+  );
+};
+
+export const operationAssignmentService = {
+  async assignEmployee(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+    input?: {
+      validFrom?: string;
+      validUntil?: string | null;
+      operationShiftId?: string | null;
+      asCoverage?: boolean;
+      replacedAssignmentId?: string | null;
+      replacedEmployeeId?: string | null;
+      coverageReason?: string | null;
+      employeeWorkdayId?: string | null;
+      absenceRequestId?: string | null;
+      absenceConflictId?: string | null;
+      coverageCommandId?: string | null;
+    },
+    userId?: string | null,
+  ) {
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    if (!isOperationAssignable(operation.status)) {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_ASSIGNABLE",
+        "No se puede asignar empleados a operaciones canceladas o completadas",
+      );
+    }
+
+    const employee = await employeeRepository.findById(companyId, employeeId);
+    if (!employee) {
+      throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+    }
+    if (!employee.active) {
+      throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
+    }
+
+    if (input?.asCoverage && !input.replacedAssignmentId) {
+      throw new AppError(
+        400,
+        "COVERAGE_REPLACED_ASSIGNMENT_REQUIRED",
+        "La cobertura manual requiere la asignación a reemplazar",
+      );
+    }
+
+    if (input?.asCoverage) {
+      if (!input.employeeWorkdayId || !input.replacedEmployeeId) {
+        throw new AppError(
+          400,
+          "EMPLOYEE_WORKDAY_REQUIRED",
+          "La cobertura requiere la jornada del colaborador ausente",
+        );
+      }
+      const coverageCommandId = input.coverageCommandId?.trim();
+      if (!coverageCommandId || coverageCommandId.length < 8) {
+        throw new AppError(
+          400,
+          "COVERAGE_COMMAND_ID_REQUIRED",
+          "coverageCommandId es obligatorio para cubrir la jornada",
+        );
+      }
+      const covered = await employeeWorkdayCoverageService.coverEmployeeWorkday(
+        companyId,
+        userId,
+        {
+          operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          replacementEmployeeId: employeeId,
+          replacedAssignmentId: input.replacedAssignmentId!,
+          replacedEmployeeId: input.replacedEmployeeId,
+          coverageCommandId,
+          sourceType: "MANUAL_COVERAGE",
+          absenceRequestId: input.absenceRequestId,
+          absenceConflictId: input.absenceConflictId,
+          coverageReason: input.coverageReason,
+        },
+      );
+      const workdayRows = await employeeWorkdayRepository.listWithWorkDatesByEmployeeWorkdayIds(
+        companyId,
+        [input.employeeWorkdayId],
+      );
+      const referenceDate =
+        workdayRows[0]?.workDate ?? covered.replacementAssignment.validFrom;
+      return withLifecycleState(covered.replacementAssignment, referenceDate);
+    }
+
+    const operationKind = operation.operationKind ?? "ONE_TIME";
+    const operationWorkDate =
+      operationKind === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+
+    if (
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      operationKind === "ONE_TIME" &&
+      operationWorkDate &&
+      input?.operationShiftId
+    ) {
+      await prepareOneTimeMultiShiftAssignment(
+        companyId,
+        operationId,
+        operationWorkDate,
+        input.operationShiftId,
+      );
+    }
+
+    const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
+      operationKind,
+      operationWorkDate,
+      input,
+    );
+
+    const timezone = await resolveCompanyOperationTimezone(companyId);
+    const operationalDate = resolveOperationOperationalDate(
+      {
+        scheduledStart: operation.scheduledStart,
+        workDate: operationWorkDate,
+      },
+      timezone,
+    );
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let transactionClosed = false;
+    let committedAssignment: OperationEmployeeAssignment | null = null;
+
+    try {
+      const lockedEmployee = await employeeDeactivationRepository.lockEmployeeForUpdate(
+        companyId,
+        employeeId,
+        transaction,
+      );
+      if (!lockedEmployee) {
+        throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+      }
+      if (!lockedEmployee.active) {
+        throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
+      }
+
+      const resolvedShiftId: string | null = input?.operationShiftId ?? null;
+
+      const result = await operationAssignmentCore.assignEmployeeInTransaction(
+        companyId,
+        transaction,
+        {
+          operationId,
+          employeeId,
+          validFrom,
+          validUntil,
+          employeeActive: lockedEmployee.active,
+          operationKind,
+          operationWorkDate,
+          assignmentOrigin: undefined,
+          scheduleMode: operation.scheduleMode,
+          operationShiftId: resolvedShiftId,
+        },
+      );
+
+      if (result.outcome === "skipped") {
+        if (result.reason === "already_assigned" && result.existingAssignmentId) {
+          const existing = await operationEmployeeRepository.findById(
+            companyId,
+            result.existingAssignmentId,
+          );
+          if (existing && !existing.cancelledAt) {
+            // Idempotent no-op: no ASSIGNMENT_CHANGE / coverage mutation.
+            await transaction.commit();
+            transactionClosed = true;
+            return withLifecycleState(existing, operationWorkDate ?? validFrom);
+          }
+        }
+        if (
+          result.reason === "already_assigned" ||
+          result.reason === "assignment_period_overlap"
+        ) {
+          throw new AppError(
+            409,
+            "ASSIGNMENT_PERIOD_OVERLAP",
+            "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
+          );
+        }
+        throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
+      }
+
+      await insertHumanAssignmentChangeEvent(
+        {
+          companyId,
+          operationId,
+          operationalDate,
+          changedFields: ["assignment", "employeeId"],
+          actorUserId: userId,
+          reason: "Asignación vía API",
+        },
+        transaction,
+      );
+
+      await transaction.commit();
+      transactionClosed = true;
+      committedAssignment = result.assignment;
+      if (result.outcome === "added" && result.crossOperationShiftOverlapWarnings?.length) {
+        (
+          committedAssignment as OperationEmployeeAssignment & {
+            crossOperationShiftOverlapWarnings?: typeof result.crossOperationShiftOverlapWarnings;
+          }
+        ).crossOperationShiftOverlapWarnings = result.crossOperationShiftOverlapWarnings;
+      }
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
+
+    if (operationKind === "RECURRING" && committedAssignment) {
+      try {
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          operationId,
+          () =>
+            recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+              companyId,
+              operationId,
+              committedAssignment!,
+            ),
+          "recurring assignment create",
+        );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after commit", error);
+      }
+    }
+
+    await logAuditSafe("operation_assignment.create", () =>
+      auditService.log(companyId, {
+        entityType: "operation_assignment",
+        entityId: committedAssignment!.id,
+        action: "create",
+        newData: {
+          operationId,
+          employeeId,
+          validFrom,
+          validUntil,
+          assignmentOrigin: input?.asCoverage ? "COVERAGE" : "MANUAL",
+        },
+        userId: userId ?? null,
+      }),
+    );
+
+    return withLifecycleState(committedAssignment!, operationWorkDate ?? validFrom);
+  },
+
+  async assignEmployeesBatch(
+    companyId: string,
+    operationId: string,
+    employeeIds: string[],
+    input?: { validFrom?: string; validUntil?: string | null; operationShiftId?: string | null },
+    userId?: string | null,
+  ) {
+    const uniqueIds = [...new Set(employeeIds.map((id) => id.trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      throw new AppError(400, "VALIDATION_ERROR", "Seleccioná al menos un colaborador");
+    }
+
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    if (!isOperationAssignable(operation.status)) {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_ASSIGNABLE",
+        "No se puede asignar empleados a operaciones canceladas o completadas",
+      );
+    }
+
+    const operationKind = operation.operationKind ?? "ONE_TIME";
+    const operationWorkDate =
+      operationKind === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+
+    if (
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      operationKind === "ONE_TIME" &&
+      operationWorkDate &&
+      input?.operationShiftId
+    ) {
+      await prepareOneTimeMultiShiftAssignment(
+        companyId,
+        operationId,
+        operationWorkDate,
+        input.operationShiftId,
+      );
+    }
+
+    const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
+      operationKind,
+      operationWorkDate,
+      input,
+    );
+
+    const employees = await employeeRepository.listByIds(companyId, uniqueIds);
+    const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+
+    for (const employeeId of uniqueIds) {
+      const employee = employeeById.get(employeeId);
+      if (!employee) {
+        throw new AppError(
+          404,
+          "EMPLOYEE_NOT_FOUND",
+          `Empleado no encontrado: ${employeeId}`,
+        );
+      }
+      if (!employee.active) {
+        throw new AppError(
+          409,
+          "EMPLOYEE_INACTIVE",
+          `No se puede asignar un empleado inactivo: ${employee.name}`,
+        );
+      }
+    }
+
+    const skipReasonMessage = (reason: string): { code: string; reason: string } => {
+      if (reason === "already_assigned") {
+        return {
+          code: "ASSIGNMENT_ALREADY_EXISTS",
+          reason: "Ya está asignado en el período indicado.",
+        };
+      }
+      return {
+        code: "ASSIGNMENT_PERIOD_OVERLAP",
+        reason: "Tiene una asignación que se superpone con esas fechas.",
+      };
+    };
+
+    const assignedIds: string[] = [];
+    const skipped: Array<{
+      employeeId: string;
+      employeeName: string;
+      code: string;
+      reason: string;
+    }> = [];
+    const committedAssignments: OperationEmployeeAssignment[] = [];
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    let transactionClosed = false;
+
+    try {
+      // Stable lock order to reduce deadlocks with concurrent singular/batch assigns.
+      const lockOrder = [...uniqueIds].sort((left, right) => left.localeCompare(right));
+      for (const employeeId of lockOrder) {
+        const locked = await employeeDeactivationRepository.lockEmployeeForUpdate(
+          companyId,
+          employeeId,
+          transaction,
+        );
+        if (!locked) {
+          throw new AppError(404, "EMPLOYEE_NOT_FOUND", `Empleado no encontrado: ${employeeId}`);
+        }
+        if (!locked.active) {
+          const employee = employeeById.get(employeeId);
+          throw new AppError(
+            409,
+            "EMPLOYEE_INACTIVE",
+            `No se puede asignar un empleado inactivo: ${employee?.name ?? employeeId}`,
+          );
+        }
+      }
+
+      for (const employeeId of uniqueIds) {
+        const employee = employeeById.get(employeeId)!;
+        const result = await operationAssignmentCore.assignEmployeeInTransaction(
+          companyId,
+          transaction,
+          {
+            operationId,
+            employeeId,
+            validFrom,
+            validUntil,
+            employeeActive: employee.active,
+            operationKind,
+            operationWorkDate,
+            scheduleMode: operation.scheduleMode,
+            operationShiftId: input?.operationShiftId ?? null,
+          },
+        );
+
+        if (result.outcome === "skipped") {
+          if (
+            result.reason === "already_assigned" ||
+            result.reason === "assignment_period_overlap"
+          ) {
+            skipped.push({
+              employeeId,
+              employeeName: employee.name,
+              ...skipReasonMessage(result.reason),
+            });
+            continue;
+          }
+          throw new AppError(
+            409,
+            "EMPLOYEE_INACTIVE",
+            `No se puede asignar un empleado inactivo: ${employee.name}`,
+          );
+        }
+
+        assignedIds.push(employeeId);
+        committedAssignments.push(result.assignment);
+      }
+
+      if (committedAssignments.length > 0) {
+        const timezone = await resolveCompanyOperationTimezone(companyId);
+        const operationalDate = resolveOperationOperationalDate(
+          {
+            scheduledStart: operation.scheduledStart,
+            workDate: operationWorkDate,
+          },
+          timezone,
+        );
+        await insertHumanAssignmentChangeEvent(
+          {
+            companyId,
+            operationId,
+            operationalDate,
+            changedFields: ["assignment", "employeeId"],
+            actorUserId: userId,
+            reason: "Asignación por lote vía API",
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+      transactionClosed = true;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
+
+    if (operationKind === "RECURRING" && committedAssignments.length > 0) {
+      try {
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          operationId,
+          async () => {
+            for (const assignment of committedAssignments) {
+              await recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+                companyId,
+                operationId,
+                assignment,
+              );
+            }
+          },
+          "recurring assignment batch create",
+        );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after batch commit", error);
+      }
+    }
+
+    for (const assignment of committedAssignments) {
+      await logAuditSafe("operation_assignment.create", () =>
+        auditService.log(companyId, {
+          entityType: "operation_assignment",
+          entityId: assignment.id,
+          action: "create",
+          newData: {
+            operationId,
+            employeeId: assignment.employeeId,
+            validFrom,
+            validUntil,
+            assignmentOrigin: "MANUAL",
+            batch: true,
+          },
+          userId: userId ?? null,
+        }),
+      );
+    }
+
+    return {
+      assignedCount: assignedIds.length,
+      assignedIds,
+      skippedCount: skipped.length,
+      skipped,
+    };
+  },
+
+  async listAssignmentPeriods(companyId: string, operationId: string) {
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    const referenceDate = await resolveLifecycleReferenceDate(
+      companyId,
+      operationId,
+      operation.operationKind ?? "ONE_TIME",
+    );
+
+    const assignments = await operationEmployeeRepository.listByOperation(companyId, operationId);
+    return assignments.map((assignment) => withLifecycleState(assignment, referenceDate));
+  },
+
+  /**
+   * @deprecated Assignment-scoped coverage (pre workday identity). Fase 3 uses
+   * `employeeWorkdayCoverageService.coverEmployeeWorkday` / `coverEmployeeWorkdayInTransaction`.
+   * No production callers remain; remove after legacy multi-shift tests migrate.
+   */
+  async applyOperationalCoverageInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      operation: {
+        scheduleMode: "SINGLE" | "MULTI_SHIFT";
+        operationKind?: string | null;
+        scheduledStart: Date | string | null;
+      };
+      replacementEmployeeId: string;
+      replacementEmployeeActive: boolean;
+      replacedAssignmentId: string;
+      replacedEmployeeId?: string | null;
+      validFrom: string;
+      validUntil: string | null;
+      operationWorkDate: string | null;
+      operationalDate: string;
+      operationShiftId?: string | null;
+      sourceType: CoverageEventSourceType;
+      sourceConflictId?: string | null;
+      coverageReason?: string | null;
+      resolvedByUserId?: string | null;
+      actorUserId?: string | null;
+    },
+  ): Promise<OperationEmployeeAssignment> {
+    const replaced = await operationEmployeeRepository.findByIdInTransaction(
+      companyId,
+      transaction,
+      input.replacedAssignmentId,
+    );
+    if (!replaced || replaced.operationId !== input.operationId) {
+      throw new AppError(
+        404,
+        "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
+        "La asignación a cubrir no existe en esta operación",
+      );
+    }
+    if (replaced.cancelledAt) {
+      throw new AppError(
+        409,
+        "COVERAGE_REPLACED_ASSIGNMENT_CANCELLED",
+        "La asignación a cubrir ya está cancelada",
+      );
+    }
+    if (
+      input.replacedEmployeeId &&
+      input.replacedEmployeeId !== replaced.employeeId
+    ) {
+      throw new AppError(
+        400,
+        "COVERAGE_REPLACED_EMPLOYEE_MISMATCH",
+        "El empleado reemplazado no coincide con la asignación indicada",
+      );
+    }
+    if (replaced.employeeId === input.replacementEmployeeId) {
+      throw new AppError(
+        409,
+        "COVERAGE_SAME_EMPLOYEE",
+        "El reemplazo debe ser un colaborador distinto al cubierto",
+      );
+    }
+    if (
+      input.operationShiftId != null &&
+      input.operationShiftId !== (replaced.operationShiftId ?? null)
+    ) {
+      throw new AppError(
+        400,
+        "COVERAGE_SHIFT_MISMATCH",
+        "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
+      );
+    }
+
+    const alreadyCovered = await operationCoverageEventRepository.existsForReplacedAssignment(
+      companyId,
+      replaced.id,
+      transaction,
+    );
+    if (alreadyCovered) {
+      throw new AppError(
+        409,
+        "COVERAGE_ALREADY_RECORDED",
+        "Ya existe una cobertura para esa asignación",
+      );
+    }
+
+    const resolvedShiftId = replaced.operationShiftId ?? null;
+
+    await this.cancelAssignmentInSharedTransaction(companyId, transaction, {
+      operationId: input.operationId,
+      assignmentId: replaced.id,
+    });
+    await insertHumanAssignmentChangeEvent(
+      {
+        companyId,
+        operationId: input.operationId,
+        operationalDate: input.operationalDate,
+        changedFields: ["assignment", "cancelledAt", "coverage"],
+        actorUserId: input.actorUserId,
+        reason: "Cancelación por cobertura operativa",
+      },
+      transaction,
+    );
+
+    const assignResult = await operationAssignmentCore.assignEmployeeInTransaction(
+      companyId,
+      transaction,
+      {
+        operationId: input.operationId,
+        employeeId: input.replacementEmployeeId,
+        validFrom: input.validFrom,
+        validUntil: input.validUntil,
+        employeeActive: input.replacementEmployeeActive,
+        operationKind: input.operation.operationKind ?? "ONE_TIME",
+        operationWorkDate: input.operationWorkDate,
+        assignmentOrigin: "COVERAGE",
+        scheduleMode: input.operation.scheduleMode,
+        operationShiftId: resolvedShiftId,
+      },
+    );
+
+    if (assignResult.outcome === "skipped") {
+      throw new AppError(
+        409,
+        "ASSIGNMENT_PERIOD_OVERLAP",
+        "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
+      );
+    }
+
+    const coverageInsert = await operationCoverageEventRepository.insert(
+      {
+        companyId,
+        operationId: input.operationId,
+        operationalDate: input.operationalDate,
+        sourceType: input.sourceType,
+        sourceConflictId: input.sourceConflictId ?? null,
+        replacedAssignmentId: replaced.id,
+        replacedEmployeeId: replaced.employeeId,
+        replacementAssignmentId: assignResult.assignment.id,
+        replacementEmployeeId: input.replacementEmployeeId,
+        reason: input.coverageReason ?? null,
+        resolvedByUserId: input.resolvedByUserId ?? null,
+      },
+      transaction,
+    );
+    if (!coverageInsert.inserted) {
+      throw new AppError(
+        409,
+        "COVERAGE_ALREADY_RECORDED",
+        "Ya existe una cobertura para esa asignación",
+      );
+    }
+
+    await insertHumanAssignmentChangeEvent(
+      {
+        companyId,
+        operationId: input.operationId,
+        operationalDate: input.operationalDate,
+        changedFields: ["assignment", "employeeId", "coverage"],
+        actorUserId: input.actorUserId,
+        reason: "Asignación de cobertura operativa",
+      },
+      transaction,
+    );
+
+    return assignResult.assignment;
+  },
+
+  /**
+   * Cancel an assignment inside a caller-owned transaction (no nested commit).
+   */
+  async cancelAssignmentInSharedTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: { operationId: string; assignmentId: string },
+  ): Promise<OperationEmployeeAssignment> {
+    const assignment = await operationEmployeeRepository.findByIdInTransaction(
+      companyId,
+      transaction,
+      input.assignmentId,
+    );
+    if (!assignment || assignment.operationId !== input.operationId) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+    if (assignment.cancelledAt) {
+      throw new AppError(409, "ASSIGNMENT_ALREADY_CANCELLED", "La asignación ya está cancelada");
+    }
+
+    await cancelExpectedEmployeeWorkdaysForAssignment(companyId, transaction, input.assignmentId);
+    const cancelledAssignment = await operationEmployeeRepository.cancelAssignmentInTransaction(
+      companyId,
+      transaction,
+      input.assignmentId,
+    );
+    if (!cancelledAssignment) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+
+    if (cancelledAssignment.assignmentOrigin === "COVERAGE") {
+      await employeeWorkdayCoverageService.supersedeCoverageForReplacementAssignment(
+        companyId,
+        transaction,
+        cancelledAssignment.id,
+      );
+    }
+
+    return cancelledAssignment;
+  },
+
+  async cancelAssignment(
+    companyId: string,
+    operationId: string,
+    assignmentId: string,
+    userId?: string | null,
+  ) {
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    const assignment = await operationEmployeeRepository.findById(companyId, assignmentId);
+    if (!assignment || assignment.operationId !== operationId) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+    if (assignment.cancelledAt) {
+      throw new AppError(409, "ASSIGNMENT_ALREADY_CANCELLED", "La asignación ya está cancelada");
+    }
+
+    const timezone = await resolveCompanyOperationTimezone(companyId);
+    const operationWorkDate =
+      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+    const operationalDate = resolveOperationOperationalDate(
+      {
+        scheduledStart: operation.scheduledStart,
+        workDate: operationWorkDate,
+      },
+      timezone,
+    );
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let transactionClosed = false;
+    let cancelled: OperationEmployeeAssignment | null = null;
+
+    try {
+      const cancelledAssignment = await this.cancelAssignmentInSharedTransaction(
+        companyId,
+        transaction,
+        { operationId, assignmentId },
+      );
+
+      await insertHumanAssignmentChangeEvent(
+        {
+          companyId,
+          operationId,
+          operationalDate,
+          changedFields: ["assignment", "cancelledAt"],
+          actorUserId: userId,
+          reason: "Cancelación de asignación vía API",
+        },
+        transaction,
+      );
+
+      await transaction.commit();
+      transactionClosed = true;
+      cancelled = cancelledAssignment;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
+
+    await logAuditSafe("operation_assignment.cancel", () =>
+      auditService.log(companyId, {
+        entityType: "operation_assignment",
+        entityId: assignmentId,
+        action: "cancel",
+        previousData: { operationId, assignmentId },
+        userId: userId ?? null,
+      }),
+    );
+
+    if ((operation.operationKind ?? "ONE_TIME") === "RECURRING" && cancelled) {
+      try {
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          operationId,
+          () =>
+            recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+              companyId,
+              operationId,
+              cancelled!,
+            ),
+          "recurring assignment cancel",
+        );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after commit", error);
+      }
+    }
+
+    const referenceDate = await resolveLifecycleReferenceDate(
+      companyId,
+      operationId,
+      operation.operationKind ?? "ONE_TIME",
+    );
+    return withLifecycleState(cancelled!, referenceDate);
+  },
+
+  async endAssignment(
+    companyId: string,
+    operationId: string,
+    assignmentId: string,
+    effectiveDate: string,
+    userId?: string | null,
+  ) {
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    const timezone = await resolveCompanyOperationTimezone(companyId);
+    const operationWorkDate =
+      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+    const operationalDate = resolveOperationOperationalDate(
+      {
+        scheduledStart: operation.scheduledStart,
+        workDate: operationWorkDate,
+      },
+      timezone,
+    );
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let transactionClosed = false;
+    let updated: OperationEmployeeAssignment | null = null;
+
+    try {
+      const assignment = await operationEmployeeRepository.findByIdInTransaction(
+        companyId,
+        transaction,
+        assignmentId,
+      );
+      if (!assignment || assignment.operationId !== operationId) {
+        throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+      }
+      if (assignment.cancelledAt) {
+        throw new AppError(409, "ASSIGNMENT_ALREADY_CANCELLED", "La asignación ya está cancelada");
+      }
+      if (assignment.validUntil) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_ALREADY_BOUNDED",
+          "Solo se pueden finalizar asignaciones abiertas sin fecha de fin",
+        );
+      }
+
+      if (compareEffectiveDate(effectiveDate, assignment.validFrom) < 0) {
+        throw new AppError(
+          400,
+          "ASSIGNMENT_INVALID_END_DATE",
+          "La fecha efectiva no puede ser anterior al inicio de la asignación",
+        );
+      }
+
+      const overlap = await operationEmployeeRepository.findOverlappingInTransaction(
+        companyId,
+        transaction,
+        {
+          operationId: assignment.operationId,
+          employeeId: assignment.employeeId,
+          validFrom: assignment.validFrom,
+          validUntil: effectiveDate,
+          excludeAssignmentId: assignment.id,
+          operationShiftId: assignment.operationShiftId,
+        },
+      );
+      if (overlap) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_PERIOD_OVERLAP",
+          "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
+        );
+      }
+
+      const ended = await operationEmployeeRepository.endAssignmentInTransaction(
+        companyId,
+        transaction,
+        assignmentId,
+        effectiveDate,
+      );
+      if (!ended) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_INVALID_END_DATE",
+          "No se pudo finalizar la asignación con la fecha indicada",
+        );
+      }
+
+      await reconcileEmployeeWorkdaysOutsideAssignment(companyId, transaction, ended);
+
+      await insertHumanAssignmentChangeEvent(
+        {
+          companyId,
+          operationId,
+          operationalDate,
+          changedFields: ["assignment", "validUntil"],
+          actorUserId: userId,
+          reason: "Finalización de vigencia de asignación vía API",
+        },
+        transaction,
+      );
+
+      await transaction.commit();
+      transactionClosed = true;
+      updated = ended;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
+
+    await logAuditSafe("operation_assignment.end", () =>
+      auditService.log(companyId, {
+        entityType: "operation_assignment",
+        entityId: assignmentId,
+        action: "end",
+        newData: { operationId, assignmentId, effectiveDate },
+        userId: userId ?? null,
+      }),
+    );
+
+    if ((operation.operationKind ?? "ONE_TIME") === "RECURRING" && updated) {
+      try {
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          operationId,
+          () =>
+            recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+              companyId,
+              operationId,
+              updated!,
+            ),
+          "recurring assignment end",
+        );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after commit", error);
+      }
+    }
+
+    const referenceDate = await resolveLifecycleReferenceDate(
+      companyId,
+      operationId,
+      operation.operationKind ?? "ONE_TIME",
+    );
+    return withLifecycleState(updated!, referenceDate);
+  },
+};
+
+const compareEffectiveDate = (left: string, right: string): number => left.localeCompare(right);

@@ -20,11 +20,11 @@ describe("company-report-email-recipient.schema", () => {
 describe("daily attendance report locking SQL source", () => {
   it("claims runs and deliveries with UPDLOCK READPAST", () => {
     const runs = readFileSync(
-      join(process.cwd(), "src/repositories/daily-attendance-report-run.repository.ts"),
+      join(process.cwd(), "src/repositories/reports/daily-attendance-report-run.repository.ts"),
       "utf8",
     );
     const deliveries = readFileSync(
-      join(process.cwd(), "src/repositories/daily-attendance-report-delivery.repository.ts"),
+      join(process.cwd(), "src/repositories/reports/daily-attendance-report-delivery.repository.ts"),
       "utf8",
     );
     assert.match(runs, /UPDLOCK,\s*READPAST/);

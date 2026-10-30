@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { absenceBalanceService } from "../services/absence-balance.service";
-import { absenceBalanceLedgerService } from "../services/absence-balance-ledger.service";
+import { absenceBalanceService } from "../services/absence/absence-balance.service";
+import { absenceBalanceLedgerService } from "../services/absence/absence-balance-ledger.service";
 import type {
   AdjustEmployeeAbsenceBalanceInput,
   ReverseAbsenceBalanceMovementInput,

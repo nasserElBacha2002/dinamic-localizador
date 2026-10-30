@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { config } from "dotenv";
 import { connectDatabase, closeDatabase } from "../database/connection";
-import type { EmployeeAbsenceBalanceBackfillSummary } from "../services/employee-absence-balance-backfill.service";
-import { employeeAbsenceBalanceBackfillService } from "../services/employee-absence-balance-backfill.service";
+import type { EmployeeAbsenceBalanceBackfillSummary } from "../services/employees/employee-absence-balance-backfill.service";
+import { employeeAbsenceBalanceBackfillService } from "../services/employees/employee-absence-balance-backfill.service";
 
 config();
 

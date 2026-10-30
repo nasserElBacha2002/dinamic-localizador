@@ -1,4 +1,4 @@
-import { Alert, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Group, SimpleGrid, Stack, Tabs } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -15,27 +15,25 @@ import { companyRoleLabels } from "../../utils/labels";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 import {
-  buildAbsenceSummary,
   buildEmployeeCategoriesSummary,
   buildLocationZonesSummary,
-  buildOperationalSettingsSummary,
-  buildWorkScheduleSummary,
+  buildOperationalAndWorkScheduleCardSummary,
 } from "./company-settings-summaries";
-import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
-import { CompanyWhatsAppQuotaSettingsDialog } from "./components/CompanyWhatsAppQuotaSettingsDialog";
+import { CompanyWhatsAppAlertsDialog } from "./components/whatsapp/CompanyWhatsAppAlertsDialog";
+import { CompanyWhatsAppQuotaSettingsDialog } from "./components/whatsapp/CompanyWhatsAppQuotaSettingsDialog";
 import {
   useCompanyAlertRecipients,
 } from "../../hooks/useCompanyAlertRecipients";
 import { useWhatsAppQuotaSettings } from "../../hooks/useWhatsAppQuotaSettings";
-import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
-import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
-import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
-import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypePolicyDialog";
-import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
-import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
-import { CompanyShiftTemplatesDialog } from "./components/CompanyShiftTemplatesDialog";
-import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
-import { LocationZonesDialog } from "./components/LocationZonesDialog";
+import { CompanyAbsenceCalendarDialog } from "./components/absence/CompanyAbsenceCalendarDialog";
+import { CompanyAbsenceOperationalIntegrationDialog } from "./components/absence/CompanyAbsenceOperationalIntegrationDialog";
+import { CompanyAbsenceSettingsDialog } from "./components/absence/CompanyAbsenceSettingsDialog";
+import { CompanyAbsenceSettingsTabPanel } from "./components/absence/CompanyAbsenceSettingsTabPanel";
+import { CompanyAbsenceTypePolicyDialog } from "./components/absence/CompanyAbsenceTypePolicyDialog";
+import { CompanyOperationalAndWorkScheduleDialog } from "./components/schedule/CompanyOperationalAndWorkScheduleDialog";
+import { CompanyShiftTemplatesDialog } from "./components/schedule/CompanyShiftTemplatesDialog";
+import { EmployeeCategoriesDialog } from "./components/employees/EmployeeCategoriesDialog";
+import { LocationZonesDialog } from "./components/locations/LocationZonesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 import pageClasses from "./settings-visual.module.css";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
@@ -46,12 +44,11 @@ import { isOvernightShift } from "../../utils/operation-shift-payload";
 type SettingsTab = "company" | "absences";
 
 type DialogKey =
-  | "operational"
+  | "operationalWorkSchedule"
   | "absences"
   | "absenceTypePolicy"
   | "absenceCalendar"
   | "absenceOperationalIntegration"
-  | "workSchedule"
   | "shiftTemplates"
   | "employeeCategories"
   | "locationZones"
@@ -122,10 +119,15 @@ export function CompanySettingsPage() {
     setSearchParams({ tab }, { replace: true });
   };
 
-  const operationalSummary = useMemo(
-    () => (settingsQuery.data ? buildOperationalSettingsSummary(settingsQuery.data) : null),
-    [settingsQuery.data],
-  );
+  const operationalAndWorkScheduleSummary = useMemo(() => {
+    if (!settingsQuery.data || !workScheduleQuery.data) {
+      return null;
+    }
+    return buildOperationalAndWorkScheduleCardSummary(
+      settingsQuery.data,
+      workScheduleQuery.data,
+    );
+  }, [settingsQuery.data, workScheduleQuery.data]);
 
   if (permissionsQuery.isPending) {
     return <LoadingState />;
@@ -195,12 +197,26 @@ export function CompanySettingsPage() {
         <Tabs.Panel value="company" pt="md">
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
             <SettingsSummaryCard
-              title="Configuración operativa"
-              description="Defaults usados por operaciones, importaciones y validaciones del bot."
-              summaryItems={operationalSummary?.summaryItems ?? []}
-              actionLabel="Gestionar configuración operativa"
-              canEdit={canUpdate}
-              onAction={() => setOpenDialog("operational")}
+              title="Configuración operativa y horario laboral"
+              description="Defaults operativos, tolerancias del bot y horario semanal predeterminado para operaciones habituales."
+              summaryItems={operationalAndWorkScheduleSummary?.summaryItems ?? []}
+              loading={settingsQuery.isLoading || workScheduleQuery.isLoading}
+              error={
+                settingsQuery.isError
+                  ? getApiErrorMessage(settingsQuery.error)
+                  : workScheduleQuery.isError
+                    ? getApiErrorMessage(workScheduleQuery.error)
+                    : null
+              }
+              onRetry={() => {
+                void settingsQuery.refetch();
+                void workScheduleQuery.refetch();
+              }}
+              actionLabel="Gestionar configuración"
+              canEdit={
+                canUpdate && !settingsQuery.isError && !workScheduleQuery.isError
+              }
+              onAction={() => setOpenDialog("operationalWorkSchedule")}
             />
 
             <SettingsSummaryCard
@@ -278,24 +294,6 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar cuotas"
               canEdit={canUpdate && !whatsappQuotaQuery.isError}
               onAction={() => setOpenDialog("whatsappQuotas")}
-            />
-
-            <SettingsSummaryCard
-              title="Horario laboral semanal"
-              description="Horario predeterminado para operaciones habituales con horario de la empresa."
-              summaryItems={
-                workScheduleQuery.data
-                  ? buildWorkScheduleSummary(workScheduleQuery.data).summaryItems
-                  : []
-              }
-              loading={workScheduleQuery.isLoading}
-              error={
-                workScheduleQuery.isError ? getApiErrorMessage(workScheduleQuery.error) : null
-              }
-              onRetry={() => void workScheduleQuery.refetch()}
-              actionLabel="Gestionar horario"
-              canEdit={canUpdate && !workScheduleQuery.isError}
-              onAction={() => setOpenDialog("workSchedule")}
             />
 
             <SettingsSummaryCard
@@ -390,165 +388,16 @@ export function CompanySettingsPage() {
 
         <Tabs.Panel value="absences" pt="md">
           {absencesTabEnabled && absenceSettingsQuery.isPending ? <LoadingState /> : null}
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            <SettingsSummaryCard
-              title="Configuración base de ausencias"
-              description="Saldos predeterminados para nuevos empleados e información general del módulo."
-              summaryItems={
-                absenceSettingsQuery.data
-                  ? buildAbsenceSummary(absenceSettingsQuery.data).summaryItems
-                  : []
-              }
-              loading={absenceSettingsQuery.isLoading}
-              error={
-                absenceSettingsQuery.isError
-                  ? getApiErrorMessage(absenceSettingsQuery.error)
-                  : null
-              }
-              onRetry={() => void absenceSettingsQuery.refetch()}
-              actionLabel="Gestionar ausencias"
-              canEdit={canUpdate && !absenceSettingsQuery.isError}
-              onAction={() => setOpenDialog("absences")}
+          {absencesTabEnabled ? (
+            <CompanyAbsenceSettingsTabPanel
+              canUpdate={canUpdate}
+              onOpenDialog={setOpenDialog}
+              absenceSettingsQuery={absenceSettingsQuery}
+              absenceCalendarQuery={absenceCalendarQuery}
+              settingsQuery={settingsQuery}
+              storageHealthQuery={storageHealthQuery}
             />
-
-            <SettingsSummaryCard
-              title="Políticas por tipo"
-              description="Días corridos o hábiles, calendario aplicable y política de adjuntos por tipo."
-              summaryItems={[
-                {
-                  label: "Tipos",
-                  value: "Configurá el modo de conteo y adjuntos sin SQL",
-                },
-              ]}
-              actionLabel="Gestionar políticas"
-              canEdit={canUpdate}
-              onAction={() => setOpenDialog("absenceTypePolicy")}
-            />
-
-            <SettingsSummaryCard
-              title="Calendarios, feriados y excepciones"
-              description="Días laborables, feriados y excepciones para el cálculo de duración. Incluye activación de calendario avanzado."
-              summaryItems={
-                absenceCalendarQuery.data
-                  ? [
-                      {
-                        label: "Calendario",
-                        value: absenceCalendarQuery.data.name,
-                      },
-                      {
-                        label: "Zona horaria",
-                        value: absenceCalendarQuery.data.timezone,
-                      },
-                      {
-                        label: "Días laborables",
-                        value: String(
-                          absenceCalendarQuery.data.weekdays.filter((day) => day.isWorkingDay)
-                            .length,
-                        ),
-                      },
-                    ]
-                  : []
-              }
-              loading={absenceCalendarQuery.isLoading}
-              error={
-                absenceCalendarQuery.isError
-                  ? getApiErrorMessage(absenceCalendarQuery.error)
-                  : null
-              }
-              onRetry={() => void absenceCalendarQuery.refetch()}
-              actionLabel="Gestionar calendario"
-              canEdit={canUpdate && !absenceCalendarQuery.isError}
-              onAction={() => setOpenDialog("absenceCalendar")}
-            />
-
-            <SettingsSummaryCard
-              title="Integración operativa"
-              description="Impacto de ausencias sobre operaciones, jornadas y conflictos. Activación por empresa piloto."
-              summaryItems={
-                settingsQuery.data
-                  ? [
-                      {
-                        label: "Estado",
-                        value: settingsQuery.data.absenceOperationalIntegrationEnabled
-                          ? "Habilitada"
-                          : "Deshabilitada",
-                      },
-                      {
-                        label: "Rollout",
-                        value: "Off por defecto · activar solo piloto",
-                      },
-                    ]
-                  : []
-              }
-              loading={settingsQuery.isLoading}
-              error={settingsQuery.isError ? getApiErrorMessage(settingsQuery.error) : null}
-              onRetry={() => void settingsQuery.refetch()}
-              actionLabel="Gestionar integración"
-              canEdit={canUpdate && !settingsQuery.isError}
-              onAction={() => setOpenDialog("absenceOperationalIntegration")}
-            />
-
-            {canUpdate ? (
-              <SettingsSummaryCard
-                title="Documentación adjunta"
-                description="Almacenamiento de archivos adjuntos en solicitudes de ausencia (PDF e imágenes)."
-                summaryItems={
-                  storageHealthQuery.data
-                    ? [
-                        {
-                          label: "Módulo",
-                          value: "Siempre habilitado",
-                        },
-                        {
-                          label: "Almacenamiento",
-                          value: storageHealthQuery.data.storageConfigured
-                            ? storageHealthQuery.data.storageAvailable
-                              ? "Disponible"
-                              : "No disponible"
-                            : "No configurado",
-                        },
-                        ...(storageHealthQuery.data.message
-                          ? [
-                              {
-                                label: "Detalle",
-                                value: storageHealthQuery.data.message,
-                              },
-                            ]
-                          : []),
-                      ]
-                    : []
-                }
-                loading={storageHealthQuery.isLoading}
-                error={
-                  storageHealthQuery.isError
-                    ? getApiErrorMessage(storageHealthQuery.error)
-                    : null
-                }
-                onRetry={() => void storageHealthQuery.refetch()}
-                footer={
-                  <Stack gap="xs">
-                    <Text size="sm">
-                      Los adjuntos están siempre habilitados. El upload depende de que GCS esté
-                      configurado y accesible en el servidor.
-                    </Text>
-                    {!storageHealthQuery.data?.storageConfigured ||
-                    !storageHealthQuery.data?.storageAvailable ? (
-                      <Text size="xs" c="dimmed">
-                        El almacenamiento debe estar configurado en el servidor para poder
-                        subir archivos.
-                      </Text>
-                    ) : null}
-                  </Stack>
-                }
-              />
-            ) : null}
-
-            <Alert color="gray" variant="light" className={pageClasses.readOnlyAlert}>
-              Los saldos individuales de colaboradores se gestionan en la ficha del empleado, no
-              en configuración. El ledger de saldos se activa por empresa con un proceso administrativo
-              explícito.
-            </Alert>
-          </SimpleGrid>
+          ) : null}
         </Tabs.Panel>
       </Tabs>
 
@@ -577,12 +426,15 @@ export function CompanySettingsPage() {
         />
       ) : null}
 
-      {openDialog === "operational" && settingsQuery.data ? (
-        <CompanyOperationalSettingsDialog
-          key={`operational-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
+      {openDialog === "operationalWorkSchedule" &&
+      settingsQuery.data &&
+      workScheduleQuery.data ? (
+        <CompanyOperationalAndWorkScheduleDialog
+          key={`operational-work-schedule-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}-${workScheduleQuery.data.updatedAt}`}
           opened
           onClose={() => setOpenDialog(null)}
           settings={settingsQuery.data}
+          schedule={workScheduleQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
         />
@@ -641,16 +493,6 @@ export function CompanySettingsPage() {
           zones={locationZonesQuery.data}
           canUpdate={canManageLocationZones}
           canEditGlobal={isPlatformAdmin}
-        />
-      ) : null}
-
-      {openDialog === "workSchedule" && workScheduleQuery.data ? (
-        <CompanyWeeklyScheduleDialog
-          opened
-          onClose={() => setOpenDialog(null)}
-          schedule={workScheduleQuery.data}
-          canUpdate={canUpdate}
-          onSaved={handleSaved}
         />
       ) : null}
 

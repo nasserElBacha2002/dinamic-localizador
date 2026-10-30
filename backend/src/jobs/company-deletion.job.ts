@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { companyLifecycleService } from "../services/company-lifecycle.service";
+import { companyLifecycleService } from "../services/companies/company-lifecycle.service";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;

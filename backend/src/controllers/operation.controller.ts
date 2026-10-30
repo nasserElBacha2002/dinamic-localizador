@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { operationService } from "../services/operation.service";
+import { operationService } from "../services/operations/operation.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const operationController = {

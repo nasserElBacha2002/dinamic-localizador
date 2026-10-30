@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { serviceService } from "../services/service.service";
+import { serviceService } from "../services/locations/service.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const serviceController = {

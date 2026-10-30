@@ -32,7 +32,7 @@ describe("requirePlatformAdmin observability authz", () => {
 
   it("returns 403 for authenticated company admin (non-platform)", async () => {
     mock.reset();
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     mock.method(userRepository, "findById", async () => ({
       id: "u1",
       active: true,
@@ -67,7 +67,7 @@ describe("requirePlatformAdmin observability authz", () => {
 
   it("calls next for platform admin", async () => {
     mock.reset();
-    const { userRepository } = await import("../repositories/user.repository");
+    const { userRepository } = await import("../repositories/identity/user.repository");
     mock.method(userRepository, "findById", async () => ({
       id: "u1",
       active: true,

@@ -29,6 +29,8 @@ import {
   formatOperationalCheckOutCell,
 } from "../../utils/operation-workforce-display";
 import { navigateWithListContext } from "../../utils/list-navigation";
+import { employeeWorkdayAttendanceDetailPath } from "../../utils/attendance-list-display";
+import { operationAbsenceBadgePresentationLabel } from "../../utils/operational-workday-presentation";
 import {
   resolveManualAttendanceActions,
   type ManualAttendanceAction,
@@ -116,6 +118,16 @@ export function OperationEmployeeTable({
   const location = useLocation();
   const operationDetailPath = `/operations/${operationId}`;
 
+  const resolveAttendanceDetailPath = (row: OperationAttendanceSummaryEmployee): string | null => {
+    if (row.attendance?.id) {
+      return `/attendance/${row.attendance.id}`;
+    }
+    if (row.employeeWorkdayId) {
+      return employeeWorkdayAttendanceDetailPath(row.employeeWorkdayId);
+    }
+    return null;
+  };
+
   const columns = useMemo<DataTableColumn<OperationAttendanceSummaryEmployee>[]>(
     () => [
       {
@@ -154,7 +166,7 @@ export function OperationEmployeeTable({
                   {row.absenceBadges.map((badge) => (
                     <StatusBadge
                       key={`${row.assignmentId}-${badge.code}`}
-                      label={badge.label}
+                      label={operationAbsenceBadgePresentationLabel(badge)}
                       tone={
                         badge.code === "OPEN_CONFLICT" || badge.code === "ABSENT"
                           ? "danger"
@@ -281,18 +293,14 @@ export function OperationEmployeeTable({
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
       onRowClick={(row) => {
-        if (!row.attendance) {
+        const detailPath = resolveAttendanceDetailPath(row);
+        if (!detailPath) {
           return;
         }
 
-        navigateWithListContext(
-          navigate,
-          `/attendance/${row.attendance.id}`,
-          operationDetailPath,
-          location,
-        );
+        navigateWithListContext(navigate, detailPath, operationDetailPath, location);
       }}
-      isRowClickable={(row) => Boolean(row.attendance)}
+      isRowClickable={(row) => Boolean(resolveAttendanceDetailPath(row))}
       mobileView="summary"
       mobileCard={mobileCard}
       rowActions={(row) => {
@@ -319,17 +327,13 @@ export function OperationEmployeeTable({
           : [];
 
         const items = [];
-        if (hasAttendanceDetail) {
+        const detailPath = resolveAttendanceDetailPath(row);
+        if (detailPath) {
           items.push({
             key: "detail",
             label: "Ver detalle",
             onClick: () =>
-              navigateWithListContext(
-                navigate,
-                `/attendance/${row.attendance!.id}`,
-                operationDetailPath,
-                location,
-              ),
+              navigateWithListContext(navigate, detailPath, operationDetailPath, location),
           });
         }
         const absenceLink = row.absenceBadges?.find((b) => b.absenceRequestId)?.absenceRequestId
@@ -433,17 +437,12 @@ export function OperationEmployeeTable({
           <ActionMenu
             mode="menu"
             primary={
-              hasAttendanceDetail ? (
+              detailPath ? (
                 <Button
                   size="compact-xs"
                   variant="light"
                   onClick={() =>
-                    navigateWithListContext(
-                      navigate,
-                      `/attendance/${row.attendance!.id}`,
-                      operationDetailPath,
-                      location,
-                    )
+                    navigateWithListContext(navigate, detailPath, operationDetailPath, location)
                   }
                 >
                   Ver detalle

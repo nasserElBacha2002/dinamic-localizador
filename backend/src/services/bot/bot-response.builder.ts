@@ -5,14 +5,14 @@ import type {
   EmployeeWorkdayCheckoutCandidate,
 } from "../../types/employee-workday-availability";
 import type { CheckoutEligibleOperation, CompatibleOperation } from "../../types/twilio.types";
-import { formatLocalTime } from "../../utils/attendance-validation";
-import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
+import { formatLocalTime } from "../../utils/attendance/attendance-validation";
+import { getBotOperationTimezone } from "../../utils/bot/bot-runtime-settings-scope";
 import {
   formatAssignmentServiceReference,
   formatBotOperationSelectionLines,
   formatBotWorkdaySelectionLines,
-} from "../../utils/employee-assignment-format";
-import { checkoutStatusLabel } from "../../utils/checkout-validation";
+} from "../../utils/employees/employee-assignment-format";
+import { checkoutStatusLabel } from "../../utils/attendance/checkout-validation";
 
 export const GLOBAL_CANCEL_MESSAGE =
   "Flujo cancelado. Ahora podés iniciar otra operación.";

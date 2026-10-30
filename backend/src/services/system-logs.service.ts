@@ -9,14 +9,14 @@ import {
 } from "../constants/system-logs";
 import { systemRuntimeLogRepository } from "../repositories/system-runtime-log.repository";
 import type { SystemLogsListQuery } from "../schemas/system-logs.schema";
-import { platformAuditService } from "./platform-audit.service";
+import { platformAuditService } from "./companies/platform-audit.service";
 import { systemLogger } from "../utils/system-logs/logger";
 import {
   toSystemRuntimeLogDetail,
   toSystemRuntimeLogSummary,
 } from "../utils/system-logs/present";
 import { assertSystemLogsStorageAvailable } from "../utils/system-logs/storage-availability";
-import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
+import { withDedicatedSessionAppLock } from "../utils/whatsapp/whatsapp-retention-lock";
 
 const clampPage = (page: number): number => {
   const n = Number(page);

@@ -3,7 +3,7 @@ import { getPool } from "../database/connection";
 import {
   deleteCompanyIdentityAndConfigSetBased,
   deleteCompanyOperationalDataSetBased,
-} from "../repositories/company-purge.repository";
+} from "../repositories/companies/company-purge.repository";
 
 /**
  * Fixture-only cascades for integration cleanup / junk scripts.
@@ -93,6 +93,34 @@ export const deleteOperationCascade = async (
       DELETE FROM bot_simulation_sessions
       WHERE company_id = @companyId AND operation_id = @operationId;
 
+      IF OBJECT_ID(N'dbo.replacement_request_notifications', N'U') IS NOT NULL
+        DELETE n
+        FROM replacement_request_notifications n
+        INNER JOIN replacement_requests rr ON rr.id = n.request_id AND rr.company_id = n.company_id
+        INNER JOIN operation_workdays ow ON ow.id = rr.operation_workday_id AND ow.company_id = rr.company_id
+        WHERE rr.company_id = @companyId AND ow.operation_id = @operationId;
+
+      IF OBJECT_ID(N'dbo.replacement_request_candidates', N'U') IS NOT NULL
+        DELETE c
+        FROM replacement_request_candidates c
+        INNER JOIN replacement_requests rr ON rr.id = c.request_id AND rr.company_id = c.company_id
+        INNER JOIN operation_workdays ow ON ow.id = rr.operation_workday_id AND ow.company_id = rr.company_id
+        WHERE rr.company_id = @companyId AND ow.operation_id = @operationId;
+
+      IF OBJECT_ID(N'dbo.replacement_requests', N'U') IS NOT NULL
+        DELETE rr
+        FROM replacement_requests rr
+        INNER JOIN operation_workdays ow ON ow.id = rr.operation_workday_id AND ow.company_id = rr.company_id
+        WHERE rr.company_id = @companyId AND ow.operation_id = @operationId;
+
+      IF OBJECT_ID(N'dbo.absence_operational_conflicts', N'U') IS NOT NULL
+        DELETE FROM absence_operational_conflicts
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
+      IF OBJECT_ID(N'dbo.operation_coverage_events', N'U') IS NOT NULL
+        DELETE FROM operation_coverage_events
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
       DELETE FROM employee_workdays
       WHERE company_id = @companyId
         AND operation_workday_id IN (
@@ -105,10 +133,6 @@ export const deleteOperationCascade = async (
 
       DELETE FROM operation_workdays
       WHERE company_id = @companyId AND operation_id = @operationId;
-
-      IF OBJECT_ID(N'dbo.operation_coverage_events', N'U') IS NOT NULL
-        DELETE FROM operation_coverage_events
-        WHERE company_id = @companyId AND operation_id = @operationId;
 
       IF OBJECT_ID(N'dbo.operation_change_events', N'U') IS NOT NULL
         DELETE FROM operation_change_events

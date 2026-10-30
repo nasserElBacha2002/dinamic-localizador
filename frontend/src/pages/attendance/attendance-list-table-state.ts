@@ -23,7 +23,7 @@ export const ATTENDANCE_TABLE_FIELDS = {
   operationShiftId: { type: "string" as const },
   validationStatus: {
     type: "enum",
-    values: ["", "VALID", "PENDING_REVIEW", "REJECTED"],
+    values: ["", "VALID", "PENDING_REVIEW", "REJECTED", "ABSENT"],
   },
   locationStatus: {
     type: "enum",

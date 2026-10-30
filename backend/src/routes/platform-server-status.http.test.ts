@@ -5,7 +5,7 @@ import { authenticate } from "../middleware/authenticate";
 import { platformServerStatusRouter } from "./platform-server-status.routes";
 import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
-import { userRepository } from "../repositories/user.repository";
+import { userRepository } from "../repositories/identity/user.repository";
 import { serverStatusService } from "../services/server-status.service";
 
 setupUnitTestEnv();

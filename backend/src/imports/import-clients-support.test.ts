@@ -32,9 +32,9 @@ describe("import entity types", () => {
 describe("legacy import templates without Cliente column", () => {
   it("accepts service rows without client column", async () => {
     setupUnitTestEnv();
-    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceRepository } = await import("../repositories/locations/service.repository");
     const { companyLocationTypesService } = await import(
-      "../services/company-location-types.service"
+      "../services/companies/company-location-types.service"
     );
     mock.method(serviceRepository, "findExistingNames", async () => new Map());
     mock.method(companyLocationTypesService, "listLocationTypes", async () => []);
@@ -55,9 +55,9 @@ describe("services import client column", () => {
   it("accepts valid client and rejects missing client", async () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../repositories/client.repository");
-    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceRepository } = await import("../repositories/locations/service.repository");
     const { companyLocationTypesService } = await import(
-      "../services/company-location-types.service"
+      "../services/companies/company-location-types.service"
     );
 
     mock.method(serviceRepository, "findExistingNames", async () => new Map());
@@ -105,9 +105,9 @@ describe("services import client column", () => {
   it("rejects incompatible service format for client", async () => {
     setupUnitTestEnv();
     const { clientRepository } = await import("../repositories/client.repository");
-    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceRepository } = await import("../repositories/locations/service.repository");
     const { companyLocationTypesService } = await import(
-      "../services/company-location-types.service"
+      "../services/companies/company-location-types.service"
     );
 
     mock.method(serviceRepository, "findExistingNames", async () => new Map());
@@ -152,9 +152,9 @@ describe("employees import client column", () => {
   it("resolves client into import payload", async () => {
     setupUnitTestEnv();
     const { employeeCategoryRepository } = await import(
-      "../repositories/employee-category.repository"
+      "../repositories/employees/employee-category.repository"
     );
-    const { employeeRepository } = await import("../repositories/employee.repository");
+    const { employeeRepository } = await import("../repositories/employees/employee.repository");
     const { clientRepository } = await import("../repositories/client.repository");
 
     mock.method(employeeCategoryRepository, "listForCompany", async () => []);

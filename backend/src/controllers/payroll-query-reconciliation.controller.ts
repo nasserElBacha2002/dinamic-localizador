@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { payrollQueryReconciliationService } from "../services/payroll-query-reconciliation.service";
+import { payrollQueryReconciliationService } from "../services/payroll/payroll-query-reconciliation.service";
 
 export const payrollQueryReconciliationController = {
   async list(req: Request, res: Response): Promise<void> {

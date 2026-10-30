@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { workTeamAssignmentService } from "../services/work-team-assignment.service";
+import { workTeamAssignmentService } from "../services/work-teams/work-team-assignment.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const workTeamAssignmentController = {

@@ -7,7 +7,7 @@ import {
   SERVICE_LIST_SORT_FIELDS,
 } from "./service.schema";
 import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
-import { SERVICE_LIST_SORT_COLUMNS } from "../repositories/service.repository";
+import { SERVICE_LIST_SORT_COLUMNS } from "../repositories/locations/service.repository";
 
 describe("listServicesQuerySchema", () => {
   it("accepts format, client, locality, neighborhood and sort filters", () => {

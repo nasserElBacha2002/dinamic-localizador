@@ -1,11 +1,11 @@
-import { isAbsenceIntent } from "../../utils/absence-intent";
+import { isAbsenceIntent } from "../../utils/absence/absence-intent";
 import {
   isConfirmAttendanceIntent,
   isUnavailabilityIntent,
   isUpcomingAssignmentsIntent,
   isWorkdayQueryIntent,
-} from "../../utils/assignment-intent";
-import { isPayrollReceiptIntent } from "../../utils/payroll-receipt-intent";
+} from "../../utils/operations/assignment-intent";
+import { isPayrollReceiptIntent } from "../../utils/payroll-receipts/payroll-receipt-intent";
 import {
   isCheckInIntent,
   isCheckoutIntent,

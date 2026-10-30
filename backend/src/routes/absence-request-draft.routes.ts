@@ -6,8 +6,8 @@ import { requirePermission } from "../middleware/company-context";
 import { acceptSingleMultipartFileStream } from "../middleware/multipart-file-stream";
 import { validate } from "../middleware/validate";
 import { absenceDayPeriodSchema } from "../schemas/absence-request.schema";
-import { absenceAttachmentService } from "../services/absence-attachment.service";
-import { absenceRequestDraftService } from "../services/absence-request-draft.service";
+import { absenceAttachmentService } from "../services/absence/absence-attachment.service";
+import { absenceRequestDraftService } from "../services/absence/absence-request-draft.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 const createDraftSchema = z.object({

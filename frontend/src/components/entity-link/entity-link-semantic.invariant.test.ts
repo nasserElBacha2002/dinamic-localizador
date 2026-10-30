@@ -7,15 +7,22 @@ import { resolve } from "node:path";
  * Semantic regression: service labels must never fall back to operation ids.
  */
 describe("entity link semantic invariants (source)", () => {
-  it("AbsenceDetailPage does not link serviceName via operationId", () => {
+  it("AbsenceDetailPage does not link serviceName via operationId fallback", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/pages/absences/AbsenceDetailPage.tsx"),
       "utf8",
     );
     assert.equal(source.includes('entityType={row.serviceId ? "service" : "operation"}'), false);
     assert.equal(source.includes("row.serviceId || row.operationId"), false);
+  });
+
+  it("AbsenceOperationalImpactSection links planning service column to serviceId", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/components/absences/AbsenceOperationalImpactSection.tsx"),
+      "utf8",
+    );
+    assert.equal(source.includes("row.serviceId || row.operationId"), false);
     assert.match(source, /entityType="service"[\s\S]*entityId=\{row\.serviceId\}/);
-    assert.match(source, /entityType="operation"[\s\S]*entityId=\{row\.operationId\}/);
   });
 
   it("WorkTeamDetailPage links Servicio to serviceId, not operationId", () => {

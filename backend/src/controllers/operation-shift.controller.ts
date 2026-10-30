@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { AppError } from "../errors/app-error";
-import { operationShiftService } from "../services/operation-shift.service";
+import { operationShiftService } from "../services/operations/operation-shift.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const shiftTemplateController = {

@@ -37,7 +37,11 @@ interface AbsenceAttachmentsSectionProps {
   requestId: string;
   requestStatus: AbsenceRequestStatus;
   attachmentPolicy?: AbsenceAttachmentPolicy | null;
-  canManage: boolean;
+  /** Enables listing/download when the backend allows read access. */
+  canView?: boolean;
+  /** Enables upload/delete (requires review permission in current API). */
+  canManage?: boolean;
+  variant?: "card" | "embedded";
 }
 
 function resolvePolicy(
@@ -50,7 +54,9 @@ export function AbsenceAttachmentsSection({
   requestId,
   requestStatus,
   attachmentPolicy,
-  canManage,
+  canView = false,
+  canManage = false,
+  variant = "card",
 }: AbsenceAttachmentsSectionProps) {
   const policy = resolvePolicy(attachmentPolicy);
   const editable =
@@ -58,7 +64,7 @@ export function AbsenceAttachmentsSection({
   const canUpload = editable && policy !== "FORBIDDEN";
 
   const { listQuery, uploadMutation, deleteMutation, downloadMutation } =
-    useAbsenceAttachments(requestId, canManage);
+    useAbsenceAttachments(requestId, canView);
 
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -257,20 +263,81 @@ export function AbsenceAttachmentsSection({
     [deletingId, downloadingId, editable],
   );
 
-  if (!canManage) {
-    return null;
+  const description =
+    policy === "REQUIRED"
+      ? "Este tipo de ausencia requiere al menos un adjunto."
+      : policy === "FORBIDDEN"
+        ? "Este tipo de ausencia no admite adjuntos."
+        : variant === "embedded"
+          ? null
+          : "Podés adjuntar PDF o imágenes (JPEG, PNG, WebP).";
+
+  const body = (
+    <Stack gap="md">
+        {variant === "embedded" && description ? (
+          <Text size="sm" c="dimmed">
+            {description}
+          </Text>
+        ) : null}
+        {variant === "embedded" && canUpload ? (
+          <Group justify="flex-start">
+            <FileButton onChange={(file) => void handleUpload(file)} accept={ACCEPTED_TYPES}>
+              {(props) => (
+                <Button {...props} size="compact-sm" loading={uploadMutation.isPending}>
+                  Subir archivo
+                </Button>
+              )}
+            </FileButton>
+          </Group>
+        ) : null}
+        {uploadProgress != null ? (
+          <Stack gap={4}>
+            <Text size="sm">Subiendo archivo… {uploadProgress}%</Text>
+            <Progress value={uploadProgress} animated />
+          </Stack>
+        ) : null}
+
+        {!canView ? (
+          <Text c="dimmed" size="sm">
+            La documentación adjunta no está disponible con tus permisos actuales.
+          </Text>
+        ) : null}
+
+        {canView && listQuery.isLoading ? <LoadingState /> : null}
+
+        {canView && listQuery.isError ? (
+          <Alert color="red">{getApiErrorMessage(listQuery.error)}</Alert>
+        ) : null}
+
+        {canView && !listQuery.isLoading && !listQuery.isError && rows.length === 0 ? (
+          <Text c="dimmed" size="sm">
+            {policy === "FORBIDDEN"
+              ? "No se permiten adjuntos para este tipo."
+              : "No hay documentación adjunta."}
+          </Text>
+        ) : null}
+
+        {canView && !listQuery.isLoading && !listQuery.isError && rows.length > 0 ? (
+          <DataTable
+            rows={rows}
+            columns={columns}
+            getRowKey={(row) => row.id}
+            mobileView="cards"
+            mobileCard={mobileCard}
+            aria-label="Documentación adjunta de la solicitud"
+          />
+        ) : null}
+      </Stack>
+  );
+
+  if (variant === "embedded") {
+    return body;
   }
 
   return (
     <SectionCard
       title="Documentación adjunta"
-      description={
-        policy === "REQUIRED"
-          ? "Este tipo de ausencia requiere al menos un adjunto."
-          : policy === "FORBIDDEN"
-            ? "Este tipo de ausencia no admite adjuntos."
-            : "Podés adjuntar PDF o imágenes (JPEG, PNG, WebP)."
-      }
+      description={description ?? undefined}
       action={
         canUpload ? (
           <FileButton onChange={(file) => void handleUpload(file)} accept={ACCEPTED_TYPES}>
@@ -283,39 +350,7 @@ export function AbsenceAttachmentsSection({
         ) : undefined
       }
     >
-      <Stack gap="md">
-        {uploadProgress != null ? (
-          <Stack gap={4}>
-            <Text size="sm">Subiendo archivo… {uploadProgress}%</Text>
-            <Progress value={uploadProgress} animated />
-          </Stack>
-        ) : null}
-
-        {listQuery.isLoading ? <LoadingState /> : null}
-
-        {listQuery.isError ? (
-          <Alert color="red">{getApiErrorMessage(listQuery.error)}</Alert>
-        ) : null}
-
-        {!listQuery.isLoading && !listQuery.isError && rows.length === 0 ? (
-          <Text c="dimmed" size="sm">
-            {policy === "FORBIDDEN"
-              ? "No se permiten adjuntos para este tipo."
-              : "No hay documentación adjunta."}
-          </Text>
-        ) : null}
-
-        {!listQuery.isLoading && !listQuery.isError && rows.length > 0 ? (
-          <DataTable
-            rows={rows}
-            columns={columns}
-            getRowKey={(row) => row.id}
-            mobileView="cards"
-            mobileCard={mobileCard}
-            aria-label="Documentación adjunta de la solicitud"
-          />
-        ) : null}
-      </Stack>
+      {body}
     </SectionCard>
   );
 }

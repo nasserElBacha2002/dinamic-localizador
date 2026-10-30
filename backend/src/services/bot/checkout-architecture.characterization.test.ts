@@ -6,12 +6,12 @@ import {
   roundCheckoutDistanceMeters,
 } from "./checkout-result-code";
 import { attendanceRecordFromVirtualCheckIn } from "./checkout-simulation-attendance";
-import type { VirtualAttendanceRecord } from "../../utils/bot-runtime-context";
+import type { VirtualAttendanceRecord } from "../../utils/bot/bot-runtime-context";
 import {
   classifyReminderSendOutcome,
   emptyReminderKindCounts,
   mergeReminderKindCounts,
-} from "../attendance-reminder-outcomes";
+} from "../attendance/attendance-reminder-outcomes";
 
 describe("resolveCheckoutWhatsAppResultCode", () => {
   it("maps CHECKOUT_REJECTED to outside-radius observability code", () => {

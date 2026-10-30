@@ -1,5 +1,5 @@
 import { env } from "../config/env";
-import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
+import { recurringWorkdayMaterializationService } from "../services/workdays/recurring-workday-materialization.service";
 
 const JOB_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 30_000;

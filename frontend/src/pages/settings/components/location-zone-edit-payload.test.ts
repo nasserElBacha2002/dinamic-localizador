@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildLocationZoneEditPayload } from "./location-zone-edit-payload";
+import { buildLocationZoneEditPayload } from "./locations/location-zone-edit-payload";
 
 describe("buildLocationZoneEditPayload", () => {
   it("omits centroids when only name changes", () => {

@@ -1,4 +1,4 @@
-import { Alert, Button, Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Alert, Button, Collapse, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import {
@@ -21,16 +21,22 @@ interface EmployeeAbsenceBalanceCardProps {
   employeeId: string;
   year: number;
   balanceImpact?: AbsenceBalanceImpact | null;
+  /** Absence type of the request being reviewed (scopes balance warnings). */
+  currentAbsenceTypeId?: string | null;
   showEdit?: boolean;
   onBalanceSaved?: () => void;
+  /** When true, hides the full balance table until expanded (detail page UX). */
+  collapseFullBalance?: boolean;
 }
 
 export function EmployeeAbsenceBalanceCard({
   employeeId,
   year,
   balanceImpact,
+  currentAbsenceTypeId,
   showEdit = true,
   onBalanceSaved,
+  collapseFullBalance = false,
 }: EmployeeAbsenceBalanceCardProps) {
   const balancesQuery = useEmployeeAbsenceBalances(employeeId, year);
   const adjustMutation = useAdjustEmployeeAbsenceBalance(employeeId);
@@ -38,6 +44,7 @@ export function EmployeeAbsenceBalanceCard({
   const [historyTarget, setHistoryTarget] = useState<EmployeeAbsenceBalanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adjustCommandId, setAdjustCommandId] = useState("");
+  const [balanceExpanded, setBalanceExpanded] = useState(false);
 
   const visibleBalances = useMemo(() => {
     const rows = balancesQuery.data ?? [];
@@ -56,9 +63,17 @@ export function EmployeeAbsenceBalanceCard({
     );
   }, [balancesQuery.data, showEdit]);
 
-  const hasNegativeBalance = visibleBalances.some(
-    (row) => row.availableDays < 0 || row.projectedAvailableDays < 0,
-  );
+  const currentTypeBalance = useMemo(() => {
+    if (!currentAbsenceTypeId) {
+      return null;
+    }
+    return visibleBalances.find((row) => row.absenceType.id === currentAbsenceTypeId) ?? null;
+  }, [currentAbsenceTypeId, visibleBalances]);
+
+  const showCurrentTypeNegativeWarning =
+    balanceImpact?.deductsBalance === true &&
+    currentTypeBalance != null &&
+    (currentTypeBalance.availableDays < 0 || currentTypeBalance.projectedAvailableDays < 0);
 
   const columns = useMemo<DataTableColumn<EmployeeAbsenceBalanceSummary>[]>(
     () => [
@@ -148,6 +163,45 @@ export function EmployeeAbsenceBalanceCard({
     return <LoadingState />;
   }
 
+  const compactSummary = buildCompactBalanceSummary(balanceImpact);
+  const showDetailedBalance = !collapseFullBalance || balanceExpanded;
+
+  const balanceTable =
+    visibleBalances.length > 0 ? (
+      <DataTable
+        rows={visibleBalances}
+        columns={columns}
+        getRowKey={(row) => row.absenceType.id}
+        emptyTitle={`No hay tipos de ausencia activos para mostrar en ${year}.`}
+        mobileView="summary"
+        mobileCard={mobileCard}
+        aria-label="Saldo de ausencias del empleado"
+      />
+    ) : (
+      <Text c="dimmed">No hay tipos de ausencia activos para mostrar en {year}.</Text>
+    );
+
+  const detailedBalanceContent = (
+    <Stack gap="md">
+      {balanceImpact?.deductsBalance ? (
+        <>
+          <Text size="sm" c="dimmed">
+            Año {balanceImpact.year}
+          </Text>
+          <DetailBalanceGrid
+            assignedDays={balanceImpact.assignedDays}
+            approvedDays={balanceImpact.approvedDays}
+            pendingDays={balanceImpact.pendingDays}
+            availableDays={balanceImpact.availableDays}
+            requestDays={balanceImpact.requestDays}
+            availableAfterApproval={balanceImpact.availableAfterApproval}
+          />
+        </>
+      ) : null}
+      {balanceTable}
+    </Stack>
+  );
+
   return (
     <Stack gap="md">
       {balanceImpact ? (
@@ -165,45 +219,45 @@ export function EmployeeAbsenceBalanceCard({
                 ) : null}
               </>
             ) : null}
-            <Text size="sm" c="dimmed">
-              Año {balanceImpact.year}
-            </Text>
-            <DetailBalanceGrid
-              assignedDays={balanceImpact.assignedDays}
-              approvedDays={balanceImpact.approvedDays}
-              pendingDays={balanceImpact.pendingDays}
-              availableDays={balanceImpact.availableDays}
-              requestDays={balanceImpact.requestDays}
-              availableAfterApproval={balanceImpact.availableAfterApproval}
-            />
+            {collapseFullBalance && compactSummary ? (
+              <Text size="sm">{compactSummary}</Text>
+            ) : null}
+            {!collapseFullBalance ? detailedBalanceContent : null}
           </Stack>
         ) : (
-          <Alert color="gray" variant="light">
-            {balanceImpact.message ?? "Este tipo de ausencia no descuenta saldo."}
-          </Alert>
+          <>
+            <Alert color="gray" variant="light">
+              {balanceImpact.message ?? "Este tipo de ausencia no descuenta saldo."}
+            </Alert>
+            {!collapseFullBalance ? balanceTable : null}
+          </>
         )
+      ) : !collapseFullBalance ? (
+        balanceTable
       ) : null}
 
-      {hasNegativeBalance ? (
+      {showCurrentTypeNegativeWarning ? (
         <Alert color="yellow">
           El empleado tiene saldo negativo para este tipo de ausencia. Revisá los días otorgados o las
           solicitudes aprobadas.
         </Alert>
       ) : null}
 
-      {visibleBalances.length > 0 ? (
-        <DataTable
-          rows={visibleBalances}
-          columns={columns}
-          getRowKey={(row) => row.absenceType.id}
-          emptyTitle={`No hay tipos de ausencia activos para mostrar en ${year}.`}
-          mobileView="summary"
-          mobileCard={mobileCard}
-          aria-label="Saldo de ausencias del empleado"
-        />
-      ) : (
-        <Text c="dimmed">No hay tipos de ausencia activos para mostrar en {year}.</Text>
-      )}
+      {collapseFullBalance ? (
+        <>
+          <Group>
+            <Button
+              variant="light"
+              size="compact-sm"
+              onClick={() => setBalanceExpanded((open) => !open)}
+              aria-expanded={balanceExpanded}
+            >
+              {balanceExpanded ? "Ocultar saldo" : "Ver saldo del empleado"}
+            </Button>
+          </Group>
+          <Collapse expanded={showDetailedBalance}>{detailedBalanceContent}</Collapse>
+        </>
+      ) : null}
 
       <AbsenceBalanceAdjustmentDialog
         opened={Boolean(editTarget)}
@@ -250,6 +304,20 @@ export function EmployeeAbsenceBalanceCard({
       />
     </Stack>
   );
+}
+
+function buildCompactBalanceSummary(balanceImpact: AbsenceBalanceImpact | null | undefined): string | null {
+  if (!balanceImpact?.deductsBalance) {
+    return null;
+  }
+  const parts = [
+    `Año ${balanceImpact.year}`,
+    balanceImpact.requestDays != null ? `${balanceImpact.requestDays} días solicitados` : null,
+    balanceImpact.availableAfterApproval != null
+      ? `Disponible luego de aprobar: ${balanceImpact.availableAfterApproval}`
+      : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
 }
 
 function DetailBalanceGrid(input: {

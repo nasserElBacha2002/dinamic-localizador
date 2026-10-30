@@ -7,7 +7,7 @@ import {
 } from "../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { SYSTEM_LOG_RETENTION_LOCK_RESOURCE } from "../constants/system-logs";
-import { acquireDedicatedSessionAppLockForTests } from "../utils/whatsapp-retention-lock";
+import { acquireDedicatedSessionAppLockForTests } from "../utils/whatsapp/whatsapp-retention-lock";
 
 describeDatabaseIntegration("system log retention lease", () => {
   before(async () => {

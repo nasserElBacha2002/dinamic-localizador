@@ -70,6 +70,11 @@ describe("listAttendanceQuerySchema multi ids", () => {
     });
     assert.deepEqual(merged.employeeIds, [ID_B, ID_C, ID_A]);
   });
+
+  it("accepts filter-only validationStatus ABSENT", () => {
+    const parsed = listAttendanceQuerySchema.parse({ validationStatus: "ABSENT" });
+    assert.equal(parsed.validationStatus, "ABSENT");
+  });
 });
 
 describe("assignEmployeesBatchSchema", () => {

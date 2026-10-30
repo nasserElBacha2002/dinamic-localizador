@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { platformCompanyService } from "../services/platform-company.service";
-import { companyLifecycleService } from "../services/company-lifecycle.service";
+import { platformCompanyService } from "../services/companies/platform-company.service";
+import { companyLifecycleService } from "../services/companies/company-lifecycle.service";
 
 export const platformCompanyController = {
   async listCompanies(_req: Request, res: Response) {

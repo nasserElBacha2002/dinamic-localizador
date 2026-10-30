@@ -7,7 +7,7 @@ import {
   CLIENT_COMPANY_NORMALIZED_NAME_UNIQUE_INDEX,
   EMPLOYEE_COMPANY_PHONE_UNIQUE_INDEX,
 } from "../imports/constraint-classifiers";
-import { OPERATIONAL_LOCATION_COMPANY_NAME_UNIQUE_INDEX } from "../utils/service-name-duplicate-errors";
+import { OPERATIONAL_LOCATION_COMPANY_NAME_UNIQUE_INDEX } from "../utils/operations/service-name-duplicate-errors";
 
 describe("import constraint classifiers", () => {
   it("maps employee phone unique index", () => {

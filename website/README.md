@@ -25,4 +25,11 @@ Ver `.env.example`. Por defecto el CTA **Ingresar** apunta a `/login` (mismo dom
 
 ## SEO
 
-Metadata principal en `index.html`. `useLandingDocumentMeta` puede complementar en runtime; para OG/canonical avanzados evaluar SSR/SSG en una iteración futura.
+Metadata principal en `index.html` (title, description, canonical, og:url). `useLandingDocumentMeta` puede complementar en runtime.
+
+Archivos estáticos para Google Search Console:
+
+- `https://dinamicoperations.com/sitemap.xml`
+- `https://dinamicoperations.com/robots.txt`
+
+Hay un solo `sitemap.xml` y un solo `robots.txt` para el dominio. Viven en este proyecto; Vite los copia a `dist`. El Nginx del host tiene que proxear `/sitemap.xml` y `/robots.txt` al website (como ya hace con `/`), porque el catch-all del mismo dominio va a la app. Ver `deploy/nginx.dinamicoperations.com.conf.template`.

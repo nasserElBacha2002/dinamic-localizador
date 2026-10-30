@@ -14,7 +14,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
-import { normalizeLocationZoneName } from "../utils/normalize-location-zone-name";
+import { normalizeLocationZoneName } from "../utils/locations/normalize-location-zone-name";
 
 const SCRATCH = "dbo.__test_mig109_scratch_zones";
 const SURVIVORS = "dbo.__test_mig109_survivors";

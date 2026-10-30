@@ -5,8 +5,8 @@ import {
   addDaysToDateIso,
   buildRecurringExpectedInstants,
   buildUtcInstantFromLocalWorkDateTime,
-} from "./recurring-workday-instant";
-import { computeMaterializationRange, iterateDateIsoRange } from "./recurring-workday-range";
+} from "./workdays/recurring-workday-instant";
+import { computeMaterializationRange, iterateDateIsoRange } from "./workdays/recurring-workday-range";
 
 describe("recurring-workday-instant", () => {
   it("builds daytime expected instants in Buenos Aires", () => {

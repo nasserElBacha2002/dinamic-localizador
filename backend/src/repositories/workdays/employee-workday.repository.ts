@@ -199,6 +199,26 @@ export const employeeWorkdayRepository = {
     return result.recordset.map((row) => mapEmployeeWorkdayRow(row as Record<string, unknown>));
   },
 
+  async findLatestIdByAssignment(
+    companyId: string,
+    assignmentId: string,
+  ): Promise<string | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .query(`
+        SELECT TOP 1 id
+        FROM employee_workdays
+        WHERE company_id = @companyId
+          AND operation_assignment_id = @assignmentId
+        ORDER BY created_at DESC
+      `);
+    const id = result.recordset[0]?.id;
+    return id ? String(id) : null;
+  },
+
   async hasAttendanceInTransaction(
     companyId: string,
     transaction: sql.Transaction,

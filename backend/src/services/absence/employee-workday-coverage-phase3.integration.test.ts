@@ -638,11 +638,12 @@ describeDatabaseIntegration("employee workday coverage phase3", () => {
         WHERE ew.company_id = @companyId AND ow.operation_id = @operationId AND ew.employee_id = @employeeId
         ORDER BY ow.work_date ASC
       `);
-    const wd10 = rows.recordset[10];
-    const wd11 = rows.recordset[11];
-    assert.ok(wd10 && wd11);
-    const coverDate = normalizeSqlDateIso(wd10.work_date);
-    const nextDate = normalizeSqlDateIso(wd11.work_date);
+    assert.ok(rows.recordset.length >= 3, "expected at least 3 materialized workdays");
+    const wdCover = rows.recordset[1];
+    const wdNext = rows.recordset[2];
+    assert.ok(wdCover && wdNext);
+    const coverDate = normalizeSqlDateIso(wdCover.work_date);
+    const nextDate = normalizeSqlDateIso(wdNext.work_date);
 
     const absence = await absenceRequestRepository.create(companyId, {
       employeeId: absentId,
@@ -661,13 +662,13 @@ describeDatabaseIntegration("employee workday coverage phase3", () => {
       absentEmployeeId: absentId,
       operationId: operation.id,
       assignmentId: titular.id,
-      employeeWorkdayId: String(wd10.employee_workday_id),
-      keySuffix: "wd10",
+      employeeWorkdayId: String(wdCover.employee_workday_id),
+      keySuffix: "wd-cover",
     });
 
     await employeeWorkdayCoverageService.coverEmployeeWorkday(companyId, adminUserId, {
       operationId: operation.id,
-      employeeWorkdayId: String(wd10.employee_workday_id),
+      employeeWorkdayId: String(wdCover.employee_workday_id),
       replacementEmployeeId: repl,
       replacedAssignmentId: titular.id,
       replacedEmployeeId: absentId,
@@ -694,17 +695,17 @@ describeDatabaseIntegration("employee workday coverage phase3", () => {
         INNER JOIN operation_workdays ow ON ow.id = ew.operation_workday_id
         WHERE ew.company_id = @companyId AND ow.operation_id = @operationId AND ew.employee_id = @employeeId
       `);
-    const row10 = expectations.recordset.find(
+    const rowCover = expectations.recordset.find(
       (r) => normalizeSqlDateIso(r.work_date) === coverDate,
     );
-    const row11 = expectations.recordset.find(
+    const rowNext = expectations.recordset.find(
       (r) => normalizeSqlDateIso(r.work_date) === nextDate,
     );
-    assert.equal(row10?.expectation_status, "CANCELLED");
-    assert.equal(row11?.expectation_status, "EXPECTED");
-    assert.equal(String(row11?.operation_assignment_id), titular.id);
+    assert.equal(rowCover?.expectation_status, "CANCELLED");
+    assert.equal(rowNext?.expectation_status, "EXPECTED");
+    assert.equal(String(rowNext?.operation_assignment_id), titular.id);
 
-    const replOn11 = await pool
+    const replOnNext = await pool
       .request()
       .input("operationId", sql.UniqueIdentifier, operation.id)
       .input("employeeId", sql.UniqueIdentifier, repl)
@@ -715,7 +716,7 @@ describeDatabaseIntegration("employee workday coverage phase3", () => {
         INNER JOIN operation_workdays ow ON ow.id = ew.operation_workday_id
         WHERE ow.operation_id = @operationId AND ew.employee_id = @employeeId AND ow.work_date = @workDate
       `);
-    assert.equal(replOn11.recordset.length, 0);
+    assert.equal(replOnNext.recordset.length, 0);
   });
 
   it("F availability: inactive replacement is rejected", async () => {

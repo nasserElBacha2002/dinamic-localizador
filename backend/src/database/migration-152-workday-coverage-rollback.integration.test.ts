@@ -10,9 +10,11 @@ import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
+  resolveCompanyTodayIso,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { deleteOperationCascade } from "../test-helpers/integration-entity-cascade";
 import { getPool } from "./connection";
 import {
   applySqlScriptInTransaction,
@@ -157,57 +159,64 @@ describeDatabaseIntegration("migration 152 workday coverage rollback", () => {
     const replacementA = await insertEmployee(1);
     const replacementB = await insertEmployee(2);
 
-    const start = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
-    const end = new Date(start.getTime() + 8 * 60 * 60 * 1000);
-    const operationRow = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("serviceId", sql.UniqueIdentifier, serviceId)
-      .input("startAt", sql.DateTime2, start)
-      .input("endAt", sql.DateTime2, end)
-      .query(`
-        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
-        INSERT INTO scheduled_operations (
-          company_id, service_id, operation_kind, scheduled_start, scheduled_end, status
-        )
-        OUTPUT INSERTED.id INTO @inserted (id)
-        VALUES (@companyId, @serviceId, N'ONE_TIME', @startAt, @endAt, N'SCHEDULED');
-        SELECT id FROM @inserted;
-      `);
-    const operationId = String(operationRow.recordset[0].id);
-
+    const { operationService } = await import("../services/operations/operation.service");
     const { operationAssignmentService } = await import(
       "../services/operations/operation-assignment.service"
     );
-    const { operationWorkDateService } = await import(
-      "../services/operations/operation-work-date.service"
+    const { recurringWorkdayMaterializationService } = await import(
+      "../services/workdays/recurring-workday-materialization.service"
     );
-    const { workdayMaterializationService } = await import(
-      "../services/workdays/workday-materialization.service"
+    const { WEEKDAYS } = await import("../constants/weekday");
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const allDaysSchedule = WEEKDAYS.map((dayOfWeek) => ({
+      dayOfWeek,
+      isEnabled: true,
+      startTime: "09:00",
+      endTime: "18:00",
+    }));
+    const operation = await operationService.createRecurring(
+      companyId,
+      {
+        operationKind: "RECURRING",
+        serviceId,
+        validFrom: today,
+        scheduleSource: "CUSTOM",
+        scheduleDays: allDaysSchedule,
+      },
+      {
+        earlyToleranceMinutes: 60,
+        lateToleranceMinutes: 90,
+        earlyToleranceSource: "CUSTOM",
+        lateToleranceSource: "CUSTOM",
+      },
     );
-    const workDate = await operationWorkDateService.resolveOperationWorkDate(companyId, operationId);
-    await operationAssignmentService.assignEmployee(companyId, operationId, replacementA, {
-      validFrom: workDate,
-      validUntil: workDate,
+    const operationId = operation.id;
+    const titularId = await insertEmployee(3);
+    await operationAssignmentService.assignEmployee(companyId, operationId, titularId, {
+      validFrom: today,
     });
-    await operationAssignmentService.assignEmployee(companyId, operationId, replacementB, {
-      validFrom: workDate,
-      validUntil: workDate,
-    });
-    const workdayA = (
-      await workdayMaterializationService.ensureEmployeeWorkday(
-        companyId,
-        operationId,
-        replacementA,
-      )
-    ).id;
-    const workdayB = (
-      await workdayMaterializationService.ensureEmployeeWorkday(
-        companyId,
-        operationId,
-        replacementB,
-      )
-    ).id;
+    await recurringWorkdayMaterializationService.materializeOperationHorizon(
+      companyId,
+      operationId,
+    );
+    const workdayRows = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("employeeId", sql.UniqueIdentifier, titularId)
+      .query(`
+        SELECT ew.id
+        FROM employee_workdays ew
+        INNER JOIN operation_workdays ow ON ow.id = ew.operation_workday_id
+        WHERE ew.company_id = @companyId
+          AND ow.operation_id = @operationId
+          AND ew.employee_id = @employeeId
+        ORDER BY ow.work_date ASC
+      `);
+    assert.ok(workdayRows.recordset.length >= 3, "need materialized workdays for rollback Case B");
+    const workdayA = String(workdayRows.recordset[1].id);
+    const workdayB = String(workdayRows.recordset[2].id);
 
     const sharedAssignmentId = randomUUID();
     const transaction = new sql.Transaction(pool);
@@ -250,6 +259,12 @@ describeDatabaseIntegration("migration 152 workday coverage rollback", () => {
     }
     assert.equal(threw, true);
     await assertSchema152();
+
+    try {
+      await deleteOperationCascade(companyId, operationId);
+    } catch (error) {
+      console.warn("[migration-152] Case B cleanup failed", error);
+    }
   });
 
   it("Case A — compatible database executes rollback then restores forward 152", async () => {

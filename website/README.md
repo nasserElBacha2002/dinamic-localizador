@@ -32,4 +32,4 @@ Archivos estáticos para Google Search Console:
 - `https://dinamicoperations.com/sitemap.xml`
 - `https://dinamicoperations.com/robots.txt`
 
-Hay un solo `sitemap.xml` y un solo `robots.txt` para el dominio. Viven en este proyecto; Vite los copia a `dist`. El Nginx del host tiene que proxear `/sitemap.xml` y `/robots.txt` al website (como ya hace con `/`), porque el catch-all del mismo dominio va a la app. Ver `deploy/nginx.dinamicoperations.com.conf.template`.
+Hay un solo par de URLs de dominio: `https://dinamicoperations.com/sitemap.xml` y `/robots.txt`. El catch-all del host manda todo lo que no es `/` a la app, así que esos archivos también están en `frontend/public/` (y el Nginx de la app los sirve como estáticos, sin caer en la SPA). Las copias de este proyecto quedan alineadas para cuando el Nginx del host proxee esas rutas al website.

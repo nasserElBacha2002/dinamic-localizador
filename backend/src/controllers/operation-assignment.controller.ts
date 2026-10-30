@@ -17,6 +17,10 @@ export const operationAssignmentController = {
         replacedAssignmentId: req.body.replacedAssignmentId,
         replacedEmployeeId: req.body.replacedEmployeeId,
         coverageReason: req.body.coverageReason,
+        employeeWorkdayId: req.body.employeeWorkdayId,
+        absenceRequestId: req.body.absenceRequestId,
+        absenceConflictId: req.body.absenceConflictId,
+        coverageCommandId: req.body.coverageCommandId,
       },
       req.auth?.userId ?? null,
     );

@@ -244,6 +244,28 @@ export const punctualityStatusFilterClause = (
   return "ar.punctuality_status = @punctualityStatus";
 };
 
+/**
+ * List validation filter. ABSENT is filter-only and must match the validation column badge:
+ * no canonical attendance row and workday effective state ABSENT (past opportunity window).
+ * Branches without workday context (simulation-only / legacy orphan) must not match ABSENT.
+ */
+export const ATTENDANCE_LIST_OPERATIONAL_ABSENT_FILTER_SQL = `
+  ar.id IS NULL AND (${EFFECTIVE_STATE_SQL}) = N'ABSENT'
+`;
+
+export const validationStatusFilterClause = (
+  validationStatus: NonNullable<ListAttendanceQuery["validationStatus"]>,
+  options?: { useEffectiveStateFilter?: boolean },
+): string => {
+  if (validationStatus === "ABSENT") {
+    if (options?.useEffectiveStateFilter) {
+      return ATTENDANCE_LIST_OPERATIONAL_ABSENT_FILTER_SQL.trim();
+    }
+    return "1 = 0";
+  }
+  return "ar.validation_status = @validationStatus";
+};
+
 const pushAttendanceStatusFilters = (
   filters: SqlFilter[],
   query: ListAttendanceQuery,
@@ -252,9 +274,15 @@ const pushAttendanceStatusFilters = (
   const allowNull = options?.allowNullAttendanceForNotRecorded ?? false;
 
   if (query.validationStatus) {
+    const clause = validationStatusFilterClause(query.validationStatus, {
+      useEffectiveStateFilter: allowNull,
+    });
+    const bindsValidationParam = clause.includes("@validationStatus");
     filters.push({
-      clause: "ar.validation_status = @validationStatus",
-      apply: (request) => request.input("validationStatus", sql.NVarChar(30), query.validationStatus),
+      clause,
+      apply: bindsValidationParam
+        ? (request) => request.input("validationStatus", sql.NVarChar(30), query.validationStatus)
+        : () => undefined,
     });
   }
 

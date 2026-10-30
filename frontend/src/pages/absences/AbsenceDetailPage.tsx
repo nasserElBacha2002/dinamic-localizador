@@ -4,23 +4,17 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { absenceKeys } from "../../api/absence-query-keys";
-import { AbsenceAttachmentsSection } from "../../components/absences/AbsenceAttachmentsSection";
 import { AbsenceOperationalImpactSection } from "../../components/absences/AbsenceOperationalImpactSection";
+import { AbsenceRequestSummarySection } from "../../components/absences/AbsenceRequestSummarySection";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
-import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
-import { EntityLink } from "../../components/entity-link";
+import { EmployeeAbsenceCollaboratorHistorySection } from "../../components/absences/EmployeeAbsenceCollaboratorHistorySection";
 import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
 import {
-  DataTable,
-  DetailFieldGrid,
   ErrorState,
   LoadingState,
   PageHeader,
   ResponsiveModal,
   SectionCard,
-  StatusBadge,
-  type DataTableColumn,
-  type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
   useAbsenceOperationalImpact,
@@ -34,99 +28,23 @@ import {
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import type { AffectedOperationWarning } from "../../types/absence";
-import { terminology } from "../../domain/terminology";
-import {
-  absenceEventTypeLabels,
-  absenceRequestedViaLabels,
-  absenceStatusLabels,
-  absenceTypeLabels,
-  formatAbsenceDate,
-} from "../../utils/absence-labels";
-import { formatDateTime } from "../../utils/dates";
+import { absenceTypeLabels } from "../../utils/absence-labels";
 import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
-import { operationStatusLabels } from "../../utils/labels";
-import { absenceStatusTone } from "../../utils/absence-status-display";
-import { operationStatusTone } from "../../utils/operation-status-display";
+import { absenceConflictUserMessage } from "./absence-conflict-message";
+import {
+  buildApprovalImpactPreviewText,
+  buildOperationCoverageHref,
+  deriveAbsenceOperationalSummary,
+  selectPrimaryCoverageOperationId,
+  shouldOfferCoverageAction,
+} from "./absence-detail-planning";
 import { hasPermission } from "../../utils/permissions";
 import { AbsenceNeedsInfoEditor } from "./AbsenceNeedsInfoEditor";
 import { AbsenceReviewActions } from "./AbsenceReviewActions";
-import { absenceConflictUserMessage } from "./absence-conflict-message";
 import {
   canAdminEditNeedsInfo,
   canShowAbsenceReviewActions,
 } from "./absence-review-permissions";
-
-const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
-  {
-    key: "service",
-    header: "Servicio",
-    render: (row) => (
-      <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
-    ),
-  },
-  {
-    key: "operation",
-    header: "Operación",
-    render: (row) => (
-      <EntityLink
-        entityType="operation"
-        entityId={row.operationId}
-        label={formatDateTime(row.scheduledStart)}
-      />
-    ),
-  },
-  { key: "start", header: "Inicio", getValue: (row) => formatDateTime(row.scheduledStart) },
-  {
-    key: "end",
-    header: "Fin",
-    getValue: (row) => (row.scheduledEnd ? formatDateTime(row.scheduledEnd) : "—"),
-  },
-  {
-    key: "status",
-    header: "Estado",
-    getValue: (row) => operationStatusLabels[row.status] ?? row.status,
-  },
-];
-
-const affectedOperationMobileCard: DataTableMobileCardConfig<AffectedOperationWarning> = {
-  title: (row) => (
-    <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
-  ),
-  status: (row) => (
-    <StatusBadge
-      label={operationStatusLabels[row.status] ?? row.status}
-      tone={operationStatusTone(row.status)}
-      variant="light"
-    />
-  ),
-  fields: [
-    {
-      key: "operation",
-      label: "Operación",
-      render: (row) => (
-        <EntityLink
-          entityType="operation"
-          entityId={row.operationId}
-          label={formatDateTime(row.scheduledStart)}
-        />
-      ),
-      visibility: "always",
-    },
-    {
-      key: "start",
-      label: "Inicio",
-      getValue: (row) => formatDateTime(row.scheduledStart),
-      visibility: "always",
-    },
-    {
-      key: "end",
-      label: "Fin",
-      getValue: (row) => (row.scheduledEnd ? formatDateTime(row.scheduledEnd) : "—"),
-      visibility: "always",
-    },
-  ],
-};
 
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -137,6 +55,10 @@ export function AbsenceDetailPage() {
   const canUpdateBalance = hasPermission(
     permissionsQuery.data?.permissions,
     "absences:balance:update",
+  );
+  const canManageOperations = hasPermission(
+    permissionsQuery.data?.permissions,
+    "operations:manage",
   );
 
   const requestQuery = useAbsenceRequest(id);
@@ -183,6 +105,11 @@ export function AbsenceDetailPage() {
     permissionsQuery.data?.permissions,
     "absences:review",
   );
+  const canViewAttachments = canManageAttachments;
+  const canReadAttendance = hasPermission(
+    permissionsQuery.data?.permissions,
+    "attendance:read",
+  );
   const attachmentType = typesQuery.data?.find((type) => type.id === detail.absenceTypeId);
   const attachmentPolicy =
     attachmentType?.attachmentPolicy ??
@@ -192,6 +119,28 @@ export function AbsenceDetailPage() {
   const insufficientBalance =
     detail.balanceImpact?.deductsBalance === true &&
     detail.balanceImpact.hasSufficientBalance === false;
+
+  const operationalSummary = deriveAbsenceOperationalSummary({
+    requestStatus: detail.status,
+    impact: impactQuery.data,
+    impactLoading: impactQuery.isLoading,
+    impactError: impactQuery.isError,
+  });
+  const primaryCoverageOperationId = selectPrimaryCoverageOperationId(
+    impactQuery.data,
+    detail.status,
+  );
+  const coverageHref =
+    canManageOperations &&
+    shouldOfferCoverageAction(detail.status, impactQuery.data) &&
+    primaryCoverageOperationId
+      ? buildOperationCoverageHref(primaryCoverageOperationId)
+      : null;
+  const approvalImpactPreview = buildApprovalImpactPreviewText(impactQuery.data);
+
+  const absenceTypeLabel =
+    absenceTypeLabels[detail.absenceType.code as keyof typeof absenceTypeLabels] ??
+    detail.absenceType.name;
 
   const closeRejectModal = () => {
     setRejectOpen(false);
@@ -274,12 +223,13 @@ export function AbsenceDetailPage() {
     <Stack gap="md">
       <PageHeader
         title="Detalle de ausencia"
-        description={`${detail.employee.name} · ${formatAbsenceDate(detail.startDate)} – ${formatAbsenceDate(detail.endDate)} · excepción operativa`}
+        description={`${detail.employee.name} · ${absenceTypeLabel}`}
         action={
           <AbsenceReviewActions
             canReview={canReview}
             insufficientBalance={insufficientBalance}
             approvePending={approveMutation.isPending}
+            coverageHref={coverageHref}
             onApprove={() => {
               void impactQuery.refetch();
               setApproveOpen(true);
@@ -303,54 +253,16 @@ export function AbsenceDetailPage() {
         </Alert>
       ) : null}
 
-      <SectionCard title="Resumen">
-        <DetailFieldGrid
-          fields={[
-            {
-              label: terminology.worker.singular,
-              value: (
-                <EntityLink
-                  entityType="employee"
-                  entityId={detail.employee?.id ?? detail.employeeId}
-                  label={`${detail.employee.name} (${detail.employee.phoneNumber})`}
-                />
-              ),
-            },
-            {
-              label: "Tipo",
-              value:
-                absenceTypeLabels[detail.absenceType.code as keyof typeof absenceTypeLabels] ??
-                detail.absenceType.name,
-            },
-            { label: "Inicio", value: formatAbsenceDate(detail.startDate) },
-            { label: "Fin", value: formatAbsenceDate(detail.endDate) },
-            { label: "Días", value: detail.totalDays },
-            { label: "Motivo", value: detail.reason },
-            {
-              label: "Estado",
-              value: (
-                <StatusBadge
-                  label={absenceStatusLabels[detail.status]}
-                  tone={absenceStatusTone(detail.status)}
-                  variant="light"
-                />
-              ),
-            },
-            { label: "Origen", value: absenceRequestedViaLabels[detail.requestedVia] },
-            { label: "Creada", value: formatDateTime(detail.createdAt) },
-          ]}
-        />
-      </SectionCard>
-
-      <SectionCard title="Revisión">
-        <DetailFieldGrid
-          fields={[
-            { label: "Revisada por", value: detail.reviewerName ?? "—" },
-            { label: "Revisada el", value: detail.reviewedAt ? formatDateTime(detail.reviewedAt) : "—" },
-            { label: "Comentario de revisión", value: detail.reviewComment ?? "—" },
-          ]}
-        />
-      </SectionCard>
+      <AbsenceRequestSummarySection
+        detail={detail}
+        absenceTypeLabel={absenceTypeLabel}
+        operationalSummary={operationalSummary}
+        impact={impactQuery.data}
+        canManageOperations={canManageOperations}
+        attachmentPolicy={attachmentPolicy}
+        canViewAttachments={canViewAttachments}
+        canManageAttachments={canManageAttachments}
+      />
 
       {canEditNeedsInfo ? (
         <AbsenceNeedsInfoEditor
@@ -367,19 +279,16 @@ export function AbsenceDetailPage() {
         />
       ) : null}
 
-      <AbsenceAttachmentsSection
-        requestId={detail.id}
-        requestStatus={detail.status}
-        attachmentPolicy={attachmentPolicy}
-        canManage={canManageAttachments}
-      />
+      <AbsenceOperationalImpactSection requestId={detail.id} requestStatus={detail.status} />
 
       <SectionCard title="Saldo del empleado">
         <EmployeeAbsenceBalanceCard
           employeeId={detail.employeeId}
           year={balanceYear}
           balanceImpact={detail.balanceImpact}
+          currentAbsenceTypeId={detail.absenceTypeId}
           showEdit={canUpdateBalance}
+          collapseFullBalance
           onBalanceSaved={() => {
             if (id) {
               void queryClient.invalidateQueries({
@@ -390,48 +299,13 @@ export function AbsenceDetailPage() {
         />
       </SectionCard>
 
-      <SectionCard title={`Historial del empleado (${balanceYear})`}>
-        <EmployeeAbsenceHistoryTable employeeId={detail.employeeId} year={balanceYear} />
-      </SectionCard>
-
-      <AbsenceOperationalImpactSection requestId={detail.id} />
-
-      <SectionCard title={`Impacto en ${terminology.operation.plural.toLowerCase()}`}>
-        {detail.affectedOperations.length === 0 ? (
-          <Text c="dimmed">
-            No se detectaron operaciones asignadas que se superpongan con esta ausencia.
-          </Text>
-        ) : (
-          <Stack gap="md">
-            <Alert color="yellow">
-              Esta solicitud se superpone con {detail.affectedOperations.length} operación(es)
-              asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
-            </Alert>
-            <DataTable
-              rows={detail.affectedOperations}
-              columns={affectedOperationColumns}
-              getRowKey={(row) => row.operationId}
-              mobileView="cards"
-              mobileCard={affectedOperationMobileCard}
-              aria-label="Operaciones afectadas por la ausencia"
-            />
-          </Stack>
-        )}
-      </SectionCard>
-
-      <SectionCard title="Historial">
-        <Stack gap="xs">
-          {detail.events.map((event) => (
-            <Text key={event.id} size="sm">
-              {formatDateTime(event.createdAt)} ·{" "}
-              {absenceEventTypeLabels[event.eventType as keyof typeof absenceEventTypeLabels] ??
-                event.eventType}
-              {event.performerName ? ` · ${event.performerName}` : ""}
-              {event.comment ? ` · ${event.comment}` : ""}
-            </Text>
-          ))}
-        </Stack>
-      </SectionCard>
+      <EmployeeAbsenceCollaboratorHistorySection
+        employeeId={detail.employeeId}
+        year={balanceYear}
+        events={detail.events}
+        currentRequestId={detail.id}
+        canReadAttendance={canReadAttendance}
+      />
 
       <ResponsiveModal
         opened={rejectOpen}
@@ -526,19 +400,15 @@ export function AbsenceDetailPage() {
         <Stack gap="sm">
           {impactQuery.data ? (
             <>
-              <Text size="sm">
-                Impacto estimado: {impactQuery.data.affectedOperations} operación(es),{" "}
-                {impactQuery.data.affectedWorkdays} jornada(s),{" "}
-                {impactQuery.data.attendanceConflicts} conflicto(s) de asistencia.
-              </Text>
+              <Text size="sm">{approvalImpactPreview}</Text>
               {impactQuery.data.requiresManualAction ? (
                 <Alert color="yellow">
-                  Hay conflictos o operaciones afectadas. Podés aprobar igualmente; las asignaciones
-                  no se eliminan automáticamente.
+                  La aprobación puede dejar jornadas sin cubrir o conflictos de planificación. Las
+                  asignaciones existentes no se eliminan automáticamente.
                 </Alert>
               ) : (
                 <Text c="dimmed" size="sm">
-                  No se detectaron conflictos críticos de planificación.
+                  No se anticipan conflictos críticos de planificación.
                 </Text>
               )}
             </>

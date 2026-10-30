@@ -89,8 +89,8 @@ export function CompanyAbsenceSettingsDialog({
     <SettingsDialog
       opened={opened}
       onClose={handleClose}
-      title="Ausencias"
-      subtitle="Los saldos de ausencias se asignan a nuevos empleados. No modifican empleados existentes."
+      title="Tipos y saldos"
+      subtitle="Días anuales predeterminados y asignación automática para nuevos colaboradores."
       onSave={handleSave}
       saving={updateMutation.isPending}
       saveDisabled={!hasChanges || disabled}
@@ -117,9 +117,6 @@ export function CompanyAbsenceSettingsDialog({
                 <Table.Tr key={row.absenceTypeCode}>
                   <Table.Td>
                     <Text size="sm">{row.absenceTypeName}</Text>
-                    <Text size="xs" c="dimmed">
-                      {row.absenceTypeCode}
-                    </Text>
                   </Table.Td>
                   <Table.Td>
                     <NumberInput

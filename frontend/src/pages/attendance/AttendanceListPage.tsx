@@ -34,7 +34,7 @@ import type {
   CheckoutStatusFilter,
   LocationStatus,
   PunctualityStatus,
-  ValidationStatus,
+  ValidationStatusFilter,
 } from "../../types/attendance";
 import { terminology } from "../../domain/terminology";
 import { isModuleEnabled } from "../../utils/company-modules";
@@ -50,6 +50,7 @@ import {
   attendanceListRowKey,
   attendanceListValidationLabel,
   attendanceListValidationTone,
+  attendanceValidationStatusFilterOptions,
 } from "../../utils/attendance-list-display";
 import { formatDistanceMeters, getRelatedName } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -57,7 +58,6 @@ import {
   checkoutStatusLabels,
   locationStatusLabels,
   punctualityStatusLabels,
-  validationStatusLabels,
 } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 import { navigateWithListContext } from "../../utils/list-navigation";
@@ -152,7 +152,7 @@ export function AttendanceListPage() {
     employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
     serviceIds: table.state.serviceIds.length > 0 ? table.state.serviceIds : undefined,
     operationShiftId: effectiveOperationShiftId || undefined,
-    validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
+    validationStatus: (table.state.validationStatus as ValidationStatusFilter) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
     checkoutStatus: (table.state.checkoutStatus as CheckoutStatusFilter) || undefined,
@@ -456,10 +456,7 @@ export function AttendanceListPage() {
             onChange={(nextValue) => {
               table.setField("validationStatus", nextValue);
             }}
-            data={[
-              { value: "", label: "Todas" },
-              ...Object.entries(validationStatusLabels).map(([value, label]) => ({ value, label })),
-            ]}
+            data={attendanceValidationStatusFilterOptions()}
           />
         </FilterBar.Item>
 

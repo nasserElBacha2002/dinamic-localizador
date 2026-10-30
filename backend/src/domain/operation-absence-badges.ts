@@ -7,10 +7,16 @@ import type {
 const BADGE_LABELS: Record<OperationAbsenceBadgeCode, string> = {
   ABSENT: "Ausente",
   PARTIAL_ABSENCE: "Ausencia parcial",
-  REPLACEMENT_PENDING: "Reemplazo pendiente",
-  REPLACED: "Reemplazado",
-  OPEN_CONFLICT: "Conflicto abierto",
-  RESOLVED_CONFLICT: "Conflicto resuelto",
+  REPLACEMENT_PENDING: "Vacante por ausencia",
+  REPLACED: "Cobertura activa",
+  OPEN_CONFLICT: "Planificación pendiente",
+  RESOLVED_CONFLICT: "Planificación resuelta",
+};
+
+export type OperationAbsenceActiveWorkdayCoverage = {
+  replacementEmployeeId: string;
+  replacementEmployeeName?: string | null;
+  absenceRequestId?: string | null;
 };
 
 export type OperationAbsenceBadgeInput = {
@@ -19,6 +25,8 @@ export type OperationAbsenceBadgeInput = {
   expectationStatus?: string | null;
   availabilityStatus?: string | null;
   conflicts: AbsenceOperationalConflictDto[];
+  /** Active workday-scoped coverage (Phase 3). Not inferred from resolved conflicts alone. */
+  activeWorkdayCoverage?: OperationAbsenceActiveWorkdayCoverage | null;
 };
 
 /**
@@ -60,40 +68,47 @@ export const resolveOperationAbsenceBadges = (
       c.replacementEmployeeId === input.employeeId,
   );
 
+  const activeCoverage = input.activeWorkdayCoverage;
+  const titularHasActiveCoverage =
+    Boolean(activeCoverage?.replacementEmployeeId) &&
+    activeCoverage!.replacementEmployeeId !== input.employeeId;
+
   const openAssignment = related.find(
     (c) =>
       c.status === "OPEN" &&
       c.conflictType === "ASSIGNMENT_DURING_ABSENCE" &&
-      c.assignmentId === input.assignmentId,
+      c.assignmentId === input.assignmentId &&
+      !titularHasActiveCoverage,
   );
   if (openAssignment) {
     push("REPLACEMENT_PENDING", {
       absenceRequestId: openAssignment.absenceRequestId,
       conflictId: openAssignment.id,
     });
-    push("OPEN_CONFLICT", {
-      absenceRequestId: openAssignment.absenceRequestId,
-      conflictId: openAssignment.id,
+  }
+
+  if (titularHasActiveCoverage && activeCoverage) {
+    push("REPLACED", {
+      absenceRequestId:
+        activeCoverage.absenceRequestId ??
+        related.find((c) => c.assignmentId === input.assignmentId)?.absenceRequestId ??
+        null,
+      replacementEmployeeId: activeCoverage.replacementEmployeeId,
     });
   }
 
-  const replaced = related.find(
+  const assignReplacementResolved = related.find(
     (c) =>
       c.status === "RESOLVED" &&
       c.resolutionCode === "ASSIGN_REPLACEMENT" &&
       c.assignmentId === input.assignmentId &&
       c.employeeId === input.employeeId,
   );
-  if (replaced) {
-    push("REPLACED", {
-      absenceRequestId: replaced.absenceRequestId,
-      conflictId: replaced.id,
-      replacementEmployeeId: replaced.replacementEmployeeId,
-    });
+  if (assignReplacementResolved && !titularHasActiveCoverage) {
     push("RESOLVED_CONFLICT", {
-      absenceRequestId: replaced.absenceRequestId,
-      conflictId: replaced.id,
-      replacementEmployeeId: replaced.replacementEmployeeId,
+      absenceRequestId: assignReplacementResolved.absenceRequestId,
+      conflictId: assignReplacementResolved.id,
+      replacementEmployeeId: assignReplacementResolved.replacementEmployeeId,
     });
   }
 
@@ -110,7 +125,7 @@ export const resolveOperationAbsenceBadges = (
   const otherResolved = related.find(
     (c) =>
       (c.status === "RESOLVED" || c.status === "DISMISSED") &&
-      c.id !== replaced?.id,
+      c.id !== assignReplacementResolved?.id,
   );
   if (otherResolved) {
     push("RESOLVED_CONFLICT", {

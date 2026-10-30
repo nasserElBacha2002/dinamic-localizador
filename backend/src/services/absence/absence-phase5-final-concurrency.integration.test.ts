@@ -24,6 +24,7 @@ import { absenceOperationalImpactQueryService } from "./absence-operational-impa
 import { absenceOperationalReconciliationService } from "./absence-operational-reconciliation.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { operationWorkDateService } from "../operations/operation-work-date.service";
+import { workdayMaterializationService } from "../workdays/workday-materialization.service";
 import { AppError } from "../../errors/app-error";
 import { buildAttendanceDuringAbsenceConflictKey } from "../../types/absence-operational-impact";
 import { getDateIsoInTimezone } from "../../utils/absence-date";
@@ -126,14 +127,53 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
     };
   };
 
+  const resolveEmployeeWorkdayIdForConflict = async (input: {
+    operationId: string;
+    employeeId: string;
+    assignmentId: string;
+    workDate: string;
+  }): Promise<string> => {
+    const pool = getPool();
+    const byAssignment = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("assignmentId", sql.UniqueIdentifier, input.assignmentId)
+      .query(`
+        SELECT TOP 1 ew.id
+        FROM dbo.employee_workdays ew
+        WHERE ew.company_id = @companyId
+          AND ew.employee_id = @employeeId
+          AND ew.operation_assignment_id = @assignmentId
+        ORDER BY ew.created_at DESC
+      `);
+    if (byAssignment.recordset[0]?.id) {
+      return String(byAssignment.recordset[0].id);
+    }
+
+    const ensured = await workdayMaterializationService.ensureEmployeeWorkday(
+      companyId,
+      input.operationId,
+      input.employeeId,
+    );
+    return ensured.id;
+  };
+
   const insertOpenAssignmentConflict = async (input: {
     absenceRequestId: string;
     employeeId: string;
     operationId: string;
     serviceId: string;
     assignmentId: string;
+    workDate: string;
     version?: number;
   }) => {
+    const employeeWorkdayId = await resolveEmployeeWorkdayIdForConflict({
+      operationId: input.operationId,
+      employeeId: input.employeeId,
+      assignmentId: input.assignmentId,
+      workDate: input.workDate,
+    });
     return absenceOperationalImpactRepository.upsertConflict({
       companyId,
       absenceRequestId: input.absenceRequestId,
@@ -144,13 +184,17 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       operationId: input.operationId,
       serviceId: input.serviceId,
       assignmentId: input.assignmentId,
+      employeeWorkdayId,
       idempotencyKey: `test-conflict:${randomUUID()}`,
       rangeStartAt: new Date(),
       rangeEndAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
     });
   };
 
-  const insertApprovedAbsenceStub = async (employeeId: string): Promise<string> => {
+  const insertApprovedAbsenceStub = async (
+    employeeId: string,
+    options?: { coverWorkDate?: string },
+  ): Promise<string> => {
     const pool = getPool();
     const type = await pool
       .request()
@@ -162,11 +206,12 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
     assert.ok(absenceTypeId, "company must have an absence type");
 
     const companyTz = "America/Argentina/Buenos_Aires";
-    const startDate = getDateIsoInTimezone(new Date(), companyTz);
-    const endDate = getDateIsoInTimezone(
-      new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-      companyTz,
-    );
+    const startDate =
+      options?.coverWorkDate ?? getDateIsoInTimezone(new Date(), companyTz);
+    const endDate =
+      options?.coverWorkDate ??
+      getDateIsoInTimezone(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), companyTz);
+    const totalDays = options?.coverWorkDate ? 1 : 3;
 
     const created = await absenceRequestRepository.create(companyId, {
       employeeId,
@@ -175,7 +220,7 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       endDate,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
-      totalDays: 3,
+      totalDays,
       reason: "phase5 concurrency fixture",
       requestedVia: "ADMIN",
     });
@@ -382,13 +427,14 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       { validFrom: workDate, validUntil: workDate },
       adminUserId,
     );
-    const absenceRequestId = await insertApprovedAbsenceStub(absent);
+    const absenceRequestId = await insertApprovedAbsenceStub(absent, { coverWorkDate: workDate });
     const conflict = await insertOpenAssignmentConflict({
       absenceRequestId,
       employeeId: absent,
       operationId,
       serviceId,
       assignmentId: assignment.id,
+      workDate,
     });
 
     const sharedCommand = `shared-${randomUUID()}`;
@@ -450,6 +496,7 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       operationId,
       serviceId,
       assignmentId: assignment.id,
+      workDate,
     });
 
     const [a, b] = await Promise.allSettled([
@@ -538,13 +585,14 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       { validFrom: workDate, validUntil: workDate },
       adminUserId,
     );
-    const absenceRequestId = await insertApprovedAbsenceStub(absent);
+    const absenceRequestId = await insertApprovedAbsenceStub(absent, { coverWorkDate: workDate });
     const conflict = await insertOpenAssignmentConflict({
       absenceRequestId,
       employeeId: absent,
       operationId,
       serviceId,
       assignmentId: assignment.id,
+      workDate,
     });
 
     __setResolveConflictFailurePointForTests("after_assignment_created");
@@ -598,13 +646,14 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       { validFrom: workDate, validUntil: workDate },
       adminUserId,
     );
-    const absenceRequestId = await insertApprovedAbsenceStub(absent);
+    const absenceRequestId = await insertApprovedAbsenceStub(absent, { coverWorkDate: workDate });
     const conflict = await insertOpenAssignmentConflict({
       absenceRequestId,
       employeeId: absent,
       operationId,
       serviceId,
       assignmentId: assignment.id,
+      workDate,
     });
 
     __setResolveConflictFailurePointForTests("before_audit");

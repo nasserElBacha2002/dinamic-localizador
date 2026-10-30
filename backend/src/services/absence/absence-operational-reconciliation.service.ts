@@ -13,6 +13,7 @@ import {
   type JobLeaseToken,
 } from "../../repositories/absence/absence-workday-sync-job.repository";
 import { employeeWorkdayAbsenceReconciliationService } from "../workdays/employee-workday-absence-reconciliation.service";
+import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import type sql from "mssql";
 
@@ -134,6 +135,16 @@ export const absenceOperationalReconciliationService = {
 
     for (const op of impact.operations) {
       await guard();
+      const matchingWorkday = impact.workdays.find(
+        (workday) => workday.operationAssignmentId === op.assignmentId,
+      );
+      let employeeWorkdayId = matchingWorkday?.employeeWorkdayId ?? null;
+      if (!employeeWorkdayId) {
+        employeeWorkdayId = await employeeWorkdayRepository.findLatestIdByAssignment(
+          companyId,
+          op.assignmentId,
+        );
+      }
       const key = buildOperationalConflictIdempotencyKey({
         requestId: absenceRequestId,
         version,
@@ -150,6 +161,7 @@ export const absenceOperationalReconciliationService = {
         operationId: op.operationId,
         serviceId: op.serviceId,
         assignmentId: op.assignmentId,
+        employeeWorkdayId,
         idempotencyKey: key,
         rangeStartAt: new Date(op.scheduledStart),
         rangeEndAt: op.scheduledEnd ? new Date(op.scheduledEnd) : null,

@@ -15,7 +15,10 @@ import {
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
-import { buildAbsencePendingDedupKey } from "../../utils/admin-alert/dedup-keys";
+import {
+  buildAbsenceCreatedOperationalDedupKey,
+  buildAbsencePendingDedupKey,
+} from "../../utils/admin-alert/dedup-keys";
 
 const uniqueCompanyName = (): string =>
   `Admin Alert Recon ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -179,8 +182,8 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
       phoneNumber: uniquePhone("11110002"),
       displayName: "Early",
       isEnabled: true,
-      receiveOperationalAlerts: false,
-      receiveRequestAlerts: true,
+      receiveOperationalAlerts: true,
+      receiveRequestAlerts: false,
       receiveSecurityAlerts: false,
     });
 
@@ -195,15 +198,15 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
       sourceMessageSid: uniqueMessageSid(),
     });
 
-    const dedup = buildAbsencePendingDedupKey(detail.id);
+    const dedup = buildAbsenceCreatedOperationalDedupKey(detail.id);
     assert.equal(await countOutbox(companyId, dedup), 1);
 
     const late = await companyAlertRecipientRepository.create(companyId, {
       phoneNumber: uniquePhone("11110003"),
       displayName: "Late",
       isEnabled: true,
-      receiveOperationalAlerts: false,
-      receiveRequestAlerts: true,
+      receiveOperationalAlerts: true,
+      receiveRequestAlerts: false,
       receiveSecurityAlerts: false,
     });
 
@@ -251,16 +254,16 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
       phoneNumber: uniquePhone("11110004"),
       displayName: "A",
       isEnabled: true,
-      receiveOperationalAlerts: false,
-      receiveRequestAlerts: true,
+      receiveOperationalAlerts: true,
+      receiveRequestAlerts: false,
       receiveSecurityAlerts: false,
     });
     const recipientB = await companyAlertRecipientRepository.create(companyId, {
       phoneNumber: uniquePhone("11110005"),
       displayName: "B",
       isEnabled: true,
-      receiveOperationalAlerts: false,
-      receiveRequestAlerts: true,
+      receiveOperationalAlerts: true,
+      receiveRequestAlerts: false,
       receiveSecurityAlerts: false,
     });
 
@@ -296,7 +299,7 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     });
     mock.restoreAll();
 
-    const dedup = buildAbsencePendingDedupKey(detail.id);
+    const dedup = buildAbsenceCreatedOperationalDedupKey(detail.id);
     assert.equal(await countOutbox(companyId, dedup), 1);
 
     const beforeB = await getPool()
@@ -334,12 +337,12 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     );
 
     const { companyId, vacation, employee } = await seedCompany(true);
-    await companyAlertRecipientRepository.create(companyId, {
+    const recipient = await companyAlertRecipientRepository.create(companyId, {
       phoneNumber: uniquePhone("11110006"),
       displayName: "Only",
       isEnabled: true,
-      receiveOperationalAlerts: false,
-      receiveRequestAlerts: true,
+      receiveOperationalAlerts: true,
+      receiveRequestAlerts: false,
       receiveSecurityAlerts: false,
     });
 
@@ -361,7 +364,7 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
     }
 
     const targetId = ids[0]!;
-    const targetDedup = buildAbsencePendingDedupKey(targetId);
+    const targetDedup = buildAbsenceCreatedOperationalDedupKey(targetId);
     assert.equal(await countOutbox(companyId, targetDedup), 1);
 
     await getPool()
@@ -373,6 +376,34 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
         WHERE company_id = @companyId AND deduplication_key = @dedup
       `);
     assert.equal(await countOutbox(companyId, targetDedup), 0);
+
+    // Recon queries are global TOP N ordered by occurred_at ASC. Anchor this
+    // company's missing row as the oldest eligible obligation so a small batch
+    // still has to surface it past already-materialized peers.
+    const watermark = new Date("1900-01-01T00:00:00.000Z");
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("recipientId", sql.UniqueIdentifier, recipient.id)
+      .input("targetId", sql.UniqueIdentifier, targetId)
+      .input("watermark", sql.DateTime2, watermark)
+      .query(`
+        UPDATE company_settings
+        SET admin_alerts_enabled_at = @watermark
+        WHERE company_id = @companyId;
+
+        UPDATE company_alert_recipients
+        SET created_at = @watermark
+        WHERE company_id = @companyId AND id = @recipientId;
+
+        UPDATE absence_requests
+        SET created_at = DATEADD(hour, 1, @watermark)
+        WHERE company_id = @companyId AND id <> @targetId;
+
+        UPDATE absence_requests
+        SET created_at = @watermark
+        WHERE company_id = @companyId AND id = @targetId;
+      `);
 
     mock.method(adminAlertService, "emit", async () => ({
       enqueued: 0,
@@ -434,5 +465,44 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
 
     await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
     assert.equal(await countOutbox(companyId, dedup), 1);
+  });
+
+  it("REQUEST-only recipient is not live-emitted and is recovered by reconciliation", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+
+    const { companyId, vacation, employee } = await seedCompany(true);
+    await companyAlertRecipientRepository.create(companyId, {
+      phoneNumber: uniquePhone("11110008"),
+      displayName: "Request Only",
+      isEnabled: true,
+      receiveOperationalAlerts: false,
+      receiveRequestAlerts: true,
+      receiveSecurityAlerts: false,
+    });
+
+    const absenceStartIso = addDaysToIso(await resolveCompanyTodayIso(companyId), 3);
+    const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: absenceStartIso,
+      endDate: absenceStartIso,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      reason: "Request only",
+      sourceMessageSid: uniqueMessageSid(),
+    });
+
+    const pendingDedup = buildAbsencePendingDedupKey(detail.id);
+    const operationalDedup = buildAbsenceCreatedOperationalDedupKey(detail.id);
+    assert.equal(await countOutbox(companyId, pendingDedup), 0);
+    assert.equal(await countOutbox(companyId, operationalDedup), 0);
+
+    const recovery = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.ok(recovery.recovered >= 1);
+    assert.equal(await countOutbox(companyId, pendingDedup), 1);
+    assert.equal(await countOutbox(companyId, operationalDedup), 0);
   });
 });

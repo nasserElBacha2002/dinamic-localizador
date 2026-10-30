@@ -1,4 +1,4 @@
-import { Alert, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Group, SimpleGrid, Stack, Tabs } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -15,7 +15,6 @@ import { companyRoleLabels } from "../../utils/labels";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 import {
-  buildAbsenceSummary,
   buildEmployeeCategoriesSummary,
   buildLocationZonesSummary,
   buildOperationalSettingsSummary,
@@ -30,6 +29,7 @@ import { useWhatsAppQuotaSettings } from "../../hooks/useWhatsAppQuotaSettings";
 import { CompanyAbsenceCalendarDialog } from "./components/absence/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceOperationalIntegrationDialog } from "./components/absence/CompanyAbsenceOperationalIntegrationDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/absence/CompanyAbsenceSettingsDialog";
+import { CompanyAbsenceSettingsTabPanel } from "./components/absence/CompanyAbsenceSettingsTabPanel";
 import { CompanyAbsenceTypePolicyDialog } from "./components/absence/CompanyAbsenceTypePolicyDialog";
 import { CompanyOperationalSettingsDialog } from "./components/schedule/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/schedule/CompanyWeeklyScheduleDialog";
@@ -390,165 +390,16 @@ export function CompanySettingsPage() {
 
         <Tabs.Panel value="absences" pt="md">
           {absencesTabEnabled && absenceSettingsQuery.isPending ? <LoadingState /> : null}
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            <SettingsSummaryCard
-              title="Configuración base de ausencias"
-              description="Saldos predeterminados para nuevos empleados e información general del módulo."
-              summaryItems={
-                absenceSettingsQuery.data
-                  ? buildAbsenceSummary(absenceSettingsQuery.data).summaryItems
-                  : []
-              }
-              loading={absenceSettingsQuery.isLoading}
-              error={
-                absenceSettingsQuery.isError
-                  ? getApiErrorMessage(absenceSettingsQuery.error)
-                  : null
-              }
-              onRetry={() => void absenceSettingsQuery.refetch()}
-              actionLabel="Gestionar ausencias"
-              canEdit={canUpdate && !absenceSettingsQuery.isError}
-              onAction={() => setOpenDialog("absences")}
+          {absencesTabEnabled ? (
+            <CompanyAbsenceSettingsTabPanel
+              canUpdate={canUpdate}
+              onOpenDialog={setOpenDialog}
+              absenceSettingsQuery={absenceSettingsQuery}
+              absenceCalendarQuery={absenceCalendarQuery}
+              settingsQuery={settingsQuery}
+              storageHealthQuery={storageHealthQuery}
             />
-
-            <SettingsSummaryCard
-              title="Políticas por tipo"
-              description="Días corridos o hábiles, calendario aplicable y política de adjuntos por tipo."
-              summaryItems={[
-                {
-                  label: "Tipos",
-                  value: "Configurá el modo de conteo y adjuntos sin SQL",
-                },
-              ]}
-              actionLabel="Gestionar políticas"
-              canEdit={canUpdate}
-              onAction={() => setOpenDialog("absenceTypePolicy")}
-            />
-
-            <SettingsSummaryCard
-              title="Calendarios, feriados y excepciones"
-              description="Días laborables, feriados y excepciones para el cálculo de duración. Incluye activación de calendario avanzado."
-              summaryItems={
-                absenceCalendarQuery.data
-                  ? [
-                      {
-                        label: "Calendario",
-                        value: absenceCalendarQuery.data.name,
-                      },
-                      {
-                        label: "Zona horaria",
-                        value: absenceCalendarQuery.data.timezone,
-                      },
-                      {
-                        label: "Días laborables",
-                        value: String(
-                          absenceCalendarQuery.data.weekdays.filter((day) => day.isWorkingDay)
-                            .length,
-                        ),
-                      },
-                    ]
-                  : []
-              }
-              loading={absenceCalendarQuery.isLoading}
-              error={
-                absenceCalendarQuery.isError
-                  ? getApiErrorMessage(absenceCalendarQuery.error)
-                  : null
-              }
-              onRetry={() => void absenceCalendarQuery.refetch()}
-              actionLabel="Gestionar calendario"
-              canEdit={canUpdate && !absenceCalendarQuery.isError}
-              onAction={() => setOpenDialog("absenceCalendar")}
-            />
-
-            <SettingsSummaryCard
-              title="Integración operativa"
-              description="Impacto de ausencias sobre operaciones, jornadas y conflictos. Activación por empresa piloto."
-              summaryItems={
-                settingsQuery.data
-                  ? [
-                      {
-                        label: "Estado",
-                        value: settingsQuery.data.absenceOperationalIntegrationEnabled
-                          ? "Habilitada"
-                          : "Deshabilitada",
-                      },
-                      {
-                        label: "Rollout",
-                        value: "Off por defecto · activar solo piloto",
-                      },
-                    ]
-                  : []
-              }
-              loading={settingsQuery.isLoading}
-              error={settingsQuery.isError ? getApiErrorMessage(settingsQuery.error) : null}
-              onRetry={() => void settingsQuery.refetch()}
-              actionLabel="Gestionar integración"
-              canEdit={canUpdate && !settingsQuery.isError}
-              onAction={() => setOpenDialog("absenceOperationalIntegration")}
-            />
-
-            {canUpdate ? (
-              <SettingsSummaryCard
-                title="Documentación adjunta"
-                description="Almacenamiento de archivos adjuntos en solicitudes de ausencia (PDF e imágenes)."
-                summaryItems={
-                  storageHealthQuery.data
-                    ? [
-                        {
-                          label: "Módulo",
-                          value: "Siempre habilitado",
-                        },
-                        {
-                          label: "Almacenamiento",
-                          value: storageHealthQuery.data.storageConfigured
-                            ? storageHealthQuery.data.storageAvailable
-                              ? "Disponible"
-                              : "No disponible"
-                            : "No configurado",
-                        },
-                        ...(storageHealthQuery.data.message
-                          ? [
-                              {
-                                label: "Detalle",
-                                value: storageHealthQuery.data.message,
-                              },
-                            ]
-                          : []),
-                      ]
-                    : []
-                }
-                loading={storageHealthQuery.isLoading}
-                error={
-                  storageHealthQuery.isError
-                    ? getApiErrorMessage(storageHealthQuery.error)
-                    : null
-                }
-                onRetry={() => void storageHealthQuery.refetch()}
-                footer={
-                  <Stack gap="xs">
-                    <Text size="sm">
-                      Los adjuntos están siempre habilitados. El upload depende de que GCS esté
-                      configurado y accesible en el servidor.
-                    </Text>
-                    {!storageHealthQuery.data?.storageConfigured ||
-                    !storageHealthQuery.data?.storageAvailable ? (
-                      <Text size="xs" c="dimmed">
-                        El almacenamiento debe estar configurado en el servidor para poder
-                        subir archivos.
-                      </Text>
-                    ) : null}
-                  </Stack>
-                }
-              />
-            ) : null}
-
-            <Alert color="gray" variant="light" className={pageClasses.readOnlyAlert}>
-              Los saldos individuales de colaboradores se gestionan en la ficha del empleado, no
-              en configuración. El ledger de saldos se activa por empresa con un proceso administrativo
-              explícito.
-            </Alert>
-          </SimpleGrid>
+          ) : null}
         </Tabs.Panel>
       </Tabs>
 

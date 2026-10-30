@@ -33,6 +33,13 @@ export const buildMissingCheckoutAfterEndDedupKey = (
 export const buildAbsencePendingDedupKey = (absenceRequestId: string): string =>
   `absence-pending:${normalizeId(absenceRequestId)}`;
 
+/** Operational WhatsApp alert for new absence creation (Subfase 2.5). */
+export const buildAbsenceCreatedOperationalDedupKey = (absenceRequestId: string): string =>
+  `absence-created:operational:${normalizeId(absenceRequestId)}`;
+
+/** @deprecated Use buildAbsenceCreatedOperationalDedupKey */
+export const buildAbsencePendingOperationalDedupKey = buildAbsenceCreatedOperationalDedupKey;
+
 /** Durable crossing id: allows future alerts after recovery + re-cross. */
 export const buildAttendanceThresholdDedupKey = (
   employeeId: string,

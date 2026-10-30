@@ -1,4 +1,4 @@
-import { Alert, Stack, Switch, Text } from "@mantine/core";
+import { Stack, Switch, Text } from "@mantine/core";
 import { useState } from "react";
 import { SettingsDialog } from "../SettingsDialog";
 import { useCompanySettings, useUpdateCompanySettings } from "../../../../hooks/useCompanySettings";
@@ -25,8 +25,8 @@ export function CompanyAbsenceOperationalIntegrationDialog({
     <SettingsDialog
       opened={opened}
       onClose={onClose}
-      title="Integración operativa"
-      subtitle="Impacto de ausencias aprobadas sobre operaciones, jornadas y conflictos."
+      title="Vínculo con operaciones"
+      subtitle="Define si las ausencias aprobadas generan efectos visibles en jornadas y conflictos operativos."
       size="lg"
       onSave={() => onClose()}
       saveLabel="Cerrar"
@@ -35,10 +35,10 @@ export function CompanyAbsenceOperationalIntegrationDialog({
       submitError={submitError}
     >
       <Stack gap="md">
-        <Alert color="yellow">
-          Activar solo en empresas piloto. No reprocesa ausencias históricas automáticamente.
-          Precondiciones: migración 069/070, jornadas y asignaciones operativas disponibles.
-        </Alert>
+        <Text size="sm" c="dimmed">
+          Usá esta opción solo si tu empresa necesita reflejar ausencias en la planificación
+          operativa. No recalcula solicitudes ya registradas.
+        </Text>
 
         {settingsQuery.data ? (
           <>
@@ -49,8 +49,8 @@ export function CompanyAbsenceOperationalIntegrationDialog({
                 : "deshabilitada (por defecto)"}
             </Text>
             <Switch
-              label="Integración operativa de ausencias"
-              description="Genera conflictos y efectos auditables al aprobar/cancelar, sin eliminar asignaciones silenciosamente."
+              label="Vínculo operativo de ausencias"
+              description="Al aprobar o cancelar, registra conflictos y efectos auditables sin quitar asignaciones en silencio."
               checked={Boolean(settingsQuery.data.absenceOperationalIntegrationEnabled)}
               disabled={!canUpdate || updateSettings.isPending}
               onChange={(event) => {
@@ -62,8 +62,8 @@ export function CompanyAbsenceOperationalIntegrationDialog({
                   .then(() =>
                     onSaved(
                       event.currentTarget.checked
-                        ? "Integración operativa de ausencias activada."
-                        : "Integración operativa de ausencias desactivada.",
+                        ? "Vínculo operativo de ausencias activado."
+                        : "Vínculo operativo de ausencias desactivado.",
                     ),
                   )
                   .catch((error: unknown) => setSubmitError(getApiErrorMessage(error)));

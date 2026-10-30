@@ -20,6 +20,7 @@ export interface SettingsSummaryCardProps {
   error?: string | null;
   onRetry?: () => void;
   footer?: ReactNode;
+  cardClassName?: string;
 }
 
 export function SettingsSummaryCard({
@@ -34,10 +35,15 @@ export function SettingsSummaryCard({
   error = null,
   onRetry,
   footer,
+  cardClassName,
 }: SettingsSummaryCardProps) {
+  const cardClass = cardClassName
+    ? `${classes.summaryCard} ${cardClassName}`
+    : classes.summaryCard;
+
   if (loading) {
     return (
-      <Card withBorder padding="lg" radius="md" h="100%" className={classes.summaryCard}>
+      <Card withBorder padding="lg" radius="md" h="100%" className={cardClass}>
         <Stack gap="sm">
           <Skeleton height={20} width="60%" />
           <Skeleton height={14} width="90%" />
@@ -50,7 +56,7 @@ export function SettingsSummaryCard({
 
   if (error) {
     return (
-      <Card withBorder padding="lg" radius="md" h="100%" className={classes.summaryCard}>
+      <Card withBorder padding="lg" radius="md" h="100%" className={cardClass}>
         <Stack gap="sm">
           <Title order={4} className={classes.summaryTitle}>
             {title}
@@ -67,7 +73,7 @@ export function SettingsSummaryCard({
   }
 
   return (
-    <Card withBorder padding="lg" radius="md" h="100%" className={classes.summaryCard}>
+    <Card withBorder padding="lg" radius="md" h="100%" className={cardClass}>
       <Stack gap="md" justify="space-between" h="100%">
         <Stack gap="sm">
           <Stack gap={4}>

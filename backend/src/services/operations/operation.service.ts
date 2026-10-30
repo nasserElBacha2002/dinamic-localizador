@@ -5,6 +5,8 @@ import { getPool } from "../../database/connection";
 import { resolveOperationAbsenceBadges } from "../../domain/operation-absence-badges";
 import { operationAttendanceRepository } from "../../repositories/operations/operation-attendance.repository";
 import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
+import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import type { ActiveWorkdayCoverageRow } from "../../repositories/operations/operation-coverage-event.repository";
 import { operationRepository } from "../../repositories/operations/operation.repository";
 import { operationScheduleRepository } from "../../repositories/operations/operation-schedule.repository";
 import { serviceRepository } from "../../repositories/locations/service.repository";
@@ -1048,13 +1050,86 @@ export const operationService = {
         )
       : [];
 
+    const employeeWorkdayIds = summary.employees
+      .map((employee) => employee.employeeWorkdayId)
+      .filter((id): id is string => Boolean(id));
+    const coverageByWorkday = featureEnabled
+      ? await operationCoverageEventRepository.listActiveCoverageByEmployeeWorkdayIds(
+          companyId,
+          employeeWorkdayIds,
+        )
+      : new Map<string, ActiveWorkdayCoverageRow>();
+
+    const legacyCoverageByAssignmentDate = new Map<string, ActiveWorkdayCoverageRow>();
+    if (featureEnabled && summary.workDate) {
+      const legacyPairKeys = new Set<string>();
+      const legacyPairs: Array<{ replacedAssignmentId: string; operationalDate: string }> = [];
+      for (const employee of summary.employees) {
+        if (
+          employee.employeeWorkdayId &&
+          coverageByWorkday.has(employee.employeeWorkdayId)
+        ) {
+          continue;
+        }
+        const key = `${employee.assignmentId}:${summary.workDate}`;
+        if (legacyPairKeys.has(key)) {
+          continue;
+        }
+        legacyPairKeys.add(key);
+        legacyPairs.push({
+          replacedAssignmentId: employee.assignmentId,
+          operationalDate: summary.workDate,
+        });
+      }
+      if (legacyPairs.length > 0) {
+        const legacyBatch =
+          await operationCoverageEventRepository.listLegacyActiveByAssignmentAndOperationalDates(
+            companyId,
+            legacyPairs,
+          );
+        for (const [key, row] of legacyBatch) {
+          legacyCoverageByAssignmentDate.set(key, row);
+        }
+      }
+    }
+
+    const resolveActiveWorkdayCoverage = (employee: (typeof summary.employees)[number]) => {
+      if (employee.employeeWorkdayId) {
+        const fromWorkday = coverageByWorkday.get(employee.employeeWorkdayId);
+        if (fromWorkday?.replacementEmployeeId) {
+          return {
+            replacementEmployeeId: fromWorkday.replacementEmployeeId,
+            replacementEmployeeName: fromWorkday.replacementEmployeeName,
+            absenceRequestId: employee.absenceRequestId,
+          };
+        }
+      }
+      if (summary.workDate) {
+        const legacy = legacyCoverageByAssignmentDate.get(
+          `${employee.assignmentId}:${summary.workDate}`,
+        );
+        if (legacy?.replacementEmployeeId) {
+          return {
+            replacementEmployeeId: legacy.replacementEmployeeId,
+            replacementEmployeeName: legacy.replacementEmployeeName,
+            absenceRequestId: employee.absenceRequestId,
+          };
+        }
+      }
+      return null;
+    };
+
     const employees = summary.employees.map((employee) => {
+      const activeWorkdayCoverage = featureEnabled
+        ? resolveActiveWorkdayCoverage(employee)
+        : null;
       const badges = featureEnabled
         ? resolveOperationAbsenceBadges({
             employeeId: employee.employee.id,
             assignmentId: employee.assignmentId,
             expectationStatus: employee.expectationStatus,
             conflicts,
+            activeWorkdayCoverage,
           })
         : [];
       return {

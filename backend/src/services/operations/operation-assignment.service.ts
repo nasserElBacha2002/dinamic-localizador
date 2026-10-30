@@ -24,9 +24,11 @@ import { auditService } from "../audit.service";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
 import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import type { CoverageEventSourceType } from "../../repositories/operations/operation-coverage-event.repository";
 import { operationChangeEventRepository } from "../../repositories/operations/operation-change-event.repository";
 import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
 import { resolveOperationOperationalDate } from "../../utils/operations/operation-change-events";
+import { employeeWorkdayCoverageService } from "../absence/employee-workday-coverage.service";
 
 const withLifecycleState = (
   assignment: OperationEmployeeAssignment,
@@ -244,6 +246,10 @@ export const operationAssignmentService = {
       replacedAssignmentId?: string | null;
       replacedEmployeeId?: string | null;
       coverageReason?: string | null;
+      employeeWorkdayId?: string | null;
+      absenceRequestId?: string | null;
+      absenceConflictId?: string | null;
+      coverageCommandId?: string | null;
     },
     userId?: string | null,
   ) {
@@ -275,80 +281,54 @@ export const operationAssignmentService = {
       );
     }
 
+    if (input?.asCoverage) {
+      if (!input.employeeWorkdayId || !input.replacedEmployeeId) {
+        throw new AppError(
+          400,
+          "EMPLOYEE_WORKDAY_REQUIRED",
+          "La cobertura requiere la jornada del colaborador ausente",
+        );
+      }
+      const coverageCommandId = input.coverageCommandId?.trim();
+      if (!coverageCommandId || coverageCommandId.length < 8) {
+        throw new AppError(
+          400,
+          "COVERAGE_COMMAND_ID_REQUIRED",
+          "coverageCommandId es obligatorio para cubrir la jornada",
+        );
+      }
+      const covered = await employeeWorkdayCoverageService.coverEmployeeWorkday(
+        companyId,
+        userId,
+        {
+          operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          replacementEmployeeId: employeeId,
+          replacedAssignmentId: input.replacedAssignmentId!,
+          replacedEmployeeId: input.replacedEmployeeId,
+          coverageCommandId,
+          sourceType: "MANUAL_COVERAGE",
+          absenceRequestId: input.absenceRequestId,
+          absenceConflictId: input.absenceConflictId,
+          coverageReason: input.coverageReason,
+        },
+      );
+      const workdayRows = await employeeWorkdayRepository.listWithWorkDatesByEmployeeWorkdayIds(
+        companyId,
+        [input.employeeWorkdayId],
+      );
+      const referenceDate =
+        workdayRows[0]?.workDate ?? covered.replacementAssignment.validFrom;
+      return withLifecycleState(covered.replacementAssignment, referenceDate);
+    }
+
     const operationKind = operation.operationKind ?? "ONE_TIME";
     const operationWorkDate =
       operationKind === "ONE_TIME"
         ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
         : null;
 
-    /**
-     * Coverage: resolve shift from the replaced assignment only (never from request).
-     * Validate before any prepare/cancel so a rejected coverage leaves no lateral writes.
-     */
-    let coverageShiftId: string | null | undefined;
-    if (input?.asCoverage && input.replacedAssignmentId) {
-      const replacedPreview = await operationEmployeeRepository.findById(
-        companyId,
-        input.replacedAssignmentId,
-      );
-      if (!replacedPreview || replacedPreview.operationId !== operationId) {
-        throw new AppError(
-          404,
-          "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
-          "La asignación a cubrir no existe en esta operación",
-        );
-      }
-      if (replacedPreview.cancelledAt) {
-        throw new AppError(
-          409,
-          "COVERAGE_REPLACED_ASSIGNMENT_CANCELLED",
-          "La asignación a cubrir ya está cancelada",
-        );
-      }
-      if (
-        input.replacedEmployeeId &&
-        input.replacedEmployeeId !== replacedPreview.employeeId
-      ) {
-        throw new AppError(
-          400,
-          "COVERAGE_REPLACED_EMPLOYEE_MISMATCH",
-          "El empleado reemplazado no coincide con la asignación indicada",
-        );
-      }
-      if (replacedPreview.employeeId === employeeId) {
-        throw new AppError(
-          409,
-          "COVERAGE_SAME_EMPLOYEE",
-          "El reemplazo debe ser un colaborador distinto al cubierto",
-        );
-      }
-      if (
-        input.operationShiftId != null &&
-        input.operationShiftId !== (replacedPreview.operationShiftId ?? null)
-      ) {
-        throw new AppError(
-          400,
-          "COVERAGE_SHIFT_MISMATCH",
-          "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
-        );
-      }
-      coverageShiftId = replacedPreview.operationShiftId ?? null;
-      if (
-        operation.scheduleMode === "MULTI_SHIFT" &&
-        operationKind === "ONE_TIME" &&
-        operationWorkDate &&
-        coverageShiftId
-      ) {
-        // Prepare outside the assignment TX so materialization does not open a
-        // second connection while employee/assignment locks are held.
-        await prepareOneTimeMultiShiftAssignment(
-          companyId,
-          operationId,
-          operationWorkDate,
-          coverageShiftId,
-        );
-      }
-    } else if (
+    if (
       operation.scheduleMode === "MULTI_SHIFT" &&
       operationKind === "ONE_TIME" &&
       operationWorkDate &&
@@ -397,99 +377,7 @@ export const operationAssignmentService = {
         throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
       }
 
-      let replacedEmployeeId: string | null = null;
-      let resolvedShiftId: string | null =
-        input?.asCoverage ? (coverageShiftId ?? null) : (input?.operationShiftId ?? null);
-
-      if (input?.asCoverage && input.replacedAssignmentId) {
-        const replaced = await operationEmployeeRepository.findByIdInTransaction(
-          companyId,
-          transaction,
-          input.replacedAssignmentId,
-        );
-        if (!replaced || replaced.operationId !== operationId) {
-          throw new AppError(
-            404,
-            "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
-            "La asignación a cubrir no existe en esta operación",
-          );
-        }
-        if (replaced.cancelledAt) {
-          throw new AppError(
-            409,
-            "COVERAGE_REPLACED_ASSIGNMENT_CANCELLED",
-            "La asignación a cubrir ya está cancelada",
-          );
-        }
-        if (
-          input.replacedEmployeeId &&
-          input.replacedEmployeeId !== replaced.employeeId
-        ) {
-          throw new AppError(
-            400,
-            "COVERAGE_REPLACED_EMPLOYEE_MISMATCH",
-            "El empleado reemplazado no coincide con la asignación indicada",
-          );
-        }
-        if (replaced.employeeId === employeeId) {
-          throw new AppError(
-            409,
-            "COVERAGE_SAME_EMPLOYEE",
-            "El reemplazo debe ser un colaborador distinto al cubierto",
-          );
-        }
-        if (
-          input.operationShiftId != null &&
-          input.operationShiftId !== (replaced.operationShiftId ?? null)
-        ) {
-          throw new AppError(
-            400,
-            "COVERAGE_SHIFT_MISMATCH",
-            "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
-          );
-        }
-
-        const alreadyCovered = await operationCoverageEventRepository.existsForReplacedAssignment(
-          companyId,
-          replaced.id,
-          transaction,
-        );
-        if (alreadyCovered) {
-          throw new AppError(
-            409,
-            "COVERAGE_ALREADY_RECORDED",
-            "Ya existe una cobertura para esa asignación",
-          );
-        }
-
-        replacedEmployeeId = replaced.employeeId;
-        // Always take the locked row's shift — never the request body.
-        resolvedShiftId = replaced.operationShiftId ?? null;
-
-        if ((coverageShiftId ?? null) !== (resolvedShiftId ?? null)) {
-          throw new AppError(
-            409,
-            "COVERAGE_SHIFT_MISMATCH",
-            "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
-          );
-        }
-
-        await this.cancelAssignmentInSharedTransaction(companyId, transaction, {
-          operationId,
-          assignmentId: replaced.id,
-        });
-        await insertHumanAssignmentChangeEvent(
-          {
-            companyId,
-            operationId,
-            operationalDate,
-            changedFields: ["assignment", "cancelledAt", "coverage"],
-            actorUserId: userId,
-            reason: "Cancelación por cobertura manual",
-          },
-          transaction,
-        );
-      }
+      const resolvedShiftId: string | null = input?.operationShiftId ?? null;
 
       const result = await operationAssignmentCore.assignEmployeeInTransaction(
         companyId,
@@ -502,22 +390,13 @@ export const operationAssignmentService = {
           employeeActive: lockedEmployee.active,
           operationKind,
           operationWorkDate,
-          assignmentOrigin: input?.asCoverage ? "COVERAGE" : undefined,
+          assignmentOrigin: undefined,
           scheduleMode: operation.scheduleMode,
           operationShiftId: resolvedShiftId,
         },
       );
 
       if (result.outcome === "skipped") {
-        // Coverage already cancelled the replaced assignment in this TX — never
-        // treat a skip as an idempotent success (would commit a partial coverage).
-        if (input?.asCoverage) {
-          throw new AppError(
-            409,
-            "ASSIGNMENT_PERIOD_OVERLAP",
-            "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
-          );
-        }
         if (result.reason === "already_assigned" && result.existingAssignmentId) {
           const existing = await operationEmployeeRepository.findById(
             companyId,
@@ -543,43 +422,14 @@ export const operationAssignmentService = {
         throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
       }
 
-      if (input?.asCoverage && result.outcome === "added") {
-        const coverageInsert = await operationCoverageEventRepository.insert(
-          {
-            companyId,
-            operationId,
-            operationalDate,
-            sourceType: "MANUAL_COVERAGE",
-            replacedAssignmentId: input.replacedAssignmentId!,
-            replacedEmployeeId,
-            replacementAssignmentId: result.assignment.id,
-            replacementEmployeeId: employeeId,
-            reason: input.coverageReason ?? "Cobertura manual explícita",
-            resolvedByUserId: userId ?? null,
-          },
-          transaction,
-        );
-        if (!coverageInsert.inserted) {
-          throw new AppError(
-            409,
-            "COVERAGE_ALREADY_RECORDED",
-            "Ya existe una cobertura para esa asignación",
-          );
-        }
-      }
-
       await insertHumanAssignmentChangeEvent(
         {
           companyId,
           operationId,
           operationalDate,
-          changedFields: input?.asCoverage
-            ? ["assignment", "employeeId", "coverage"]
-            : ["assignment", "employeeId"],
+          changedFields: ["assignment", "employeeId"],
           actorUserId: userId,
-          reason: input?.asCoverage
-            ? "Asignación de cobertura manual vía API"
-            : "Asignación vía API",
+          reason: "Asignación vía API",
         },
         transaction,
       );
@@ -895,6 +745,179 @@ export const operationAssignmentService = {
   },
 
   /**
+   * @deprecated Assignment-scoped coverage (pre workday identity). Fase 3 uses
+   * `employeeWorkdayCoverageService.coverEmployeeWorkday` / `coverEmployeeWorkdayInTransaction`.
+   * No production callers remain; remove after legacy multi-shift tests migrate.
+   */
+  async applyOperationalCoverageInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      operation: {
+        scheduleMode: "SINGLE" | "MULTI_SHIFT";
+        operationKind?: string | null;
+        scheduledStart: Date | string | null;
+      };
+      replacementEmployeeId: string;
+      replacementEmployeeActive: boolean;
+      replacedAssignmentId: string;
+      replacedEmployeeId?: string | null;
+      validFrom: string;
+      validUntil: string | null;
+      operationWorkDate: string | null;
+      operationalDate: string;
+      operationShiftId?: string | null;
+      sourceType: CoverageEventSourceType;
+      sourceConflictId?: string | null;
+      coverageReason?: string | null;
+      resolvedByUserId?: string | null;
+      actorUserId?: string | null;
+    },
+  ): Promise<OperationEmployeeAssignment> {
+    const replaced = await operationEmployeeRepository.findByIdInTransaction(
+      companyId,
+      transaction,
+      input.replacedAssignmentId,
+    );
+    if (!replaced || replaced.operationId !== input.operationId) {
+      throw new AppError(
+        404,
+        "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
+        "La asignación a cubrir no existe en esta operación",
+      );
+    }
+    if (replaced.cancelledAt) {
+      throw new AppError(
+        409,
+        "COVERAGE_REPLACED_ASSIGNMENT_CANCELLED",
+        "La asignación a cubrir ya está cancelada",
+      );
+    }
+    if (
+      input.replacedEmployeeId &&
+      input.replacedEmployeeId !== replaced.employeeId
+    ) {
+      throw new AppError(
+        400,
+        "COVERAGE_REPLACED_EMPLOYEE_MISMATCH",
+        "El empleado reemplazado no coincide con la asignación indicada",
+      );
+    }
+    if (replaced.employeeId === input.replacementEmployeeId) {
+      throw new AppError(
+        409,
+        "COVERAGE_SAME_EMPLOYEE",
+        "El reemplazo debe ser un colaborador distinto al cubierto",
+      );
+    }
+    if (
+      input.operationShiftId != null &&
+      input.operationShiftId !== (replaced.operationShiftId ?? null)
+    ) {
+      throw new AppError(
+        400,
+        "COVERAGE_SHIFT_MISMATCH",
+        "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
+      );
+    }
+
+    const alreadyCovered = await operationCoverageEventRepository.existsForReplacedAssignment(
+      companyId,
+      replaced.id,
+      transaction,
+    );
+    if (alreadyCovered) {
+      throw new AppError(
+        409,
+        "COVERAGE_ALREADY_RECORDED",
+        "Ya existe una cobertura para esa asignación",
+      );
+    }
+
+    const resolvedShiftId = replaced.operationShiftId ?? null;
+
+    await this.cancelAssignmentInSharedTransaction(companyId, transaction, {
+      operationId: input.operationId,
+      assignmentId: replaced.id,
+    });
+    await insertHumanAssignmentChangeEvent(
+      {
+        companyId,
+        operationId: input.operationId,
+        operationalDate: input.operationalDate,
+        changedFields: ["assignment", "cancelledAt", "coverage"],
+        actorUserId: input.actorUserId,
+        reason: "Cancelación por cobertura operativa",
+      },
+      transaction,
+    );
+
+    const assignResult = await operationAssignmentCore.assignEmployeeInTransaction(
+      companyId,
+      transaction,
+      {
+        operationId: input.operationId,
+        employeeId: input.replacementEmployeeId,
+        validFrom: input.validFrom,
+        validUntil: input.validUntil,
+        employeeActive: input.replacementEmployeeActive,
+        operationKind: input.operation.operationKind ?? "ONE_TIME",
+        operationWorkDate: input.operationWorkDate,
+        assignmentOrigin: "COVERAGE",
+        scheduleMode: input.operation.scheduleMode,
+        operationShiftId: resolvedShiftId,
+      },
+    );
+
+    if (assignResult.outcome === "skipped") {
+      throw new AppError(
+        409,
+        "ASSIGNMENT_PERIOD_OVERLAP",
+        "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
+      );
+    }
+
+    const coverageInsert = await operationCoverageEventRepository.insert(
+      {
+        companyId,
+        operationId: input.operationId,
+        operationalDate: input.operationalDate,
+        sourceType: input.sourceType,
+        sourceConflictId: input.sourceConflictId ?? null,
+        replacedAssignmentId: replaced.id,
+        replacedEmployeeId: replaced.employeeId,
+        replacementAssignmentId: assignResult.assignment.id,
+        replacementEmployeeId: input.replacementEmployeeId,
+        reason: input.coverageReason ?? null,
+        resolvedByUserId: input.resolvedByUserId ?? null,
+      },
+      transaction,
+    );
+    if (!coverageInsert.inserted) {
+      throw new AppError(
+        409,
+        "COVERAGE_ALREADY_RECORDED",
+        "Ya existe una cobertura para esa asignación",
+      );
+    }
+
+    await insertHumanAssignmentChangeEvent(
+      {
+        companyId,
+        operationId: input.operationId,
+        operationalDate: input.operationalDate,
+        changedFields: ["assignment", "employeeId", "coverage"],
+        actorUserId: input.actorUserId,
+        reason: "Asignación de cobertura operativa",
+      },
+      transaction,
+    );
+
+    return assignResult.assignment;
+  },
+
+  /**
    * Cancel an assignment inside a caller-owned transaction (no nested commit).
    */
   async cancelAssignmentInSharedTransaction(
@@ -922,6 +945,14 @@ export const operationAssignmentService = {
     );
     if (!cancelledAssignment) {
       throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+
+    if (cancelledAssignment.assignmentOrigin === "COVERAGE") {
+      await employeeWorkdayCoverageService.supersedeCoverageForReplacementAssignment(
+        companyId,
+        transaction,
+        cancelledAssignment.id,
+      );
     }
 
     return cancelledAssignment;

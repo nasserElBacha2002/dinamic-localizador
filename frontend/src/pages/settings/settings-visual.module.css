@@ -45,6 +45,11 @@
   height: 100%;
 }
 
+.summaryCardSecondary {
+  border-left-color: var(--mantine-color-gray-4);
+  background: var(--mantine-color-surface, #fff);
+}
+
 .summaryTitle {
   color: var(--settings-ink, var(--mantine-color-brand-7));
   font-weight: 600;

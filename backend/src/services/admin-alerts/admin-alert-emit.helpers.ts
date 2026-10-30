@@ -7,6 +7,8 @@ export type AdminAlertEmitSource =
   | "operation-lifecycle-missing-checkin"
   | "whatsapp-forwarded-location"
   | "absence-request-pending"
+  | "absence-request-pending-operational"
+  | "absence-request-created-operational"
   | "attendance-threshold-crossed";
 
 /**

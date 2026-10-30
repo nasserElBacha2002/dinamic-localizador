@@ -192,12 +192,17 @@ describe("operationAssignmentService coverage validation", () => {
       const { operationEmployeeRepository } = await import(
         "../../repositories/operations/operation-employee.repository"
       );
+      const { employeeWorkdayRepository } = await import(
+        "../../repositories/workdays/employee-workday.repository"
+      );
       const { operationAssignmentService } = await import("./operation-assignment.service");
 
       const companyId = "00000000-0000-4000-8000-000000000001";
       const operationId = "00000000-0000-4000-8000-000000000002";
       const employeeId = "00000000-0000-4000-8000-000000000003";
       const replacedId = "00000000-0000-4000-8000-000000000099";
+      const employeeWorkdayId = "00000000-0000-4000-8000-000000000010";
+      const coverageCommandId = "cmd-12345678";
 
       mock.method(operationRepository, "findById", async () => ({
         id: operationId,
@@ -220,12 +225,26 @@ describe("operationAssignmentService coverage validation", () => {
       }));
       mock.method(operationEmployeeRepository, "findById", async () => null);
       mock.method(operationEmployeeRepository, "findByIdInTransaction", async () => null);
+      mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeWorkdayIds", async () => [
+        {
+          id: employeeWorkdayId,
+          employeeId: replacedId,
+          operationId,
+          operationAssignmentId: replacedId,
+          workDate: "2026-07-10",
+          operationWorkdayId: null,
+          serviceId: null,
+        },
+      ]);
 
       await assert.rejects(
         () =>
           operationAssignmentService.assignEmployee(companyId, operationId, employeeId, {
             asCoverage: true,
             replacedAssignmentId: replacedId,
+            replacedEmployeeId: replacedId,
+            employeeWorkdayId,
+            coverageCommandId,
             validFrom: "2026-07-10",
             validUntil: "2026-07-10",
           }),

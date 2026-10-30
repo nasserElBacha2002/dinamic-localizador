@@ -45,6 +45,10 @@ export type AssignEmployeePayloadInput = {
   replacedAssignmentId?: string;
   replacedEmployeeId?: string;
   coverageReason?: string;
+  employeeWorkdayId?: string;
+  absenceRequestId?: string;
+  absenceConflictId?: string | null;
+  coverageCommandId?: string;
 };
 
 export type AssignEmployeesBatchPayloadInput = {
@@ -78,6 +82,10 @@ export function buildAssignEmployeePayload(
         ? { replacedEmployeeId: input.replacedEmployeeId }
         : {}),
       ...(input.coverageReason !== undefined ? { coverageReason: input.coverageReason } : {}),
+      ...(input.employeeWorkdayId ? { employeeWorkdayId: input.employeeWorkdayId } : {}),
+      ...(input.absenceRequestId ? { absenceRequestId: input.absenceRequestId } : {}),
+      ...(input.absenceConflictId ? { absenceConflictId: input.absenceConflictId } : {}),
+      ...(input.coverageCommandId ? { coverageCommandId: input.coverageCommandId } : {}),
       ...(input.operationShiftId !== undefined
         ? { operationShiftId: input.operationShiftId }
         : {}),

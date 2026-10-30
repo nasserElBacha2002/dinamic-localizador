@@ -9,8 +9,14 @@ import { absenceWorkdaySyncJobRepository } from "../../repositories/absence/abse
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
+import type { EmployeeWorkdayWithSchedule } from "../../repositories/workdays/employee-workday.repository";
+import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import type { ActiveWorkdayCoverageRow } from "../../repositories/operations/operation-coverage-event.repository";
 import type { AffectedOperationWarning } from "../../types/absence";
-import type { AbsenceOperationalImpactResult } from "../../types/absence-operational-impact";
+import type {
+  AbsenceOperationalConflictDto,
+  AbsenceOperationalImpactResult,
+} from "../../types/absence-operational-impact";
 import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../../utils/absence-date";
 import { isWorkdayCoveredByAbsence } from "../../utils/absence/absence-workday-coverage";
 import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
@@ -21,6 +27,47 @@ const rangesOverlap = (
   bStart: Date,
   bEnd: Date,
 ): boolean => aStart.getTime() <= bEnd.getTime() && bStart.getTime() <= aEnd.getTime();
+
+const conflictMatchesWorkday = (
+  conflict: AbsenceOperationalConflictDto,
+  workday: { id: string; operationId: string | null },
+  assignmentId: string | null | undefined,
+): boolean => {
+  if (conflict.employeeWorkdayId) {
+    return conflict.employeeWorkdayId === workday.id;
+  }
+  if (!workday.operationId || conflict.operationId !== workday.operationId) {
+    return false;
+  }
+  if (conflict.assignmentId && assignmentId) {
+    return conflict.assignmentId === assignmentId;
+  }
+  if (conflict.assignmentId && !assignmentId) {
+    return false;
+  }
+  return true;
+};
+
+type AffectedAssignmentRow = Awaited<
+  ReturnType<typeof absenceRequestRepository.findAffectedAssignments>
+>[number];
+
+const resolveAssignmentForWorkday = (
+  workday: EmployeeWorkdayWithSchedule,
+  assignments: AffectedAssignmentRow[],
+): AffectedAssignmentRow | undefined => {
+  if (workday.operationAssignmentId) {
+    return assignments.find((assignment) => assignment.assignmentId === workday.operationAssignmentId);
+  }
+  if (!workday.operationId) {
+    return undefined;
+  }
+  const onOperation = assignments.filter((assignment) => assignment.operationId === workday.operationId);
+  if (onOperation.length === 1) {
+    return onOperation[0];
+  }
+  return undefined;
+};
 
 const mapJobStatusToReconciliation = (
   jobStatus: string | null | undefined,
@@ -182,29 +229,91 @@ export const absenceOperationalImpactQueryService = {
       }),
     );
 
+    const allConflicts = featureEnabled
+      ? await absenceOperationalImpactRepository.listConflictsByRequest(
+          companyId,
+          absenceRequestId,
+        )
+      : [];
+    const openConflicts = allConflicts.filter((c) => c.status === "OPEN");
+    const workdayIds = coveredWorkdays.map((w) => w.id);
+    const coverageByWorkday =
+      await operationCoverageEventRepository.listActiveCoverageByEmployeeWorkdayIds(
+        companyId,
+        workdayIds,
+      );
+
+    const legacyCoverageByKey = new Map<string, ActiveWorkdayCoverageRow>();
+    const legacyPairs: Array<{ replacedAssignmentId: string; operationalDate: string }> = [];
+    const legacyPairByWorkdayId = new Map<string, string>();
+    for (const workday of coveredWorkdays) {
+      if (coverageByWorkday.has(workday.id)) {
+        continue;
+      }
+      const assignment = resolveAssignmentForWorkday(workday, assignments);
+      const assignmentId =
+        workday.operationAssignmentId ?? assignment?.assignmentId ?? null;
+      if (!assignmentId) {
+        continue;
+      }
+      const key = `${assignmentId}:${workday.workDate}`;
+      legacyPairs.push({ replacedAssignmentId: assignmentId, operationalDate: workday.workDate });
+      legacyPairByWorkdayId.set(workday.id, key);
+    }
+    const legacyBatch =
+      await operationCoverageEventRepository.listLegacyActiveByAssignmentAndOperationalDates(
+        companyId,
+        legacyPairs,
+      );
+    for (const [workdayId, key] of legacyPairByWorkdayId) {
+      const legacy = legacyBatch.get(key);
+      if (legacy) {
+        legacyCoverageByKey.set(workdayId, legacy);
+      }
+    }
+
     const workdayImpacts = coveredWorkdays.map((workday) => {
       const hasPresence = attendanceIds.has(workday.id);
+      const assignment = resolveAssignmentForWorkday(workday, assignments);
+      const assignmentId =
+        workday.operationAssignmentId ?? assignment?.assignmentId ?? null;
+      const operationCancelled = assignment?.operationStatus === "CANCELLED";
+      const coverageSummary =
+        coverageByWorkday.get(workday.id) ?? legacyCoverageByKey.get(workday.id) ?? undefined;
+      const hasOperationalReplacement = Boolean(coverageSummary);
+      const openAssignmentConflict = allConflicts.find(
+        (conflict) =>
+          conflict.status === "OPEN" &&
+          conflict.conflictType === "ASSIGNMENT_DURING_ABSENCE" &&
+          !conflict.replacementEmployeeId &&
+          Boolean(conflict.operationId) &&
+          conflictMatchesWorkday(conflict, workday, assignmentId),
+      );
+      const needsCoverage =
+        featureEnabled &&
+        request.status === "APPROVED" &&
+        Boolean(workday.operationId) &&
+        !operationCancelled &&
+        Boolean(openAssignmentConflict) &&
+        !hasOperationalReplacement;
+
       return {
         employeeWorkdayId: workday.id,
         workDate: workday.workDate,
         operationId: workday.operationId,
         serviceId: workday.serviceId,
+        operationAssignmentId: workday.operationAssignmentId,
         covered: true,
         hasAttendancePresence: hasPresence,
         conflictCode: hasPresence
           ? ("ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE" as const)
           : null,
+        needsCoverage,
+        hasOperationalReplacement,
+        coveredByEmployeeId: coverageSummary?.replacementEmployeeId ?? null,
+        coveredByEmployeeName: coverageSummary?.replacementEmployeeName ?? null,
       };
     });
-
-    const openConflicts = featureEnabled
-      ? (
-          await absenceOperationalImpactRepository.listConflictsByRequest(
-            companyId,
-            absenceRequestId,
-          )
-        ).filter((c) => c.status === "OPEN")
-      : [];
 
     const latestJob = await absenceWorkdaySyncJobRepository.findLatestByRequest(
       companyId,

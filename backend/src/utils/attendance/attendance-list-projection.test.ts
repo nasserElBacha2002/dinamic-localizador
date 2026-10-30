@@ -8,6 +8,7 @@ import {
   mapAttendanceListRow,
   normalizeAttendanceListIdFilters,
   punctualityStatusFilterClause,
+  validationStatusFilterClause,
   STARTED_WORKDAY_SQL,
 } from "./attendance-list-projection";
 import { EFFECTIVE_STATE_SQL } from "../workdays/employee-workday-statistics-projection";
@@ -346,6 +347,27 @@ describe("attendance list occurred / location / checkout filters", () => {
     assert.match(
       punctualityStatusFilterClause("NOT_RECORDED", { allowNullAttendanceForNotRecorded: true }),
       /ar\.id IS NULL/,
+    );
+  });
+
+  it("maps validation ABSENT filter to no-punch operational absent SQL", () => {
+    const clause = validationStatusFilterClause("ABSENT", { useEffectiveStateFilter: true });
+    assert.match(clause, /ar\.id IS NULL/);
+    assert.match(clause, /THEN N'EXPECTED'/);
+    assert.match(clause, /= N'ABSENT'/);
+    assert.equal(
+      validationStatusFilterClause("ABSENT", { useEffectiveStateFilter: false }),
+      "1 = 0",
+    );
+    assert.equal(validationStatusFilterClause("VALID"), "ar.validation_status = @validationStatus");
+
+    const filters = buildExpectedAttendanceListFilters(ID_A, {
+      ...emptyQuery,
+      validationStatus: "ABSENT",
+    });
+    assert.equal(
+      filters.some((filter) => filter.clause.includes("ar.id IS NULL")),
+      true,
     );
   });
 });

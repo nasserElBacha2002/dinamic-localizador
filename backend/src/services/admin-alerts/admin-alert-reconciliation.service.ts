@@ -74,9 +74,11 @@ export const adminAlertReconciliationService = {
   async reconcilePendingAbsenceRequests(
     batchSize = 50,
   ): Promise<{ scanned: number; recovered: number }> {
-    const obligations =
-      await adminAlertContextRepository.listMissingPendingAbsenceObligations(batchSize);
-    return materializeObligations(obligations);
+    const [requestObligations, operationalObligations] = await Promise.all([
+      adminAlertContextRepository.listMissingPendingAbsenceObligations(batchSize),
+      adminAlertContextRepository.listMissingCreatedAbsenceOperationalObligations(batchSize),
+    ]);
+    return materializeObligations([...requestObligations, ...operationalObligations]);
   },
 
   async reconcileAll(options?: {

@@ -16,6 +16,7 @@ import {
   checkoutStatusFilterClause,
   locationStatusFilterClause,
   punctualityStatusFilterClause,
+  validationStatusFilterClause,
   expectedAttendanceListSelectSql,
   legacyOrphanAttendanceListSelectSql,
   mapAttendanceListRow,
@@ -80,9 +81,15 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   }
 
   if (query.validationStatus) {
+    const clause = validationStatusFilterClause(query.validationStatus, {
+      useEffectiveStateFilter: false,
+    });
+    const bindsValidationParam = clause.includes("@validationStatus");
     filters.push({
-      clause: "ar.validation_status = @validationStatus",
-      apply: (request) => request.input("validationStatus", sql.NVarChar(30), query.validationStatus),
+      clause,
+      apply: bindsValidationParam
+        ? (request) => request.input("validationStatus", sql.NVarChar(30), query.validationStatus)
+        : () => undefined,
     });
   }
 

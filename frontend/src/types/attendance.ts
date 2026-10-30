@@ -1,6 +1,8 @@
 import type { OperationStatus } from "./operation-status";
 
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
+/** Filter-only list value; maps to workday effectiveState ABSENT (not ar.validation_status). */
+export type ValidationStatusFilter = ValidationStatus | "ABSENT";
 export type LocationStatus =
   | "INSIDE_GEOFENCE"
   | "OUTSIDE_GEOFENCE"
@@ -220,7 +222,7 @@ export interface AttendanceFilters {
   employeeIds?: string[];
   serviceIds?: string[];
   operationShiftId?: string;
-  validationStatus?: ValidationStatus;
+  validationStatus?: ValidationStatusFilter;
   locationStatus?: LocationStatus;
   punctualityStatus?: PunctualityStatus;
   checkoutStatus?: CheckoutStatusFilter;

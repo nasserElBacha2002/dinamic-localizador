@@ -97,6 +97,10 @@ export async function assignEmployeeToOperation(
     replacedAssignmentId?: string;
     replacedEmployeeId?: string;
     coverageReason?: string;
+    employeeWorkdayId?: string;
+    absenceRequestId?: string;
+    absenceConflictId?: string | null;
+    coverageCommandId?: string;
   },
 ): Promise<OperationEmployeeAssignment> {
   const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(

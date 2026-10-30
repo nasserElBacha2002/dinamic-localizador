@@ -384,6 +384,18 @@ const createRequest = async (
   }
 
   if (autoApproved) {
+    await adminAlertAbsencePendingService.emitOperationalForCreatedRequest({
+      companyId,
+      requestId,
+      employeeId: input.employeeId,
+      employeeName: employee.name,
+      absenceTypeName: absenceType.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      totalDays,
+      initialStatus: "APPROVED",
+    });
+
     return absenceWorkdaySyncService.runAfterAbsenceMutation(
       companyId,
       requestId,
@@ -397,17 +409,17 @@ const createRequest = async (
     );
   }
 
-  if (input.requestedVia === "WHATSAPP") {
-    await adminAlertAbsencePendingService.emitForPendingWhatsappRequest({
-      companyId,
-      requestId,
-      employeeId: input.employeeId,
-      employeeName: employee.name,
-      absenceTypeName: absenceType.name,
-      startDate: input.startDate,
-      endDate: input.endDate,
-    });
-  }
+  await adminAlertAbsencePendingService.emitOperationalForCreatedRequest({
+    companyId,
+    requestId,
+    employeeId: input.employeeId,
+    employeeName: employee.name,
+    absenceTypeName: absenceType.name,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    totalDays,
+    initialStatus: "PENDING",
+  });
 
   return absenceRequestService.getById(companyId, requestId);
 };

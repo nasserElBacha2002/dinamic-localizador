@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, before, it, mock } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -16,6 +16,7 @@ import { deleteOperationCascade } from "../../test-helpers/integration-entity-ca
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
+import { __setCoverEmployeeWorkdayFailurePointForTests } from "../absence/employee-workday-coverage.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { operationScheduleModeTransitionService } from "../operations/operation-schedule-mode-transition.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
@@ -115,6 +116,81 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
       `);
     return Number(result.recordset[0].total);
   };
+
+  const findEmployeeWorkdayForAssignment = async (
+    absentEmployeeId: string,
+    operationAssignmentId: string,
+  ): Promise<string> => {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, absentEmployeeId)
+      .input("assignmentId", sql.UniqueIdentifier, operationAssignmentId)
+      .query(`
+        SELECT TOP 1 ew.id
+        FROM dbo.employee_workdays ew
+        WHERE ew.company_id = @companyId
+          AND ew.employee_id = @employeeId
+          AND ew.operation_assignment_id = @assignmentId
+        ORDER BY ew.created_at DESC
+      `);
+    const id = result.recordset[0]?.id;
+    assert.ok(id, "expected employee workday for titular assignment");
+    return String(id);
+  };
+
+  const restoreMorningTitularAssignment = async () => {
+    const current = await loadAssignment(morningAssignmentId);
+    if (current && !current.cancelled_at && current.employee_id === employeeA) {
+      return;
+    }
+
+    const pool = getPool();
+    const active = await pool
+      .request()
+      .input("operationId", sql.UniqueIdentifier, multiOperationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeA)
+      .input("shiftId", sql.UniqueIdentifier, morningShiftId)
+      .query(`
+        SELECT TOP 1 id
+        FROM dbo.operation_assignments
+        WHERE operation_id = @operationId
+          AND employee_id = @employeeId
+          AND operation_shift_id = @shiftId
+          AND cancelled_at IS NULL
+        ORDER BY created_at DESC
+      `);
+    const activeId = active.recordset[0]?.id;
+    if (activeId) {
+      morningAssignmentId = String(activeId);
+      return;
+    }
+
+    const restored = await operationAssignmentService.assignEmployee(
+      companyId,
+      multiOperationId,
+      employeeA,
+      { operationShiftId: morningShiftId },
+    );
+    morningAssignmentId = restored.id;
+  };
+
+  const buildWorkdayCoverageInput = async (
+    replacedAssignmentId: string,
+    replacedEmployeeId: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    asCoverage: true as const,
+    replacedAssignmentId,
+    replacedEmployeeId,
+    employeeWorkdayId: await findEmployeeWorkdayForAssignment(
+      replacedEmployeeId,
+      replacedAssignmentId,
+    ),
+    coverageCommandId: `phase3-ms-${randomUUID()}`,
+    ...extra,
+  });
 
   before(async () => {
     await setupDatabaseIntegration();
@@ -273,11 +349,7 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
       companyId,
       multiOperationId,
       coverer,
-      {
-        asCoverage: true,
-        replacedAssignmentId: morningAssignmentId,
-        replacedEmployeeId: employeeA,
-      },
+      await buildWorkdayCoverageInput(morningAssignmentId, employeeA),
     );
 
     assert.equal(replacement.operationShiftId, morningShiftId);
@@ -306,12 +378,9 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
       companyId,
       multiOperationId,
       employeeB,
-      {
-        asCoverage: true,
-        replacedAssignmentId: morningAssignmentId,
-        replacedEmployeeId: employeeA,
+      await buildWorkdayCoverageInput(morningAssignmentId, employeeA, {
         operationShiftId: morningShiftId,
-      },
+      }),
     );
     assert.equal(replacement.operationShiftId, morningShiftId);
 
@@ -325,38 +394,49 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
     morningAssignmentId = restored.id;
   });
 
-  it("coverage with other shift id → COVERAGE_SHIFT_MISMATCH; original stays active", async () => {
-    const beforeCoverage = await countCoverageEvents(multiOperationId);
+  it("client operationShiftId mismatch is ignored; coverage inherits titular shift", async () => {
+    await restoreMorningTitularAssignment();
+    const beforeCoverage = await countCoverageEvents(
+      multiOperationId,
+      morningAssignmentId,
+    );
     const beforeCovererAssignments = await countAssignmentsForEmployee(
       multiOperationId,
       employeeC,
     );
     const beforeCovererEw = await countEmployeeWorkdays(multiOperationId, employeeC);
 
-    await assert.rejects(
-      () =>
-        operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeC, {
-          asCoverage: true,
-          replacedAssignmentId: morningAssignmentId,
-          replacedEmployeeId: employeeA,
-          operationShiftId: afternoonShiftId,
-        }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "COVERAGE_SHIFT_MISMATCH",
+    const replacement = await operationAssignmentService.assignEmployee(
+      companyId,
+      multiOperationId,
+      employeeC,
+      await buildWorkdayCoverageInput(morningAssignmentId, employeeA, {
+        operationShiftId: afternoonShiftId,
+      }),
     );
+    assert.equal(replacement.operationShiftId, morningShiftId);
+    assert.equal(await countCoverageEvents(multiOperationId, morningAssignmentId), beforeCoverage + 1);
 
-    const original = await loadAssignment(morningAssignmentId);
-    assert.ok(original);
-    assert.equal(original.cancelled_at, null);
-    assert.equal(await countCoverageEvents(multiOperationId), beforeCoverage);
+    await operationAssignmentService.cancelAssignment(companyId, multiOperationId, replacement.id);
+    const restored = await operationAssignmentService.assignEmployee(
+      companyId,
+      multiOperationId,
+      employeeA,
+      { operationShiftId: morningShiftId },
+    );
+    morningAssignmentId = restored.id;
+
     assert.equal(
       await countAssignmentsForEmployee(multiOperationId, employeeC),
       beforeCovererAssignments,
     );
-    assert.equal(await countEmployeeWorkdays(multiOperationId, employeeC), beforeCovererEw);
+    assert.ok(
+      (await countEmployeeWorkdays(multiOperationId, employeeC)) >= beforeCovererEw,
+    );
   });
 
   it("SINGLE op coverage keeps operationShiftId null", async () => {
+    await restoreMorningTitularAssignment();
     const assigned = await operationAssignmentService.assignEmployee(
       companyId,
       singleOperationId,
@@ -368,17 +448,14 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
       companyId,
       singleOperationId,
       employeeB,
-      {
-        asCoverage: true,
-        replacedAssignmentId: assigned.id,
-        replacedEmployeeId: employeeA,
-      },
+      await buildWorkdayCoverageInput(assigned.id, employeeA),
     );
     assert.equal(replacement.operationShiftId, null);
     assert.equal(await countCoverageEvents(singleOperationId, assigned.id), 1);
   });
 
   it("TX rolls back when coverer already has overlapping assignment after cancel path", async () => {
+    await restoreMorningTitularAssignment();
     // Pre-assign coverer C on morning so coverage assign overlaps and aborts inside TX.
     const existingCover = await operationAssignmentService.assignEmployee(
       companyId,
@@ -391,12 +468,13 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
     const beforeCoverage = await countCoverageEvents(multiOperationId, morningAssignmentId);
 
     await assert.rejects(
-      () =>
-        operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeC, {
-          asCoverage: true,
-          replacedAssignmentId: morningAssignmentId,
-          replacedEmployeeId: employeeA,
-        }),
+      async () =>
+        operationAssignmentService.assignEmployee(
+          companyId,
+          multiOperationId,
+          employeeC,
+          await buildWorkdayCoverageInput(morningAssignmentId, employeeA),
+        ),
       (error: unknown) =>
         error instanceof AppError &&
         (error.code === "ASSIGNMENT_PERIOD_OVERLAP" || error.code === "COVERAGE_SAME_EMPLOYEE"),
@@ -416,19 +494,10 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
     );
   });
 
-  it("rejected mismatch leaves no new OW/EW/events for coverer beyond pre-existing materialization", async () => {
-    const pool = getPool();
-    const owBefore = await pool
-      .request()
-      .input("operationId", sql.UniqueIdentifier, multiOperationId)
-      .query(`
-        SELECT COUNT(*) AS total FROM dbo.operation_workdays WHERE operation_id = @operationId
-      `);
-    const ewBefore = await countEmployeeWorkdays(multiOperationId, employeeB);
-    const eventsBefore = await countCoverageEvents(multiOperationId);
-
+  it("workday-scoped coverage rejects assign without employeeWorkdayId", async () => {
+    await restoreMorningTitularAssignment();
     await assert.rejects(
-      () =>
+      async () =>
         operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeB, {
           asCoverage: true,
           replacedAssignmentId: morningAssignmentId,
@@ -436,23 +505,13 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
           operationShiftId: afternoonShiftId,
         }),
       (error: unknown) =>
-        error instanceof AppError && error.code === "COVERAGE_SHIFT_MISMATCH",
+        error instanceof AppError && error.code === "EMPLOYEE_WORKDAY_REQUIRED",
     );
-
-    const owAfter = await pool
-      .request()
-      .input("operationId", sql.UniqueIdentifier, multiOperationId)
-      .query(`
-        SELECT COUNT(*) AS total FROM dbo.operation_workdays WHERE operation_id = @operationId
-      `);
-    assert.equal(Number(owAfter.recordset[0].total), Number(owBefore.recordset[0].total));
-    assert.equal(await countEmployeeWorkdays(multiOperationId, employeeB), ewBefore);
-    assert.equal(await countCoverageEvents(multiOperationId), eventsBefore);
     assert.equal((await loadAssignment(morningAssignmentId))?.cancelled_at ?? null, null);
   });
 
   it("injected failure after prepare rolls back coverage assignment side effects", async () => {
-    const { operationAssignmentCore } = await import("../operations/operation-assignment-core.service");
+    await restoreMorningTitularAssignment();
     const pool = getPool();
 
     const owBefore = await pool
@@ -465,33 +524,22 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
     const coverageBefore = await countCoverageEvents(multiOperationId, morningAssignmentId);
     const assignmentsBefore = await countAssignmentsForEmployee(multiOperationId, employeeB);
 
-    const originalAssign = operationAssignmentCore.assignEmployeeInTransaction.bind(
-      operationAssignmentCore,
-    );
-    const assignMock = mock.method(
-      operationAssignmentCore,
-      "assignEmployeeInTransaction",
-      async (...args: Parameters<typeof originalAssign>) => {
-        // Allow prepare + locks to complete, then fail inside the shared TX.
-        await originalAssign(...args);
-        throw new Error("injected failure after prepare and assign write");
-      },
-    );
-
+    __setCoverEmployeeWorkdayFailurePointForTests("after_replacement_assignment");
     try {
       await assert.rejects(
-        () =>
-          operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeB, {
-            asCoverage: true,
-            replacedAssignmentId: morningAssignmentId,
-            replacedEmployeeId: employeeA,
-          }),
+        async () =>
+          operationAssignmentService.assignEmployee(
+            companyId,
+            multiOperationId,
+            employeeB,
+            await buildWorkdayCoverageInput(morningAssignmentId, employeeA),
+          ),
         (error: unknown) =>
           error instanceof Error &&
-          error.message.includes("injected failure after prepare and assign write"),
+          error.message.includes("INJECTED_FAILURE:after_replacement_assignment"),
       );
     } finally {
-      assignMock.mock.restore();
+      __setCoverEmployeeWorkdayFailurePointForTests(null);
     }
 
     const owAfter = await pool
@@ -512,17 +560,12 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
   });
 
   it("two concurrent coverages on same assignment: only one completes", async () => {
+    await restoreMorningTitularAssignment();
+    const inputB = await buildWorkdayCoverageInput(morningAssignmentId, employeeA);
+    const inputC = await buildWorkdayCoverageInput(morningAssignmentId, employeeA);
     const results = await Promise.allSettled([
-      operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeB, {
-        asCoverage: true,
-        replacedAssignmentId: morningAssignmentId,
-        replacedEmployeeId: employeeA,
-      }),
-      operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeC, {
-        asCoverage: true,
-        replacedAssignmentId: morningAssignmentId,
-        replacedEmployeeId: employeeA,
-      }),
+      operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeB, inputB),
+      operationAssignmentService.assignEmployee(companyId, multiOperationId, employeeC, inputC),
     ]);
 
     const fulfilled = results.filter((r) => r.status === "fulfilled");

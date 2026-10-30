@@ -235,18 +235,35 @@ export const absenceOperationalImpactQueryService = {
         )
       : [];
     const openConflicts = allConflicts.filter((c) => c.status === "OPEN");
-    const coveredReplacedAssignmentIds =
-      await operationCoverageEventRepository.listCoveredReplacedAssignmentIds(
+    const workdayIds = coveredWorkdays.map((w) => w.id);
+    const coverageByWorkday =
+      await operationCoverageEventRepository.listActiveCoverageByEmployeeWorkdayIds(
         companyId,
-        [
-          ...new Set([
-            ...assignments.map((assignment) => assignment.assignmentId),
-            ...coveredWorkdays
-              .map((workday) => workday.operationAssignmentId)
-              .filter((id): id is string => Boolean(id)),
-          ]),
-        ],
+        workdayIds,
       );
+
+    const legacyCoverageByKey = new Map<string, Awaited<
+      ReturnType<typeof operationCoverageEventRepository.findLegacyActiveByAssignmentAndDate>
+    >>();
+    for (const workday of coveredWorkdays) {
+      if (coverageByWorkday.has(workday.id)) {
+        continue;
+      }
+      const assignment = resolveAssignmentForWorkday(workday, assignments);
+      const assignmentId =
+        workday.operationAssignmentId ?? assignment?.assignmentId ?? null;
+      if (!assignmentId) {
+        continue;
+      }
+      const legacy = await operationCoverageEventRepository.findLegacyActiveByAssignmentAndDate(
+        companyId,
+        assignmentId,
+        workday.workDate,
+      );
+      if (legacy) {
+        legacyCoverageByKey.set(workday.id, legacy);
+      }
+    }
 
     const workdayImpacts = coveredWorkdays.map((workday) => {
       const hasPresence = attendanceIds.has(workday.id);
@@ -254,9 +271,9 @@ export const absenceOperationalImpactQueryService = {
       const assignmentId =
         workday.operationAssignmentId ?? assignment?.assignmentId ?? null;
       const operationCancelled = assignment?.operationStatus === "CANCELLED";
-      const hasManualCoverage = assignmentId
-        ? coveredReplacedAssignmentIds.has(assignmentId)
-        : false;
+      const coverageSummary =
+        coverageByWorkday.get(workday.id) ?? legacyCoverageByKey.get(workday.id) ?? undefined;
+      const hasOperationalReplacement = Boolean(coverageSummary);
       const openAssignmentConflict = allConflicts.find(
         (conflict) =>
           conflict.status === "OPEN" &&
@@ -265,14 +282,6 @@ export const absenceOperationalImpactQueryService = {
           Boolean(conflict.operationId) &&
           conflictMatchesWorkday(conflict, workday, assignmentId),
       );
-      const resolvedReplacement = allConflicts.find(
-        (conflict) =>
-          conflict.status === "RESOLVED" &&
-          conflict.resolutionCode === "ASSIGN_REPLACEMENT" &&
-          Boolean(conflict.replacementEmployeeId) &&
-          conflictMatchesWorkday(conflict, workday, assignmentId),
-      );
-      const hasOperationalReplacement = Boolean(resolvedReplacement) || hasManualCoverage;
       const needsCoverage =
         featureEnabled &&
         request.status === "APPROVED" &&
@@ -294,6 +303,8 @@ export const absenceOperationalImpactQueryService = {
           : null,
         needsCoverage,
         hasOperationalReplacement,
+        coveredByEmployeeId: coverageSummary?.replacementEmployeeId ?? null,
+        coveredByEmployeeName: coverageSummary?.replacementEmployeeName ?? null,
       };
     });
 

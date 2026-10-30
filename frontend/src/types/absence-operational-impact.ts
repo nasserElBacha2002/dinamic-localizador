@@ -80,6 +80,8 @@ export type AbsenceOperationalImpact = {
     needsCoverage?: boolean;
     hasOperationalReplacement?: boolean;
     operationAssignmentId?: string | null;
+    coveredByEmployeeId?: string | null;
+    coveredByEmployeeName?: string | null;
   }>;
   openConflicts: AbsenceOperationalConflict[];
   reconciliationStatus:

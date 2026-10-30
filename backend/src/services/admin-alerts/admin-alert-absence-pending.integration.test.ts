@@ -340,6 +340,74 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
     assert.equal(String(categories.recordset[0]?.template_category), "OPERATIONAL");
   });
 
+  it("reconciliation does not add REQUEST after canonical OPERATIONAL creation alert", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+    const { companyId, vacation, employee } = await seedCompany();
+    await createOperationalRecipient(companyId, { alsoRequestAlerts: true });
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 27);
+    const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: day,
+      endDate: day,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      reason: "Vacaciones",
+      sourceMessageSid: uniqueMessageSid(),
+    });
+
+    assert.equal(detail.status, "PENDING");
+    assert.equal(await countOutboxForRequest(companyId, detail.id), 1);
+
+    const before = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("requestId", sql.UniqueIdentifier, detail.id)
+      .query(`
+        SELECT template_category, COUNT(*) AS total
+        FROM whatsapp_admin_alert_notifications
+        WHERE company_id = @companyId AND absence_request_id = @requestId
+        GROUP BY template_category
+      `);
+    const beforeMap = new Map(
+      before.recordset.map((row) => [
+        String((row as Record<string, unknown>).template_category),
+        Number((row as Record<string, unknown>).total),
+      ]),
+    );
+    assert.equal(beforeMap.get("OPERATIONAL"), 1);
+    assert.equal(beforeMap.get("REQUEST") ?? 0, 0);
+
+    await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    const second = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+
+    assert.equal(await countOutboxForRequest(companyId, detail.id), 1);
+    const after = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("requestId", sql.UniqueIdentifier, detail.id)
+      .query(`
+        SELECT template_category, COUNT(*) AS total
+        FROM whatsapp_admin_alert_notifications
+        WHERE company_id = @companyId AND absence_request_id = @requestId
+        GROUP BY template_category
+      `);
+    const afterMap = new Map(
+      after.recordset.map((row) => [
+        String((row as Record<string, unknown>).template_category),
+        Number((row as Record<string, unknown>).total),
+      ]),
+    );
+    assert.equal(afterMap.get("OPERATIONAL"), 1);
+    assert.equal(afterMap.get("REQUEST") ?? 0, 0);
+    assert.equal(second.recovered, 0);
+  });
+
   it("creates one operational outbox row per operational recipient", async () => {
     const { absenceRequestService } = await import("../absence/absence-request.service");
     const { companyId, vacation, employee } = await seedCompany();

@@ -17,6 +17,7 @@ import type { AbsenceOperationalResolutionCode } from "../../types/absence-opera
 import { EntityLink } from "../entity-link";
 import {
   buildAbsencePlanningRows,
+  buildOperationCoverageContext,
   buildOperationCoverageHref,
   conflictTypeHumanLabel,
   type AbsencePlanningRow,
@@ -91,11 +92,15 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
     impact.affectedWorkdays === 0;
 
   const renderPlanningAction = (row: AbsencePlanningRow) => {
+    const coverageContext =
+      row.needsCoverage && row.operationId
+        ? buildOperationCoverageContext({ impact, requestId, row })
+        : null;
     if (row.needsCoverage && canManageOperations && row.operationId) {
       return (
         <Button
           component={RouterLink}
-          to={buildOperationCoverageHref(row.operationId)}
+          to={buildOperationCoverageHref(row.operationId, coverageContext)}
           size="compact-xs"
           variant="light"
         >

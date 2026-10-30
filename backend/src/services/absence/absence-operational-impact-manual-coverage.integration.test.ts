@@ -195,6 +195,12 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
     assert.equal(workdayBefore?.needsCoverage, true);
     assert.equal(workdayBefore?.hasOperationalReplacement, false);
 
+    const openConflict = before.openConflicts.find(
+      (conflict) =>
+        conflict.conflictType === "ASSIGNMENT_DURING_ABSENCE" && conflict.status === "OPEN",
+    );
+    assert.ok(openConflict);
+
     await operationAssignmentService.assignEmployee(
       companyId,
       operationId,
@@ -206,6 +212,10 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
         replacedAssignmentId: assignment.id,
         replacedEmployeeId: absentEmployeeId,
         coverageReason: "Cobertura desde operación (test)",
+        absenceRequestId: created.id,
+        absenceConflictId: openConflict.id,
+        employeeWorkdayId: workdayBefore?.employeeWorkdayId,
+        coverageCommandId: `coverage-impact-test-${randomUUID()}`,
       },
       adminUserId,
     );
@@ -218,5 +228,10 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
     assert.ok(workdayAfter);
     assert.equal(workdayAfter?.needsCoverage, false);
     assert.equal(workdayAfter?.hasOperationalReplacement, true);
+    assert.ok(workdayAfter?.coveredByEmployeeId);
+    const openAfter = after.openConflicts.filter(
+      (c) => c.conflictType === "ASSIGNMENT_DURING_ABSENCE" && c.status === "OPEN",
+    );
+    assert.equal(openAfter.length, 0);
   });
 });

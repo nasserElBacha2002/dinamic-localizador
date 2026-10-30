@@ -249,6 +249,17 @@ export const adminAlertContextRepository = {
                 LOWER(CONVERT(NVARCHAR(36), ar.id))
               )
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM whatsapp_admin_alert_notifications n_created
+            WHERE n_created.company_id = ar.company_id
+              AND n_created.recipient_id = car.id
+              AND n_created.absence_request_id = ar.id
+              AND n_created.deduplication_key = CONCAT(
+                N'absence-created:operational:',
+                LOWER(CONVERT(NVARCHAR(36), ar.id))
+              )
+          )
         ORDER BY ar.created_at ASC, ar.id ASC, car.id ASC
       `);
 

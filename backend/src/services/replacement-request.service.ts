@@ -449,4 +449,67 @@ export const replacementRequestService = {
       throw error;
     }
   },
+
+  async markCoveredForAbsentWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      absentEmployeeWorkdayId: string;
+      absentEmployeeId: string;
+      replacementEmployeeId: string;
+    },
+  ): Promise<void> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.absentEmployeeWorkdayId)
+      .input("absentEmployeeId", sql.UniqueIdentifier, input.absentEmployeeId)
+      .input("replacementEmployeeId", sql.UniqueIdentifier, input.replacementEmployeeId)
+      .query(`
+        UPDATE replacement_requests
+        SET status = N'COVERED',
+            resolved_employee_id = @replacementEmployeeId,
+            resolved_at = SYSUTCDATETIME(),
+            request_version = request_version + 1,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND absent_employee_workday_id = @employeeWorkdayId
+          AND absent_employee_id = @absentEmployeeId
+          AND status = N'PENDING'
+      `);
+    if ((result.rowsAffected[0] ?? 0) > 0) {
+      await auditService.log(
+        companyId,
+        {
+          action: "REPLACEMENT_COVERED",
+          entityType: "replacement_request",
+          entityId: input.absentEmployeeWorkdayId,
+          newData: { replacementEmployeeId: input.replacementEmployeeId },
+        },
+        transaction,
+      );
+    }
+  },
+
+  async reopenPendingForAbsentWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: { absentEmployeeWorkdayId: string; absentEmployeeId: string },
+  ): Promise<void> {
+    await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.absentEmployeeWorkdayId)
+      .input("absentEmployeeId", sql.UniqueIdentifier, input.absentEmployeeId)
+      .query(`
+        UPDATE replacement_requests
+        SET status = N'PENDING',
+            resolved_employee_id = NULL,
+            resolved_at = NULL,
+            request_version = request_version + 1,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND absent_employee_workday_id = @employeeWorkdayId
+          AND absent_employee_id = @absentEmployeeId
+          AND status = N'COVERED'
+      `);
+  },
 };

@@ -15,14 +15,9 @@ import { rollbackTransactionSafely } from "../../utils/sql-transaction";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 import { auditService } from "../audit.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
-import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
-import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
-import { resolveOperationOperationalDate } from "../../utils/operations/operation-change-events";
-import { resolveOperationTimezone } from "../../utils/operations/operation-timezone";
-import { employeeAvailabilityService } from "../employees/employee-availability.service";
-import { operationAssignmentCore } from "../operations/operation-assignment-core.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
-import { operationWorkDateService } from "../operations/operation-work-date.service";
+import { employeeWorkdayCoverageService } from "./employee-workday-coverage.service";
+import { replacementRequestService } from "../replacement-request.service";
 
 /** Test-only failure points for transactional atomicity evidence (Phase 5). */
 export type ResolveConflictFailurePoint =
@@ -204,76 +199,43 @@ export const absenceOperationalConflictService = {
           );
         }
 
-        const startAt = existing.rangeStartAt
-          ? new Date(existing.rangeStartAt)
-          : new Date(`${request.startDate}T00:00:00.000Z`);
-        const endAt = existing.rangeEndAt
-          ? new Date(existing.rangeEndAt)
-          : new Date(`${request.endDate}T23:59:59.999Z`);
-        const availability = await employeeAvailabilityService.getAvailabilityForInterval({
-          companyId,
-          employeeId: input.replacementEmployeeId,
-          startAt,
-          endAt,
-        });
-        if (availability.status !== "AVAILABLE") {
+        if (!existing.employeeWorkdayId) {
           throw new AppError(
             409,
-            "REPLACEMENT_UNAVAILABLE",
-            "El reemplazo no está disponible en el intervalo de la ausencia",
+            "WORKDAY_CONTEXT_REQUIRED",
+            "El conflicto no tiene jornada operativa para registrar cobertura",
           );
         }
 
-        const operationWorkDate = await operationWorkDateService.resolveOperationWorkDate(
+        await employeeWorkdayCoverageService.coverEmployeeWorkdayInTransaction(
           companyId,
-          existing.operationId,
-        );
-        const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
-          operation.operationKind ?? "ONE_TIME",
-          operationWorkDate,
+          transaction,
+          input.resolvedByUserId,
           {
-            validFrom: original.validFrom,
-            validUntil: original.validUntil,
+            operationId: existing.operationId,
+            employeeWorkdayId: existing.employeeWorkdayId,
+            replacementEmployeeId: input.replacementEmployeeId,
+            replacedAssignmentId: existing.assignmentId,
+            replacedEmployeeId: existing.employeeId,
+            coverageCommandId: clientCommandId,
+            sourceType: "ABSENCE_ASSIGN_REPLACEMENT",
+            sourceConflictId: conflictId,
+            absenceRequestId,
+            absenceConflictId: conflictId,
+            coverageReason: input.resolutionReason,
           },
+          { reconcileAbsence: false },
         );
 
-        const assignResult = await operationAssignmentCore.assignEmployeeInTransaction(
+        await replacementRequestService.markCoveredForAbsentWorkdayInTransaction(
           companyId,
           transaction,
           {
-            operationId: existing.operationId,
-            employeeId: input.replacementEmployeeId,
-            validFrom,
-            validUntil,
-            employeeActive: lockedReplacement.active,
-            operationKind: operation.operationKind ?? "ONE_TIME",
-            operationWorkDate,
+            absentEmployeeWorkdayId: existing.employeeWorkdayId,
+            absentEmployeeId: existing.employeeId,
+            replacementEmployeeId: input.replacementEmployeeId,
           },
         );
-
-        if (assignResult.outcome === "skipped") {
-          if (
-            assignResult.reason === "already_assigned" &&
-            assignResult.existingAssignmentId
-          ) {
-            // Idempotent retry: replacement already assigned for equivalent period.
-          } else if (
-            assignResult.reason === "already_assigned" ||
-            assignResult.reason === "assignment_period_overlap"
-          ) {
-            throw new AppError(
-              409,
-              "ASSIGNMENT_PERIOD_OVERLAP",
-              "El reemplazo ya tiene una asignación que se superpone con esas fechas",
-            );
-          } else {
-            throw new AppError(
-              409,
-              "REPLACEMENT_INVALID",
-              "No se pudo asignar el reemplazo",
-            );
-          }
-        }
 
         maybeInjectResolveFailure("after_assignment_created");
       }
@@ -318,44 +280,6 @@ export const absenceOperationalConflictService = {
       );
       if (!updated) {
         throw new AppError(409, "ABSENCE_OPERATIONAL_CONFLICT_RACE", "El conflicto ya fue resuelto");
-      }
-
-      if (
-        input.resolutionCode === "ASSIGN_REPLACEMENT" &&
-        existing.operationId &&
-        input.replacementEmployeeId
-      ) {
-        const coveredOperation = await operationRepository.findById(
-          companyId,
-          existing.operationId,
-        );
-        const operationWorkDate = await operationWorkDateService.resolveOperationWorkDate(
-          companyId,
-          existing.operationId,
-        );
-        const settings = await companySettingsRepository.findByCompanyId(companyId);
-        const timezone = resolveOperationTimezone(settings?.operationTimezone);
-        await operationCoverageEventRepository.insert(
-          {
-            companyId,
-            operationId: existing.operationId,
-            operationalDate: resolveOperationOperationalDate(
-              {
-                scheduledStart: coveredOperation?.scheduledStart ?? null,
-                workDate: operationWorkDate,
-              },
-              timezone,
-            ),
-            sourceType: "ABSENCE_ASSIGN_REPLACEMENT",
-            sourceConflictId: conflictId,
-            replacedAssignmentId: existing.assignmentId,
-            replacedEmployeeId: existing.employeeId,
-            replacementEmployeeId: input.replacementEmployeeId,
-            reason: input.resolutionReason ?? null,
-            resolvedByUserId: input.resolvedByUserId ?? null,
-          },
-          transaction,
-        );
       }
 
       maybeInjectResolveFailure("after_resolve_conflict");

@@ -39,8 +39,42 @@ const conflictTypeLabels: Record<string, string> = {
   OPERATION_AFFECTED: "Operación afectada",
 };
 
-export function buildOperationCoverageHref(operationId: string): string {
-  return `/operations/${operationId}`;
+export type OperationCoverageDeepLinkContext = {
+  employeeWorkdayId: string;
+  assignmentId: string;
+  absentEmployeeId: string;
+  absentEmployeeName?: string | null;
+  absenceRequestId: string;
+  absenceConflictId?: string | null;
+  workDate: string;
+  shiftLabel?: string | null;
+};
+
+export function buildOperationCoverageHref(
+  operationId: string,
+  context?: OperationCoverageDeepLinkContext | null,
+): string {
+  if (!context) {
+    return `/operations/${operationId}`;
+  }
+  const params = new URLSearchParams({
+    cover: "1",
+    employeeWorkdayId: context.employeeWorkdayId,
+    assignmentId: context.assignmentId,
+    absentEmployeeId: context.absentEmployeeId,
+    absenceRequestId: context.absenceRequestId,
+    workDate: context.workDate,
+  });
+  if (context.absenceConflictId) {
+    params.set("absenceConflictId", context.absenceConflictId);
+  }
+  if (context.absentEmployeeName?.trim()) {
+    params.set("absentEmployeeName", context.absentEmployeeName.trim());
+  }
+  if (context.shiftLabel?.trim()) {
+    params.set("shiftLabel", context.shiftLabel.trim());
+  }
+  return `/operations/${operationId}?${params.toString()}`;
 }
 
 export function conflictTypeHumanLabel(conflictType: string): string {
@@ -196,6 +230,42 @@ export function shouldOfferCoverageAction(
   return impactHasWorkdaysNeedingCoverage(impact, requestStatus);
 }
 
+export function buildOperationCoverageContext(input: {
+  impact: AbsenceOperationalImpact;
+  requestId: string;
+  row: AbsencePlanningRow;
+}): OperationCoverageDeepLinkContext | null {
+  const workday = input.impact.workdays.find(
+    (item) => item.employeeWorkdayId === input.row.key,
+  );
+  if (!workday || !input.row.operationId || !input.row.assignmentId) {
+    return null;
+  }
+  const operation = findOperationForWorkday(
+    input.impact,
+    workday.operationId,
+    workday.operationAssignmentId ?? input.row.assignmentId,
+  );
+  const openConflict = findOpenAssignmentVacancyConflict(
+    input.impact,
+    workday,
+    operation?.assignmentId ?? input.row.assignmentId,
+  );
+  const absentEmployeeId = operation?.employeeId ?? openConflict?.employeeId;
+  if (!absentEmployeeId) {
+    return null;
+  }
+  return {
+    employeeWorkdayId: workday.employeeWorkdayId,
+    assignmentId: input.row.assignmentId,
+    absentEmployeeId,
+    absenceRequestId: input.requestId,
+    absenceConflictId: openConflict?.id ?? null,
+    workDate: workday.workDate,
+    shiftLabel: input.row.shiftLabel,
+  };
+}
+
 export function buildAbsencePlanningRows(
   impact: AbsenceOperationalImpact,
   requestStatus: AbsenceRequestStatus,
@@ -242,6 +312,7 @@ export function buildAbsencePlanningRows(
         openConflict,
         hasOperationalReplacement: deriveWorkdayHasOperationalReplacement(workday),
         hasAttendancePresence: workday.hasAttendancePresence,
+        coveredByEmployeeName: workday.coveredByEmployeeName ?? null,
       }),
       needsCoverage,
       hasOpenConflict: Boolean(openConflict),
@@ -348,6 +419,7 @@ function deriveSituationLabel(input: {
   openConflict: AbsenceOperationalConflict | null;
   hasOperationalReplacement: boolean;
   hasAttendancePresence: boolean;
+  coveredByEmployeeName?: string | null;
 }): string {
   if (input.requestStatus !== "APPROVED") {
     if (input.openConflict) {
@@ -365,7 +437,9 @@ function deriveSituationLabel(input: {
   }
 
   if (input.hasOperationalReplacement) {
-    return "Jornada cubierta";
+    return input.coveredByEmployeeName?.trim()
+      ? `Jornada cubierta · ${input.coveredByEmployeeName.trim()}`
+      : "Jornada cubierta";
   }
 
   if (input.openConflict) {

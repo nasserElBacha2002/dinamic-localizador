@@ -1,6 +1,7 @@
 import { Button, Collapse, Select, SimpleGrid, Stack, Text, TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
 import {
   ManualAttendanceDialog,
@@ -59,6 +60,14 @@ import { canReviewOperationalAttendance } from "./operation-workforce-attendance
 import type { ManualAttendanceAction } from "../../utils/manual-attendance-actions";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
 import { notifications } from "@mantine/notifications";
+import { OperationAiRecommendationsPanel } from "./OperationAiRecommendationsPanel";
+import {
+  buildCoverageTargetFromDeepLink,
+  newCoverageCommandId,
+  type ParsedOperationCoverageDeepLink,
+} from "../../utils/operation-coverage-deeplink";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import { absenceKeys } from "../../api/absence-query-keys";
 
 interface OperationTeamSectionProps {
   operationId: string;
@@ -71,6 +80,7 @@ interface OperationTeamSectionProps {
   selectedWorkday: OperationTeamWorkdaySelection | null;
   onWorkdayChange: (selection: OperationTeamWorkdaySelection | null) => void;
   onFeedback: (message: string, severity: "success" | "error") => void;
+  coverageDeepLink?: ParsedOperationCoverageDeepLink | null;
 }
 
 export function OperationTeamSection({
@@ -84,6 +94,7 @@ export function OperationTeamSection({
   selectedWorkday,
   onWorkdayChange,
   onFeedback,
+  coverageDeepLink = null,
 }: OperationTeamSectionProps) {
   const isRecurring = operationKind === "RECURRING";
   const isMultiShift = scheduleMode === "MULTI_SHIFT";
@@ -113,6 +124,9 @@ export function OperationTeamSection({
   );
   const assignBatchMutation = useAssignOperationEmployeesBatch(operationId);
   const assignEmployeeMutation = useAssignOperationEmployee(operationId);
+  const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
+  const coverageCommandIdRef = useRef(newCoverageCommandId());
   const cancelMutation = useCancelOperationAssignment(operationId);
   const endMutation = useEndOperationAssignment(operationId);
   const reviewMutation = useReviewAttendance();
@@ -123,6 +137,37 @@ export function OperationTeamSection({
 
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [coverageTarget, setCoverageTarget] = useState<CoverageAssignmentTarget | null>(null);
+  const appliedCoverageDeepLinkRef = useRef<string | null>(null);
+
+  const targetCoverageWorkDate = useMemo(() => {
+    if (coverageTarget?.workDateLabel) {
+      return coverageTarget.workDateLabel;
+    }
+    if (coverageDeepLink?.workDate) {
+      return coverageDeepLink.workDate;
+    }
+    return null;
+  }, [coverageTarget, coverageDeepLink]);
+
+  const coverageAwareWorkDate =
+    targetCoverageWorkDate ?? selectedWorkday?.workDate ?? operationWorkDate;
+
+  useEffect(() => {
+    if (!coverageDeepLink || !canAssign) {
+      return;
+    }
+    const signature = [
+      coverageDeepLink.employeeWorkdayId,
+      coverageDeepLink.assignmentId,
+      coverageDeepLink.absenceRequestId,
+    ].join(":");
+    if (appliedCoverageDeepLinkRef.current === signature) {
+      return;
+    }
+    appliedCoverageDeepLinkRef.current = signature;
+    coverageCommandIdRef.current = newCoverageCommandId();
+    setCoverageTarget(buildCoverageTargetFromDeepLink(coverageDeepLink));
+  }, [canAssign, coverageDeepLink]);
   const [endTarget, setEndTarget] = useState<OperationEmployeeAssignment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [manualTarget, setManualTarget] = useState<ManualAttendanceDialogTarget | null>(null);
@@ -272,11 +317,30 @@ export function OperationTeamSection({
       }
 
       try {
+        const coverageContext = coverageTarget;
+        if (!coverageContext?.employeeWorkdayId) {
+          const message = "Falta la jornada del colaborador ausente para cubrir.";
+          onFeedback(message, "error");
+          return { status: "error", added: [], skipped: [] };
+        }
         const payload = buildAssignEmployeePayload(scheduleMode, {
           employeeId,
           asCoverage: true,
           replacedAssignmentId: input.replacedAssignmentId,
           replacedEmployeeId: input.replacedEmployeeId,
+          coverageReason: coverageContext?.absenceRequestId
+            ? "Cobertura por ausencia aprobada"
+            : "Cobertura operativa",
+          ...(coverageContext?.employeeWorkdayId
+            ? { employeeWorkdayId: coverageContext.employeeWorkdayId }
+            : {}),
+          ...(coverageContext?.absenceRequestId
+            ? {
+                absenceRequestId: coverageContext.absenceRequestId,
+                absenceConflictId: coverageContext.absenceConflictId ?? undefined,
+                coverageCommandId: coverageCommandIdRef.current,
+              }
+            : {}),
           ...(input.validFrom
             ? {
                 validFrom: input.validFrom,
@@ -285,6 +349,11 @@ export function OperationTeamSection({
             : {}),
         });
         const assignment = await assignEmployeeMutation.mutateAsync(payload);
+        if (coverageContext?.absenceRequestId && companyId) {
+          void queryClient.invalidateQueries({
+            queryKey: absenceKeys.operationalImpact(companyId, coverageContext.absenceRequestId),
+          });
+        }
         onFeedback("Cobertura asignada correctamente.", "success");
         return { status: "success", added: [assignment.employeeId], skipped: [] };
       } catch (error) {
@@ -703,11 +772,39 @@ export function OperationTeamSection({
           bodyMode="scroll"
         >
           {coverageTarget ? (
-            <OperationIndividualAssignmentPanel
+            <Stack gap="md">
+              <OperationAiRecommendationsPanel
+                operationId={operationId}
+                operationKind={operationKind}
+                scheduleMode={scheduleMode}
+                selectedShiftId={coverageTarget.operationShiftId ?? null}
+                selectedShiftLabel={coverageTarget.shiftLabel ?? null}
+                operationWorkDate={coverageAwareWorkDate}
+                excludeEmployeeIds={[
+                  ...currentlyAssignedEmployeeIds,
+                  coverageTarget.replacedEmployeeId,
+                ]}
+                enabled
+                assignLoading={assignEmployeeMutation.isPending}
+                onAssign={async (input) =>
+                  handleAssignEmployees({
+                    ...input,
+                    asCoverage: true,
+                    replacedAssignmentId: coverageTarget.replacedAssignmentId,
+                    replacedEmployeeId: coverageTarget.replacedEmployeeId,
+                  })
+                }
+                onResult={(result) => {
+                  if (result.status === "success") {
+                    setCoverageTarget(null);
+                  }
+                }}
+              />
+              <OperationIndividualAssignmentPanel
               key={`coverage:${coverageTarget.replacedAssignmentId}`}
               operationKind={operationKind}
               scheduleMode={scheduleMode}
-              operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
+              operationWorkDate={coverageAwareWorkDate}
               excludeEmployeeIds={currentlyAssignedEmployeeIds}
               shiftOptions={shiftOptions}
               coverageTarget={coverageTarget}
@@ -719,6 +816,7 @@ export function OperationTeamSection({
                 }
               }}
             />
+            </Stack>
           ) : null}
         </ResponsiveModal>
       ) : null}

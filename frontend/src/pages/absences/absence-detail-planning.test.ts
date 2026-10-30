@@ -89,6 +89,14 @@ describe("absence-detail-planning", () => {
     assert.equal(shouldOfferCoverageAction("APPROVED", impact), true);
     assert.equal(selectPrimaryCoverageOperationId(impact, "APPROVED"), "op-1");
     assert.equal(buildOperationCoverageHref("op-1"), "/operations/op-1");
+    const href = buildOperationCoverageHref("op-1", {
+      employeeWorkdayId: "ew-1",
+      assignmentId: "as-1",
+      absentEmployeeId: "emp-1",
+      absenceRequestId: "req-1",
+      workDate: "2026-10-30",
+    });
+    assert.match(href, /cover=1/);
   });
 
   it("does not offer coverage when replacement exists", () => {

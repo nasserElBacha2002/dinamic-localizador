@@ -23,6 +23,11 @@ export type CoverageAssignmentTarget = {
   replacedEmployeeName?: string;
   operationShiftId?: string | null;
   shiftLabel?: string | null;
+  employeeWorkdayId?: string;
+  absenceRequestId?: string;
+  absenceConflictId?: string | null;
+  workDateLabel?: string;
+  pendingCoverageLabel?: string;
 };
 
 export interface OperationIndividualAssignmentPanelProps {
@@ -176,13 +181,23 @@ export function OperationIndividualAssignmentPanel({
     <Stack gap="md">
       {isCoverage ? (
         <Stack gap={4}>
+          <Text fw={600}>Cobertura requerida</Text>
           <Text size="sm">
-            Cobertura de{" "}
             <Text span fw={500}>
-              {coverageTarget?.replacedEmployeeName ?? "colaborador reemplazado"}
+              {coverageTarget?.replacedEmployeeName ?? "Colaborador ausente"}
             </Text>
-            .
+            {coverageTarget?.workDateLabel ? (
+              <>
+                {" "}
+                · {formatDateInputDisplay(coverageTarget.workDateLabel)}
+              </>
+            ) : null}
           </Text>
+          {coverageTarget?.pendingCoverageLabel ? (
+            <Badge color="orange" variant="light">
+              {coverageTarget.pendingCoverageLabel}
+            </Badge>
+          ) : null}
           {coverageShiftLabel ? (
             <TextInput
               label="Turno"

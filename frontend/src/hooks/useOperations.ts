@@ -178,6 +178,10 @@ export function useAssignOperationEmployee(operationId: string) {
       replacedAssignmentId?: string;
       replacedEmployeeId?: string;
       coverageReason?: string;
+      employeeWorkdayId?: string;
+      absenceRequestId?: string;
+      absenceConflictId?: string | null;
+      coverageCommandId?: string;
     }) => assignEmployeeToOperation(operationId, input),
     onSettled: (_data, error) => {
       if (error && !isRecurringWorkdaySyncError(error)) {

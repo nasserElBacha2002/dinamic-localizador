@@ -2,6 +2,7 @@ export const LANDING_SEO = {
   title: "Dinamic Operations | Planificá y mantené cubiertos tus servicios",
   description:
     "Organizá equipos, detectá problemas y resolvé cambios e imprevistos en servicios con personal distribuido. Conocé Dinamic Operations.",
+  canonicalUrl: "https://dinamicoperations.com/",
   /** Intención SEO del brief; no duplicar como H1 visible. */
   seoHeadline:
     "Mantené cada servicio cubierto, incluso cuando la operación cambia.",

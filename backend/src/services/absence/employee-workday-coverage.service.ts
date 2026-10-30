@@ -52,6 +52,25 @@ export type CoverEmployeeWorkdayOptions = {
   reconcileAbsence?: boolean;
 };
 
+export type CoverEmployeeWorkdayFailurePoint =
+  | "after_replacement_assignment"
+  | "after_coverage_event"
+  | "before_reconcile";
+
+let coverEmployeeWorkdayFailurePoint: CoverEmployeeWorkdayFailurePoint | null = null;
+
+export const __setCoverEmployeeWorkdayFailurePointForTests = (
+  point: CoverEmployeeWorkdayFailurePoint | null,
+): void => {
+  coverEmployeeWorkdayFailurePoint = point;
+};
+
+const maybeInjectCoverFailure = (point: CoverEmployeeWorkdayFailurePoint): void => {
+  if (coverEmployeeWorkdayFailurePoint === point) {
+    throw new Error(`INJECTED_FAILURE:${point}`);
+  }
+};
+
 const loadWorkdayContext = async (
   companyId: string,
   employeeWorkdayId: string,
@@ -163,37 +182,52 @@ const validateCoverContext = async (
     }
   }
 
-  if (input.absenceConflictId && input.absenceRequestId) {
-    const conflict = await absenceOperationalImpactRepository.findConflictById(
-      companyId,
-      input.absenceRequestId,
-      input.absenceConflictId,
-    );
-    if (!conflict) {
-      throw new AppError(
-        404,
-        "ABSENCE_OPERATIONAL_CONFLICT_NOT_FOUND",
-        "Conflicto de ausencia no encontrado",
+    if (input.absenceConflictId && input.absenceRequestId) {
+      const conflict = await absenceOperationalImpactRepository.findConflictById(
+        companyId,
+        input.absenceRequestId,
+        input.absenceConflictId,
       );
+      if (!conflict) {
+        throw new AppError(
+          404,
+          "ABSENCE_OPERATIONAL_CONFLICT_NOT_FOUND",
+          "Conflicto de ausencia no encontrado",
+        );
+      }
+      if (conflict.status !== "OPEN" && conflict.status !== "RESOLVED") {
+        throw new AppError(
+          409,
+          "ABSENCE_OPERATIONAL_CONFLICT_NOT_OPEN",
+          "El conflicto de ausencia no admite cobertura",
+        );
+      }
+      if (conflict.employeeWorkdayId) {
+        if (conflict.employeeWorkdayId !== input.employeeWorkdayId) {
+          throw new AppError(
+            400,
+            "ABSENCE_CONFLICT_WORKDAY_MISMATCH",
+            "El conflicto no corresponde a la jornada indicada",
+          );
+        }
+        if (
+          conflict.assignmentId &&
+          conflict.assignmentId !== input.replacedAssignmentId
+        ) {
+          throw new AppError(
+            400,
+            "ABSENCE_CONFLICT_ASSIGNMENT_MISMATCH",
+            "El conflicto no corresponde a la asignación indicada",
+          );
+        }
+      } else if (conflict.assignmentId !== input.replacedAssignmentId) {
+        throw new AppError(
+          400,
+          "ABSENCE_CONFLICT_ASSIGNMENT_MISMATCH",
+          "El conflicto no corresponde a la asignación indicada",
+        );
+      }
     }
-    if (conflict.status !== "OPEN" && conflict.status !== "RESOLVED") {
-      throw new AppError(
-        409,
-        "ABSENCE_OPERATIONAL_CONFLICT_NOT_OPEN",
-        "El conflicto de ausencia no admite cobertura",
-      );
-    }
-    const conflictMatchesWorkday =
-      (conflict.employeeWorkdayId && conflict.employeeWorkdayId === input.employeeWorkdayId) ||
-      (conflict.assignmentId && conflict.assignmentId === input.replacedAssignmentId);
-    if (!conflictMatchesWorkday) {
-      throw new AppError(
-        400,
-        "ABSENCE_CONFLICT_WORKDAY_MISMATCH",
-        "El conflicto no corresponde a la jornada indicada",
-      );
-    }
-  }
 
   const intervalStart = new Date(workday.expectedStartAt);
   const intervalEnd = workday.expectedEndAt
@@ -413,6 +447,8 @@ const executeCoverEmployeeWorkdayInTransaction = async (
     });
   }
 
+  maybeInjectCoverFailure("after_replacement_assignment");
+
   const coverageInsert = await operationCoverageEventRepository.insert(
     {
       companyId,
@@ -439,7 +475,10 @@ const executeCoverEmployeeWorkdayInTransaction = async (
     );
   }
 
+  maybeInjectCoverFailure("after_coverage_event");
+
   if (reconcileAbsence && input.absenceRequestId) {
+    maybeInjectCoverFailure("before_reconcile");
     await absenceWorkdayCoverageReconciliationService.syncAfterCoverageInTransaction({
       companyId,
       transaction,
@@ -511,16 +550,34 @@ export const employeeWorkdayCoverageService = {
       .query(`
         UPDATE operation_coverage_events
         SET superseded_at = SYSUTCDATETIME()
-        OUTPUT INSERTED.absent_employee_workday_id, INSERTED.replaced_employee_id
+        OUTPUT
+          INSERTED.absent_employee_workday_id,
+          INSERTED.replaced_employee_id,
+          INSERTED.replaced_assignment_id,
+          INSERTED.source_conflict_id
         WHERE company_id = @companyId
           AND replacement_assignment_id = @replacementAssignmentId
           AND superseded_at IS NULL
       `);
     const row = result.recordset[0] as Record<string, unknown> | undefined;
     if (row?.absent_employee_workday_id) {
+      const absentEmployeeWorkdayId = String(row.absent_employee_workday_id);
+      const absentEmployeeId = String(row.replaced_employee_id);
+      await absenceOperationalImpactRepository.reopenAssignReplacementConflictsForWorkdayInTransaction(
+        {
+          companyId,
+          absentEmployeeId,
+          employeeWorkdayId: absentEmployeeWorkdayId,
+          replacedAssignmentId: row.replaced_assignment_id
+            ? String(row.replaced_assignment_id)
+            : null,
+          sourceConflictId: row.source_conflict_id ? String(row.source_conflict_id) : null,
+        },
+        transaction,
+      );
       await replacementRequestService.reopenPendingForAbsentWorkdayInTransaction(companyId, transaction, {
-        absentEmployeeWorkdayId: String(row.absent_employee_workday_id),
-        absentEmployeeId: String(row.replaced_employee_id),
+        absentEmployeeWorkdayId,
+        absentEmployeeId,
       });
     }
   },

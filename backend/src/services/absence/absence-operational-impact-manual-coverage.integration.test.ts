@@ -14,7 +14,6 @@ import {
 } from "../../test-helpers/integration-test";
 import { getPool } from "../../database/connection";
 import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
-import { absenceOperationalImpactRepository } from "../../repositories/absence/absence-operational-impact.repository";
 import { absenceWorkdaySyncJobRepository } from "../../repositories/absence/absence-workday-sync-job.repository";
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
@@ -160,21 +159,6 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
             updated_at = SYSUTCDATETIME()
         WHERE id = @id
       `);
-
-    await absenceOperationalImpactRepository.upsertConflict({
-      companyId,
-      absenceRequestId: created.id,
-      absenceVersion: 1,
-      conflictType: "ASSIGNMENT_DURING_ABSENCE",
-      severity: "WARNING",
-      employeeId: absentEmployeeId,
-      operationId,
-      serviceId,
-      assignmentId: assignment.id,
-      idempotencyKey: `coverage-impact:${randomUUID()}`,
-      rangeStartAt: start,
-      rangeEndAt: new Date(start.getTime() + 8 * 60 * 60 * 1000),
-    });
 
     await absenceWorkdaySyncJobRepository.enqueue({
       companyId,

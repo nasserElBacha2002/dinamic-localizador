@@ -36,7 +36,7 @@ const baseConflict = (
 });
 
 describe("operation absence badges matrix", () => {
-  it("marks replacement pending and open conflict for OPEN assignment conflict", () => {
+  it("marks vacancy pending for OPEN assignment conflict without active coverage", () => {
     const badges = resolveOperationAbsenceBadges({
       employeeId: "emp1",
       assignmentId: "asg1",
@@ -45,11 +45,10 @@ describe("operation absence badges matrix", () => {
     });
     const codes = badges.map((b) => b.code);
     assert.ok(codes.includes("REPLACEMENT_PENDING"));
-    assert.ok(codes.includes("OPEN_CONFLICT"));
-    assert.ok(codes.includes("ABSENT"));
+    assert.ok(!codes.includes("REPLACED"));
   });
 
-  it("marks replaced when ASSIGN_REPLACEMENT resolved", () => {
+  it("case A: resolved ASSIGN_REPLACEMENT without active coverage is not Cobertura activa", () => {
     const badges = resolveOperationAbsenceBadges({
       employeeId: "emp1",
       assignmentId: "asg1",
@@ -62,8 +61,56 @@ describe("operation absence badges matrix", () => {
       ],
     });
     const codes = badges.map((b) => b.code);
-    assert.ok(codes.includes("REPLACED"));
+    assert.ok(!codes.includes("REPLACED"));
     assert.ok(codes.includes("RESOLVED_CONFLICT"));
+  });
+
+  it("case B: active workday coverage shows Cobertura activa without redundant planificación resuelta", () => {
+    const badges = resolveOperationAbsenceBadges({
+      employeeId: "emp1",
+      assignmentId: "asg1",
+      conflicts: [
+        baseConflict({
+          status: "RESOLVED",
+          resolutionCode: "ASSIGN_REPLACEMENT",
+          replacementEmployeeId: "emp2",
+        }),
+      ],
+      activeWorkdayCoverage: {
+        replacementEmployeeId: "emp2",
+        absenceRequestId: "a1",
+      },
+    });
+    const codes = badges.map((b) => b.code);
+    assert.ok(codes.includes("REPLACED"));
+    assert.ok(!codes.includes("RESOLVED_CONFLICT"));
+    assert.equal(
+      badges.find((b) => b.code === "REPLACED")?.replacementEmployeeId,
+      "emp2",
+    );
+  });
+
+  it("case C: cancelled/superseded coverage reopens vacancy when conflict is OPEN", () => {
+    const badges = resolveOperationAbsenceBadges({
+      employeeId: "emp1",
+      assignmentId: "asg1",
+      conflicts: [
+        baseConflict({
+          status: "OPEN",
+          conflictType: "ASSIGNMENT_DURING_ABSENCE",
+        }),
+        baseConflict({
+          id: "c-old",
+          status: "RESOLVED",
+          resolutionCode: "ASSIGN_REPLACEMENT",
+          replacementEmployeeId: "emp2",
+        }),
+      ],
+      activeWorkdayCoverage: null,
+    });
+    const codes = badges.map((b) => b.code);
+    assert.ok(codes.includes("REPLACEMENT_PENDING"));
+    assert.ok(!codes.includes("REPLACED"));
   });
 });
 

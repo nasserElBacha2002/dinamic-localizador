@@ -1,4 +1,5 @@
 import type { CoverageAssignmentTarget } from "../components/operations/OperationIndividualAssignmentPanel";
+import { operationalWorkdaySituationLabels } from "./operational-workday-presentation";
 
 export type ParsedOperationCoverageDeepLink = {
   employeeWorkdayId: string;
@@ -55,8 +56,31 @@ export function buildCoverageTargetFromDeepLink(
     absenceRequestId: link.absenceRequestId,
     absenceConflictId: link.absenceConflictId ?? null,
     workDateLabel: link.workDate,
-    pendingCoverageLabel: "Pendiente de cobertura",
+    pendingCoverageLabel: operationalWorkdaySituationLabels.vacancyPending,
   };
+}
+
+const COVERAGE_DEEP_LINK_PARAM_KEYS = [
+  "cover",
+  "employeeWorkdayId",
+  "assignmentId",
+  "absentEmployeeId",
+  "absenceRequestId",
+  "absenceConflictId",
+  "workDate",
+  "absentEmployeeName",
+  "shiftLabel",
+] as const;
+
+/** Removes coverage deep-link query params after the UX context was consumed. */
+export function stripOperationCoverageDeepLinkParams(
+  params: URLSearchParams,
+): URLSearchParams {
+  const next = new URLSearchParams(params);
+  for (const key of COVERAGE_DEEP_LINK_PARAM_KEYS) {
+    next.delete(key);
+  }
+  return next;
 }
 
 export function newCoverageCommandId(): string {

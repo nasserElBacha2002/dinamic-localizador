@@ -39,15 +39,19 @@ export const attendanceValidationStatusFilterOptions = (): { value: string; labe
   { value: "ABSENT", label: employeeWorkdayEffectiveStateLabels.ABSENT },
 ];
 
+export function employeeWorkdayAttendanceDetailPath(employeeWorkdayId: string): string {
+  return `/attendance/workdays/${employeeWorkdayId}`;
+}
+
 export function attendanceListDetailPath(row: AttendanceRecordWithRelations): string {
   if (row.hasAttendanceRecord === false && row.employeeWorkdayId) {
-    return `/attendance/workdays/${row.employeeWorkdayId}`;
+    return employeeWorkdayAttendanceDetailPath(row.employeeWorkdayId);
   }
   if (row.hasAttendanceRecord !== false && row.id) {
     return `/attendance/${row.id}`;
   }
   if (row.employeeWorkdayId) {
-    return `/attendance/workdays/${row.employeeWorkdayId}`;
+    return employeeWorkdayAttendanceDetailPath(row.employeeWorkdayId);
   }
   return `/attendance/${row.id}`;
 }

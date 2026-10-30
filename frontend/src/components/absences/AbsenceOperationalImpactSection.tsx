@@ -17,14 +17,14 @@ import type { AbsenceOperationalResolutionCode } from "../../types/absence-opera
 import { EntityLink } from "../entity-link";
 import {
   buildAbsencePlanningRows,
-  buildOperationCoverageContext,
-  buildOperationCoverageHref,
   conflictTypeHumanLabel,
+  resolveAbsencePlanningRowAction,
   type AbsencePlanningRow,
 } from "../../pages/absences/absence-detail-planning";
 import { formatAbsenceDate } from "../../utils/absence-labels";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
+import { operationalWorkdaySituationLabels } from "../../utils/operational-workday-presentation";
 
 const newCommandId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -64,7 +64,7 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [commandId, setCommandId] = useState(newCommandId);
 
-  if (impactQuery.isLoading) {
+  if (impactQuery.isLoading && !impactQuery.data) {
     return (
       <SectionCard title="Planificación afectada">
         <Text c="dimmed">Evaluando planificación…</Text>
@@ -72,7 +72,7 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
     );
   }
 
-  if (impactQuery.isError || !impactQuery.data) {
+  if (!impactQuery.data) {
     return (
       <SectionCard title="Planificación afectada">
         <Alert color="red">
@@ -83,6 +83,7 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
   }
 
   const impact = impactQuery.data;
+  const showStaleImpactError = impactQuery.isError;
   const planningRows = buildAbsencePlanningRows(impact, requestStatus);
   const effectiveConflictId =
     selectedConflictId ?? impact.openConflicts[0]?.id ?? null;
@@ -92,31 +93,35 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
     impact.affectedWorkdays === 0;
 
   const renderPlanningAction = (row: AbsencePlanningRow) => {
-    const coverageContext =
-      row.needsCoverage && row.operationId
-        ? buildOperationCoverageContext({ impact, requestId, row })
-        : null;
-    if (row.needsCoverage && canManageOperations && row.operationId) {
+    const action = resolveAbsencePlanningRowAction({
+      row,
+      impact,
+      requestId,
+      canManageOperations,
+      canViewOperations,
+      allowOperationalMutations: !showStaleImpactError,
+    });
+    if (action.kind === "cover") {
       return (
         <Button
           component={RouterLink}
-          to={buildOperationCoverageHref(row.operationId, coverageContext)}
+          to={action.href}
           size="compact-xs"
           variant="light"
         >
-          Cubrir jornada
+          {action.label}
         </Button>
       );
     }
-    if (canViewOperations && row.operationId) {
+    if (action.kind === "view_operation") {
       return (
         <Button
           component={RouterLink}
-          to={buildOperationCoverageHref(row.operationId)}
+          to={action.href}
           size="compact-xs"
           variant="subtle"
         >
-          Ver operación
+          {action.label}
         </Button>
       );
     }
@@ -228,7 +233,13 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
             No se detectaron jornadas asignadas superpuestas con esta ausencia.
           </Text>
         ) : (
-          <DataTable
+          <>
+            {showStaleImpactError ? (
+              <Alert color="orange">
+                {operationalWorkdaySituationLabels.coverageStatusUnknown}
+              </Alert>
+            ) : null}
+            <DataTable
             rows={planningRows}
             columns={planningColumns}
             getRowKey={(row) => row.key}
@@ -236,9 +247,10 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
             mobileCard={planningMobileCard}
             aria-label="Planificación afectada por la ausencia"
           />
+          </>
         )}
 
-        {impact.openConflicts.length > 0 && canManageOperations ? (
+        {impact.openConflicts.length > 0 && canManageOperations && !showStaleImpactError ? (
           <Accordion variant="contained">
             <Accordion.Item value="advanced-conflicts">
               <Accordion.Control>Resolución avanzada de conflictos</Accordion.Control>

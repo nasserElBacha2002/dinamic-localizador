@@ -7,9 +7,11 @@ import {
   buildOperationCoverageHref,
   deriveAbsenceOperationalSummary,
   findOperationForWorkday,
+  resolveAbsencePlanningRowAction,
   selectPrimaryCoverageOperationId,
   shouldOfferCoverageAction,
 } from "./absence-detail-planning";
+import { operationalWorkdaySituationLabels } from "../../utils/operational-workday-presentation";
 
 const assignmentConflict = (
   overrides: Partial<AbsenceOperationalImpact["openConflicts"][number]> = {},
@@ -118,7 +120,84 @@ describe("absence-detail-planning", () => {
     });
     assert.equal(shouldOfferCoverageAction("APPROVED", impact), false);
     const rows = buildAbsencePlanningRows(impact, "APPROVED");
-    assert.equal(rows[0]?.situationLabel, "Jornada cubierta");
+    assert.equal(rows[0]?.situationLabel, operationalWorkdaySituationLabels.covered);
+  });
+
+  it("offers Cubrir jornada only when vacancy remains", () => {
+    const impact = baseImpact();
+    const rows = buildAbsencePlanningRows(impact, "APPROVED");
+    const cover = resolveAbsencePlanningRowAction({
+      row: rows[0]!,
+      impact,
+      requestId: "req-1",
+      canManageOperations: true,
+      canViewOperations: true,
+    });
+    assert.equal(cover.kind, "cover");
+    if (cover.kind === "cover") {
+      assert.equal(cover.label, "Cubrir jornada");
+      assert.match(cover.href, /employeeWorkdayId=wd-1/);
+    }
+  });
+
+  it("shows Ver cobertura without cover CTA when replacement exists", () => {
+    const impact = baseImpact({
+      workdays: [
+        {
+          ...baseImpact().workdays[0]!,
+          needsCoverage: false,
+          hasOperationalReplacement: true,
+          coveredByEmployeeName: "María Gómez",
+        },
+      ],
+      openConflicts: [],
+    });
+    const rows = buildAbsencePlanningRows(impact, "APPROVED");
+    const action = resolveAbsencePlanningRowAction({
+      row: rows[0]!,
+      impact,
+      requestId: "req-1",
+      canManageOperations: true,
+      canViewOperations: true,
+    });
+    assert.equal(action.kind, "view_operation");
+    if (action.kind === "view_operation") {
+      assert.equal(action.label, "Ver cobertura");
+      assert.doesNotMatch(action.href, /cover=1/);
+    }
+    assert.match(rows[0]?.situationLabel ?? "", /María Gómez/);
+  });
+
+  it("labels cancelled operation workdays", () => {
+    const impact = baseImpact({
+      operations: [
+        {
+          ...baseImpact().operations[0]!,
+          operationStatus: "CANCELLED",
+        },
+      ],
+    });
+    const rows = buildAbsencePlanningRows(impact, "APPROVED");
+    assert.equal(rows[0]?.situationLabel, operationalWorkdaySituationLabels.workdayCancelled);
+  });
+
+  it("blocks cover mutation CTA when operational mutations are disabled (stale impact)", () => {
+    const impact = baseImpact();
+    const rows = buildAbsencePlanningRows(impact, "APPROVED");
+    assert.equal(rows[0]?.needsCoverage, true);
+    const blocked = resolveAbsencePlanningRowAction({
+      row: rows[0]!,
+      impact,
+      requestId: "req-1",
+      canManageOperations: true,
+      canViewOperations: true,
+      allowOperationalMutations: false,
+    });
+    assert.equal(blocked.kind, "view_operation");
+    if (blocked.kind === "view_operation") {
+      assert.equal(blocked.label, "Ver operación");
+      assert.doesNotMatch(blocked.href, /cover=1/);
+    }
   });
 
   it("matches operation by assignmentId when multiple assignments share operationId", () => {

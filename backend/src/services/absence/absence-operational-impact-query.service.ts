@@ -11,6 +11,7 @@ import { employeeRepository } from "../../repositories/employees/employee.reposi
 import { employeeWorkdayRepository } from "../../repositories/workdays/employee-workday.repository";
 import type { EmployeeWorkdayWithSchedule } from "../../repositories/workdays/employee-workday.repository";
 import { operationCoverageEventRepository } from "../../repositories/operations/operation-coverage-event.repository";
+import type { ActiveWorkdayCoverageRow } from "../../repositories/operations/operation-coverage-event.repository";
 import type { AffectedOperationWarning } from "../../types/absence";
 import type {
   AbsenceOperationalConflictDto,
@@ -32,8 +33,8 @@ const conflictMatchesWorkday = (
   workday: { id: string; operationId: string | null },
   assignmentId: string | null | undefined,
 ): boolean => {
-  if (conflict.employeeWorkdayId && conflict.employeeWorkdayId === workday.id) {
-    return true;
+  if (conflict.employeeWorkdayId) {
+    return conflict.employeeWorkdayId === workday.id;
   }
   if (!workday.operationId || conflict.operationId !== workday.operationId) {
     return false;
@@ -242,9 +243,9 @@ export const absenceOperationalImpactQueryService = {
         workdayIds,
       );
 
-    const legacyCoverageByKey = new Map<string, Awaited<
-      ReturnType<typeof operationCoverageEventRepository.findLegacyActiveByAssignmentAndDate>
-    >>();
+    const legacyCoverageByKey = new Map<string, ActiveWorkdayCoverageRow>();
+    const legacyPairs: Array<{ replacedAssignmentId: string; operationalDate: string }> = [];
+    const legacyPairByWorkdayId = new Map<string, string>();
     for (const workday of coveredWorkdays) {
       if (coverageByWorkday.has(workday.id)) {
         continue;
@@ -255,13 +256,19 @@ export const absenceOperationalImpactQueryService = {
       if (!assignmentId) {
         continue;
       }
-      const legacy = await operationCoverageEventRepository.findLegacyActiveByAssignmentAndDate(
+      const key = `${assignmentId}:${workday.workDate}`;
+      legacyPairs.push({ replacedAssignmentId: assignmentId, operationalDate: workday.workDate });
+      legacyPairByWorkdayId.set(workday.id, key);
+    }
+    const legacyBatch =
+      await operationCoverageEventRepository.listLegacyActiveByAssignmentAndOperationalDates(
         companyId,
-        assignmentId,
-        workday.workDate,
+        legacyPairs,
       );
+    for (const [workdayId, key] of legacyPairByWorkdayId) {
+      const legacy = legacyBatch.get(key);
       if (legacy) {
-        legacyCoverageByKey.set(workday.id, legacy);
+        legacyCoverageByKey.set(workdayId, legacy);
       }
     }
 

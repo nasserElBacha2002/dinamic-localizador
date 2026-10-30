@@ -5,6 +5,10 @@ import type {
 } from "../../types/absence-operational-impact";
 import type { StatusBadgeTone } from "../../design-system";
 import { operationStatusLabels } from "../../utils/labels";
+import {
+  formatCoveredSituationLabel,
+  operationalWorkdaySituationLabels,
+} from "../../utils/operational-workday-presentation";
 
 export type AbsenceOperationalSummaryLabel =
   | "Pendiente de aprobación"
@@ -28,9 +32,16 @@ export type AbsencePlanningRow = {
   operationStatusLabel: string;
   situationLabel: string;
   needsCoverage: boolean;
+  hasOperationalReplacement: boolean;
+  coveredByEmployeeName: string | null;
   hasOpenConflict: boolean;
   assignmentId: string;
 };
+
+export type AbsencePlanningRowAction =
+  | { kind: "none" }
+  | { kind: "cover"; href: string; label: "Cubrir jornada" }
+  | { kind: "view_operation"; href: string; label: "Ver operación" | "Ver cobertura" };
 
 const conflictTypeLabels: Record<string, string> = {
   ASSIGNMENT_DURING_ABSENCE: "Asignación durante la ausencia",
@@ -308,6 +319,7 @@ export function buildAbsencePlanningRows(
         operationStatus,
       situationLabel: deriveSituationLabel({
         requestStatus,
+        operationStatus,
         needsCoverage,
         openConflict,
         hasOperationalReplacement: deriveWorkdayHasOperationalReplacement(workday),
@@ -315,10 +327,63 @@ export function buildAbsencePlanningRows(
         coveredByEmployeeName: workday.coveredByEmployeeName ?? null,
       }),
       needsCoverage,
+      hasOperationalReplacement: deriveWorkdayHasOperationalReplacement(workday),
+      coveredByEmployeeName: workday.coveredByEmployeeName ?? null,
       hasOpenConflict: Boolean(openConflict),
       assignmentId,
     };
   });
+}
+
+export function resolveAbsencePlanningRowAction(input: {
+  row: AbsencePlanningRow;
+  impact: AbsenceOperationalImpact;
+  requestId: string;
+  canManageOperations: boolean;
+  canViewOperations: boolean;
+  allowOperationalMutations?: boolean;
+}): AbsencePlanningRowAction {
+  const {
+    row,
+    impact,
+    requestId,
+    canManageOperations,
+    canViewOperations,
+    allowOperationalMutations = true,
+  } = input;
+  if (!row.operationId) {
+    return { kind: "none" };
+  }
+
+  if (!allowOperationalMutations) {
+    if (canViewOperations) {
+      return {
+        kind: "view_operation",
+        href: buildOperationCoverageHref(row.operationId),
+        label: "Ver operación",
+      };
+    }
+    return { kind: "none" };
+  }
+
+  if (row.needsCoverage && canManageOperations) {
+    const coverageContext = buildOperationCoverageContext({ impact, requestId, row });
+    return {
+      kind: "cover",
+      href: buildOperationCoverageHref(row.operationId, coverageContext),
+      label: "Cubrir jornada",
+    };
+  }
+
+  if (canViewOperations) {
+    return {
+      kind: "view_operation",
+      href: buildOperationCoverageHref(row.operationId),
+      label: row.hasOperationalReplacement ? "Ver cobertura" : "Ver operación",
+    };
+  }
+
+  return { kind: "none" };
 }
 
 export function deriveAbsenceOperationalSummary(input: {
@@ -415,38 +480,41 @@ export function deriveAbsenceOperationalSummary(input: {
 
 function deriveSituationLabel(input: {
   requestStatus: AbsenceRequestStatus;
+  operationStatus: string;
   needsCoverage: boolean;
   openConflict: AbsenceOperationalConflict | null;
   hasOperationalReplacement: boolean;
   hasAttendancePresence: boolean;
   coveredByEmployeeName?: string | null;
 }): string {
+  if (input.operationStatus === "CANCELLED") {
+    return operationalWorkdaySituationLabels.workdayCancelled;
+  }
+
   if (input.requestStatus !== "APPROVED") {
     if (input.openConflict) {
       return conflictTypeHumanLabel(input.openConflict.conflictType);
     }
-    return "Impacto estimado al aprobar";
+    return operationalWorkdaySituationLabels.impactOnApproval;
   }
 
   if (input.needsCoverage) {
-    return "Vacante pendiente";
+    return operationalWorkdaySituationLabels.vacancyPending;
   }
 
   if (input.hasAttendancePresence) {
-    return "Asistencia registrada — revisar";
+    return operationalWorkdaySituationLabels.attendanceDuringAbsence;
   }
 
   if (input.hasOperationalReplacement) {
-    return input.coveredByEmployeeName?.trim()
-      ? `Jornada cubierta · ${input.coveredByEmployeeName.trim()}`
-      : "Jornada cubierta";
+    return formatCoveredSituationLabel(input.coveredByEmployeeName);
   }
 
   if (input.openConflict) {
     return conflictTypeHumanLabel(input.openConflict.conflictType);
   }
 
-  return "Sin pendientes";
+  return operationalWorkdaySituationLabels.noPending;
 }
 
 export function buildApprovalImpactPreviewText(

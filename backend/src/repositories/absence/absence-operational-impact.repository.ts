@@ -294,6 +294,49 @@ export const absenceOperationalImpactRepository = {
     return mapConflict(result.recordset[0] as Record<string, unknown>);
   },
 
+  async reopenAssignReplacementConflictsForWorkdayInTransaction(
+    input: {
+      companyId: string;
+      absentEmployeeId: string;
+      employeeWorkdayId: string;
+      replacedAssignmentId?: string | null;
+      sourceConflictId?: string | null;
+    },
+    transaction: sql.Transaction,
+  ): Promise<void> {
+    await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("absentEmployeeId", sql.UniqueIdentifier, input.absentEmployeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
+      .input("replacedAssignmentId", sql.UniqueIdentifier, input.replacedAssignmentId ?? null)
+      .input("sourceConflictId", sql.UniqueIdentifier, input.sourceConflictId ?? null)
+      .query(`
+        UPDATE absence_operational_conflicts
+        SET status = N'OPEN',
+            resolution_code = NULL,
+            resolution_reason = NULL,
+            resolved_by_user_id = NULL,
+            replacement_employee_id = NULL,
+            resolution_command_id = NULL,
+            resolved_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND employee_id = @absentEmployeeId
+          AND status = N'RESOLVED'
+          AND resolution_code = N'ASSIGN_REPLACEMENT'
+          AND conflict_type = N'ASSIGNMENT_DURING_ABSENCE'
+          AND (
+            employee_workday_id = @employeeWorkdayId
+            OR (@sourceConflictId IS NOT NULL AND id = @sourceConflictId)
+            OR (
+              employee_workday_id IS NULL
+              AND @replacedAssignmentId IS NOT NULL
+              AND assignment_id = @replacedAssignmentId
+            )
+          )
+      `);
+  },
+
   async upsertEffect(input: {
     companyId: string;
     absenceRequestId: string;

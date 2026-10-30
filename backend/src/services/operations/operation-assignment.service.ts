@@ -744,6 +744,11 @@ export const operationAssignmentService = {
     return assignments.map((assignment) => withLifecycleState(assignment, referenceDate));
   },
 
+  /**
+   * @deprecated Assignment-scoped coverage (pre workday identity). Fase 3 uses
+   * `employeeWorkdayCoverageService.coverEmployeeWorkday` / `coverEmployeeWorkdayInTransaction`.
+   * No production callers remain; remove after legacy multi-shift tests migrate.
+   */
   async applyOperationalCoverageInTransaction(
     companyId: string,
     transaction: sql.Transaction,

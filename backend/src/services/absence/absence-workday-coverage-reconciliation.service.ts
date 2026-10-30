@@ -25,6 +25,22 @@ const buildCoverageResolutionCommandId = (input: {
 }): string =>
   `${input.coverageCommandId}:${input.conflictId}:${input.replacementEmployeeId}`.slice(0, 120);
 
+export type SyncAfterCoverageFailurePoint = "before_resolve_conflicts" | "before_mark_covered";
+
+let syncAfterCoverageFailurePoint: SyncAfterCoverageFailurePoint | null = null;
+
+export const __setSyncAfterCoverageFailurePointForTests = (
+  point: SyncAfterCoverageFailurePoint | null,
+): void => {
+  syncAfterCoverageFailurePoint = point;
+};
+
+const maybeInjectSyncFailure = (point: SyncAfterCoverageFailurePoint): void => {
+  if (syncAfterCoverageFailurePoint === point) {
+    throw new Error(`INJECTED_FAILURE:${point}`);
+  }
+};
+
 export const absenceWorkdayCoverageReconciliationService = {
   async syncAfterCoverageInTransaction(
     input: SyncAbsenceCoverageInTransactionInput,
@@ -38,15 +54,49 @@ export const absenceWorkdayCoverageReconciliationService = {
       );
     }
 
+    if (!input.employeeWorkdayId) {
+      throw new AppError(
+        400,
+        "EMPLOYEE_WORKDAY_REQUIRED",
+        "La reconciliación de cobertura requiere la jornada del colaborador ausente",
+      );
+    }
+
+    if (input.absenceConflictId) {
+      const conflict = await absenceOperationalImpactRepository.findConflictForUpdate(
+        input.companyId,
+        input.absenceRequestId,
+        input.absenceConflictId,
+        input.transaction,
+      );
+      if (!conflict) {
+        throw new AppError(
+          404,
+          "ABSENCE_OPERATIONAL_CONFLICT_NOT_FOUND",
+          "Conflicto de ausencia no encontrado",
+        );
+      }
+      if (conflict.employeeWorkdayId && conflict.employeeWorkdayId !== input.employeeWorkdayId) {
+        throw new AppError(
+          400,
+          "ABSENCE_CONFLICT_WORKDAY_MISMATCH",
+          "El conflicto no corresponde a la jornada indicada",
+        );
+      }
+      if (conflict.assignmentId && conflict.assignmentId !== input.replacedAssignmentId) {
+        throw new AppError(
+          400,
+          "ABSENCE_CONFLICT_ASSIGNMENT_MISMATCH",
+          "El conflicto no corresponde a la asignación indicada",
+        );
+      }
+    }
+
     const conflictRows = await new sql.Request(input.transaction)
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
       .input("replacedAssignmentId", sql.UniqueIdentifier, input.replacedAssignmentId)
-      .input(
-        "employeeWorkdayId",
-        sql.UniqueIdentifier,
-        input.employeeWorkdayId ?? null,
-      )
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
       .input("absenceConflictId", sql.UniqueIdentifier, input.absenceConflictId ?? null)
       .query(`
         SELECT id
@@ -56,11 +106,15 @@ export const absenceWorkdayCoverageReconciliationService = {
           AND status = N'OPEN'
           AND conflict_type = N'ASSIGNMENT_DURING_ABSENCE'
           AND (
-            (@absenceConflictId IS NOT NULL AND id = @absenceConflictId)
+            employee_workday_id = @employeeWorkdayId
             OR (
-              assignment_id = @replacedAssignmentId
-              OR (@employeeWorkdayId IS NOT NULL AND employee_workday_id = @employeeWorkdayId)
+              employee_workday_id IS NULL
+              AND assignment_id = @replacedAssignmentId
             )
+          )
+          AND (
+            @absenceConflictId IS NULL
+            OR id = @absenceConflictId
           )
       `);
     const conflictIds = new Set<string>();
@@ -71,6 +125,7 @@ export const absenceWorkdayCoverageReconciliationService = {
     }
 
     for (const id of conflictIds) {
+      maybeInjectSyncFailure("before_resolve_conflicts");
       const resolutionCommandId = buildCoverageResolutionCommandId({
         conflictId: id,
         replacementEmployeeId: input.replacementEmployeeId,
@@ -112,6 +167,7 @@ export const absenceWorkdayCoverageReconciliationService = {
     }
 
     if (input.employeeWorkdayId) {
+      maybeInjectSyncFailure("before_mark_covered");
       await replacementRequestService.markCoveredForAbsentWorkdayInTransaction(
         input.companyId,
         input.transaction,

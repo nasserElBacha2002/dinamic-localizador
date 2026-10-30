@@ -184,41 +184,76 @@ export const operationCoverageEventRepository = {
     replacedAssignmentId: string,
     operationalDate: string,
   ): Promise<ActiveWorkdayCoverageRow | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("replacedAssignmentId", sql.UniqueIdentifier, replacedAssignmentId)
-      .input("operationalDate", sql.Date, operationalDate)
-      .query(`
-        SELECT TOP 1
-          oce.id AS event_id,
-          oce.absent_employee_workday_id,
-          oce.replacement_employee_id,
-          e.name AS replacement_employee_name,
-          oce.replacement_assignment_id,
-          oce.coverage_command_id
-        ${ACTIVE_COVERAGE_JOIN}
-          AND oce.replaced_assignment_id = @replacedAssignmentId
-          AND oce.operational_date = @operationalDate
-          AND oce.absent_employee_workday_id IS NULL
-      `);
-    const row = result.recordset[0] as Record<string, unknown> | undefined;
-    if (!row?.event_id || !row.replacement_employee_id) {
-      return null;
+    const map = await this.listLegacyActiveByAssignmentAndOperationalDates(companyId, [
+      { replacedAssignmentId, operationalDate },
+    ]);
+    return map.get(`${replacedAssignmentId}:${operationalDate}`) ?? null;
+  },
+
+  async listLegacyActiveByAssignmentAndOperationalDates(
+    companyId: string,
+    pairs: Array<{ replacedAssignmentId: string; operationalDate: string }>,
+  ): Promise<Map<string, ActiveWorkdayCoverageRow>> {
+    const map = new Map<string, ActiveWorkdayCoverageRow>();
+    if (pairs.length === 0) {
+      return map;
     }
-    return {
-      eventId: String(row.event_id),
-      absentEmployeeWorkdayId: "",
-      replacementEmployeeId: String(row.replacement_employee_id),
-      replacementEmployeeName: row.replacement_employee_name
-        ? String(row.replacement_employee_name)
-        : null,
-      replacementAssignmentId: row.replacement_assignment_id
-        ? String(row.replacement_assignment_id)
-        : null,
-      coverageCommandId: row.coverage_command_id ? String(row.coverage_command_id) : null,
-    };
+
+    const unique = new Map<string, { replacedAssignmentId: string; operationalDate: string }>();
+    for (const pair of pairs) {
+      unique.set(`${pair.replacedAssignmentId}:${pair.operationalDate}`, pair);
+    }
+    const list = [...unique.values()];
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const conditions: string[] = [];
+    list.forEach((pair, index) => {
+      request.input(`assignmentId${index}`, sql.UniqueIdentifier, pair.replacedAssignmentId);
+      request.input(`operationalDate${index}`, sql.Date, pair.operationalDate);
+      conditions.push(
+        `(oce.replaced_assignment_id = @assignmentId${index} AND oce.operational_date = @operationalDate${index})`,
+      );
+    });
+
+    const result = await request.query(`
+      SELECT
+        oce.id AS event_id,
+        oce.replaced_assignment_id,
+        oce.operational_date,
+        oce.absent_employee_workday_id,
+        oce.replacement_employee_id,
+        e.name AS replacement_employee_name,
+        oce.replacement_assignment_id,
+        oce.coverage_command_id
+      ${ACTIVE_COVERAGE_JOIN}
+        AND oce.absent_employee_workday_id IS NULL
+        AND (${conditions.join(" OR ")})
+    `);
+
+    for (const row of result.recordset as Record<string, unknown>[]) {
+      if (!row.event_id || !row.replacement_employee_id || !row.replaced_assignment_id) {
+        continue;
+      }
+      const assignmentId = String(row.replaced_assignment_id);
+      const operationalDate =
+        row.operational_date instanceof Date
+          ? row.operational_date.toISOString().slice(0, 10)
+          : String(row.operational_date).slice(0, 10);
+      map.set(`${assignmentId}:${operationalDate}`, {
+        eventId: String(row.event_id),
+        absentEmployeeWorkdayId: "",
+        replacementEmployeeId: String(row.replacement_employee_id),
+        replacementEmployeeName: row.replacement_employee_name
+          ? String(row.replacement_employee_name)
+          : null,
+        replacementAssignmentId: row.replacement_assignment_id
+          ? String(row.replacement_assignment_id)
+          : null,
+        coverageCommandId: row.coverage_command_id ? String(row.coverage_command_id) : null,
+      });
+    }
+    return map;
   },
 
   async supersedeActiveForWorkdayInTransaction(

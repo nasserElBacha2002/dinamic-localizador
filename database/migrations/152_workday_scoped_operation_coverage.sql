@@ -6,6 +6,8 @@
     - Allow superseded_at for historical audit without counting as active coverage
     - Relax replaced_assignment unique index to legacy rows only (no workday id)
   Rollback: rollback/152_workday_scoped_operation_coverage_rollback.sql
+  Compatibility: legacy events keep absent_employee_workday_id NULL; rollback is blocked
+  when multiple active rows share replaced_assignment_id (manual reconciliation required).
 */
 
 IF COL_LENGTH(N'dbo.operation_coverage_events', N'absent_employee_workday_id') IS NULL

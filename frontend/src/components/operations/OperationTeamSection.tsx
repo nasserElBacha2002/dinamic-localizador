@@ -81,6 +81,7 @@ interface OperationTeamSectionProps {
   onWorkdayChange: (selection: OperationTeamWorkdaySelection | null) => void;
   onFeedback: (message: string, severity: "success" | "error") => void;
   coverageDeepLink?: ParsedOperationCoverageDeepLink | null;
+  onCoverageDeepLinkConsumed?: () => void;
 }
 
 export function OperationTeamSection({
@@ -95,6 +96,7 @@ export function OperationTeamSection({
   onWorkdayChange,
   onFeedback,
   coverageDeepLink = null,
+  onCoverageDeepLinkConsumed,
 }: OperationTeamSectionProps) {
   const isRecurring = operationKind === "RECURRING";
   const isMultiShift = scheduleMode === "MULTI_SHIFT";
@@ -167,7 +169,8 @@ export function OperationTeamSection({
     appliedCoverageDeepLinkRef.current = signature;
     coverageCommandIdRef.current = newCoverageCommandId();
     setCoverageTarget(buildCoverageTargetFromDeepLink(coverageDeepLink));
-  }, [canAssign, coverageDeepLink]);
+    onCoverageDeepLinkConsumed?.();
+  }, [canAssign, coverageDeepLink, onCoverageDeepLinkConsumed]);
   const [endTarget, setEndTarget] = useState<OperationEmployeeAssignment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [manualTarget, setManualTarget] = useState<ManualAttendanceDialogTarget | null>(null);
@@ -425,9 +428,27 @@ export function OperationTeamSection({
     });
   };
 
+  const invalidateAbsenceImpactForRow = (row: OperationAttendanceSummaryEmployee | undefined) => {
+    if (!companyId || !row) {
+      return;
+    }
+    const absenceRequestId =
+      row.absenceRequestId ??
+      row.absenceBadges?.find((badge) => badge.absenceRequestId)?.absenceRequestId ??
+      coverageTarget?.absenceRequestId ??
+      null;
+    if (absenceRequestId) {
+      void queryClient.invalidateQueries({
+        queryKey: absenceKeys.operationalImpact(companyId, absenceRequestId),
+      });
+    }
+  };
+
   const handleCancelAssignment = async (assignment: OperationEmployeeAssignment) => {
+    const summaryRow = rows.find((row) => row.assignmentId === assignment.id);
     try {
       await cancelMutation.mutateAsync(assignment.id);
+      invalidateAbsenceImpactForRow(summaryRow);
       onFeedback("Asignación cancelada correctamente.", "success");
     } catch (error) {
       const parsed = parseApiError(error);

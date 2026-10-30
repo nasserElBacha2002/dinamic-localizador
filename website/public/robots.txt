@@ -1,0 +1,10 @@
+# dinamicoperations.com — landing en / y app autenticada en el resto de rutas.
+User-agent: *
+Allow: /$
+Allow: /sitemap.xml
+Allow: /robots.txt
+Allow: /brand/
+Allow: /marketing-assets/
+Disallow: /
+
+Sitemap: https://dinamicoperations.com/sitemap.xml

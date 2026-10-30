@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../../constants/company-settings";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";
@@ -19,6 +20,7 @@ export const companyWorkScheduleService = {
     companyId: string,
     timezone: string,
     transaction?: sql.Transaction,
+    scheduleDefaults?: { startTime: string; endTime: string },
   ): Promise<CompanyWorkSchedule> {
     const existing = transaction
       ? await companyWorkScheduleRepository.findByCompanyIdInTransaction(companyId, transaction)
@@ -27,7 +29,26 @@ export const companyWorkScheduleService = {
       return existing;
     }
 
-    const days = normalizeWeeklyScheduleDays(createDefaultWeeklyScheduleDays());
+    const resolvedDefaults =
+      scheduleDefaults ??
+      (await (async () => {
+        const companySettings = transaction
+          ? await companySettingsRepository.findByCompanyIdInTransaction(companyId, transaction)
+          : await companySettingsRepository.findByCompanyId(companyId);
+
+        return {
+          startTime:
+            companySettings?.defaultOperationStartTime?.trim() ??
+            DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
+          endTime:
+            companySettings?.defaultOperationEndTime?.trim() ??
+            DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
+        };
+      })());
+
+    const days = normalizeWeeklyScheduleDays(
+      createDefaultWeeklyScheduleDays(resolvedDefaults.startTime, resolvedDefaults.endTime),
+    );
     const validation = validateWeeklyScheduleDays(days);
     if (!validation.valid) {
       throw new AppError(400, validation.code, validation.message);

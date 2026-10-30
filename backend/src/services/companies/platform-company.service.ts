@@ -1,6 +1,9 @@
 import sql from "mssql";
 import { DEFAULT_COMPANY_MODULE_KEYS } from "../../constants/company-modules";
-import { toCompanySettingsInput } from "../../constants/company-settings";
+import {
+  DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
+  toCompanySettingsInput,
+} from "../../constants/company-settings";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import { companyModuleRepository } from "../../repositories/companies/company-module.repository";
@@ -105,6 +108,14 @@ export const platformCompanyService = {
         company.id,
         settingsInput.operationTimezone,
         transaction,
+        {
+          startTime:
+            settingsInput.defaultOperationStartTime ??
+            DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
+          endTime:
+            settingsInput.defaultOperationEndTime ??
+            DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
+        },
       );
       await companyLocationZoneDefaultsService.ensureDefaultGenericZonesForCompany(
         company.id,

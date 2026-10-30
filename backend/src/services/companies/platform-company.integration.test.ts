@@ -86,6 +86,12 @@ describeDatabaseIntegration("platform company creation integration", () => {
     const schedule = await companyWorkScheduleService.getByCompanyId(result.data.company.id);
     assert.ok(schedule);
     assert.ok(schedule.days.length > 0);
+    assert.equal(settings?.defaultOperationStartTime, "20:30");
+    assert.equal(settings?.defaultOperationEndTime, "03:00");
+    for (const day of schedule.days.filter((entry) => entry.isEnabled)) {
+      assert.equal(day.startTime, settings?.defaultOperationStartTime);
+      assert.equal(day.endTime, settings?.defaultOperationEndTime);
+    }
 
     const invitation = await userInvitationRepository.findById(result.data.ownerInvitation.id);
     assert.ok(invitation);

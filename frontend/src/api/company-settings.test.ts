@@ -39,29 +39,32 @@ describe("company settings frontend module", () => {
     assert.match(navFile, /Configuración/);
   });
 
-  it("uses operational settings dialog for core company settings", () => {
+  it("uses unified operational and work schedule dialog for core company settings", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
+      join(
+        process.cwd(),
+        "src/pages/settings/components/schedule/CompanyOperationalAndWorkScheduleDialog.tsx",
+      ),
       "utf8",
     );
-    const formFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/schedule/OperationalSettingsForm.tsx"),
+    const saveFile = readFileSync(
+      join(
+        process.cwd(),
+        "src/pages/settings/components/schedule/company-operational-work-schedule-save.ts",
+      ),
       "utf8",
     );
 
     assert.match(pageFile, /company:settings:update/);
-    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
-    assert.match(pageFile, /buildOperationalSettingsSummary/);
-    assert.match(dialogFile, /updateMutation\.mutateAsync/);
-    assert.match(dialogFile, /toOperationalSettingsUpdateInput/);
-    assert.match(dialogFile, /Guardar configuración/);
-    assert.match(formFile, /defaultEarlyArrivalToleranceMinutes/);
-    assert.match(formFile, /earlyLeaveToleranceMinutes/);
-    assert.doesNotMatch(formFile, /lateGraceMinutes/);
+    assert.match(pageFile, /CompanyOperationalAndWorkScheduleDialog/);
+    assert.match(pageFile, /buildOperationalAndWorkScheduleCardSummary/);
+    assert.match(dialogFile, /executeUnifiedSettingsSave/);
+    assert.match(saveFile, /settingsMutate/);
+    assert.match(saveFile, /scheduleMutate/);
   });
 
   it("validates invalid radius and minutes", () => {
@@ -95,12 +98,15 @@ describe("company settings frontend module", () => {
     assert.match(validationFile, /defaultOperationEndTime/);
   });
 
-  it("calls updateCompanySettings from operational dialog", () => {
-    const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
+  it("calls updateCompanySettings from unified save orchestration", () => {
+    const saveFile = readFileSync(
+      join(
+        process.cwd(),
+        "src/pages/settings/components/schedule/company-operational-work-schedule-save.ts",
+      ),
       "utf8",
     );
-    assert.match(dialogFile, /useUpdateCompanySettings/);
-    assert.match(dialogFile, /updateMutation\.mutateAsync/);
+    assert.match(saveFile, /toOperationalSettingsUpdateInput/);
+    assert.match(saveFile, /settingsMutate/);
   });
 });

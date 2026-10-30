@@ -17,8 +17,7 @@ import { hasPermission } from "../../utils/permissions";
 import {
   buildEmployeeCategoriesSummary,
   buildLocationZonesSummary,
-  buildOperationalSettingsSummary,
-  buildWorkScheduleSummary,
+  buildOperationalAndWorkScheduleCardSummary,
 } from "./company-settings-summaries";
 import { CompanyWhatsAppAlertsDialog } from "./components/whatsapp/CompanyWhatsAppAlertsDialog";
 import { CompanyWhatsAppQuotaSettingsDialog } from "./components/whatsapp/CompanyWhatsAppQuotaSettingsDialog";
@@ -31,8 +30,7 @@ import { CompanyAbsenceOperationalIntegrationDialog } from "./components/absence
 import { CompanyAbsenceSettingsDialog } from "./components/absence/CompanyAbsenceSettingsDialog";
 import { CompanyAbsenceSettingsTabPanel } from "./components/absence/CompanyAbsenceSettingsTabPanel";
 import { CompanyAbsenceTypePolicyDialog } from "./components/absence/CompanyAbsenceTypePolicyDialog";
-import { CompanyOperationalSettingsDialog } from "./components/schedule/CompanyOperationalSettingsDialog";
-import { CompanyWeeklyScheduleDialog } from "./components/schedule/CompanyWeeklyScheduleDialog";
+import { CompanyOperationalAndWorkScheduleDialog } from "./components/schedule/CompanyOperationalAndWorkScheduleDialog";
 import { CompanyShiftTemplatesDialog } from "./components/schedule/CompanyShiftTemplatesDialog";
 import { EmployeeCategoriesDialog } from "./components/employees/EmployeeCategoriesDialog";
 import { LocationZonesDialog } from "./components/locations/LocationZonesDialog";
@@ -46,12 +44,11 @@ import { isOvernightShift } from "../../utils/operation-shift-payload";
 type SettingsTab = "company" | "absences";
 
 type DialogKey =
-  | "operational"
+  | "operationalWorkSchedule"
   | "absences"
   | "absenceTypePolicy"
   | "absenceCalendar"
   | "absenceOperationalIntegration"
-  | "workSchedule"
   | "shiftTemplates"
   | "employeeCategories"
   | "locationZones"
@@ -122,10 +119,15 @@ export function CompanySettingsPage() {
     setSearchParams({ tab }, { replace: true });
   };
 
-  const operationalSummary = useMemo(
-    () => (settingsQuery.data ? buildOperationalSettingsSummary(settingsQuery.data) : null),
-    [settingsQuery.data],
-  );
+  const operationalAndWorkScheduleSummary = useMemo(() => {
+    if (!settingsQuery.data || !workScheduleQuery.data) {
+      return null;
+    }
+    return buildOperationalAndWorkScheduleCardSummary(
+      settingsQuery.data,
+      workScheduleQuery.data,
+    );
+  }, [settingsQuery.data, workScheduleQuery.data]);
 
   if (permissionsQuery.isPending) {
     return <LoadingState />;
@@ -195,12 +197,26 @@ export function CompanySettingsPage() {
         <Tabs.Panel value="company" pt="md">
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
             <SettingsSummaryCard
-              title="Configuración operativa"
-              description="Defaults usados por operaciones, importaciones y validaciones del bot."
-              summaryItems={operationalSummary?.summaryItems ?? []}
-              actionLabel="Gestionar configuración operativa"
-              canEdit={canUpdate}
-              onAction={() => setOpenDialog("operational")}
+              title="Configuración operativa y horario laboral"
+              description="Defaults operativos, tolerancias del bot y horario semanal predeterminado para operaciones habituales."
+              summaryItems={operationalAndWorkScheduleSummary?.summaryItems ?? []}
+              loading={settingsQuery.isLoading || workScheduleQuery.isLoading}
+              error={
+                settingsQuery.isError
+                  ? getApiErrorMessage(settingsQuery.error)
+                  : workScheduleQuery.isError
+                    ? getApiErrorMessage(workScheduleQuery.error)
+                    : null
+              }
+              onRetry={() => {
+                void settingsQuery.refetch();
+                void workScheduleQuery.refetch();
+              }}
+              actionLabel="Gestionar configuración"
+              canEdit={
+                canUpdate && !settingsQuery.isError && !workScheduleQuery.isError
+              }
+              onAction={() => setOpenDialog("operationalWorkSchedule")}
             />
 
             <SettingsSummaryCard
@@ -278,24 +294,6 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar cuotas"
               canEdit={canUpdate && !whatsappQuotaQuery.isError}
               onAction={() => setOpenDialog("whatsappQuotas")}
-            />
-
-            <SettingsSummaryCard
-              title="Horario laboral semanal"
-              description="Horario predeterminado para operaciones habituales con horario de la empresa."
-              summaryItems={
-                workScheduleQuery.data
-                  ? buildWorkScheduleSummary(workScheduleQuery.data).summaryItems
-                  : []
-              }
-              loading={workScheduleQuery.isLoading}
-              error={
-                workScheduleQuery.isError ? getApiErrorMessage(workScheduleQuery.error) : null
-              }
-              onRetry={() => void workScheduleQuery.refetch()}
-              actionLabel="Gestionar horario"
-              canEdit={canUpdate && !workScheduleQuery.isError}
-              onAction={() => setOpenDialog("workSchedule")}
             />
 
             <SettingsSummaryCard
@@ -428,12 +426,15 @@ export function CompanySettingsPage() {
         />
       ) : null}
 
-      {openDialog === "operational" && settingsQuery.data ? (
-        <CompanyOperationalSettingsDialog
-          key={`operational-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
+      {openDialog === "operationalWorkSchedule" &&
+      settingsQuery.data &&
+      workScheduleQuery.data ? (
+        <CompanyOperationalAndWorkScheduleDialog
+          key={`operational-work-schedule-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}-${workScheduleQuery.data.updatedAt}`}
           opened
           onClose={() => setOpenDialog(null)}
           settings={settingsQuery.data}
+          schedule={workScheduleQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
         />
@@ -492,16 +493,6 @@ export function CompanySettingsPage() {
           zones={locationZonesQuery.data}
           canUpdate={canManageLocationZones}
           canEditGlobal={isPlatformAdmin}
-        />
-      ) : null}
-
-      {openDialog === "workSchedule" && workScheduleQuery.data ? (
-        <CompanyWeeklyScheduleDialog
-          opened
-          onClose={() => setOpenDialog(null)}
-          schedule={workScheduleQuery.data}
-          canUpdate={canUpdate}
-          onSaved={handleSaved}
         />
       ) : null}
 

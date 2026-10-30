@@ -30,6 +30,7 @@ import {
 } from "./absence-workday-coverage-reconciliation.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { operationService } from "../operations/operation.service";
+import { operationWorkDateService } from "../operations/operation-work-date.service";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
 
 const uniquePhone = (n: number): string =>
@@ -984,7 +985,10 @@ describeDatabaseIntegration("employee workday coverage phase3", () => {
       `);
     const operationId = String(op.recordset[0].id);
     fixtures.trackOperation(companyId, operationId);
-    const workDate = start.toISOString().slice(0, 10);
+    const workDate = await operationWorkDateService.resolveOperationWorkDate(
+      companyId,
+      operationId,
+    );
     const assignment = await operationAssignmentService.assignEmployee(
       companyId,
       operationId,

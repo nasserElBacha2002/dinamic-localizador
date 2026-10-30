@@ -20,6 +20,7 @@ import { absenceOperationalImpactQueryService } from "./absence-operational-impa
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { operationAssignmentService } from "../operations/operation-assignment.service";
 import { operationWorkDateService } from "../operations/operation-work-date.service";
+import { workdayMaterializationService } from "../workdays/workday-materialization.service";
 
 const uniquePhone = (n: number): string =>
   `+54911${Date.now().toString().slice(-7)}${n}`;
@@ -126,6 +127,11 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
       { validFrom: workDate, validUntil: workDate },
       adminUserId,
     );
+    await workdayMaterializationService.ensureEmployeeWorkday(
+      companyId,
+      operationId,
+      absentEmployeeId,
+    );
 
     const type = await pool
       .request()
@@ -184,6 +190,10 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
         conflict.conflictType === "ASSIGNMENT_DURING_ABSENCE" && conflict.status === "OPEN",
     );
     assert.ok(openConflict);
+    assert.ok(
+      workdayBefore?.employeeWorkdayId,
+      "impact workday must expose employeeWorkdayId for workday-scoped coverage",
+    );
 
     await operationAssignmentService.assignEmployee(
       companyId,
@@ -198,7 +208,7 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
         coverageReason: "Cobertura desde operación (test)",
         absenceRequestId: created.id,
         absenceConflictId: openConflict.id,
-        employeeWorkdayId: workdayBefore?.employeeWorkdayId,
+        employeeWorkdayId: workdayBefore.employeeWorkdayId,
         coverageCommandId: `coverage-impact-test-${randomUUID()}`,
       },
       adminUserId,

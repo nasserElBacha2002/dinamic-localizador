@@ -134,6 +134,9 @@ export const absenceOperationalReconciliationService = {
 
     for (const op of impact.operations) {
       await guard();
+      const matchingWorkday = impact.workdays.find(
+        (workday) => workday.operationAssignmentId === op.assignmentId,
+      );
       const key = buildOperationalConflictIdempotencyKey({
         requestId: absenceRequestId,
         version,
@@ -150,6 +153,7 @@ export const absenceOperationalReconciliationService = {
         operationId: op.operationId,
         serviceId: op.serviceId,
         assignmentId: op.assignmentId,
+        employeeWorkdayId: matchingWorkday?.employeeWorkdayId ?? null,
         idempotencyKey: key,
         rangeStartAt: new Date(op.scheduledStart),
         rangeEndAt: op.scheduledEnd ? new Date(op.scheduledEnd) : null,

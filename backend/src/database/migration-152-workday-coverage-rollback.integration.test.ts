@@ -126,37 +126,88 @@ describeDatabaseIntegration("migration 152 workday coverage rollback", () => {
     const companyId = String(company.recordset[0]?.id ?? "");
     assert.ok(companyId);
 
-    const operation = await pool
+    const service = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
-        SELECT TOP 1 id FROM scheduled_operations WHERE company_id = @companyId ORDER BY created_at DESC
+        SELECT TOP 1 id FROM operational_locations
+        WHERE company_id = @companyId AND active = 1
+        ORDER BY created_at ASC
       `);
-    const operationId = String(operation.recordset[0]?.id ?? "");
-    assert.ok(operationId);
+    const serviceId = String(service.recordset[0]?.id ?? "");
+    assert.ok(serviceId);
 
-    const employees = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`
-        SELECT TOP 2 id FROM employees WHERE company_id = @companyId AND active = 1
-      `);
-    assert.ok(employees.recordset.length >= 2);
-    const replacementA = String(employees.recordset[0].id);
-    const replacementB = String(employees.recordset[1].id);
+    const insertEmployee = async (suffix: number): Promise<string> => {
+      const phone = `+54911${Date.now().toString().slice(-7)}${suffix}`;
+      const row = await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("name", sql.NVarChar(200), `Rollback152 Emp ${suffix}`)
+        .input("phone", sql.NVarChar(20), phone)
+        .query(`
+          DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+          INSERT INTO employees (company_id, name, phone_number, employee_type, active)
+          OUTPUT INSERTED.id INTO @inserted (id)
+          VALUES (@companyId, @name, @phone, N'fijo', 1);
+          SELECT id FROM @inserted;
+        `);
+      return String(row.recordset[0].id);
+    };
 
-    const workdays = await pool
+    const replacementA = await insertEmployee(1);
+    const replacementB = await insertEmployee(2);
+
+    const start = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 8 * 60 * 60 * 1000);
+    const operationRow = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("serviceId", sql.UniqueIdentifier, serviceId)
+      .input("startAt", sql.DateTime2, start)
+      .input("endAt", sql.DateTime2, end)
       .query(`
-        SELECT TOP 2 ew.id
-        FROM employee_workdays ew
-        WHERE ew.company_id = @companyId
-        ORDER BY ew.created_at DESC
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+        INSERT INTO scheduled_operations (
+          company_id, service_id, operation_kind, scheduled_start, scheduled_end, status
+        )
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, @serviceId, N'ONE_TIME', @startAt, @endAt, N'SCHEDULED');
+        SELECT id FROM @inserted;
       `);
-    assert.ok(workdays.recordset.length >= 2);
-    const workdayA = String(workdays.recordset[0].id);
-    const workdayB = String(workdays.recordset[1].id);
+    const operationId = String(operationRow.recordset[0].id);
+
+    const { operationAssignmentService } = await import(
+      "../services/operations/operation-assignment.service"
+    );
+    const { operationWorkDateService } = await import(
+      "../services/operations/operation-work-date.service"
+    );
+    const { workdayMaterializationService } = await import(
+      "../services/workdays/workday-materialization.service"
+    );
+    const workDate = await operationWorkDateService.resolveOperationWorkDate(companyId, operationId);
+    await operationAssignmentService.assignEmployee(companyId, operationId, replacementA, {
+      validFrom: workDate,
+      validUntil: workDate,
+    });
+    await operationAssignmentService.assignEmployee(companyId, operationId, replacementB, {
+      validFrom: workDate,
+      validUntil: workDate,
+    });
+    const workdayA = (
+      await workdayMaterializationService.ensureEmployeeWorkday(
+        companyId,
+        operationId,
+        replacementA,
+      )
+    ).id;
+    const workdayB = (
+      await workdayMaterializationService.ensureEmployeeWorkday(
+        companyId,
+        operationId,
+        replacementB,
+      )
+    ).id;
 
     const sharedAssignmentId = randomUUID();
     const transaction = new sql.Transaction(pool);

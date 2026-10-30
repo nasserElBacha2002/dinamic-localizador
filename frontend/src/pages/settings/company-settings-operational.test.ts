@@ -86,17 +86,20 @@ describe("OperationalSettingsForm", () => {
   });
 });
 
-describe("CompanyOperationalSettingsDialog", () => {
+describe("CompanyOperationalAndWorkScheduleDialog structure", () => {
   it("uses SettingsDialog with dirty-aware save and unsaved-close protection", () => {
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
+      join(
+        process.cwd(),
+        "src/pages/settings/components/schedule/CompanyOperationalAndWorkScheduleDialog.tsx",
+      ),
       "utf8",
     );
 
     assert.match(dialogFile, /SettingsDialog/);
     assert.match(dialogFile, /OperationalSettingsForm/);
     assert.match(dialogFile, /Guardar configuración/);
-    assert.match(dialogFile, /saveDisabled=\{!canUpdate \|\| !hasChanges \|\| !isValid\}/);
+    assert.match(dialogFile, /saveDisabled=\{/);
     assert.match(dialogFile, /window\.confirm/);
     assert.match(dialogFile, /cambios sin guardar/);
   });
@@ -164,21 +167,23 @@ describe("Operational settings mapping", () => {
 });
 
 describe("Company settings page layout", () => {
-  it("uses operational summary card and collection cards only", () => {
+  it("uses unified operational and work schedule card with collection cards", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
 
-    assert.match(pageFile, /buildOperationalSettingsSummary/);
-    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
+    assert.match(pageFile, /buildOperationalAndWorkScheduleCardSummary/);
+    assert.match(pageFile, /CompanyOperationalAndWorkScheduleDialog/);
     assert.match(pageFile, /SettingsSummaryCard/);
-    assert.match(pageFile, /Gestionar configuración operativa/);
+    assert.match(pageFile, /Gestionar configuración/);
     assert.match(pageFile, /CompanyAbsenceSettingsTabPanel/);
     assert.match(pageFile, /LocationZonesDialog/);
     assert.match(pageFile, /setOpenDialog\("locationZones"\)/);
     assert.match(pageFile, /canEditGlobal=\{isPlatformAdmin\}/);
     assert.doesNotMatch(pageFile, /CompanyOperationalSettingsSection/);
+    assert.doesNotMatch(pageFile, /Gestionar configuración operativa/);
+    assert.doesNotMatch(pageFile, /Gestionar horario/);
     assert.doesNotMatch(pageFile, /Datos generales/);
     assert.doesNotMatch(pageFile, /Inventarios \/ operaciones/);
     assert.doesNotMatch(pageFile, /Asistencia \/ WhatsApp/);
@@ -191,17 +196,16 @@ describe("Company settings page layout", () => {
     assert.doesNotMatch(pageFile, /Gestionar formatos/);
   });
 
-  it("opens operational and other dialogs from summary cards", () => {
+  it("opens unified operational/work schedule and other dialogs from summary cards", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
 
-    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
+    assert.match(pageFile, /CompanyOperationalAndWorkScheduleDialog/);
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);
     assert.match(pageFile, /LocationZonesDialog/);
-    assert.match(pageFile, /CompanyWeeklyScheduleDialog/);
-    assert.match(pageFile, /setOpenDialog\("operational"\)/);
+    assert.match(pageFile, /setOpenDialog\("operationalWorkSchedule"\)/);
     assert.match(pageFile, /openDialog === "absences"/);
     const panelFile = readFileSync(
       join(process.cwd(), "src/pages/settings/components/absence/CompanyAbsenceSettingsTabPanel.tsx"),
@@ -209,7 +213,8 @@ describe("Company settings page layout", () => {
     );
     assert.match(panelFile, /onOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationZones"\)/);
-    assert.match(pageFile, /setOpenDialog\("workSchedule"\)/);
+    assert.doesNotMatch(pageFile, /setOpenDialog\("workSchedule"\)/);
+    assert.doesNotMatch(pageFile, /setOpenDialog\("operational"\)/);
     assert.doesNotMatch(pageFile, /CompanyWeeklyScheduleSection/);
     assert.doesNotMatch(pageFile, /CompanyOperationOperationSettingsDialog/);
     assert.doesNotMatch(pageFile, /CompanyLocationTypesDialog/);

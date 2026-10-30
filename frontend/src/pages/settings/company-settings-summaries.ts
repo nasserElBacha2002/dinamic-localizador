@@ -217,6 +217,33 @@ export function buildWorkScheduleSummary(schedule: CompanyWorkSchedule) {
   };
 }
 
+export function buildOperationalAndWorkScheduleCardSummary(
+  settings: CompanySettings,
+  schedule: CompanyWorkSchedule,
+) {
+  const operational = buildOperationalSettingsSummary(settings);
+  const workSchedule = buildWorkScheduleSummary(schedule);
+
+  const operationalItems = operational.summaryItems.filter(
+    (item) => item.label !== "Zona horaria" && item.label !== "Horario predeterminado",
+  );
+
+  const scheduleItems = workSchedule.summaryItems.filter(
+    (item) => item.label !== "Zona horaria",
+  );
+
+  return {
+    summaryItems: [
+      {
+        label: "Zona horaria",
+        value: formatTimezoneSummary(schedule.timezone),
+      },
+      ...scheduleItems,
+      ...operationalItems,
+    ],
+  };
+}
+
 export function buildModulesSummary(modules: CompanyModule[]) {
   const enabled = modules.filter((module) => module.isEnabled);
   return [{ label: "Habilitados", value: `${enabled.length} de ${modules.length}` }];

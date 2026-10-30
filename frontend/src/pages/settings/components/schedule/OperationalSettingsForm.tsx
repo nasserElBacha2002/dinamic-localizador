@@ -21,6 +21,8 @@ export interface OperationalSettingsFormProps {
   onChange: (values: OperationalSettingsFormValues) => void;
   disabled?: boolean;
   validationErrors?: string[];
+  showTimezone?: boolean;
+  showDefaultOperationTimes?: boolean;
 }
 
 export function OperationalSettingsForm({
@@ -28,6 +30,8 @@ export function OperationalSettingsForm({
   onChange,
   disabled = false,
   validationErrors = [],
+  showTimezone = true,
+  showDefaultOperationTimes = true,
 }: OperationalSettingsFormProps) {
   const timezoneOptions = useMemo(
     () => getOperationTimezoneOptions(values.operationTimezone),
@@ -42,25 +46,27 @@ export function OperationalSettingsForm({
   return (
     <Stack gap="md">
       <FormGrid columns={{ base: 1, md: 2 }}>
-        <SettingsFormField
-          label="Zona horaria operativa"
-          description="Zona horaria usada por operaciones y reportes."
-        >
-          <Select
-            searchable
-            data={timezoneOptions}
-            value={selectedTimezone}
-            onChange={(value) => {
-              if (!value) {
-                return;
-              }
-              update({ operationTimezone: value });
-            }}
-            nothingFoundMessage="No se encontraron zonas horarias"
-            disabled={disabled}
-            aria-label="Zona horaria operativa"
-          />
-        </SettingsFormField>
+        {showTimezone ? (
+          <SettingsFormField
+            label="Zona horaria operativa"
+            description="Zona horaria usada por operaciones y reportes."
+          >
+            <Select
+              searchable
+              data={timezoneOptions}
+              value={selectedTimezone}
+              onChange={(value) => {
+                if (!value) {
+                  return;
+                }
+                update({ operationTimezone: value });
+              }}
+              nothingFoundMessage="No se encontraron zonas horarias"
+              disabled={disabled}
+              aria-label="Zona horaria operativa"
+            />
+          </SettingsFormField>
+        ) : null}
 
         <SettingsFormField
           label="Radio permitido por defecto (m)"
@@ -81,29 +87,33 @@ export function OperationalSettingsForm({
           />
         </SettingsFormField>
 
-        <SettingsFormField
-          label="Horario de inicio por defecto"
-          description="Default para operaciones e importaciones."
-        >
-          <OperationTimeInput
-            value={values.defaultOperationStartTime}
-            onChange={(value) => update({ defaultOperationStartTime: value })}
-            disabled={disabled}
-            aria-label="Horario de inicio por defecto"
-          />
-        </SettingsFormField>
+        {showDefaultOperationTimes ? (
+          <SettingsFormField
+            label="Horario de inicio por defecto"
+            description="Default para operaciones e importaciones."
+          >
+            <OperationTimeInput
+              value={values.defaultOperationStartTime}
+              onChange={(value) => update({ defaultOperationStartTime: value })}
+              disabled={disabled}
+              aria-label="Horario de inicio por defecto"
+            />
+          </SettingsFormField>
+        ) : null}
 
-        <SettingsFormField
-          label="Horario de fin por defecto"
-          description="Default para operaciones e importaciones."
-        >
-          <OperationTimeInput
-            value={values.defaultOperationEndTime}
-            onChange={(value) => update({ defaultOperationEndTime: value })}
-            disabled={disabled}
-            aria-label="Horario de fin por defecto"
-          />
-        </SettingsFormField>
+        {showDefaultOperationTimes ? (
+          <SettingsFormField
+            label="Horario de fin por defecto"
+            description="Default para operaciones e importaciones."
+          >
+            <OperationTimeInput
+              value={values.defaultOperationEndTime}
+              onChange={(value) => update({ defaultOperationEndTime: value })}
+              disabled={disabled}
+              aria-label="Horario de fin por defecto"
+            />
+          </SettingsFormField>
+        ) : null}
 
         <SettingsFormField
           label="Tolerancia de llegada temprana (min)"

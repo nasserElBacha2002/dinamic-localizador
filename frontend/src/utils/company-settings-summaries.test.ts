@@ -46,18 +46,21 @@ describe("validateOperationalSettingsForm", () => {
 });
 
 describe("company settings page UX structure", () => {
-  it("uses operational summary card with dialog and collection cards", () => {
+  it("uses unified operational and work schedule card with dialog and collection cards", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
     const dialogFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/schedule/CompanyOperationalSettingsDialog.tsx"),
+      join(
+        process.cwd(),
+        "src/pages/settings/components/schedule/CompanyOperationalAndWorkScheduleDialog.tsx",
+      ),
       "utf8",
     );
 
-    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
-    assert.match(pageFile, /buildOperationalSettingsSummary/);
+    assert.match(pageFile, /CompanyOperationalAndWorkScheduleDialog/);
+    assert.match(pageFile, /buildOperationalAndWorkScheduleCardSummary/);
     assert.match(dialogFile, /Guardar configuración/);
     assert.match(pageFile, /SettingsSummaryCard/);
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);

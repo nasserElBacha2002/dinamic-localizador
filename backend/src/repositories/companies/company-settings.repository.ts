@@ -157,6 +157,21 @@ export const companySettingsRepository = {
     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async findByCompanyIdInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+  ): Promise<CompanySettings | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query("SELECT * FROM company_settings WHERE company_id = @companyId");
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async create(
     companyId: string,
     input: CompanySettingsInput,

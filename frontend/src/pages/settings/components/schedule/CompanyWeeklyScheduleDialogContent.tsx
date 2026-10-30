@@ -13,6 +13,7 @@ interface CompanyWeeklyScheduleDialogContentProps {
   onTimezoneChange: (timezone: string) => void;
   onDaysChange: (days: WeeklyScheduleDay[]) => void;
   disabled?: boolean;
+  showTimezone?: boolean;
 }
 
 export function CompanyWeeklyScheduleDialogContent({
@@ -21,6 +22,7 @@ export function CompanyWeeklyScheduleDialogContent({
   onTimezoneChange,
   onDaysChange,
   disabled = false,
+  showTimezone = true,
 }: CompanyWeeklyScheduleDialogContentProps) {
   const timezoneOptions = useMemo(
     () => getOperationTimezoneOptions(timezone),
@@ -29,18 +31,20 @@ export function CompanyWeeklyScheduleDialogContent({
 
   return (
     <Stack gap="md">
-      <Select
-        searchable
-        label="Zona horaria"
-        data={timezoneOptions}
-        value={getCanonicalOperationTimezone(timezone)}
-        onChange={(value) => {
-          if (value) {
-            onTimezoneChange(value);
-          }
-        }}
-        disabled={disabled}
-      />
+      {showTimezone ? (
+        <Select
+          searchable
+          label="Zona horaria"
+          data={timezoneOptions}
+          value={getCanonicalOperationTimezone(timezone)}
+          onChange={(value) => {
+            if (value) {
+              onTimezoneChange(value);
+            }
+          }}
+          disabled={disabled}
+        />
+      ) : null}
 
       <WeeklyScheduleEditor value={days} onChange={onDaysChange} disabled={disabled} />
     </Stack>

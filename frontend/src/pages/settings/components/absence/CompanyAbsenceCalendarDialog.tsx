@@ -164,8 +164,8 @@ export function CompanyAbsenceCalendarDialog({
       <Stack gap="md">
         {settingsQuery.data ? (
           <Switch
-            label="Calendario avanzado de ausencias"
-            description="Cuando está activo, los tipos en días hábiles usan feriados y weekdays. Las solicitudes históricas no se recalculan."
+            label="Usar calendario laboral extendido"
+            description="Activa feriados y excepciones para tipos contados en días hábiles. Las solicitudes ya cargadas no se recalculan."
             checked={Boolean(settingsQuery.data.absenceAdvancedCalendarEnabled)}
             disabled={!canUpdate || updateSettings.isPending}
             onChange={(event) => {
@@ -176,8 +176,8 @@ export function CompanyAbsenceCalendarDialog({
                 .then(() =>
                   onSaved(
                     event.currentTarget.checked
-                      ? "Calendario avanzado activado."
-                      : "Calendario avanzado desactivado (modo legacy).",
+                      ? "Calendario laboral extendido activado."
+                      : "Calendario laboral extendido desactivado.",
                   ),
                 )
                 .catch((error: unknown) => setSubmitError(getApiErrorMessage(error)));

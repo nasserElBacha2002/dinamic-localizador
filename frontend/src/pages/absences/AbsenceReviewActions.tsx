@@ -1,10 +1,12 @@
 import { Button } from "@mantine/core";
+import { Link as RouterLink } from "react-router";
 import { ActionMenu, type ActionMenuItem } from "../../design-system";
 
 export function AbsenceReviewActions({
   canReview,
   insufficientBalance,
   approvePending,
+  coverageHref,
   onApprove,
   onNeedsInfo,
   onCancel,
@@ -14,6 +16,7 @@ export function AbsenceReviewActions({
   canReview: boolean;
   insufficientBalance: boolean;
   approvePending: boolean;
+  coverageHref?: string | null;
   onApprove: () => void;
   onNeedsInfo: () => void;
   onCancel: () => void;
@@ -45,7 +48,11 @@ export function AbsenceReviewActions({
   return (
     <ActionMenu
       primary={
-        canReview ? (
+        coverageHref ? (
+          <Button component={RouterLink} to={coverageHref}>
+            Cubrir jornada
+          </Button>
+        ) : canReview ? (
           <Button
             onClick={onApprove}
             disabled={approvePending || insufficientBalance}
@@ -62,7 +69,9 @@ export function AbsenceReviewActions({
       items={
         canReview
           ? [...reviewMenuItems, { key: "back", label: "Volver al listado", onClick: onBack }]
-          : []
+          : coverageHref
+            ? [{ key: "back", label: "Volver al listado", onClick: onBack }]
+            : []
       }
       menuLabel="Más acciones de la solicitud"
     />

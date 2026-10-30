@@ -1,22 +1,27 @@
-import { Alert, Button, Select, Stack, Text, Textarea } from "@mantine/core";
+import { Accordion, Alert, Button, Select, Stack, Text, Textarea } from "@mantine/core";
 import { useState } from "react";
 import { Link as RouterLink } from "react-router";
 import {
   DataTable,
   SectionCard,
-  StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
   useAbsenceOperationalImpact,
   useResolveAbsenceOperationalConflict,
 } from "../../hooks/useAbsences";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import type {
-  AbsenceOperationalConflict,
-  AbsenceOperationalResolutionCode,
-} from "../../types/absence-operational-impact";
-import { formatDateTime } from "../../utils/dates";
+import type { AbsenceRequestStatus } from "../../types/absence";
+import type { AbsenceOperationalResolutionCode } from "../../types/absence-operational-impact";
+import { EntityLink } from "../entity-link";
+import {
+  buildAbsencePlanningRows,
+  buildOperationCoverageHref,
+  conflictTypeHumanLabel,
+  type AbsencePlanningRow,
+} from "../../pages/absences/absence-detail-planning";
+import { formatAbsenceDate } from "../../utils/absence-labels";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 
@@ -25,127 +30,178 @@ const newCommandId = (): string =>
     ? crypto.randomUUID()
     : `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-const availabilityLabels: Record<string, string> = {
-  AVAILABLE: "Disponible",
-  PROVISIONALLY_UNAVAILABLE: "No disponible (provisional)",
-  UNAVAILABLE: "No disponible",
-  PARTIALLY_UNAVAILABLE: "Parcialmente no disponible",
-};
-
-const conflictTypeLabels: Record<string, string> = {
-  ASSIGNMENT_DURING_ABSENCE: "Asignación durante ausencia",
-  ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE: "Asistencia registrada durante ausencia",
-  RESPONSIBLE_UNAVAILABLE: "Responsable no disponible",
-  OPERATION_AFFECTED: "Operación afectada",
-};
-
-const resolutionOptions: Array<{ value: AbsenceOperationalResolutionCode; label: string }> = [
+const advancedResolutionOptions: Array<{
+  value: AbsenceOperationalResolutionCode;
+  label: string;
+}> = [
   { value: "KEEP_REDUCED_STAFFING", label: "Mantener con dotación reducida" },
-  { value: "ASSIGN_REPLACEMENT", label: "Asignar reemplazo" },
   { value: "CANCEL_ASSIGNMENT", label: "Cancelar asignación afectada" },
-  { value: "DISMISS_WITH_REASON", label: "Ignorar conflicto con motivo" },
+  { value: "DISMISS_WITH_REASON", label: "Registrar excepción con motivo" },
 ];
 
 type Props = {
   requestId: string;
+  requestStatus: AbsenceRequestStatus;
 };
 
-export function AbsenceOperationalImpactSection({ requestId }: Props) {
+export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Props) {
   const permissionsQuery = useCompanyPermissions();
   const impactQuery = useAbsenceOperationalImpact(requestId);
   const resolveMutation = useResolveAbsenceOperationalConflict(requestId);
-  const canResolve = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
+  const canManageOperations = hasPermission(
+    permissionsQuery.data?.permissions,
+    "operations:manage",
+  );
 
   const [selectedConflictId, setSelectedConflictId] = useState<string | null>(null);
   const [resolutionCode, setResolutionCode] =
     useState<AbsenceOperationalResolutionCode>("KEEP_REDUCED_STAFFING");
   const [resolutionReason, setResolutionReason] = useState("");
   const [resolveError, setResolveError] = useState<string | null>(null);
-  // Generated once per user intent; reused across retries of the same intent.
   const [commandId, setCommandId] = useState(newCommandId);
+
   if (impactQuery.isLoading) {
     return (
-      <SectionCard title="Impacto operativo">
-        <Text c="dimmed">Calculando impacto…</Text>
+      <SectionCard title="Planificación afectada">
+        <Text c="dimmed">Evaluando planificación…</Text>
       </SectionCard>
     );
   }
 
   if (impactQuery.isError || !impactQuery.data) {
     return (
-      <SectionCard title="Impacto operativo">
+      <SectionCard title="Planificación afectada">
         <Alert color="red">
-          {getApiErrorMessage(impactQuery.error, "No se pudo cargar el impacto operativo.")}
+          {getApiErrorMessage(impactQuery.error, "No se pudo cargar la planificación afectada.")}
         </Alert>
       </SectionCard>
     );
   }
 
   const impact = impactQuery.data;
-  const conflictColumns: DataTableColumn<AbsenceOperationalConflict>[] = [
+  const planningRows = buildAbsencePlanningRows(impact, requestStatus);
+  const showEmptyPlanning =
+    planningRows.length === 0 &&
+    impact.affectedOperations === 0 &&
+    impact.affectedWorkdays === 0;
+
+  const planningColumns: DataTableColumn<AbsencePlanningRow>[] = [
     {
-      key: "type",
-      header: "Tipo",
-      getValue: (row) => conflictTypeLabels[row.conflictType] ?? row.conflictType,
+      key: "service",
+      header: "Servicio",
+      render: (row) => (
+        <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
+      ),
     },
     {
-      key: "severity",
-      header: "Severidad",
-      getValue: (row) => row.severity,
+      key: "date",
+      header: "Fecha",
+      getValue: (row) => formatAbsenceDate(row.workDate),
+    },
+    {
+      key: "shift",
+      header: "Turno",
+      getValue: (row) => row.shiftLabel ?? "—",
     },
     {
       key: "status",
       header: "Estado",
-      render: (row) => <StatusBadge label={row.status} tone="neutral" variant="light" />,
+      getValue: (row) => row.operationStatusLabel,
     },
     {
-      key: "operation",
-      header: "Operación",
-      render: (row) =>
-        row.operationId ? (
+      key: "situation",
+      header: "Situación",
+      getValue: (row) => row.situationLabel,
+    },
+    {
+      key: "action",
+      header: "Acción",
+      render: (row) => {
+        if (row.needsCoverage && canManageOperations) {
+          return (
+            <Button
+              component={RouterLink}
+              to={buildOperationCoverageHref(row.operationId)}
+              size="compact-xs"
+              variant="light"
+            >
+              Cubrir jornada
+            </Button>
+          );
+        }
+        return (
           <Button
             component={RouterLink}
-            to={`/operations/${row.operationId}`}
+            to={buildOperationCoverageHref(row.operationId)}
             size="compact-xs"
-            variant="light"
+            variant="subtle"
           >
-            Ver
+            Ver operación
           </Button>
-        ) : (
-          "—"
-        ),
+        );
+      },
     },
   ];
 
+  const planningMobileCard: DataTableMobileCardConfig<AbsencePlanningRow> = {
+    title: (row) => (
+      <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
+    ),
+    fields: [
+      {
+        key: "date",
+        label: "Fecha",
+        getValue: (row) => formatAbsenceDate(row.workDate),
+        visibility: "always",
+      },
+      {
+        key: "shift",
+        label: "Turno",
+        getValue: (row) => row.shiftLabel ?? "—",
+        visibility: "always",
+      },
+      {
+        key: "situation",
+        label: "Situación",
+        getValue: (row) => row.situationLabel,
+        visibility: "always",
+      },
+      {
+        key: "action",
+        label: "Acción",
+        render: (row) =>
+          row.needsCoverage && canManageOperations ? (
+            <Button
+              component={RouterLink}
+              to={buildOperationCoverageHref(row.operationId)}
+              size="compact-xs"
+            >
+              Cubrir jornada
+            </Button>
+          ) : (
+            <Button
+              component={RouterLink}
+              to={buildOperationCoverageHref(row.operationId)}
+              size="compact-xs"
+              variant="subtle"
+            >
+              Ver operación
+            </Button>
+          ),
+        visibility: "always",
+      },
+    ],
+  };
+
   return (
-    <SectionCard title="Impacto operativo">
+    <SectionCard
+      title="Planificación afectada"
+      description="Operaciones y jornadas que pueden requerir acción."
+    >
       <Stack gap="md">
         {!impact.featureEnabled ? (
           <Alert color="gray">
-            La integración operativa está deshabilitada para esta empresa (solo vista previa).
-          </Alert>
-        ) : null}
-
-        <Text size="sm">
-          {impact.affectedWorkdays} jornada(s) · {impact.affectedOperations} operación(es) ·{" "}
-          {impact.affectedAssignments} asignación(es) · {impact.attendanceConflicts} conflicto(s)
-          de asistencia · disponibilidad:{" "}
-          {availabilityLabels[impact.availabilityStatus] ?? impact.availabilityStatus}
-        </Text>
-        <Text size="sm" c="dimmed">
-          Reconciliación: {impact.reconciliationStatus}
-          {impact.reconciliationAttempts != null
-            ? ` · intentos ${impact.reconciliationAttempts}`
-            : ""}
-          {impact.reconciliationLastError
-            ? ` · ${impact.reconciliationLastError}`
-            : ""}
-        </Text>
-
-        {impact.requiresManualAction ? (
-          <Alert color="yellow">
-            Esta ausencia requiere acción manual: revisá conflictos y planificación antes de
-            confirmar.
+            La integración operativa está deshabilitada para esta empresa (vista informativa).
           </Alert>
         ) : null}
 
@@ -159,96 +215,110 @@ export function AbsenceOperationalImpactSection({ requestId }: Props) {
           </Stack>
         ) : null}
 
-        {impact.workdays.some((w) => w.hasAttendancePresence) ? (
+        {impact.workdays.some((workday) => workday.hasAttendancePresence) ? (
           <Alert color="red">
-            Hay jornadas con presencia registrada dentro del rango. No se sobrescribe la
-            asistencia: quedan marcadas para revisión.
+            Hay jornadas con asistencia registrada en el período. Revisá la operación antes de
+            confirmar cambios.
           </Alert>
         ) : null}
 
-        {impact.openConflicts.length > 0 ? (
-          <Stack gap="sm">
-            <Text fw={600} size="sm">
-              Conflictos abiertos
-            </Text>
-            <DataTable
-              rows={impact.openConflicts}
-              columns={conflictColumns}
-              getRowKey={(row) => row.id}
-              aria-label="Conflictos operativos de la ausencia"
-            />
-            {canResolve ? (
-              <Stack gap="xs">
-                <Select
-                  label="Conflicto a resolver"
-                  data={impact.openConflicts.map((c) => ({
-                    value: c.id,
-                    label: `${conflictTypeLabels[c.conflictType] ?? c.conflictType} · ${c.severity}`,
-                  }))}
-                  value={selectedConflictId}
-                  onChange={(value) => {
-                    setSelectedConflictId(value);
-                    setCommandId(newCommandId());
-                  }}
-                />
-                <Select
-                  label="Resolución"
-                  data={resolutionOptions}
-                  value={resolutionCode}
-                  onChange={(value) => {
-                    setResolutionCode(
-                      (value as AbsenceOperationalResolutionCode | null) ??
-                        "KEEP_REDUCED_STAFFING",
-                    );
-                    setCommandId(newCommandId());
-                  }}
-                />
-                <Textarea
-                  label="Motivo"
-                  value={resolutionReason}
-                  onChange={(event) => setResolutionReason(event.currentTarget.value)}
-                  minRows={2}
-                />
-                {resolveError ? <Alert color="red">{resolveError}</Alert> : null}
-                <Button
-                  loading={resolveMutation.isPending}
-                  disabled={!selectedConflictId || resolutionReason.trim().length < 3}
-                  onClick={() => {
-                    if (!selectedConflictId) {
-                      return;
-                    }
-                    setResolveError(null);
-                    void resolveMutation
-                      .mutateAsync({
-                        conflictId: selectedConflictId,
-                        resolutionCode,
-                        resolutionReason: resolutionReason.trim(),
-                        commandId,
-                      })
-                      .then(() => {
-                        setSelectedConflictId(null);
-                        setResolutionReason("");
-                        setCommandId(newCommandId());
-                        void impactQuery.refetch();
-                      })
-                      .catch((error: unknown) =>
-                        setResolveError(getApiErrorMessage(error, "No se pudo resolver.")),
-                      );
-                  }}
-                >
-                  Resolver conflicto
-                </Button>
-              </Stack>
-            ) : null}
-          </Stack>
-        ) : (
+        {showEmptyPlanning ? (
           <Text c="dimmed" size="sm">
-            Sin conflictos operativos abiertos.
-            {impact.operations[0]
-              ? ` Primera operación afectada: ${impact.operations[0].serviceName} (${formatDateTime(impact.operations[0].scheduledStart)}).`
-              : ""}
+            No se detectaron jornadas asignadas superpuestas con esta ausencia.
           </Text>
+        ) : (
+          <DataTable
+            rows={planningRows}
+            columns={planningColumns}
+            getRowKey={(row) => row.key}
+            mobileView="cards"
+            mobileCard={planningMobileCard}
+            aria-label="Planificación afectada por la ausencia"
+          />
         )}
+
+        {impact.openConflicts.length > 0 && canManageOperations ? (
+          <Accordion variant="contained">
+            <Accordion.Item value="advanced-conflicts">
+              <Accordion.Control>Resolución avanzada de conflictos</Accordion.Control>
+              <Accordion.Panel>
+                <Stack gap="sm">
+                  <Text size="sm" c="dimmed">
+                    Para asignar un reemplazo, usá{" "}
+                    <Text span fw={600}>
+                      Cubrir jornada
+                    </Text>{" "}
+                    en la operación correspondiente.
+                  </Text>
+                  <Select
+                    label="Conflicto"
+                    data={impact.openConflicts.map((conflict) => ({
+                      value: conflict.id,
+                      label: conflictTypeHumanLabel(conflict.conflictType),
+                    }))}
+                    value={selectedConflictId ?? impact.openConflicts[0]?.id ?? null}
+                    onChange={(value) => {
+                      setSelectedConflictId(value);
+                      setCommandId(newCommandId());
+                    }}
+                  />
+                  <Select
+                    label="Resolución"
+                    data={advancedResolutionOptions}
+                    value={resolutionCode}
+                    onChange={(value) => {
+                      setResolutionCode(
+                        (value as AbsenceOperationalResolutionCode | null) ??
+                          "KEEP_REDUCED_STAFFING",
+                      );
+                      setCommandId(newCommandId());
+                    }}
+                  />
+                  <Textarea
+                    label="Motivo de la resolución"
+                    value={resolutionReason}
+                    onChange={(event) => setResolutionReason(event.currentTarget.value)}
+                    minRows={2}
+                  />
+                  {resolveError ? <Alert color="red">{resolveError}</Alert> : null}
+                  <Button
+                    loading={resolveMutation.isPending}
+                    disabled={
+                      !selectedConflictId ||
+                      resolutionReason.trim().length < 3 ||
+                      impact.openConflicts.length === 0
+                    }
+                    onClick={() => {
+                      const conflictId = selectedConflictId ?? impact.openConflicts[0]?.id ?? null;
+                      if (!conflictId) {
+                        return;
+                      }
+                      setResolveError(null);
+                      void resolveMutation
+                        .mutateAsync({
+                          conflictId,
+                          resolutionCode,
+                          resolutionReason: resolutionReason.trim(),
+                          commandId,
+                        })
+                        .then(() => {
+                          setSelectedConflictId(null);
+                          setResolutionReason("");
+                          setCommandId(newCommandId());
+                          void impactQuery.refetch();
+                        })
+                        .catch((error: unknown) =>
+                          setResolveError(getApiErrorMessage(error, "No se pudo resolver.")),
+                        );
+                    }}
+                  >
+                    Registrar resolución
+                  </Button>
+                </Stack>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        ) : null}
       </Stack>
     </SectionCard>
   );

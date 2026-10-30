@@ -111,8 +111,8 @@ export function CompanyAbsenceTypePolicyDialog({
     <SettingsDialog
       opened={opened}
       onClose={onClose}
-      title="Política de cálculo por tipo"
-      subtitle="Definí si cada tipo usa días corridos o días hábiles, qué calendario aplica, y la política de adjuntos."
+      title="Políticas por tipo"
+      subtitle="Definí días corridos o hábiles y la documentación requerida en cada tipo."
       onSave={() => onClose()}
       saveLabel="Cerrar"
       saving={false}
@@ -122,8 +122,8 @@ export function CompanyAbsenceTypePolicyDialog({
     >
       <Stack gap="md">
         <Alert color="gray" variant="light">
-          Los feriados y fines de semana solo afectan tipos configurados como días hábiles, y
-          únicamente cuando el calendario avanzado está activo en la empresa.
+          Los feriados y fines de semana solo afectan tipos configurados como días hábiles, cuando
+          el calendario laboral extendido está activo en la empresa.
         </Alert>
         {typesQuery.isError ? (
           <Alert color="red">{getApiErrorMessage(typesQuery.error)}</Alert>
@@ -146,9 +146,6 @@ export function CompanyAbsenceTypePolicyDialog({
                       {absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ??
                         type.name}
                     </Text>
-                    <Text size="xs" c="dimmed">
-                      {type.code}
-                    </Text>
                   </Table.Td>
                   <Table.Td>
                     <Select
@@ -167,15 +164,26 @@ export function CompanyAbsenceTypePolicyDialog({
                     />
                   </Table.Td>
                   <Table.Td>
-                    <Select
-                      data={calendarOptions}
-                      value={type.calendarId ?? ""}
-                      onChange={(value) =>
-                        void handleCalendarChange(type.id, value ? value : null)
-                      }
-                      disabled={!canUpdate || updateMutation.isPending}
-                      clearable
-                    />
+                    {(type.dayCountingMode ?? "CALENDAR_DAYS") === "BUSINESS_DAYS" ? (
+                      <Stack gap={4}>
+                        <Select
+                          data={calendarOptions}
+                          value={type.calendarId ?? ""}
+                          onChange={(value) =>
+                            void handleCalendarChange(type.id, value ? value : null)
+                          }
+                          disabled={!canUpdate || updateMutation.isPending}
+                          clearable
+                        />
+                        <Text size="xs" c="dimmed">
+                          Opcional si usás el calendario por defecto de la empresa.
+                        </Text>
+                      </Stack>
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        No aplica (días corridos)
+                      </Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Select

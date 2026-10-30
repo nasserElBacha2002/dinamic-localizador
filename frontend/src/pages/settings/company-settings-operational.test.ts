@@ -174,7 +174,7 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /CompanyOperationalSettingsDialog/);
     assert.match(pageFile, /SettingsSummaryCard/);
     assert.match(pageFile, /Gestionar configuración operativa/);
-    assert.match(pageFile, /Gestionar ausencias/);
+    assert.match(pageFile, /CompanyAbsenceSettingsTabPanel/);
     assert.match(pageFile, /LocationZonesDialog/);
     assert.match(pageFile, /setOpenDialog\("locationZones"\)/);
     assert.match(pageFile, /canEditGlobal=\{isPlatformAdmin\}/);

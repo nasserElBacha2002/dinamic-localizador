@@ -99,13 +99,9 @@ export function settingsTimezoneChanged(
 
 export function shouldSyncLegacyDefaultOperationTimes(
   scheduleDraft: ScheduleFormState,
-  scheduleBaseline: ScheduleFormState,
+  _scheduleBaseline: ScheduleFormState,
   operationalBaseline: OperationalSettingsFormValues,
 ): boolean {
-  if (scheduleStatesEqual(scheduleDraft, scheduleBaseline)) {
-    return false;
-  }
-
   if (!isWeeklyScheduleDraftValid(scheduleDraft.days)) {
     return false;
   }

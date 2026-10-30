@@ -570,6 +570,78 @@ describe("executeUnifiedSettingsSave", () => {
     assert.equal(settingsMutate.mock.callCount(), 2);
     assert.equal(scheduleMutate.mock.callCount(), 1);
   });
+
+  it("retries legacy settings sync after schedule succeeds and settings fail on uniform change", async () => {
+    const uniformDays = createDefaultWeeklySchedule("21:00", "04:00");
+    const state = createState({
+      scheduleDraft: { days: uniformDays },
+    });
+    const settingsMutate = mock.fn(async () => {
+      throw new Error("settings failed");
+    });
+    const scheduleMutate = mock.fn(async () => ({
+      ...schedule,
+      days: uniformDays,
+    }));
+
+    let operationalBaseline = state.operationalBaseline;
+    let formValues = state.formValues;
+    let scheduleBaseline = state.scheduleBaseline;
+    let scheduleDraft = state.scheduleDraft;
+
+    const runSave = async () =>
+      executeUnifiedSettingsSave({
+        canUpdate: true,
+        isSaving: false,
+        formValues,
+        operationalBaseline,
+        scheduleDraft,
+        scheduleBaseline,
+        isOperationalValid: true,
+        settingsMutate,
+        scheduleMutate,
+        onSaved: () => undefined,
+        onClose: () => undefined,
+        setSubmitError: () => undefined,
+        setOperationalBaseline: (value) => {
+          operationalBaseline = value;
+        },
+        setFormValues: (value) => {
+          formValues = value;
+        },
+        setScheduleBaseline: (value) => {
+          scheduleBaseline = value;
+        },
+        setScheduleDraft: (value) => {
+          scheduleDraft = value;
+        },
+      });
+
+    assert.equal(await runSave(), "partial");
+    assert.equal(scheduleMutate.mock.callCount(), 1);
+    assert.equal(settingsMutate.mock.callCount(), 1);
+    assert.equal(scheduleDraft.days, uniformDays);
+    assert.equal(scheduleBaseline.days, uniformDays);
+    assert.equal(operationalBaseline.defaultOperationStartTime, "20:30");
+    assert.equal(operationalBaseline.defaultOperationEndTime, "03:00");
+    assert.equal(
+      shouldSyncLegacyDefaultOperationTimes(scheduleDraft, scheduleBaseline, operationalBaseline),
+      true,
+    );
+
+    settingsMutate.mock.mockImplementation(async (input: UpdateCompanySettingsInput) => ({
+      ...settings,
+      ...input,
+    }));
+
+    assert.equal(await runSave(), "closed");
+    assert.equal(scheduleMutate.mock.callCount(), 1);
+    assert.equal(settingsMutate.mock.callCount(), 2);
+    assert.equal(settingsMutate.mock.calls[1]?.arguments[0]?.defaultOperationStartTime, "21:00");
+    assert.equal(settingsMutate.mock.calls[1]?.arguments[0]?.defaultOperationEndTime, "04:00");
+    assert.equal(operationalBaseline.defaultOperationStartTime, "21:00");
+    assert.equal(operationalBaseline.defaultOperationEndTime, "04:00");
+  });
 });
 
 describe("buildUnifiedSettingsUpdateInput", () => {
@@ -685,6 +757,21 @@ describe("buildUnifiedDialogState timezone reconciliation", () => {
 });
 
 describe("legacy default sync guards", () => {
+  it("still requires legacy sync when schedule matches baseline but legacy defaults lag", () => {
+    const uniformDays = createDefaultWeeklySchedule("21:00", "04:00");
+    const scheduleDraft = { timezone: schedule.timezone, days: uniformDays };
+    const scheduleBaseline = { ...scheduleDraft };
+
+    assert.equal(
+      shouldSyncLegacyDefaultOperationTimes(
+        scheduleDraft,
+        scheduleBaseline,
+        toOperationalSettingsFormValues(settings),
+      ),
+      true,
+    );
+  });
+
   it("does not sync legacy defaults from an invalid weekly schedule draft", () => {
     const invalidDays = createDefaultWeeklySchedule("20:30", "03:00").map((day) =>
       day.dayOfWeek === "MONDAY" ? { ...day, endTime: null } : day,

@@ -7,7 +7,10 @@ import { describe, it } from "node:test";
 import type { CompanySettings } from "../../types/company-settings";
 import type { CompanyWorkSchedule } from "../../types/schedule";
 import { createDefaultWeeklySchedule } from "../../types/schedule";
-import { buildOperationalAndWorkScheduleCardSummary } from "./company-settings-summaries";
+import {
+  buildOperationalAndWorkScheduleCardSummary,
+  formatTimezoneSummary,
+} from "./company-settings-summaries";
 import {
   buildUnifiedDialogState,
   hasUnifiedPendingChanges,
@@ -54,6 +57,15 @@ describe("buildOperationalAndWorkScheduleCardSummary", () => {
     assert.ok(labels.includes("Horario"));
     assert.ok(labels.includes("Días laborables"));
     assert.ok(labels.includes("Radio permitido"));
+  });
+
+  it("uses settings operationTimezone when schedule timezone diverges", () => {
+    const divergentSchedule = { ...schedule, timezone: "America/New_York" };
+    const summary = buildOperationalAndWorkScheduleCardSummary(settings, divergentSchedule);
+    const timezoneItem = summary.summaryItems.find((item) => item.label === "Zona horaria");
+
+    assert.equal(timezoneItem?.value, formatTimezoneSummary(settings.operationTimezone));
+    assert.notEqual(timezoneItem?.value, formatTimezoneSummary(divergentSchedule.timezone));
   });
 });
 

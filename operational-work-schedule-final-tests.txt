@@ -1,0 +1,45 @@
+=== Focused frontend tests ===
+Command: cd frontend && NODE_ENV=test NODE_OPTIONS='--max-old-space-size=6144' npx tsx --experimental-test-module-mocks --import ./src/test/setup-vite-env.mjs --import ./src/test/register-css-mock.mjs --test --test-concurrency=1 (8 test files)
+Exit code: 0
+  duration_ms: 1.552375
+  type: 'suite'
+  ...
+1..20
+# tests 59
+# suites 20
+# pass 59
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4744.435458
+
+=== company-operational-work-schedule-save.test.ts ===
+# tests 21
+# suites 7
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 484.076875
+Exit code: 0
+
+=== backend npm run build ===
+Exit code: 0
+
+=== frontend npm run lint ===
+Exit code: 0 (0 errors, 13 warnings pre-existing)
+
+=== frontend npm run build (includes tsc -b typecheck) ===
+Exit code: 0
+
+=== backend platform-company.integration.test.ts ===
+# tests 0
+# suites 2
+# pass 0
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 287.707875

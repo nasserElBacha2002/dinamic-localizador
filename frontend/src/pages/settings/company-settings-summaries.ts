@@ -236,7 +236,7 @@ export function buildOperationalAndWorkScheduleCardSummary(
     summaryItems: [
       {
         label: "Zona horaria",
-        value: formatTimezoneSummary(schedule.timezone),
+        value: formatTimezoneSummary(settings.operationTimezone),
       },
       ...scheduleItems,
       ...operationalItems,

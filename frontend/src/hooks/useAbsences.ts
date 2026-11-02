@@ -146,7 +146,8 @@ export function useApproveAbsenceRequest(absenceRequestId: string) {
   const queryClient = useQueryClient();
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
-    mutationFn: () => approveAbsenceRequest(absenceRequestId),
+    mutationFn: (input?: { allowInsufficientBalance?: boolean }) =>
+      approveAbsenceRequest(absenceRequestId, input),
     onMutate: (): MutationCompanyContext => ({ companyId }),
     onSuccess: (_data, _vars, context) => {
       invalidateAbsenceDomain(queryClient, context?.companyId);

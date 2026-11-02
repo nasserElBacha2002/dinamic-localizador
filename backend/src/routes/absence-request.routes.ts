@@ -9,6 +9,7 @@ import {
   createAbsenceRequestSchema,
   listAbsenceRequestsQuerySchema,
   needsInfoAbsenceRequestSchema,
+  approveAbsenceRequestSchema,
   rejectAbsenceRequestSchema,
   resolveAbsenceOperationalConflictSchema,
   reconcileAbsenceOperationalImpactSchema,
@@ -87,6 +88,7 @@ absenceRequestRouter.patch(
   "/:id/approve",
   requirePermission("absences:review"),
   validate(absenceRequestIdParamSchema, "params"),
+  validate(approveAbsenceRequestSchema),
   asyncHandler(absenceRequestController.approve),
 );
 

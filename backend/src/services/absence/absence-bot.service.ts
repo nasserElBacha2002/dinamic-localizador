@@ -8,6 +8,8 @@ import {
   ingestTwilioMediaAsAbsenceAttachments,
 } from "./absence-attachment-whatsapp.service";
 import { absenceRequestService } from "./absence-request.service";
+import { absenceWhatsappEditService } from "./absence-whatsapp-edit.service";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import { botSessionService } from "../bot/bot-session.service";
 import {
   detectAbsenceTypeCode,
@@ -333,6 +335,10 @@ export const absenceBotService = {
     webhookPayload?: Record<string, unknown>;
     respond: RespondFn;
   }): Promise<string> {
+    if (absenceWhatsappEditService.isEditSession(input.session)) {
+      return absenceWhatsappEditService.handleEditSession(companyId, input);
+    }
+
     if (isAbsenceCancelIntent(input.body)) {
       await botSessionService.cancelSession(companyId, input.session.id, input.session);
       return input.respond({
@@ -641,6 +647,29 @@ export const absenceBotService = {
           phoneTo: input.phoneFrom,
         });
       } catch (error) {
+        if (
+          error instanceof AppError &&
+          error.code === "ABSENCE_OVERLAP" &&
+          draft.startDate &&
+          draft.endDate
+        ) {
+          const overlapping = await absenceRequestRepository.findEditableOverlappingRequest(
+            companyId,
+            input.employeeId,
+            draft.startDate,
+            draft.endDate,
+          );
+          if (overlapping) {
+            return absenceWhatsappEditService.startOverlapPromptAfterCreate(companyId, {
+              session: input.session,
+              employeeId: input.employeeId,
+              phoneFrom: input.phoneFrom,
+              phoneTo: input.phoneTo,
+              overlappingRequestId: overlapping.id,
+              respond: input.respond,
+            });
+          }
+        }
         await botSessionService.cancelSession(companyId, input.session.id, input.session);
         const message =
           error instanceof AppError

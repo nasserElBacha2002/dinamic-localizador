@@ -5,7 +5,7 @@ import {
 } from "../whatsapp/whatsapp-module-gate";
 import { parseOperationSelection } from "../../utils/intent";
 
-export type AbsenceKindOptionKey = "single_workday" | "absence" | "vacation";
+export type AbsenceKindOptionKey = "single_workday" | "absence" | "vacation" | "edit_request";
 
 export type AbsenceKindOption = {
   key: AbsenceKindOptionKey;
@@ -16,6 +16,7 @@ const KIND_DEFINITIONS: Record<AbsenceKindOptionKey, string> = {
   single_workday: "No voy a una jornada",
   absence: "Informar una ausencia",
   vacation: "Solicitar vacaciones",
+  edit_request: "Modificar una solicitud",
 };
 
 export const ABSENCE_KIND_OPTION_KEYS = Object.keys(KIND_DEFINITIONS) as AbsenceKindOptionKey[];
@@ -36,6 +37,7 @@ export const buildAvailableAbsenceKindOptions = (
   if (!getAbsenceModuleBlockedMessage(moduleStates)) {
     options.push({ key: "absence", label: KIND_DEFINITIONS.absence });
     options.push({ key: "vacation", label: KIND_DEFINITIONS.vacation });
+    options.push({ key: "edit_request", label: KIND_DEFINITIONS.edit_request });
   }
 
   return options;

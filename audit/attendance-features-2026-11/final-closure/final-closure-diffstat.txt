@@ -1,0 +1,21 @@
+ .../final-closure/final-closure-tests.txt          | 251 +++++++++++++++++++++
+ .../admin-alerts/admin-alert-context.repository.ts | 103 +++++++++
+ ...observability-conversations.integration.test.ts |  40 ++++
+ ...ence-request-whatsapp-edit-side-effects.test.ts |  42 ++++
+ .../absence-request-whatsapp-edit-side-effects.ts  |  12 +-
+ .../services/absence/absence-request.service.ts    |   1 +
+ ...-request.updateFromWhatsapp-idempotency.test.ts |   6 +-
+ ...nce-review-balance-override.integration.test.ts | 229 +++++++++++++++++++
+ ...admin-alert-absence-pending.integration.test.ts |  48 ++++
+ .../admin-alert-absence-updated.service.ts         |   2 +-
+ .../admin-alerts/admin-alert-emit.helpers.ts       |   1 +
+ .../admin-alert-reconciliation.integration.test.ts |   5 +-
+ .../admin-alert-reconciliation.service.test.ts     |  52 +++++
+ .../admin-alert-reconciliation.service.ts          |  10 +-
+ .../whatsapp-conversation-export-messages.test.ts  |  17 ++
+ .../whatsapp-conversation-export-messages.ts       |  32 ++-
+ .../whatsapp-conversation-export.service.test.ts   |   5 +-
+ .../whatsapp-conversation-export.service.ts        |   3 +
+ .../whatsapp-conversation-export-html.test.ts      |   8 +-
+ .../whatsapp/whatsapp-conversation-export-html.ts  |   7 +-
+ 20 files changed, 848 insertions(+), 26 deletions(-)

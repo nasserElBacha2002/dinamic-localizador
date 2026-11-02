@@ -2172,7 +2172,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     );
 
     assert.match(response, /ABSENCE_KIND_STARTED/);
-    assert.deepEqual(capturedKindKeys, ["single_workday", "absence"]);
+    assert.deepEqual(capturedKindKeys, ["single_workday", "absence", "edit_request"]);
   });
 
   it("unified absence kind 1 routes to punctual unavailability for today's RECURRING occurrence", async () => {
@@ -2260,6 +2260,37 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.doesNotMatch(response, new RegExp(INVALID_SELECTION_MESSAGE));
     assert.equal(markedOperationId, operationId);
     assert.equal(markedWorkdayId, "ew-today-recurring");
+  });
+
+  it("routes edit_request from WAITING_ABSENCE_KIND_SELECTION without main menu fallback", async () => {
+    await prepareRouterUnitTest();
+    const { absenceWhatsappEditService } = await import("../../absence/absence-whatsapp-edit.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let startEditFlowCalls = 0;
+
+    mock.method(absenceWhatsappEditService, "startEditFlow", async () => {
+      startEditFlowCalls += 1;
+      return "<Response><Message>EDIT_FLOW_STARTED</Message></Response>";
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "4",
+        session: buildSession("WAITING_ABSENCE_KIND_SELECTION", {
+          intent: "ABSENCE",
+          contextJson: JSON.stringify({
+            flow: "ABSENCE_REQUEST",
+            absenceKindOptions: ["single_workday", "absence", "vacation", "edit_request"],
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /EDIT_FLOW_STARTED/);
+    assert.equal(startEditFlowCalls, 1);
+    assert.doesNotMatch(response, /Hola 👋/);
   });
 
   it("routes 4 to workday when absences is disabled (unified absence stays at 3)", async () => {

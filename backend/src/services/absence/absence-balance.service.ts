@@ -281,8 +281,11 @@ export const absenceBalanceService = {
       "id" | "employeeId" | "absenceTypeId" | "startDate" | "endDate" | "totalDays" | "status"
     >,
     transaction: sql.Transaction,
-    options?: { mode?: "from-reserve" | "direct" },
+    options?: { mode?: "from-reserve" | "direct"; allowInsufficientBalance?: boolean },
   ): Promise<void> {
+    if (options?.allowInsufficientBalance) {
+      return;
+    }
     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
     if (!absenceType || !absenceType.deductsBalance) {
       return;

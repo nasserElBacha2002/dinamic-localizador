@@ -225,6 +225,9 @@ const setupCommonWebhookMocks = async (options: {
     "../../repositories/admin-alerts/attendance-notification.repository"
   );
   const { whatsappUsageQuotaService } = await import("./whatsapp-usage-quota.service");
+  const { employeeWorkdayAvailabilityService } = await import(
+    "../workdays/employee-workday-availability.service"
+  );
 
   mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () => runtimeSettings(companyId));
   mock.method(companyModuleService, "getModuleStates", async () => options.moduleStates ?? enabledStates());
@@ -260,6 +263,24 @@ const setupCommonWebhookMocks = async (options: {
   }));
   mock.method(whatsappUsageQuotaService, "recordExemptCritical", async () => undefined);
   mock.method(whatsappUsageQuotaService, "recordAmbiguousHeld", async () => undefined);
+  mock.method(
+    employeeWorkdayAvailabilityService,
+    "diagnoseCheckInUnavailability",
+    async () => ({
+      candidateFrom: "2026-07-05T00:00:00.000Z",
+      candidateTo: "2026-07-07T00:00:00.000Z",
+      rawCandidateCount: 0,
+      eligibleCandidateCount: 0,
+      hasJustifiedWorkdayInWindow: false,
+      reasonCodes: [],
+      candidateEvaluations: [],
+      nearbyWorkdayCount: 0,
+      assignedOperationCount: 0,
+      operationIds: [],
+      workdayIds: [],
+      timezone: "America/Argentina/Buenos_Aires",
+    }),
+  );
 
   if (options.employee === null) {
     mock.method(employeeRepository, "findById", async () => null);

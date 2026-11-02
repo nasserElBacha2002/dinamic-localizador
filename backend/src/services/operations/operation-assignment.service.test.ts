@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import sql from "mssql";
 import { afterEach, describe, it, mock } from "node:test";
 import { setTestPool } from "../../database/connection";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";

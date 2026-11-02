@@ -21,6 +21,7 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import {
   buildAbsenceCreatedOperationalDedupKey,
   buildAbsencePendingDedupKey,
+  buildAbsenceUpdatedOperationalDedupKey,
 } from "../../utils/admin-alert/dedup-keys";
 import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 
@@ -108,7 +109,10 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
     return Number(result.recordset[0]?.total ?? 0);
   };
 
-  const seedCompany = async (options?: { adminAlertsEnabled?: boolean }) => {
+  const seedCompany = async (options?: {
+    adminAlertsEnabled?: boolean;
+    adminAlertDeliveryMode?: "WHATSAPP_LEGACY" | "DAILY_EMAIL";
+  }) => {
     const created = await createPlatformCompanyFixture({
       name: uniqueCompanyName(),
       defaultTimezone: "America/Argentina/Buenos_Aires",
@@ -122,6 +126,9 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
 
     await companySettingsRepository.update(companyId, {
       adminAlertsEnabled: options?.adminAlertsEnabled ?? true,
+      ...(options?.adminAlertDeliveryMode
+        ? { adminAlertDeliveryMode: options.adminAlertDeliveryMode }
+        : {}),
     });
 
     await getPool()
@@ -174,6 +181,100 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
       receiveRequestAlerts: options?.alsoRequestAlerts ?? false,
       receiveSecurityAlerts: false,
     });
+
+  it("creates OPERATIONAL outbox for pending WhatsApp vacation under DAILY_EMAIL delivery mode", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { companyId, vacation, employee } = await seedCompany({
+      adminAlertDeliveryMode: "DAILY_EMAIL",
+    });
+    const recipient = await createOperationalRecipient(companyId, { alsoRequestAlerts: true });
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const start = addDaysToDateIso(today, 28);
+    const end = addDaysToDateIso(today, 30);
+
+    const { detail, isExisting } = await absenceRequestService.createFromWhatsapp(companyId, {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: start,
+      endDate: end,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      reason: "Vacaciones producción",
+      sourceMessageSid: uniqueMessageSid(),
+    });
+
+    assert.equal(isExisting, false);
+    assert.equal(detail.status, "PENDING");
+
+    const dedup = createdOperationalDedup(detail.id);
+    assert.equal(await countOutboxForDedup(companyId, dedup), 1);
+
+    const row = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("dedup", sql.NVarChar(200), dedup)
+      .query(`
+        SELECT TOP 1 alert_type, template_category, recipient_id, last_error_code
+        FROM whatsapp_admin_alert_notifications
+        WHERE company_id = @companyId AND deduplication_key = @dedup
+      `);
+    const record = row.recordset[0] as Record<string, unknown>;
+    assert.equal(String(record.alert_type), "ABSENCE_REQUEST_PENDING");
+    assert.equal(String(record.template_category), "OPERATIONAL");
+    assert.equal(String(record.recipient_id), recipient.id);
+    assert.equal(record.last_error_code, null);
+  });
+
+  it("heals missing admin outbox when WhatsApp retries the same sourceMessageSid", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { adminAlertService } = await import("./admin-alert.service");
+
+    const { companyId, vacation, employee } = await seedCompany({
+      adminAlertDeliveryMode: "DAILY_EMAIL",
+    });
+    await createOperationalRecipient(companyId);
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 29);
+    const messageSid = uniqueMessageSid();
+    const input = {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: day,
+      endDate: day,
+      startPeriod: "FULL_DAY" as const,
+      endPeriod: "FULL_DAY" as const,
+      reason: "Vacaciones",
+      sourceMessageSid: messageSid,
+    };
+
+    mock.method(adminAlertService, "emit", async () => {
+      throw new Error("simulated enqueue failure");
+    });
+
+    const first = await absenceRequestService.createFromWhatsapp(companyId, input);
+    assert.equal(first.isExisting, false);
+    assert.equal(await countOutboxForDedup(companyId, createdOperationalDedup(first.detail.id)), 0);
+
+    mock.restoreAll();
+
+    const second = await absenceRequestService.createFromWhatsapp(companyId, input);
+    assert.equal(second.isExisting, true);
+    assert.equal(second.detail.id, first.detail.id);
+    assert.equal(await countOutboxForDedup(companyId, createdOperationalDedup(first.detail.id)), 1);
+
+    const requestCount = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("messageSid", sql.NVarChar(64), messageSid)
+      .query(`
+        SELECT COUNT(*) AS total
+        FROM absence_requests
+        WHERE company_id = @companyId AND source_message_sid = @messageSid
+      `);
+    assert.equal(Number(requestCount.recordset[0]?.total ?? 0), 1);
+  });
 
   it("creates OPERATIONAL outbox row for pending WhatsApp absence request", async () => {
     const { absenceRequestService } = await import("../absence/absence-request.service");
@@ -652,5 +753,52 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
 
     assert.equal(detail.status, "PENDING");
     assert.equal(await countOutboxForRequest(companyId, detail.id), 0);
+  });
+
+  it("reconciles updated operational alert after whatsapp edit emit failure without employee retry", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { adminAlertService } = await import("./admin-alert.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+
+    const { companyId, vacation, employee } = await seedCompany();
+    await createOperationalRecipient(companyId);
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const start = addDaysToDateIso(today, 31);
+    const end = addDaysToDateIso(today, 33);
+    const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: start,
+      endDate: end,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      reason: "Vacaciones edit reconcile",
+      sourceMessageSid: uniqueMessageSid(),
+    });
+
+    const editSid = `SM-EDIT-RECON-${Date.now()}`;
+    mock.method(adminAlertService, "emit", async () => {
+      throw new Error("simulated updated emit failure");
+    });
+
+    await absenceRequestService.updateFromWhatsapp(companyId, detail.id, {
+      employeeId: employee.id,
+      endDate: addDaysToDateIso(today, 36),
+      sourceMessageSid: editSid,
+    });
+
+    const dedup = buildAbsenceUpdatedOperationalDedupKey(detail.id, editSid);
+    assert.equal(await countOutboxForDedup(companyId, dedup), 0);
+
+    mock.restoreAll();
+
+    await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.equal(await countOutboxForDedup(companyId, dedup), 1);
+
+    await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.equal(await countOutboxForDedup(companyId, dedup), 1);
   });
 });

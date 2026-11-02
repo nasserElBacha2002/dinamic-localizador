@@ -380,4 +380,67 @@ describe("adminAlertService", () => {
     assert.equal(result.enqueued, 0);
     assert.equal(enqueued, false);
   });
+
+  it("enqueues ABSENCE_REQUEST_PENDING operational alert under DAILY_EMAIL mode", async () => {
+    const { companyRepository } = await import("../../repositories/companies/company.repository");
+    const { companySettingsRepository } = await import("../../repositories/companies/company-settings.repository");
+    const { companyAlertRecipientRepository } = await import(
+      "../../repositories/companies/company-alert-recipient.repository"
+    );
+    const { adminAlertNotificationRepository } = await import(
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
+    );
+    const { adminAlertService } = await import("./admin-alert.service");
+
+    mock.method(companyRepository, "findById", async () => ({
+      id: "company-1",
+      name: "Co",
+      status: "ACTIVE",
+    }));
+    mock.method(companySettingsRepository, "findByCompanyId", async () => ({
+      companyId: "company-1",
+      adminAlertsEnabled: true,
+      adminAlertDeliveryMode: "DAILY_EMAIL",
+    }));
+    mock.method(companyAlertRecipientRepository, "findEnabledRecipients", async () => [
+      {
+        id: "r-ops",
+        companyId: "company-1",
+        userId: null,
+        phoneNumber: "+5491112345678",
+        displayName: "Ops",
+        isEnabled: true,
+        receiveOperationalAlerts: true,
+        receiveRequestAlerts: true,
+        receiveSecurityAlerts: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    let enqueued = false;
+    mock.method(adminAlertNotificationRepository, "enqueue", async () => {
+      enqueued = true;
+      return { notification: { id: "n-absence" }, created: true };
+    });
+
+    const result = await adminAlertService.emit({
+      companyId: "company-1",
+      type: "ABSENCE_REQUEST_PENDING",
+      category: "OPERATIONAL",
+      employeeId: "emp-1",
+      absenceRequestId: "req-1",
+      deduplicationKey: "absence-created:operational:req-1",
+      occurredAt: new Date("2026-09-01T12:00:00.000Z"),
+      payload: {
+        employeeName: "Juan Pérez",
+        absenceTypeName: "Vacaciones",
+        absenceStartDate: "2026-09-01",
+        absenceEndDate: "2026-09-07",
+        absenceStatusLabel: "Pendiente de revisión",
+      },
+    });
+
+    assert.equal(result.enqueued, 1);
+    assert.equal(enqueued, true);
+  });
 });

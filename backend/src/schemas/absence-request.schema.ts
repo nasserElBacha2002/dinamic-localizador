@@ -119,6 +119,11 @@ export const updateNeedsInfoAbsenceRequestSchema = z
     },
   );
 
+export const approveAbsenceRequestSchema = z.object({
+  allowInsufficientBalance: z.boolean().optional().default(false),
+});
+
+export type ApproveAbsenceRequestInput = z.infer<typeof approveAbsenceRequestSchema>;
 export type CreateAbsenceRequestInput = z.infer<typeof createAbsenceRequestSchema>;
 export type ListAbsenceRequestsQuery = z.infer<typeof listAbsenceRequestsQuerySchema>;
 export type RejectAbsenceRequestInput = z.infer<typeof rejectAbsenceRequestSchema>;

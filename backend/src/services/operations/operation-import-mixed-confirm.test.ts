@@ -63,7 +63,6 @@ describe("operationImportService mixed canonical confirm", () => {
   let transactionCommitted = false;
   let transactionRollbackCalls = 0;
   let createManyCalls = 0;
-  let createRecurringCalls = 0;
   let createShiftIdentityCalls = 0;
   let materializeCalls = 0;
 
@@ -73,7 +72,6 @@ describe("operationImportService mixed canonical confirm", () => {
     transactionCommitted = false;
     transactionRollbackCalls = 0;
     createManyCalls = 0;
-    createRecurringCalls = 0;
     createShiftIdentityCalls = 0;
     materializeCalls = 0;
     for (const restore of restores.splice(0)) {
@@ -174,7 +172,6 @@ describe("operationImportService mixed canonical confirm", () => {
     });
 
     mock.method(operationRepository, "createRecurring", async () => {
-      createRecurringCalls += 1;
       return {
         id: "operation-recurring",
         serviceId: SERVICE_ID,

@@ -56,6 +56,9 @@ export const closeDatabase = async (): Promise<void> => {
   }
 };
 
+export const isDatabasePoolInitialized = (): boolean =>
+  Boolean(testPoolOverride || pool?.connected);
+
 export const getPool = (): sql.ConnectionPool => {
   if (testPoolOverride) {
     return testPoolOverride;

@@ -1,0 +1,166 @@
+diff --git a/backend/src/services/absence/absence-balance.service.ts b/backend/src/services/absence/absence-balance.service.ts
+index 17d6a25..210151a 100644
+--- a/backend/src/services/absence/absence-balance.service.ts
++++ b/backend/src/services/absence/absence-balance.service.ts
+@@ -281,8 +281,11 @@ export const absenceBalanceService = {
+       "id" | "employeeId" | "absenceTypeId" | "startDate" | "endDate" | "totalDays" | "status"
+     >,
+     transaction: sql.Transaction,
+-    options?: { mode?: "from-reserve" | "direct" },
++    options?: { mode?: "from-reserve" | "direct"; allowInsufficientBalance?: boolean },
+   ): Promise<void> {
++    if (options?.allowInsufficientBalance) {
++      return;
++    }
+     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
+     if (!absenceType || !absenceType.deductsBalance) {
+       return;
+diff --git a/backend/src/services/absence/absence-review.service.ts b/backend/src/services/absence/absence-review.service.ts
+index 4a7bc67..00508ae 100644
+--- a/backend/src/services/absence/absence-review.service.ts
++++ b/backend/src/services/absence/absence-review.service.ts
+@@ -25,6 +25,7 @@ const transition = async (input: {
+   action: "APPROVE" | "REJECT" | "NEEDS_INFO" | "UPDATE_NEEDS_INFO_COMMENT" | "CANCEL";
+   comment?: string | null;
+   cancelledAt?: Date | null;
++  allowInsufficientBalance?: boolean;
+ }) => {
+   const pool = getPool();
+   const transaction = new sql.Transaction(pool);
+@@ -64,6 +65,9 @@ const transition = async (input: {
+         input.companyId,
+         existing,
+         transaction,
++        {
++          allowInsufficientBalance: input.allowInsufficientBalance === true,
++        },
+       );
+     }
+ 
+@@ -143,7 +147,14 @@ const transition = async (input: {
+         entityId: input.requestId,
+         action: rule.eventType,
+         previousData: existing as unknown as Record<string, unknown>,
+-        newData: updated as unknown as Record<string, unknown>,
++        newData: {
++          ...(updated as unknown as Record<string, unknown>),
++          ...(input.action === "APPROVE" && input.allowInsufficientBalance
++            ? {
++                balanceApprovalOverride: true,
++              }
++            : {}),
++        },
+         reason: input.comment ?? null,
+         userId: input.userId,
+       },
+@@ -168,7 +179,12 @@ const transition = async (input: {
+ };
+ 
+ export const absenceReviewService = {
+-  async approve(companyId: string, requestId: string, userId: string) {
++  async approve(
++    companyId: string,
++    requestId: string,
++    userId: string,
++    options?: { allowInsufficientBalance?: boolean },
++  ) {
+     const existing = await absenceRequestRepository.findById(companyId, requestId);
+     if (!existing) {
+       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
+@@ -183,6 +199,7 @@ export const absenceReviewService = {
+           requestId,
+           userId,
+           action: "APPROVE",
++          allowInsufficientBalance: options?.allowInsufficientBalance,
+         }),
+       () =>
+         employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
+diff --git a/frontend/src/pages/absences/AbsenceDetailPage.tsx b/frontend/src/pages/absences/AbsenceDetailPage.tsx
+index f44220a..9e23041 100644
+--- a/frontend/src/pages/absences/AbsenceDetailPage.tsx
++++ b/frontend/src/pages/absences/AbsenceDetailPage.tsx
+@@ -156,9 +156,11 @@ export function AbsenceDetailPage() {
+     notifications.show({ color, message });
+   };
+ 
+-  const handleApprove = async () => {
++  const handleApprove = async (allowInsufficientBalance = false) => {
+     try {
+-      const result = await approveMutation.mutateAsync();
++      const result = await approveMutation.mutateAsync(
++        allowInsufficientBalance ? { allowInsufficientBalance: true } : undefined,
++      );
+       setApproveOpen(false);
+       notify(
+         buildAbsenceApprovalSuccessMessage({
+@@ -249,7 +251,8 @@ export function AbsenceDetailPage() {
+       />
+       {canReview && insufficientBalance ? (
+         <Alert color="warning" variant="light">
+-          Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
++          El empleado no tiene saldo suficiente para cubrir esta solicitud. Podés aprobar igualmente si
++          hay un acuerdo previo; el saldo resultante puede quedar negativo.
+         </Alert>
+       ) : null}
+ 
+@@ -374,7 +377,7 @@ export function AbsenceDetailPage() {
+       <ResponsiveModal
+         opened={approveOpen}
+         onClose={approveMutation.isPending ? () => undefined : () => setApproveOpen(false)}
+-        title="Confirmar aprobación"
++        title={insufficientBalance ? "El empleado no tiene saldo suficiente" : "Confirmar aprobación"}
+         bodyMode="normal"
+         closeOnClickOutside={!approveMutation.isPending}
+         closeOnEscape={!approveMutation.isPending}
+@@ -389,15 +392,27 @@ export function AbsenceDetailPage() {
+             </Button>
+             <Button
+               color="success"
+-              onClick={() => void handleApprove()}
++              onClick={() => void handleApprove(insufficientBalance)}
+               loading={approveMutation.isPending}
+             >
+-              Aprobar
++              {insufficientBalance ? "Aprobar igualmente" : "Aprobar"}
+             </Button>
+           </Group>
+         }
+       >
+         <Stack gap="sm">
++          {insufficientBalance && detail.balanceImpact ? (
++            <Alert color="warning" variant="light">
++              <Text size="sm">
++                Días solicitados: {detail.totalDays}. Saldo disponible:{" "}
++                {detail.balanceImpact.availableDays ?? "—"}. Saldo resultante:{" "}
++                {detail.balanceImpact.availableAfterApproval ?? "—"}.
++              </Text>
++              <Text size="sm" mt="xs">
++                La aprobación registrará un override de saldo insuficiente.
++              </Text>
++            </Alert>
++          ) : null}
+           {impactQuery.data ? (
+             <>
+               <Text size="sm">{approvalImpactPreview}</Text>
+diff --git a/frontend/src/pages/absences/AbsenceReviewActions.tsx b/frontend/src/pages/absences/AbsenceReviewActions.tsx
+index 6438255..3c9c300 100644
+--- a/frontend/src/pages/absences/AbsenceReviewActions.tsx
++++ b/frontend/src/pages/absences/AbsenceReviewActions.tsx
+@@ -4,7 +4,7 @@ import { ActionMenu, type ActionMenuItem } from "../../design-system";
+ 
+ export function AbsenceReviewActions({
+   canReview,
+-  insufficientBalance,
++  insufficientBalance: _insufficientBalance,
+   approvePending,
+   coverageHref,
+   onApprove,
+@@ -55,7 +55,7 @@ export function AbsenceReviewActions({
+         ) : canReview ? (
+           <Button
+             onClick={onApprove}
+-            disabled={approvePending || insufficientBalance}
++            disabled={approvePending}
+             loading={approvePending}
+           >
+             Aprobar

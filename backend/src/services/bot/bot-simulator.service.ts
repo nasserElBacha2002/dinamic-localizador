@@ -171,13 +171,17 @@ async function buildSessionState(
   sessionId: string,
   context: BotRuntimeContext,
 ): Promise<BotSimulationSessionState> {
-  const activeSession = await botSessionService.getActiveSessionByPhone(companyId, context.phoneNumber);
+  const activeSession = await runWithBotRuntimeContext(context, async () =>
+    botSessionService.getActiveSessionByPhone(companyId, context.phoneNumber),
+  );
 
   if (activeSession) {
     context.technicalDetails.currentFlow = "whatsapp-bot";
     context.technicalDetails.currentNode = activeSession.state;
     context.technicalDetails.sessionId = sessionId;
     context.technicalDetails.simulationMode = context.mode;
+  } else {
+    context.technicalDetails.currentNode = null;
   }
 
   return {

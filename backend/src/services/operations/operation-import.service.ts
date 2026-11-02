@@ -30,7 +30,6 @@ import { isMultiShiftCollapsedImportRow, isRecurringImportConfirmRow } from "../
 import { mapImportHeaders } from "../../utils/operations/operation-import-headers";
 import {
   parseCanonicalOperationImportRowType,
-  type CanonicalOperationImportRowType,
 } from "../../utils/operations/operation-import-canonical";
 import { createOperationImportDateTimeUtils } from "../../utils/operations/operation-import-datetime";
 import {
@@ -1529,8 +1528,8 @@ export const operationImportService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
-    let oneTimeCreated: Operation[] = [];
-    let recurringCreated: Operation[] = [];
+    let oneTimeCreated: Operation[];
+    let recurringCreated: Operation[];
     try {
       oneTimeCreated =
         oneTimeRows.length > 0

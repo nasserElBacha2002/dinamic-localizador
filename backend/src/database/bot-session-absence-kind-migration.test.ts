@@ -22,7 +22,19 @@ const MIGRATION_152_PATH = join(
   "database/migrations/152_bot_session_absence_kind_selection.sql",
 );
 
+const MIGRATION_154_PATH = join(
+  process.cwd(),
+  "..",
+  "database/migrations/154_bot_session_absence_edit_states.sql",
+);
+
 const NEW_ABSENCE_KIND_STATE = "WAITING_ABSENCE_KIND_SELECTION";
+const ABSENCE_EDIT_STATES = [
+  "WAITING_ABSENCE_EDIT_REQUEST_SELECTION",
+  "WAITING_ABSENCE_EDIT_FIELD_MENU",
+  "WAITING_ABSENCE_EDIT_CONFIRMATION",
+  "WAITING_ABSENCE_OVERLAP_PROMPT",
+] as const;
 
 const readBotSessionsCheckDefinition = async (
   constraintName: string,
@@ -52,6 +64,13 @@ describe("bot session absence kind migrations (static SQL)", () => {
   it("lists WAITING_ABSENCE_KIND_SELECTION in migration 152 state constraint", () => {
     const migration152 = readFileSync(MIGRATION_152_PATH, "utf8");
     assert.match(migration152, new RegExp(`N'${NEW_ABSENCE_KIND_STATE}'`));
+  });
+
+  it("lists absence edit states in migration 154 state constraint", () => {
+    const migration154 = readFileSync(MIGRATION_154_PATH, "utf8");
+    for (const state of ABSENCE_EDIT_STATES) {
+      assert.match(migration154, new RegExp(`N'${state}'`));
+    }
   });
 });
 
@@ -85,5 +104,20 @@ describeDatabaseIntegration("bot session absence kind migrations (database)", ()
       return;
     }
     assert.match(definition, /WAITING_ABSENCE_KIND_SELECTION/);
+  });
+
+  it("CK_bot_sessions_state includes absence edit states after migration 154", async (t) => {
+    const definition = await readBotSessionsCheckDefinition("CK_bot_sessions_state");
+    if (!definition) {
+      t.skip("CK_bot_sessions_state missing on this database");
+      return;
+    }
+    if (!definition.includes("WAITING_ABSENCE_EDIT_FIELD_MENU")) {
+      t.skip("migration 154 not applied on this database");
+      return;
+    }
+    for (const state of ABSENCE_EDIT_STATES) {
+      assert.match(definition, new RegExp(state));
+    }
   });
 });

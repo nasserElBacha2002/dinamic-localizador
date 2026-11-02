@@ -1,0 +1,145 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+TAP version 13
+# ◇ injected env (51) from .env // tip: ⌘ suppress logs { quiet: true }
+# Subtest: whatsapp observability export authz
+    # Subtest: export route is gated by requirePlatformAdmin on the router
+    ok 1 - export route is gated by requirePlatformAdmin on the router
+      ---
+      duration_ms: 381.9545
+      ...
+    1..1
+ok 1 - whatsapp observability export authz
+  ---
+  duration_ms: 382.705834
+  type: 'suite'
+  ...
+# ◇ injected env (38) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+# Subtest: absence-request whatsapp edit post-commit side effects
+    # Subtest: bumps operational impact and ensures admin alert obligation
+    ok 1 - bumps operational impact and ensures admin alert obligation
+      ---
+      duration_ms: 391.926208
+      ...
+    1..1
+ok 2 - absence-request whatsapp edit post-commit side effects
+  ---
+  duration_ms: 392.46025
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+# Subtest: absenceRequestService.updateFromWhatsapp idempotency heal
+    # Subtest: re-runs post-commit side effects when edit marker already exists
+    ok 1 - re-runs post-commit side effects when edit marker already exists
+      ---
+      duration_ms: 167.937083
+      ...
+    # Subtest: heals again on duplicate retry with same MessageSid
+    ok 2 - heals again on duplicate retry with same MessageSid
+      ---
+      duration_ms: 1.587375
+      ...
+    1..2
+ok 3 - absenceRequestService.updateFromWhatsapp idempotency heal
+  ---
+  duration_ms: 170.169334
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌘ override existing { override: true }
+# Subtest: loadConversationMessagesForExport
+    # Subtest: paginates until all messages are loaded when under hard cap
+    ok 1 - paginates until all messages are loaded when under hard cap
+      ---
+      duration_ms: 7.08
+      ...
+    # Subtest: sets truncated when total exceeds hard cap
+    ok 2 - sets truncated when total exceeds hard cap
+      ---
+      duration_ms: 28.163209
+      ...
+    1..2
+ok 4 - loadConversationMessagesForExport
+  ---
+  duration_ms: 35.693209
+  type: 'suite'
+  ...
+# ◇ injected env (38) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+# Subtest: whatsappConversationExportService
+    # Subtest: returns 404 when conversation is missing
+    ok 1 - returns 404 when conversation is missing
+      ---
+      duration_ms: 380.23325
+      ...
+    # Subtest: includes exportMeta and audits truncated exports
+    ok 2 - includes exportMeta and audits truncated exports
+      ---
+      duration_ms: 4.37925
+      ...
+    1..2
+ok 5 - whatsappConversationExportService
+  ---
+  duration_ms: 385.62425
+  type: 'suite'
+  ...
+# Subtest: admin-notification-channel-policy
+    # Subtest: keeps urgents on WhatsApp in both modes
+    ok 1 - keeps urgents on WhatsApp in both modes
+      ---
+      duration_ms: 0.727709
+      ...
+    # Subtest: routes informational types to daily report only under DAILY_EMAIL
+    ok 2 - routes informational types to daily report only under DAILY_EMAIL
+      ---
+      duration_ms: 0.329125
+      ...
+    # Subtest: never reactivates legacy missing check-in after operation
+    ok 3 - never reactivates legacy missing check-in after operation
+      ---
+      duration_ms: 0.1105
+      ...
+    # Subtest: keeps ABSENCE_REQUEST_PENDING on WhatsApp under DAILY_EMAIL (immediate admin action)
+    ok 4 - keeps ABSENCE_REQUEST_PENDING on WhatsApp under DAILY_EMAIL (immediate admin action)
+      ---
+      duration_ms: 0.125
+      ...
+    # Subtest: forwards location as AUDIT_ONLY under strict DAILY_EMAIL unless security WA enabled
+    ok 5 - forwards location as AUDIT_ONLY under strict DAILY_EMAIL unless security WA enabled
+      ---
+      duration_ms: 0.095292
+      ...
+    # Subtest: unknown types are AUDIT_ONLY (safe default)
+    ok 6 - unknown types are AUDIT_ONLY (safe default)
+      ---
+      duration_ms: 0.07775
+      ...
+    1..6
+ok 6 - admin-notification-channel-policy
+  ---
+  duration_ms: 2.649041
+  type: 'suite'
+  ...
+# Subtest: whatsapp conversation export html
+    # Subtest: renders chronological messages and escapes html
+    ok 1 - renders chronological messages and escapes html
+      ---
+      duration_ms: 1.028125
+      ...
+    # Subtest: shows incomplete export banner when truncated
+    ok 2 - shows incomplete export banner when truncated
+      ---
+      duration_ms: 0.256375
+      ...
+    1..2
+ok 7 - whatsapp conversation export html
+  ---
+  duration_ms: 2.147958
+  type: 'suite'
+  ...
+1..7
+# tests 16
+# suites 7
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 750.871125

@@ -15,6 +15,8 @@ export const ADMIN_WHATSAPP_URGENT_ALERT_TYPES = [
   "EMPLOYEE_UNAVAILABLE",
   "ATTENDANCE_THRESHOLD_CROSSED",
   "REPLACEMENT_REQUEST",
+  /** Pending absence requests require immediate admin action (not daily-report only). */
+  "ABSENCE_REQUEST_PENDING",
 ] as const satisfies readonly AdminAlertType[];
 
 /** Informational attendance alerts absorbed by the daily email report. */
@@ -66,11 +68,6 @@ export function decideAdminNotificationChannel(
   // DAILY_EMAIL
   if ((ADMIN_DAILY_REPORT_ALERT_TYPES as readonly string[]).includes(alertType)) {
     return "DAILY_REPORT_ONLY";
-  }
-
-  // Pending absence request is not a second urgent WhatsApp under the two-urgency rule.
-  if (alertType === "ABSENCE_REQUEST_PENDING") {
-    return "AUDIT_ONLY";
   }
 
   if (alertType === "FORWARDED_LOCATION_REJECTED") {

@@ -2,6 +2,7 @@
  * Check-in conversation flows for WhatsApp (start, workday selection, location).
  * Mixed selection sessions may hand off to checkout flow processors.
  */
+import { isDatabasePoolInitialized } from "../../database/connection";
 import { attendanceRepository } from "../../repositories/attendance/attendance.repository";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot/bot-session-expiration";
 import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot/bot-runtime-settings-scope";
@@ -354,80 +355,83 @@ export async function startCheckIn(input: {
     );
 
     if (candidates.length === 0) {
-      try {
-        const diagnosis = await employeeWorkdayAvailabilityService.diagnoseCheckInUnavailability(
-          companyId,
-          input.employeeId,
-          now,
-          {
-            hasJustifiedWorkdayInWindow,
-            eligibleCandidateCount: 0,
-          },
-        );
-        console.info("[whatsapp-bot] no available employee workday", {
-          companyId,
-          employeeId: input.employeeId,
-          at: now.toISOString(),
-          candidateFrom: diagnosis.candidateFrom,
-          candidateTo: diagnosis.candidateTo,
-          rawCandidateCount: diagnosis.rawCandidateCount,
-          eligibleCandidateCount: diagnosis.eligibleCandidateCount,
-          hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
-          reasonCodes: diagnosis.reasonCodes,
-          candidateRejections: diagnosis.candidateEvaluations
-            .filter((evaluation) => !evaluation.eligible)
-            .map((evaluation) => ({
-              employeeWorkdayId: evaluation.employeeWorkdayId,
-              operationWorkdayId: evaluation.operationWorkdayId,
-              operationId: evaluation.operationId,
-              rejectionReasons: evaluation.rejectionReasons,
-              priorAttendanceId: evaluation.priorAttendanceId,
-            })),
-          nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
-          assignedOperationCount: diagnosis.assignedOperationCount,
-          operationIds: diagnosis.operationIds,
-          workdayIds: diagnosis.workdayIds,
-          timezone: diagnosis.timezone,
-        });
-
-        const obsTrace = getObservabilityTrace();
-        if (obsTrace) {
-          await obsTrace.addStep({
-            stepType: "CANDIDATE_LOOKUP",
-            status: "REJECTED",
-            reasonCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
-            output: {
-              reasonCodes: diagnosis.reasonCodes,
-              rawCandidateCount: diagnosis.rawCandidateCount,
-              eligibleCandidateCount: diagnosis.eligibleCandidateCount,
+      // Mock/simulator suites often have no SQL pool. Diagnosis is telemetry-only.
+      if (isDatabasePoolInitialized()) {
+        try {
+          const diagnosis = await employeeWorkdayAvailabilityService.diagnoseCheckInUnavailability(
+            companyId,
+            input.employeeId,
+            now,
+            {
+              hasJustifiedWorkdayInWindow,
+              eligibleCandidateCount: 0,
             },
-          });
-          await obsTrace.addCandidates(
-            diagnosis.candidateEvaluations.map((evaluation) => ({
-              candidateType: "EMPLOYEE_WORKDAY",
-              entityId: evaluation.employeeWorkdayId,
-              companyId,
-              accepted: evaluation.eligible,
-              reasonCode: evaluation.eligible
-                ? null
-                : evaluation.rejectionReasons[0] ?? "REJECTED",
-              reasonDetail: evaluation.rejectionReasons.join(", ") || null,
-              snapshot: {
+          );
+          console.info("[whatsapp-bot] no available employee workday", {
+            companyId,
+            employeeId: input.employeeId,
+            at: now.toISOString(),
+            candidateFrom: diagnosis.candidateFrom,
+            candidateTo: diagnosis.candidateTo,
+            rawCandidateCount: diagnosis.rawCandidateCount,
+            eligibleCandidateCount: diagnosis.eligibleCandidateCount,
+            hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
+            reasonCodes: diagnosis.reasonCodes,
+            candidateRejections: diagnosis.candidateEvaluations
+              .filter((evaluation) => !evaluation.eligible)
+              .map((evaluation) => ({
+                employeeWorkdayId: evaluation.employeeWorkdayId,
                 operationWorkdayId: evaluation.operationWorkdayId,
                 operationId: evaluation.operationId,
                 rejectionReasons: evaluation.rejectionReasons,
                 priorAttendanceId: evaluation.priorAttendanceId,
+              })),
+            nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
+            assignedOperationCount: diagnosis.assignedOperationCount,
+            operationIds: diagnosis.operationIds,
+            workdayIds: diagnosis.workdayIds,
+            timezone: diagnosis.timezone,
+          });
+
+          const obsTrace = getObservabilityTrace();
+          if (obsTrace) {
+            await obsTrace.addStep({
+              stepType: "CANDIDATE_LOOKUP",
+              status: "REJECTED",
+              reasonCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
+              output: {
+                reasonCodes: diagnosis.reasonCodes,
+                rawCandidateCount: diagnosis.rawCandidateCount,
+                eligibleCandidateCount: diagnosis.eligibleCandidateCount,
               },
-            })),
-          );
+            });
+            await obsTrace.addCandidates(
+              diagnosis.candidateEvaluations.map((evaluation) => ({
+                candidateType: "EMPLOYEE_WORKDAY",
+                entityId: evaluation.employeeWorkdayId,
+                companyId,
+                accepted: evaluation.eligible,
+                reasonCode: evaluation.eligible
+                  ? null
+                  : evaluation.rejectionReasons[0] ?? "REJECTED",
+                reasonDetail: evaluation.rejectionReasons.join(", ") || null,
+                snapshot: {
+                  operationWorkdayId: evaluation.operationWorkdayId,
+                  operationId: evaluation.operationId,
+                  rejectionReasons: evaluation.rejectionReasons,
+                  priorAttendanceId: evaluation.priorAttendanceId,
+                },
+              })),
+            );
+          }
+        } catch (error) {
+          console.warn("[whatsapp-bot] CHECKIN_UNAVAILABILITY_DIAGNOSIS_FAILED", {
+            companyId,
+            employeeId: input.employeeId,
+            at: now.toISOString(),
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
-      } catch (error) {
-        console.warn("[whatsapp-bot] CHECKIN_UNAVAILABILITY_DIAGNOSIS_FAILED", {
-          companyId,
-          employeeId: input.employeeId,
-          at: now.toISOString(),
-          error: error instanceof Error ? error.message : String(error),
-        });
       }
       return respond(companyId, {
         message: hasJustifiedWorkdayInWindow ? NO_JUSTIFIED_ONLY_MESSAGE : NO_OPERATION_MESSAGE,

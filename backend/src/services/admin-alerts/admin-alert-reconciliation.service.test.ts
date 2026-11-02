@@ -49,6 +49,11 @@ describe("adminAlertReconciliationService", () => {
       "listMissingCreatedAbsenceOperationalObligations",
       async () => [],
     );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingUpdatedAbsenceOperationalObligations",
+      async () => [],
+    );
     mock.method(adminAlertService, "enqueueObligation", async () => ({
       enqueued: 1,
       dedupSkipped: 0,
@@ -79,6 +84,11 @@ describe("adminAlertReconciliationService", () => {
       "listMissingCreatedAbsenceOperationalObligations",
       async () => [],
     );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingUpdatedAbsenceOperationalObligations",
+      async () => [],
+    );
     mock.method(adminAlertService, "enqueueObligation", async () => ({
       enqueued: 0,
       dedupSkipped: 1,
@@ -88,6 +98,43 @@ describe("adminAlertReconciliationService", () => {
     const result = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
     assert.equal(result.scanned, 1);
     assert.equal(result.recovered, 0);
+  });
+
+  it("materializes missing updated absence operational obligations", async () => {
+    const { adminAlertContextRepository } = await import(
+      "../../repositories/admin-alerts/admin-alert-context.repository"
+    );
+    const { adminAlertService } = await import("./admin-alert.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+
+    const updatedObligation = {
+      ...sampleObligation,
+      category: "OPERATIONAL" as const,
+      deduplicationKey: "absence-updated:operational:req-1:SM-EDIT-1",
+    };
+
+    mock.method(adminAlertContextRepository, "listMissingPendingAbsenceObligations", async () => []);
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingCreatedAbsenceOperationalObligations",
+      async () => [],
+    );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingUpdatedAbsenceOperationalObligations",
+      async () => [updatedObligation],
+    );
+    mock.method(adminAlertService, "enqueueObligation", async () => ({
+      enqueued: 1,
+      dedupSkipped: 0,
+      recipientSkipped: 0,
+    }));
+
+    const result = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.equal(result.scanned, 1);
+    assert.equal(result.recovered, 1);
   });
 
   it("reconcileAll aggregates all obligation kinds", async () => {
@@ -113,6 +160,11 @@ describe("adminAlertReconciliationService", () => {
     mock.method(
       adminAlertContextRepository,
       "listMissingCreatedAbsenceOperationalObligations",
+      async () => [],
+    );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingUpdatedAbsenceOperationalObligations",
       async () => [],
     );
     mock.method(adminAlertService, "enqueueObligation", async () => ({

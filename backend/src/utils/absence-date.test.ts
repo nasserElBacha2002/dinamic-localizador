@@ -103,6 +103,17 @@ describe("formatAbsenceDateDisplay", () => {
   it("formats ISO date for summary", () => {
     assert.equal(formatAbsenceDateDisplay("2026-06-25"), "25/06/2026");
   });
+
+  it("formats SQL Date objects without leaking English weekday text", () => {
+    assert.equal(formatAbsenceDateDisplay(new Date("2026-11-05T00:00:00.000Z")), "05/11/2026");
+    assert.equal(formatAbsenceDateDisplay(new Date("2026-11-09T00:00:00.000Z")), "09/11/2026");
+  });
+
+  it("does not emit undefined when given a JS Date string", () => {
+    const rendered = formatAbsenceDateDisplay("Thu Nov 05 2026 00:00:00 GMT-0300");
+    assert.equal(rendered.includes("undefined"), false);
+    assert.match(rendered, /^\d{2}\/\d{2}\/\d{4}$/);
+  });
 });
 
 describe("compareAbsenceDates", () => {

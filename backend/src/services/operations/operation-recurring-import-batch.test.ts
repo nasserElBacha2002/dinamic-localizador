@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import sql from "mssql";
 import { afterEach, describe, it, mock } from "node:test";
-import { AppError } from "../../errors/app-error";
 import { WEEKDAYS } from "../../constants/weekday";
 import { setTestPool } from "../../database/connection";
 import { companySettingsRepository } from "../../repositories/companies/company-settings.repository";

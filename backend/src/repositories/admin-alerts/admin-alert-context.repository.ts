@@ -12,6 +12,11 @@ import type {
 const toIso = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+/** Matches `whatsapp-edit:{MessageSid}` written by `updateFromWhatsapp`. */
+const WHATSAPP_EDIT_EVENT_COMMENT_PREFIX = "whatsapp-edit:";
+/** SQL Server SUBSTRING is 1-based; skip the prefix so the SID does not keep a leading `:`. */
+const WHATSAPP_EDIT_SID_SQL_START = WHATSAPP_EDIT_EVENT_COMMENT_PREFIX.length + 1;
+
 const mapOperationalPayload = (record: Record<string, unknown>) => ({
   employeeName: String(record.employee_name),
   serviceName: String(record.service_name),
@@ -404,12 +409,12 @@ export const adminAlertContextRepository = {
           ar.end_date,
           ar.total_days,
           are.created_at AS occurred_at,
-          SUBSTRING(are.comment, 14, 200) AS source_message_sid,
+          SUBSTRING(are.comment, ${WHATSAPP_EDIT_SID_SQL_START}, 200) AS source_message_sid,
           CONCAT(
             N'absence-updated:operational:',
             LOWER(CONVERT(NVARCHAR(36), ar.id)),
             N':',
-            LTRIM(RTRIM(SUBSTRING(are.comment, 14, 200)))
+            LTRIM(RTRIM(SUBSTRING(are.comment, ${WHATSAPP_EDIT_SID_SQL_START}, 200)))
           ) AS deduplication_key
         FROM absence_request_events are
         INNER JOIN absence_requests ar
@@ -428,7 +433,7 @@ export const adminAlertContextRepository = {
         INNER JOIN absence_types at
           ON at.id = ar.absence_type_id AND at.company_id = ar.company_id
         WHERE are.event_type = N'UPDATED'
-          AND are.comment LIKE N'whatsapp-edit:%'
+          AND are.comment LIKE N'${WHATSAPP_EDIT_EVENT_COMMENT_PREFIX}%'
           AND are.created_at >= cs.admin_alerts_enabled_at
           AND NOT EXISTS (
             SELECT 1
@@ -439,7 +444,7 @@ export const adminAlertContextRepository = {
                 N'absence-updated:operational:',
                 LOWER(CONVERT(NVARCHAR(36), ar.id)),
                 N':',
-                LTRIM(RTRIM(SUBSTRING(are.comment, 14, 200)))
+                LTRIM(RTRIM(SUBSTRING(are.comment, ${WHATSAPP_EDIT_SID_SQL_START}, 200)))
               )
           )
         ORDER BY are.created_at ASC, are.id ASC, car.id ASC

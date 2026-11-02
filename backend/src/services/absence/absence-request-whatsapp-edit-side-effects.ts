@@ -10,6 +10,8 @@ export type EnsureWhatsappEditSideEffectsInput = {
   conversationId?: string | null;
   previousStartDate: string;
   previousEndDate: string;
+  /** When false, only heals admin alert (edit already bumped operational_impact_version). */
+  includeOperationalBump?: boolean;
 };
 
 /**
@@ -19,10 +21,12 @@ export type EnsureWhatsappEditSideEffectsInput = {
 export const ensureWhatsappEditPostCommitSideEffects = async (
   input: EnsureWhatsappEditSideEffectsInput,
 ): Promise<void> => {
-  await absenceOperationalImpactRepository.bumpOperationalImpactVersion(
-    input.companyId,
-    input.requestId,
-  );
+  if (input.includeOperationalBump !== false) {
+    await absenceOperationalImpactRepository.bumpOperationalImpactVersion(
+      input.companyId,
+      input.requestId,
+    );
+  }
 
   const row = await absenceRequestRepository.findDetailById(input.companyId, input.requestId);
   if (!row) {

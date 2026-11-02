@@ -21,6 +21,7 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import {
   buildAbsenceCreatedOperationalDedupKey,
   buildAbsencePendingDedupKey,
+  buildAbsenceUpdatedOperationalDedupKey,
 } from "../../utils/admin-alert/dedup-keys";
 import { addDaysToDateIso } from "../../utils/workdays/recurring-workday-instant";
 
@@ -752,5 +753,52 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
 
     assert.equal(detail.status, "PENDING");
     assert.equal(await countOutboxForRequest(companyId, detail.id), 0);
+  });
+
+  it("reconciles updated operational alert after whatsapp edit emit failure without employee retry", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { adminAlertService } = await import("./admin-alert.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+
+    const { companyId, vacation, employee } = await seedCompany();
+    await createOperationalRecipient(companyId);
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const start = addDaysToDateIso(today, 31);
+    const end = addDaysToDateIso(today, 33);
+    const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: start,
+      endDate: end,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      reason: "Vacaciones edit reconcile",
+      sourceMessageSid: uniqueMessageSid(),
+    });
+
+    const editSid = `SM-EDIT-RECON-${Date.now()}`;
+    mock.method(adminAlertService, "emit", async () => {
+      throw new Error("simulated updated emit failure");
+    });
+
+    await absenceRequestService.updateFromWhatsapp(companyId, detail.id, {
+      employeeId: employee.id,
+      endDate: addDaysToDateIso(today, 36),
+      sourceMessageSid: editSid,
+    });
+
+    const dedup = buildAbsenceUpdatedOperationalDedupKey(detail.id, editSid);
+    assert.equal(await countOutboxForDedup(companyId, dedup), 0);
+
+    mock.restoreAll();
+
+    await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.equal(await countOutboxForDedup(companyId, dedup), 1);
+
+    await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.equal(await countOutboxForDedup(companyId, dedup), 1);
   });
 });

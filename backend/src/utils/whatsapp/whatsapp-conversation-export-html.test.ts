@@ -54,6 +54,9 @@ describe("whatsapp conversation export html", () => {
       exportMeta: {
         totalMessageCount: 2,
         exportedMessageCount: 2,
+        expectedExportCount: 2,
+        truncatedByHardCap: false,
+        incompleteLoad: false,
         truncated: false,
       },
     });
@@ -96,10 +99,13 @@ describe("whatsapp conversation export html", () => {
       exportMeta: {
         totalMessageCount: 5732,
         exportedMessageCount: 5000,
+        expectedExportCount: 5732,
+        truncatedByHardCap: false,
+        incompleteLoad: true,
         truncated: true,
       },
     });
     assert.match(html, /Export incompleto/);
-    assert.match(html, /5000 de 5732/);
+    assert.match(html, /se esperaban 5732 mensajes/);
   });
 });

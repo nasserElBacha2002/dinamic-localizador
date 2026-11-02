@@ -50,7 +50,7 @@ export const adminAlertAbsenceUpdatedService = {
           absenceDetailUrl: buildAbsenceRequestAdminUrl(input.requestId),
         },
       },
-      "absence-request-created-operational",
+      "absence-request-updated-operational",
     );
   },
 

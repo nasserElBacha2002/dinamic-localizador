@@ -1063,6 +1063,7 @@ export const absenceRequestService = {
           conversationId: input.conversationId ?? null,
           previousStartDate: previousDates.previousStartDate,
           previousEndDate: previousDates.previousEndDate,
+          includeOperationalBump: false,
         });
         return { detail, isExisting: true };
       }

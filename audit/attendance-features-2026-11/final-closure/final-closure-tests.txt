@@ -1,0 +1,251 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+TAP version 13
+# ◇ injected env (51) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+# Subtest: whatsapp observability export authz
+    # Subtest: export route is gated by requirePlatformAdmin on the router
+    ok 1 - export route is gated by requirePlatformAdmin on the router
+      ---
+      duration_ms: 432.82325
+      ...
+    1..1
+ok 1 - whatsapp observability export authz
+  ---
+  duration_ms: 434.04275
+  type: 'suite'
+  ...
+# ◇ injected env (38) from .env // tip: ⌘ enable debugging { debug: true }
+# Subtest: absence-request whatsapp edit post-commit side effects
+    # Subtest: bumps operational impact and ensures admin alert obligation
+    ok 1 - bumps operational impact and ensures admin alert obligation
+      ---
+      duration_ms: 492.584958
+      ...
+    # Subtest: skips operational bump on idempotent heal-only retry
+    ok 2 - skips operational bump on idempotent heal-only retry
+      ---
+      duration_ms: 2.759125
+      ...
+    1..2
+ok 2 - absence-request whatsapp edit post-commit side effects
+  ---
+  duration_ms: 495.839709
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌘ override existing { override: true }
+# Subtest: absenceRequestService.updateFromWhatsapp idempotency heal
+    # Subtest: re-runs post-commit side effects when edit marker already exists
+    ok 1 - re-runs post-commit side effects when edit marker already exists
+      ---
+      duration_ms: 129.004959
+      ...
+    # Subtest: heals again on duplicate retry with same MessageSid without duplicate bump
+    ok 2 - heals again on duplicate retry with same MessageSid without duplicate bump
+      ---
+      duration_ms: 1.640583
+      ...
+    1..2
+ok 3 - absenceRequestService.updateFromWhatsapp idempotency heal
+  ---
+  duration_ms: 131.20175
+  type: 'suite'
+  ...
+# ◇ injected env (38) from .env // tip: ⌘ enable debugging { debug: true }
+# [admin-alert] ADMIN_ALERT_ENQUEUED {
+#   companyId: 'company-1',
+#   recipientId: 'r1',
+#   alertType: 'ABSENCE_REQUEST_PENDING',
+#   absenceRequestId: 'req-1',
+#   deduplicationKey: 'absence-pending:req-1',
+#   reason: 'RECONCILIATION_RECOVERED'
+# }
+# Subtest: adminAlertReconciliationService
+    # Subtest: materializes missing pending absence obligations
+    ok 1 - materializes missing pending absence obligations
+      ---
+      duration_ms: 479.366875
+      ...
+    # Subtest: counts only newly enqueued obligations as recovered
+    ok 2 - counts only newly enqueued obligations as recovered
+      ---
+      duration_ms: 1.767667
+      ...
+# [admin-alert] ADMIN_ALERT_ENQUEUED {
+#   companyId: 'company-1',
+#   recipientId: 'r1',
+#   alertType: 'ABSENCE_REQUEST_PENDING',
+#   absenceRequestId: 'req-1',
+#   deduplicationKey: 'absence-updated:operational:req-1:SM-EDIT-1',
+#   reason: 'RECONCILIATION_RECOVERED'
+# }
+    # Subtest: materializes missing updated absence operational obligations
+    ok 3 - materializes missing updated absence operational obligations
+      ---
+      duration_ms: 1.672958
+      ...
+# [admin-alert] ADMIN_ALERT_ENQUEUED {
+#   companyId: 'company-1',
+#   recipientId: 'r1',
+#   alertType: 'ABSENCE_REQUEST_PENDING',
+#   absenceRequestId: 'req-1',
+#   deduplicationKey: 'absence-pending:req-1',
+#   reason: 'RECONCILIATION_RECOVERED'
+# }
+    # Subtest: reconcileAll aggregates all obligation kinds
+    ok 4 - reconcileAll aggregates all obligation kinds
+      ---
+      duration_ms: 2.14675
+      ...
+    1..4
+ok 4 - adminAlertReconciliationService
+  ---
+  duration_ms: 485.574458
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌘ enable debugging { debug: true }
+# Subtest: loadConversationMessagesForExport
+    # Subtest: paginates until all messages are loaded when under hard cap
+    ok 1 - paginates until all messages are loaded when under hard cap
+      ---
+      duration_ms: 9.430625
+      ...
+    # Subtest: sets truncated when total exceeds hard cap
+    ok 2 - sets truncated when total exceeds hard cap
+      ---
+      duration_ms: 39.116
+      ...
+    # Subtest: marks incomplete when loaded count is below expected export count
+    ok 3 - marks incomplete when loaded count is below expected export count
+      ---
+      duration_ms: 1.154041
+      ...
+    1..3
+ok 5 - loadConversationMessagesForExport
+  ---
+  duration_ms: 50.408667
+  type: 'suite'
+  ...
+# ◇ injected env (38) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+# Subtest: whatsappConversationExportService
+    # Subtest: returns 404 when conversation is missing
+    ok 1 - returns 404 when conversation is missing
+      ---
+      duration_ms: 473.252333
+      ...
+    # Subtest: includes exportMeta and audits truncated exports
+    ok 2 - includes exportMeta and audits truncated exports
+      ---
+      duration_ms: 5.811083
+      ...
+    1..2
+ok 6 - whatsappConversationExportService
+  ---
+  duration_ms: 479.493792
+  type: 'suite'
+  ...
+# Subtest: admin-notification-channel-policy
+    # Subtest: keeps urgents on WhatsApp in both modes
+    ok 1 - keeps urgents on WhatsApp in both modes
+      ---
+      duration_ms: 0.837583
+      ...
+    # Subtest: routes informational types to daily report only under DAILY_EMAIL
+    ok 2 - routes informational types to daily report only under DAILY_EMAIL
+      ---
+      duration_ms: 0.217333
+      ...
+    # Subtest: never reactivates legacy missing check-in after operation
+    ok 3 - never reactivates legacy missing check-in after operation
+      ---
+      duration_ms: 0.064334
+      ...
+    # Subtest: keeps ABSENCE_REQUEST_PENDING on WhatsApp under DAILY_EMAIL (immediate admin action)
+    ok 4 - keeps ABSENCE_REQUEST_PENDING on WhatsApp under DAILY_EMAIL (immediate admin action)
+      ---
+      duration_ms: 0.053041
+      ...
+    # Subtest: forwards location as AUDIT_ONLY under strict DAILY_EMAIL unless security WA enabled
+    ok 5 - forwards location as AUDIT_ONLY under strict DAILY_EMAIL unless security WA enabled
+      ---
+      duration_ms: 0.039833
+      ...
+    # Subtest: unknown types are AUDIT_ONLY (safe default)
+    ok 6 - unknown types are AUDIT_ONLY (safe default)
+      ---
+      duration_ms: 0.033166
+      ...
+    1..6
+ok 7 - admin-notification-channel-policy
+  ---
+  duration_ms: 1.981958
+  type: 'suite'
+  ...
+# Subtest: whatsapp conversation export html
+    # Subtest: renders chronological messages and escapes html
+    ok 1 - renders chronological messages and escapes html
+      ---
+      duration_ms: 0.492958
+      ...
+    # Subtest: shows incomplete export banner when truncated
+    ok 2 - shows incomplete export banner when truncated
+      ---
+      duration_ms: 0.074834
+      ...
+    1..2
+ok 8 - whatsapp conversation export html
+  ---
+  duration_ms: 0.928709
+  type: 'suite'
+  ...
+1..8
+# tests 22
+# suites 8
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 867.567
+--- INTEGRATION (describeDatabaseIntegration) ---
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+TAP version 13
+# ◇ injected env (51) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+# ◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+# Subtest: whatsapp observability conversations HTTP
+ok 1 - whatsapp observability conversations HTTP # SKIP
+  ---
+  duration_ms: 0.245208
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+# ◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+# Subtest: absence approve with insufficient balance
+ok 2 - absence approve with insufficient balance # SKIP
+  ---
+  duration_ms: 0.220459
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌘ override existing { override: true }
+# ◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+# Subtest: admin alert absence created integration
+ok 3 - admin alert absence created integration # SKIP
+  ---
+  duration_ms: 0.219958
+  type: 'suite'
+  ...
+# ◇ injected env (51) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+# ◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+# Subtest: admin alert reconciliation corrections
+ok 4 - admin alert reconciliation corrections # SKIP
+  ---
+  duration_ms: 0.1785
+  type: 'suite'
+  ...
+1..4
+# tests 0
+# suites 4
+# pass 0
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 664.345208

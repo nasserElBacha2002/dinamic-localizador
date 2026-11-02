@@ -72,6 +72,23 @@ describe("loadConversationMessagesForExport", () => {
     const result = await loadConversationMessagesForExport("conv-2");
     assert.equal(result.totalMessageCount, total);
     assert.equal(result.truncated, true);
+    assert.equal(result.truncatedByHardCap, true);
     assert.equal(result.exportedMessageCount, WHATSAPP_EXPORT_MESSAGE_HARD_CAP);
+  });
+
+  it("marks incomplete when loaded count is below expected export count", async () => {
+    const { whatsappObservabilityRepository } = await import(
+      "../../repositories/whatsapp/whatsapp-observability.repository"
+    );
+    mock.method(whatsappObservabilityRepository, "countMessagesByConversation", async () => 120);
+    mock.method(whatsappObservabilityRepository, "listMessagesAscPage", async () => []);
+
+    const result = await loadConversationMessagesForExport("conv-partial");
+    assert.equal(result.totalMessageCount, 120);
+    assert.equal(result.expectedExportCount, 120);
+    assert.equal(result.exportedMessageCount, 0);
+    assert.equal(result.incompleteLoad, true);
+    assert.equal(result.truncated, true);
+    assert.equal(result.truncatedByHardCap, false);
   });
 });

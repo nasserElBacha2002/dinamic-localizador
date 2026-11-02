@@ -76,9 +76,10 @@ describe("whatsappConversationExportService", () => {
     });
 
     const doc = await whatsappConversationExportService.exportJson("conv-1", "admin-1");
-    assert.equal(doc.exportMeta.truncated, false);
+    assert.equal(doc.exportMeta.incompleteLoad, true);
+    assert.equal(doc.exportMeta.truncated, true);
     assert.equal(doc.exportMeta.totalMessageCount, 5732);
     assert.equal(doc.exportMeta.exportedMessageCount, 0);
-    assert.equal(auditTruncated, false);
+    assert.equal(auditTruncated, true);
   });
 });

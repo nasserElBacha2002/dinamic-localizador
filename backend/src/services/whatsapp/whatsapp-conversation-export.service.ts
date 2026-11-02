@@ -126,6 +126,9 @@ export const whatsappConversationExportService = {
       exportMeta: {
         totalMessageCount: messageLoad.totalMessageCount,
         exportedMessageCount: messageLoad.exportedMessageCount,
+        expectedExportCount: messageLoad.expectedExportCount,
+        truncatedByHardCap: messageLoad.truncatedByHardCap,
+        incompleteLoad: messageLoad.incompleteLoad,
         truncated: messageLoad.truncated,
       },
     };

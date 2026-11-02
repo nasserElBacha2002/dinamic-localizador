@@ -118,11 +118,11 @@ describe("absenceRequestService.updateFromWhatsapp idempotency heal", () => {
 
     assert.equal(result.isExisting, true);
     assert.equal(result.detail.id, REQUEST_ID);
-    assert.equal(bumpCalls(), 1);
+    assert.equal(bumpCalls(), 0);
     assert.equal(ensureCalls(), 1);
   });
 
-  it("heals again on duplicate retry with same MessageSid", async () => {
+  it("heals again on duplicate retry with same MessageSid without duplicate bump", async () => {
     setupUnitTestEnv();
     useFakeTransaction();
     const { bumpCalls, ensureCalls, absenceRequestService } = await stubAlreadyAppliedPath();
@@ -136,7 +136,7 @@ describe("absenceRequestService.updateFromWhatsapp idempotency heal", () => {
       sourceMessageSid: "SM-EDIT-1",
     });
 
-    assert.equal(bumpCalls(), 2);
+    assert.equal(bumpCalls(), 0);
     assert.equal(ensureCalls(), 2);
   });
 });

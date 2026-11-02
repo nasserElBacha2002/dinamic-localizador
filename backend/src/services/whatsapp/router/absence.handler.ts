@@ -93,14 +93,12 @@ const dispatchAbsenceKind = async (
   }
 
   if (kind === "edit_request") {
-    if (session) {
-      await botSessionService.cancelSession(ctx.companyId, session.id, session);
-    }
     return absenceWhatsappEditService.startEditFlow(ctx.companyId, {
       employeeId: ctx.employeeId!,
       phoneFrom: ctx.phoneFrom,
       phoneTo: ctx.phoneTo,
       respond,
+      kindSelectionSession: session,
     });
   }
 

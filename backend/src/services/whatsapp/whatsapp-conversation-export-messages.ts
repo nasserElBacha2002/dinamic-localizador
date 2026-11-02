@@ -1,32 +1,37 @@
 import type { WhatsAppMessage } from "../../types/twilio.types";
 import { whatsappObservabilityRepository } from "../../repositories/whatsapp/whatsapp-observability.repository";
 
-/** Safety cap to avoid unbounded memory; exportMeta.truncated must be set when hit. */
+/** Safety cap to avoid unbounded memory; exportMeta must reflect any incomplete export. */
 export const WHATSAPP_EXPORT_MESSAGE_HARD_CAP = 50_000;
 const EXPORT_PAGE_SIZE = 500;
 
-export const loadConversationMessagesForExport = async (
-  conversationId: string,
-): Promise<{
+export type ConversationExportMessageLoad = {
   messages: WhatsAppMessage[];
   totalMessageCount: number;
   exportedMessageCount: number;
+  expectedExportCount: number;
+  truncatedByHardCap: boolean;
+  incompleteLoad: boolean;
   truncated: boolean;
-}> => {
+};
+
+export const loadConversationMessagesForExport = async (
+  conversationId: string,
+): Promise<ConversationExportMessageLoad> => {
   const totalMessageCount = await whatsappObservabilityRepository.countMessagesByConversation(
     conversationId,
   );
-  const cap = Math.min(totalMessageCount, WHATSAPP_EXPORT_MESSAGE_HARD_CAP);
-  const truncated = totalMessageCount > WHATSAPP_EXPORT_MESSAGE_HARD_CAP;
+  const expectedExportCount = Math.min(totalMessageCount, WHATSAPP_EXPORT_MESSAGE_HARD_CAP);
+  const truncatedByHardCap = totalMessageCount > WHATSAPP_EXPORT_MESSAGE_HARD_CAP;
 
   const messages: WhatsAppMessage[] = [];
   let afterCreatedAt: string | null = null;
   let afterId: string | null = null;
 
-  while (messages.length < cap) {
+  while (messages.length < expectedExportCount) {
     const page = await whatsappObservabilityRepository.listMessagesAscPage({
       conversationId,
-      limit: Math.min(EXPORT_PAGE_SIZE, cap - messages.length),
+      limit: Math.min(EXPORT_PAGE_SIZE, expectedExportCount - messages.length),
       afterCreatedAt,
       afterId,
     });
@@ -39,10 +44,17 @@ export const loadConversationMessagesForExport = async (
     afterId = last.id;
   }
 
+  const exportedMessageCount = messages.length;
+  const incompleteLoad = exportedMessageCount < expectedExportCount;
+  const truncated = truncatedByHardCap || incompleteLoad;
+
   return {
     messages,
     totalMessageCount,
-    exportedMessageCount: messages.length,
+    exportedMessageCount,
+    expectedExportCount,
+    truncatedByHardCap,
+    incompleteLoad,
     truncated,
   };
 };

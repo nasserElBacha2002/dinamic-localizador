@@ -92,6 +92,7 @@ export const absenceWhatsappEditService = {
       phoneFrom: string;
       phoneTo: string;
       respond: RespondFn;
+      kindSelectionSession?: BotSession | null;
     },
   ): Promise<string> {
     const editable = await absenceRequestRepository.listEmployeeEditableRequests(
@@ -99,6 +100,13 @@ export const absenceWhatsappEditService = {
       input.employeeId,
     );
     if (editable.length === 0) {
+      if (input.kindSelectionSession) {
+        await botSessionService.cancelSession(
+          companyId,
+          input.kindSelectionSession.id,
+          input.kindSelectionSession,
+        );
+      }
       return input.respond({
         message: "No tenés solicitudes pendientes que puedas modificar.",
         employeeId: input.employeeId,
@@ -107,12 +115,38 @@ export const absenceWhatsappEditService = {
       });
     }
 
-    if (editable.length === 1) {
+    const persistEditSession = async (
+      state: BotSession["state"],
+      contextJson: string,
+    ): Promise<void> => {
+      if (input.kindSelectionSession) {
+        const updated = await botSessionService.updateAbsenceSession(
+          companyId,
+          input.kindSelectionSession.id,
+          { state, contextJson },
+        );
+        if (!updated) {
+          await botSessionService.createAbsenceSession(companyId, {
+            employeeId: input.employeeId,
+            phoneNumber: input.phoneFrom,
+            state,
+            contextJson,
+          });
+        }
+        return;
+      }
       await botSessionService.createAbsenceSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        state: "WAITING_ABSENCE_EDIT_FIELD_MENU",
-        contextJson: serializeContext({
+        state,
+        contextJson,
+      });
+    };
+
+    if (editable.length === 1) {
+      await persistEditSession(
+        "WAITING_ABSENCE_EDIT_FIELD_MENU",
+        serializeContext({
           flow: "ABSENCE_EDIT",
           absenceDraft: {
             requestId: editable[0].id,
@@ -122,19 +156,17 @@ export const absenceWhatsappEditService = {
             reason: editable[0].reason,
           },
         }),
-      });
+      );
       return this.promptFieldMenu(input, editable[0]);
     }
 
-    await botSessionService.createAbsenceSession(companyId, {
-      employeeId: input.employeeId,
-      phoneNumber: input.phoneFrom,
-      state: "WAITING_ABSENCE_EDIT_REQUEST_SELECTION",
-      contextJson: serializeContext({
+    await persistEditSession(
+      "WAITING_ABSENCE_EDIT_REQUEST_SELECTION",
+      serializeContext({
         flow: "ABSENCE_EDIT",
         absenceEditOptions: editable.map((row) => row.id),
       }),
-    });
+    );
 
     const lines = editable.map((row, index) => formatRequestLine(index, row));
     return input.respond({

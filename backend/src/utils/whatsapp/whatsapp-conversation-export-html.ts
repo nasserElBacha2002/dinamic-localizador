@@ -63,6 +63,9 @@ export type WhatsappConversationExportDocument = {
   exportMeta: {
     totalMessageCount: number;
     exportedMessageCount: number;
+    expectedExportCount: number;
+    truncatedByHardCap: boolean;
+    incompleteLoad: boolean;
     truncated: boolean;
   };
 };
@@ -135,7 +138,9 @@ export const renderWhatsappConversationExportHtml = (
   <p class="meta">Generado: ${escapeHtml(doc.exportedAt)}</p>
   ${
     doc.exportMeta.truncated
-      ? `<p class="meta"><strong>Export incompleto:</strong> ${doc.exportMeta.exportedMessageCount} de ${doc.exportMeta.totalMessageCount} mensajes exportados.</p>`
+      ? doc.exportMeta.incompleteLoad && !doc.exportMeta.truncatedByHardCap
+        ? `<p class="meta"><strong>Export incompleto:</strong> se esperaban ${doc.exportMeta.expectedExportCount} mensajes y se exportaron ${doc.exportMeta.exportedMessageCount}. No fue posible recuperar todos los mensajes.</p>`
+        : `<p class="meta"><strong>Export incompleto:</strong> ${doc.exportMeta.exportedMessageCount} de ${doc.exportMeta.totalMessageCount} mensajes exportados.</p>`
       : ""
   }
   <h2>Cabecera</h2>

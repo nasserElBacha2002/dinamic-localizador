@@ -1,13 +1,12 @@
 # Final status — attendance features (2026-11)
 
-**After adversarial review corrections:** `IMPLEMENTED_WITH_ISSUES`
+**After final closure hardening:** `IMPLEMENTED_PENDING_INTEGRATION_VALIDATION`
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| 1 — WhatsApp conversation export | IMPLEMENTED_WITH_ISSUES | Honest HTML label; pagination + truncation meta; unit/service/auth tests added |
-| 2 — Edit pending absence via WhatsApp | IMPLEMENTED_WITH_ISSUES | Idempotency heal + overlap prompt; FSM integration coverage incomplete |
-| 3 — Approve with insufficient balance | IMPLEMENTED_WITH_ISSUES | Richer audit payload; E2E negative balance approve not demonstrated |
+| Feature | Status |
+|---------|--------|
+| 1 — WhatsApp conversation export | Unit verified; HTTP integration **SKIP** (no DB) |
+| 2 — Edit pending absence via WhatsApp | Reconciliation + heal unit verified; edit reconcile integration **SKIP** |
+| 3 — Approve with insufficient balance | Override E2E test added; **SKIP** without DB |
+| DAILY_EMAIL + ABSENCE_REQUEST_PENDING | Policy unit **PASS** |
 
-Cross-cutting: `DAILY_EMAIL` + `ABSENCE_REQUEST_PENDING` → WhatsApp urgent (policy tests pass). Platform-admin export gate tested.
-
-Detail: `corrections/corrections-report.md`. Migration: `154_bot_session_absence_edit_states.sql` (includes overlap prompt state).
+Detail: `final-closure/final-closure-report.md`.

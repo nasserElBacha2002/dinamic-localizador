@@ -193,4 +193,44 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
     };
     assert.ok(body.data.some((row) => String(row.id).toLowerCase() === employeeId));
   });
+
+  it("export route enforces auth and returns html/json for platform admin", async () => {
+    const conversationId = conversationIds[0]!;
+    const unauth = await apiRequest(
+      baseUrl,
+      `/api/platform/observability/whatsapp/conversations/${conversationId}/export?format=html`,
+    );
+    assert.equal(unauth.status, 401);
+
+    const token = platformAdminToken();
+    const missing = await apiRequest(
+      baseUrl,
+      `/api/platform/observability/whatsapp/conversations/${randomUUID()}/export?format=json`,
+      { token },
+    );
+    assert.equal(missing.status, 404);
+
+    const htmlResponse = await fetch(
+      `${baseUrl}/api/platform/observability/whatsapp/conversations/${conversationId}/export?format=html`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    assert.equal(htmlResponse.status, 200);
+    assert.match(htmlResponse.headers.get("content-type") ?? "", /text\/html/i);
+    const htmlDisposition = htmlResponse.headers.get("content-disposition") ?? "";
+    assert.match(htmlDisposition, /attachment/i);
+    assert.match(htmlDisposition, /\.html"/i);
+    const htmlBody = await htmlResponse.text();
+    assert.match(htmlBody, /Exportación de conversación WhatsApp/);
+
+    const json = await apiRequest(
+      baseUrl,
+      `/api/platform/observability/whatsapp/conversations/${conversationId}/export?format=json`,
+      { token },
+    );
+    assert.equal(json.status, 200);
+    const jsonDoc = json.body as { data: { exportMeta: { totalMessageCount: number } } };
+    assert.ok(jsonDoc.data.exportMeta.totalMessageCount >= 0);
+  });
 });

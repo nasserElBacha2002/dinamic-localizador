@@ -164,10 +164,11 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
 
     await companySettingsRepository.update(companyId, { adminAlertsEnabled: true });
 
-    const recovery = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
     const dedup = buildAbsencePendingDedupKey(detail.id);
+    const createdOperational = buildAbsenceCreatedOperationalDedupKey(detail.id);
     assert.equal(await countOutbox(companyId, dedup), 0);
-    assert.equal(recovery.recovered, 0);
+    assert.equal(await countOutbox(companyId, createdOperational), 0);
   });
 
   it("does not alert a recipient created after the absence event", async () => {

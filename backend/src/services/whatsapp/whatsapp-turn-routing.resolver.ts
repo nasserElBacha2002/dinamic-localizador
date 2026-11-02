@@ -44,6 +44,10 @@ import {
   resolveMenuSnapshotSelection,
   type BotMenuOptionKey,
 } from "../bot/bot-menu.builder";
+import {
+  resolveAbsenceKindSelection,
+  resolveAbsenceKindSnapshot,
+} from "../bot/absence-kind-options";
 import { botSessionService } from "../bot/bot-session.service";
 
 const CRITICAL_MENU_OPTIONS = new Set<BotMenuOptionKey>([
@@ -282,6 +286,43 @@ export const resolveWhatsAppTextTurn = (input: {
         cancelSessionBeforeDispatch: false,
         parsedIntent: null,
         flowType: "MENU",
+      };
+    }
+  }
+
+  if (input.session?.state === "WAITING_ABSENCE_KIND_SELECTION") {
+    const context = botSessionService.parseContext(input.session.contextJson);
+    const snapshot = resolveAbsenceKindSnapshot(context.absenceKindOptions);
+    if (snapshot && body) {
+      const kind = resolveAbsenceKindSelection(
+        body,
+        snapshot.map((option) => option.key),
+      );
+      if (kind) {
+        return {
+          resolvedHandler: "ABSENCE",
+          resolvedIntent: "absence",
+          relatedOperationId: input.session.operationId ?? null,
+          globalCommand: null,
+          continueActiveSession: true,
+          cancelSessionBeforeDispatch: false,
+          parsedIntent: null,
+          flowType: "ABSENCE",
+          menuOptionKey: null,
+        };
+      }
+    }
+    if (snapshot) {
+      return {
+        resolvedHandler: null,
+        resolvedIntent: null,
+        relatedOperationId: input.session.operationId ?? null,
+        globalCommand: null,
+        continueActiveSession: true,
+        cancelSessionBeforeDispatch: false,
+        parsedIntent: null,
+        flowType: "ABSENCE",
+        menuOptionKey: null,
       };
     }
   }

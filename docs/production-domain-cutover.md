@@ -1,223 +1,149 @@
 # Production domain cutover — dinamicoperations.com
 
-Guía operativa para pasar de dominios legacy a la arquitectura unificada **sin big-bang**.  
-**No ejecutar cutover de Nginx/DNS hasta que el contenedor website esté healthy en `127.0.0.1:8085`.**
+Guía operativa para cutover de dominios legacy y **separación website / app / API**.  
+Preparación en repo: [domain-separation-phase1](../domain-separation-phase1/).
 
 ## Arquitectura objetivo
 
 ```text
-Internet
-    |
-    v
-Nginx (host, Ubuntu 22.04)
-    |
-    +-- https://dinamicoperations.com/
-    |       -> 127.0.0.1:8085 (dinamic-attendance-website)
-    +-- https://dinamicoperations.com/login, /operations, ...
-    |       -> 127.0.0.1:8084 (dinamic-attendance-frontend)
-    +-- https://api.dinamicoperations.com/
-            -> 127.0.0.1:3004 (dinamic-attendance-backend)
+dinamicoperations.com     → website (+ redirects legacy selectivos a app.*)
+app.dinamicoperations.com → frontend SPA
+api.dinamicoperations.com → backend / Twilio webhooks
 ```
 
-Legacy (mantener hasta validar):
+### Plantillas Nginx
 
-- `https://tracker.dinamiceducation.com` → frontend
-- `https://api-tracker.dinamiceducation.com` → backend
+| Host | HTTPS (objetivo) | Bootstrap HTTP | Rollback unificado legacy |
+|------|------------------|----------------|---------------------------|
+| apex | `nginx.dinamicoperations.com.conf.template` | `nginx.bootstrap.dinamicoperations.com.conf.template` | `nginx.dinamicoperations.com.legacy-unified.conf.template` |
+| app | `nginx.app.dinamicoperations.com.conf.template` | `nginx.bootstrap.app.dinamicoperations.com.conf.template` | — |
+| api | `nginx.api.dinamicoperations.com.conf.template` | `nginx.bootstrap.api.dinamicoperations.com.conf.template` | — |
 
-## Fase A — Deploy website (sin tocar Nginx público)
+Bootstrap legacy unificado (solo rollback): `nginx.bootstrap.dinamicoperations.com.legacy-unified.conf.template`.
 
-1. Merge a `develop` con cambios de `website/`, compose y workflows.
-2. Verificar GitHub Actions **Deploy Website (develop)** (build GHCR + SSH).
-3. En servidor, `.env` debe incluir `WEBSITE_IMAGE` (GHCR).  
-   **`WEBSITE_HOST_PORT`:** el script `deploy-website.sh` lo agrega o completa con `8085` si falta o está vacío; no pisa un puerto ya definido.
+**Importante:** La plantilla apex **objetivo** redirige `/login`, `/operations`, etc. a `${APP_PUBLIC_ORIGIN}`. **No instalarla en el apex hasta que `https://app.dinamicoperations.com` funcione con TLS.**
 
-4. Validación interna:
+Redirects legacy (lista mantenida inline en plantillas apex objetivo):
+
+- `/login`, `/login/2fa`, `/forgot-password`, `/reset-password`, `/invitations/accept`
+- Prefijos: `/operations`, `/employees`, `/absences`, `/settings`, `/platform`
+
+---
+
+## Fase A — Deploy contenedores (sin Nginx público)
+
+Validar website (`8085`), frontend (`8084`), backend (`3004/api/health`) en loopback.
+
+---
+
+## Fase B — DNS base
+
+Registros `A` (o CNAME) para `@`, `api`, y **`app`** cuando inicie Fase 2A.
+
+---
+
+## Fase 2A — Solo host `app.*` (sin tocar apex objetivo)
+
+Objetivo: TLS y SPA en `app.dinamicoperations.com` mientras el apex sigue en **configuración legacy unificada** (o backup previo).
+
+1. DNS `app` → IP servidor.
+2. **No** instalar `nginx.bootstrap.dinamicoperations.com.conf.template` (separada) todavía.
+3. Bootstrap **solo** app (+ api si aún no está):
 
 ```bash
-cd /opt/dinamic-attendance/dinamic-localizador
-docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml ps website
-curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8085/
-curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8085/health
-# Sustituir HASH por un archivo real bajo dist (ej. tras inspeccionar el contenedor):
-curl -fsS -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:8085/marketing-assets/<archivo>.js"
+export FRONTEND_HOST_PORT=8084 BACKEND_HOST_PORT=3004
+
+envsubst '${FRONTEND_HOST_PORT}' \
+  < deploy/nginx.bootstrap.app.dinamicoperations.com.conf.template \
+  | sudo tee /etc/nginx/sites-available/app.dinamicoperations.com
+
+sudo ln -sf /etc/nginx/sites-available/app.dinamicoperations.com /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Esperado: `200` en `/`, `/health` y al menos un asset bajo `/marketing-assets/`.
-
-## Fase B — DNS (Hostinger)
-
-Configurar **solo** estos registros (IP confirmada por operación: `170.239.85.196`):
-
-| Tipo | Nombre | Valor |
-|------|--------|--------|
-| A | `@` | `170.239.85.196` |
-| A | `api` | `170.239.85.196` |
-| A o CNAME | `www` | `dinamicoperations.com` o `170.239.85.196` (opcional) |
-
-No modificar DNS de `tracker.dinamiceducation.com` / `api-tracker.dinamiceducation.com` hasta después del cutover.
-
-Verificar propagación:
+4. Smoke HTTP: `curl -sI http://app.dinamicoperations.com/login | head -1`
+5. Certbot **solo app**: `sudo certbot certonly --nginx -d app.dinamicoperations.com`
+6. HTTPS app:
 
 ```bash
-dig +short dinamicoperations.com A
-dig +short api.dinamicoperations.com A
+envsubst '${FRONTEND_HOST_PORT}' \
+  < deploy/nginx.app.dinamicoperations.com.conf.template \
+  | sudo tee /etc/nginx/sites-available/app.dinamicoperations.com
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Fase C — Nginx bootstrap HTTP (obligatorio antes de SSL)
+7. Validar: `https://app.dinamicoperations.com/login`, deep link `/operations`, `/sitemap.xml` → 404.
 
-**Nunca** instalar las plantillas HTTPS (`nginx.dinamicoperations.com.conf.template` / `nginx.api.dinamicoperations.com.conf.template`) hasta tener certificados en disco. Esas plantillas usan `listen 443 ssl` con rutas Let's Encrypt reales.
+---
 
-### Backup
+## Fase 2B — Backend env + imágenes (sin cambiar apex a redirects)
 
-```bash
-sudo cp /etc/nginx/sites-available/<config-actual> \
-  "/etc/nginx/sites-available/<config-actual>.backup-$(date -u +%Y%m%d-%H%M%S)"
-```
+En servidor `.env` y GitHub `vars`:
 
-### STEP 1 — Instalar solo bootstrap HTTP (:80)
+| Variable | Valor |
+|----------|--------|
+| `FRONTEND_URL` | `https://app.dinamicoperations.com` |
+| `CORS_ALLOWED_ORIGINS` | `https://app.dinamicoperations.com` |
+| `VITE_API_URL` | `https://api.dinamicoperations.com/api` |
+| `VITE_OPERATIONS_APP_URL` | `https://app.dinamicoperations.com` |
 
-Plantillas:
+Redeploy backend, frontend, website. Validar login/CORS/emails/Maps (referrer `https://app.dinamicoperations.com/*` en GCP).
 
-- `deploy/nginx.bootstrap.dinamicoperations.com.conf.template` (`server_name dinamicoperations.com` — **sin www por defecto**)
-- `deploy/nginx.bootstrap.api.dinamicoperations.com.conf.template`
+Twilio (host `api.*`, paths reales):
 
-```bash
-export WEBSITE_HOST_PORT=8085 FRONTEND_HOST_PORT=8084 BACKEND_HOST_PORT=3004
-envsubst '${WEBSITE_HOST_PORT} ${FRONTEND_HOST_PORT}' \
-  < deploy/nginx.bootstrap.dinamicoperations.com.conf.template \
-  | sudo tee /etc/nginx/sites-available/dinamicoperations.com
-envsubst '${BACKEND_HOST_PORT}' \
-  < deploy/nginx.bootstrap.api.dinamicoperations.com.conf.template \
-  | sudo tee /etc/nginx/sites-available/api.dinamicoperations.com
-sudo ln -sf /etc/nginx/sites-available/dinamicoperations.com /etc/nginx/sites-enabled/
-sudo ln -sf /etc/nginx/sites-available/api.dinamicoperations.com /etc/nginx/sites-enabled/
-```
+- `TWILIO_WEBHOOK_URL` = `https://api.dinamicoperations.com/api/webhooks/twilio/whatsapp`
+- `TWILIO_STATUS_CALLBACK_URL` = `https://api.dinamicoperations.com/api/webhooks/twilio/whatsapp/status`
 
-Si configurás **DNS www**, duplicá un bloque `listen 80` con `server_name www.dinamicoperations.com` (mismo proxy) **antes** de pedir certificado con `-d www`.
+---
 
-### STEP 2 — `sudo nginx -t`
+## Fase 2C — Apex solo website + redirects (cutover marketing host)
 
-### STEP 3 — `sudo systemctl reload nginx`
-
-### STEP 4 — Verificar DNS + HTTP
+**Precondición:** Fase 2A y 2B OK.
 
 ```bash
-curl -sI http://dinamicoperations.com/ | head -1
-curl -sI http://api.dinamicoperations.com/api/health | head -1
-```
+export WEBSITE_HOST_PORT=8085 APP_PUBLIC_ORIGIN=https://app.dinamicoperations.com
 
-No deshabilitar dominios legacy aún.
-
-## Fase D — SSL (Certbot, manual)
-
-Con bootstrap HTTP activo y DNS resolviendo:
-
-### STEP 5 — Certbot
-
-**Solo apex** (sin registro www):
-
-```bash
-sudo certbot certonly --nginx -d dinamicoperations.com
-sudo certbot certonly --nginx -d api.dinamicoperations.com
-```
-
-**Con DNS www** configurado:
-
-```bash
-sudo certbot certonly --nginx -d dinamicoperations.com -d www.dinamicoperations.com
-sudo certbot certonly --nginx -d api.dinamicoperations.com
-```
-
-### STEP 6 — Instalar config HTTPS final
-
-```bash
-envsubst '${WEBSITE_HOST_PORT} ${FRONTEND_HOST_PORT}' \
+envsubst '${WEBSITE_HOST_PORT} ${APP_PUBLIC_ORIGIN}' \
   < deploy/nginx.dinamicoperations.com.conf.template \
   | sudo tee /etc/nginx/sites-available/dinamicoperations.com
-envsubst '${BACKEND_HOST_PORT}' \
-  < deploy/nginx.api.dinamicoperations.com.conf.template \
-  | sudo tee /etc/nginx/sites-available/api.dinamicoperations.com
 ```
 
-Ajustar `ssl_certificate` si Certbot usó otro path. Descomentar bloque `www` en plantilla apex solo si emitiste cert con www.
+Certbot apex (y api si falta). Bootstrap/HTTPS apex **objetivo** solo en este paso — **nunca** mezclar con el primer bootstrap de certificado app.
 
-### STEP 7 — `sudo nginx -t`
+Validar:
 
-### STEP 8 — `sudo systemctl reload nginx`
+- `https://dinamicoperations.com/` → website
+- `https://dinamicoperations.com/login` → 301 → `https://app.dinamicoperations.com/login?…`
 
-## Fase E — Variables de producción (`.env` servidor + GitHub)
+---
 
-Tras SSL y smoke tests en nuevos hosts:
+## Rollback a arquitectura unificada apex
 
-| Variable | Valor anterior (ejemplo) | Valor nuevo |
-|----------|--------------------------|-------------|
-| `FRONTEND_URL` | `https://tracker.dinamiceducation.com` | `https://dinamicoperations.com` |
-| `APP_BASE_URL` | `https://api-tracker.dinamiceducation.com` | `https://api.dinamicoperations.com` |
-| `CORS_ALLOWED_ORIGINS` | `https://tracker.dinamiceducation.com` | `https://dinamicoperations.com` |
-| `VITE_API_URL` (GitHub `vars` + rebuild frontend) | `https://api-tracker.../api` | `https://api.dinamicoperations.com/api` |
+**Preferido:** restaurar backup timestamp de `/etc/nginx/sites-available/dinamicoperations.com`.
 
-Website: CTA **Ingresar** usa `/login` relativo (sin `VITE_OPERATIONS_APP_URL` en imagen CI).
+**Alternativa desde repo** (restaura frontend en apex, sin redirects a app):
 
-Redeploy backend (env) y frontend (nueva imagen con `VITE_API_URL`).
-
-## Fase F — Twilio / URLs externas (checklist manual)
-
-Referencias en repo a dominios legacy: **ninguna hardcodeada** (solo plantillas `*.example.com`).
-
-Actualizar en **Twilio Console** y proveedores externos (valores reales viven en `.env` del servidor, no en git):
-
-- [ ] `TWILIO_WEBHOOK_URL` → `https://api.dinamicoperations.com/api/whatsapp/webhook` (confirmar path exacto en backend)
-- [ ] `TWILIO_STATUS_CALLBACK_URL` si aplica
-- [ ] Plantillas / callbacks documentados en Twilio
-- [ ] Cualquier integración que llame a `api-tracker.dinamiceducation.com`
-
-Emails (invitación, reset password) usan `FRONTEND_URL` en backend — se corrigen al actualizar env.
-
-## Fase G — Cutover checklist
-
-Solo continuar si todo OK:
-
-- [ ] `dinamic-attendance-website` healthy, `127.0.0.1:8085`
-- [ ] `dinamic-attendance-frontend` healthy, `127.0.0.1:8084`
-- [ ] `dinamic-attendance-backend` healthy, `127.0.0.1:3004/api/health`
-- [ ] DNS `dinamicoperations.com` y `api.dinamicoperations.com` resuelven
-- [ ] SSL válido
-- [ ] `sudo nginx -t` OK
-- [ ] `https://dinamicoperations.com/` → landing
-- [ ] `https://dinamicoperations.com/login` → app
-- [ ] Refresh en `/operations`, `/employees`, etc.
-- [ ] `https://api.dinamicoperations.com/api/health` → 200
-- [ ] Login, logout, API, CORS, mapas (si aplica)
-- [ ] Flujos WhatsApp en staging o ventana controlada
-
-## Fase H — Post-cutover y legacy
-
-**No** redirigir API legacy hasta revisar Twilio e integraciones.
-
-Opcional tras período de observación:
-
-```nginx
-# tracker.dinamiceducation.com — solo si no rompe enlaces críticos
-return 301 https://dinamicoperations.com$request_uri;
+```bash
+export WEBSITE_HOST_PORT=8085 FRONTEND_HOST_PORT=8084
+envsubst '${WEBSITE_HOST_PORT} ${FRONTEND_HOST_PORT}' \
+  < deploy/nginx.dinamicoperations.com.legacy-unified.conf.template \
+  | sudo tee /etc/nginx/sites-available/dinamicoperations.com
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Rollback
+Revertir `FRONTEND_URL` / `CORS_ALLOWED_ORIGINS` a `https://dinamicoperations.com` y redeploy. Deshabilitar site `app.*` si corresponde.
 
-| Fallo | Acción |
-|-------|--------|
-| Landing | Quitar `location = /` hacia website; proxy `/` a frontend legacy; reload Nginx |
-| Frontend | `FRONTEND_IMAGE=<sha-anterior>` + `deploy-frontend.sh` |
-| Website | `WEBSITE_IMAGE=<sha-anterior>` + `deploy-website.sh` |
-| Nginx | Restaurar backup `*.backup-YYYYMMDD-HHMMSS`, `nginx -t`, reload |
-| Env / API | Revertir `.env` y `vars` GitHub; redeploy backend + frontend |
-| DNS nuevo | Mantener legacy activos; no tocar DNS viejos |
+Detalle: [domain-separation-audit/10-rollback-plan.md](../domain-separation-audit/10-rollback-plan.md).
+
+---
+
+## Entorno legacy previo (tracker.dinamiceducation.com)
+
+Mantener hasta validar; no redirigir API legacy sin revisar Twilio.
 
 ## GitHub Actions
 
-| Workflow | Artefacto |
-|----------|-----------|
-| Deploy Frontend | `ghcr.io/<repo>/frontend:$SHA` |
-| Deploy Website | `ghcr.io/<repo>/website:$SHA` |
-| Deploy Backend | build en servidor (sin cambio en esta fase) |
-
-Secrets/vars compartidos: `DEPLOY_*`, `GHCR_PULL_TOKEN`, `VITE_*`, `DEPLOY_*_HEALTH_URL`, agregar `DEPLOY_WEBSITE_HEALTH_URL` (default `http://127.0.0.1:8085/health`).
+| Workflow | Vars |
+|----------|------|
+| Deploy Frontend | `VITE_API_URL`, `VITE_GOOGLE_MAPS_*` |
+| Deploy Website | `VITE_OPERATIONS_APP_URL` (vacío = `/login` relativo pre-cutover) |

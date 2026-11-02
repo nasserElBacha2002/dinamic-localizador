@@ -100,6 +100,13 @@ export function getCanonicalOperationTimezone(timezone: string): string {
     return DEFAULT_OPERATION_TIMEZONE;
   }
 
+  const isCuratedPreferred = PREFERRED_OPERATION_TIMEZONES.some(
+    (entry) => entry.value === trimmed && isValidTimezone(entry.value),
+  );
+  if (isCuratedPreferred) {
+    return trimmed;
+  }
+
   const preferredOptions = buildPreferredTimezoneOptions();
   const targetOffset = getTimezoneOffsetLabel(trimmed);
   const matchingPreferred = preferredOptions.find(

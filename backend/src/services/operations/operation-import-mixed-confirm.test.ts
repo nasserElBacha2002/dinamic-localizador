@@ -13,6 +13,7 @@ import { operationShiftRepository } from "../../repositories/operations/operatio
 import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
 import { serviceRepository } from "../../repositories/locations/service.repository";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { operationImportService } from "./operation-import.service";
 
@@ -441,5 +442,78 @@ describe("operationImportService mixed canonical confirm", () => {
     assert.equal(createManyCalls, 1);
     assert.equal(recurringCreates, 2);
     assert.equal(materializeCalls, 2);
+  });
+
+  it("does not rollback mixed batch when post-commit materialization throws unexpected error", async () => {
+    mockSharedConfirmContext({ withCompanySchedule: true });
+
+    mock.method(operationRepository, "createManyInTransaction", async () => [
+      {
+        id: "operation-one-time",
+        serviceId: SERVICE_ID,
+        operationKind: "ONE_TIME",
+        scheduledStart: "2026-12-01T23:30:00.000Z",
+        scheduledEnd: "2026-12-02T06:00:00.000Z",
+        earlyToleranceMinutes: 15,
+        lateToleranceMinutes: 15,
+        earlyToleranceSource: "COMPANY_DEFAULT",
+        lateToleranceSource: "COMPANY_DEFAULT",
+        status: "SCHEDULED",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    mock.method(operationRepository, "createRecurring", async () => ({
+      id: "operation-recurring",
+      serviceId: SERVICE_ID,
+      operationKind: "RECURRING",
+      scheduleMode: "SINGLE",
+      scheduledStart: null,
+      scheduledEnd: null,
+      earlyToleranceMinutes: 15,
+      lateToleranceMinutes: 15,
+      earlyToleranceSource: "COMPANY_DEFAULT",
+      lateToleranceSource: "COMPANY_DEFAULT",
+      status: "SCHEDULED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+    mock.method(recurringWorkdaySyncService, "runOperationSync", async () => {
+      throw new Error("unexpected mixed materialization failure");
+    });
+
+    await assert.rejects(
+      () =>
+        operationImportService.confirm(COMPANY_ID, [
+          {
+            serviceId: SERVICE_ID,
+            scheduledStart: "2026-12-01T23:30:00.000Z",
+            scheduledEnd: "2026-12-02T06:00:00.000Z",
+            earlyToleranceMinutes: 15,
+            lateToleranceMinutes: 15,
+            earlyToleranceSource: "COMPANY_DEFAULT",
+            lateToleranceSource: "COMPANY_DEFAULT",
+          },
+          {
+            operationKind: "RECURRING",
+            scheduleMode: "SINGLE",
+            serviceId: SERVICE_ID,
+            validFrom: "2026-12-10",
+            validUntil: null,
+            scheduleSource: "COMPANY",
+            earlyToleranceMinutes: 15,
+            lateToleranceMinutes: 15,
+            earlyToleranceSource: "COMPANY_DEFAULT",
+            lateToleranceSource: "COMPANY_DEFAULT",
+          },
+        ]),
+      /unexpected mixed materialization failure/,
+    );
+
+    assert.equal(transactionCommitted, true);
+    assert.equal(transactionRollbackCalls, 0);
+    assert.equal(materializeCalls, 0);
   });
 });

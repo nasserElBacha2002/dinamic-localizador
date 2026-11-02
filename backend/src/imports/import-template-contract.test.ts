@@ -517,6 +517,88 @@ describe("operations template preview contract", () => {
     );
   });
 
+  it("canonical template FIJA rejects explicit days with empty schedule times", async () => {
+    mockImportContext({ withCompanyWorkSchedule: true });
+    const template = buildOperationImportTemplate();
+    const headers = parseTemplateHeaders(template.body);
+    const buffer = buildCsvFromTemplate(template.body, [
+      buildRowFromTemplate(headers, {
+        Sucursal: "213",
+        Tipo: "FIJA",
+        "Vigencia desde": FUTURE_DATE,
+        Lunes: "SI",
+        Martes: "1",
+      }),
+    ]);
+    const preview = await operationImportService.previewFile(COMPANY_ID, buffer, CSV_FILE_NAME);
+    assert.equal(preview.rows[0]?.status, "invalid");
+    assert.ok(
+      preview.rows[0]?.errors.some((message) => message.includes("Horario inicio y Horario fin")),
+    );
+  });
+
+  it("canonical template FIJA rejects only one schedule time with weekday values", async () => {
+    mockImportContext({ withCompanyWorkSchedule: true });
+    const template = buildOperationImportTemplate();
+    const headers = parseTemplateHeaders(template.body);
+    const buffer = buildCsvFromTemplate(template.body, [
+      buildRowFromTemplate(headers, {
+        Sucursal: "213",
+        Tipo: "FIJA",
+        "Vigencia desde": FUTURE_DATE,
+        "Horario inicio": "09:00",
+        Lunes: "SI",
+      }),
+    ]);
+    const preview = await operationImportService.previewFile(COMPANY_ID, buffer, CSV_FILE_NAME);
+    assert.equal(preview.rows[0]?.status, "invalid");
+    assert.ok(
+      preview.rows[0]?.errors.some((message) => message.includes("Horario inicio y Horario fin")),
+    );
+  });
+
+  it("canonical template FIJA rejects both times without enabled weekdays", async () => {
+    mockImportContext({ withCompanyWorkSchedule: true });
+    const template = buildOperationImportTemplate();
+    const headers = parseTemplateHeaders(template.body);
+    const buffer = buildCsvFromTemplate(template.body, [
+      buildRowFromTemplate(headers, {
+        Sucursal: "213",
+        Tipo: "FIJA",
+        "Vigencia desde": FUTURE_DATE,
+        "Horario inicio": "09:00",
+        "Horario fin": "18:00",
+        Lunes: "NO",
+        Martes: "0",
+      }),
+    ]);
+    const preview = await operationImportService.previewFile(COMPANY_ID, buffer, CSV_FILE_NAME);
+    assert.equal(preview.rows[0]?.status, "invalid");
+  });
+
+  it("canonical template FIJA accepts explicit CUSTOM schedule with SI/NO and 1/0", async () => {
+    mockImportContext({ withCompanyWorkSchedule: true });
+    const template = buildOperationImportTemplate();
+    const headers = parseTemplateHeaders(template.body);
+    const buffer = buildCsvFromTemplate(template.body, [
+      buildRowFromTemplate(headers, {
+        Sucursal: "213",
+        Tipo: "FIJA",
+        "Vigencia desde": FUTURE_DATE,
+        "Horario inicio": "09:00",
+        "Horario fin": "18:00",
+        Lunes: "SI",
+        Martes: "1",
+        Miercoles: "NO",
+        Jueves: "0",
+        Viernes: "SI",
+      }),
+    ]);
+    const preview = await operationImportService.previewFile(COMPANY_ID, buffer, CSV_FILE_NAME);
+    assert.equal(preview.rows[0]?.scheduleSource, "CUSTOM");
+    assert.equal(preview.rows[0]?.status, "valid");
+  });
+
   it("canonical template supports mixed PUNTUAL, FIJA and MULTI_TURNO rows", async () => {
     mockImportContext({ withCompanyWorkSchedule: true });
     const template = buildOperationImportTemplate();

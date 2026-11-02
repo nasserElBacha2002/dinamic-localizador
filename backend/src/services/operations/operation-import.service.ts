@@ -783,7 +783,17 @@ const validateRecurringRow = (
     scheduleMode === "SINGLE" &&
     !rawScheduleSource.trim()
   ) {
-    scheduleSource = hasRecurringImportCustomScheduleColumnValues(headers, row) ? "CUSTOM" : "COMPANY";
+    const hasCustomColumns = hasRecurringImportCustomScheduleColumnValues(headers, row);
+    if (!hasCustomColumns) {
+      scheduleSource = "COMPANY";
+    } else if (!rawStartTime.trim() || !rawEndTime.trim()) {
+      errors.push(
+        "Para una operación fija con horario personalizado, completá Horario inicio y Horario fin.",
+      );
+      scheduleSource = "CUSTOM";
+    } else {
+      scheduleSource = "CUSTOM";
+    }
   }
   if (scheduleMode === "MULTI_SHIFT") {
     if (scheduleSource === "CUSTOM" && rawScheduleSource.trim()) {
@@ -894,10 +904,18 @@ const validateRecurringRow = (
       errors.push(endTimeResolution.error);
     }
 
-    const startTime = startTimeResolution.value ?? defaultStartTime;
-    const endTime = endTimeResolution.value ?? defaultEndTime;
+    const useStrictCanonicalCustomTimes =
+      options.inferCanonicalSingleScheduleSource && scheduleSource === "CUSTOM";
+    const startTime = useStrictCanonicalCustomTimes
+      ? startTimeResolution.value
+      : (startTimeResolution.value ?? defaultStartTime);
+    const endTime = useStrictCanonicalCustomTimes
+      ? endTimeResolution.value
+      : (endTimeResolution.value ?? defaultEndTime);
 
-    if (startTime === endTime) {
+    if (useStrictCanonicalCustomTimes && (!startTime || !endTime)) {
+      // Missing times are reported when inferring CUSTOM; avoid silent defaults.
+    } else if (startTime && endTime && startTime === endTime) {
       errors.push("La hora de inicio y fin no pueden ser iguales");
     }
 
@@ -914,6 +932,10 @@ const validateRecurringRow = (
       const weekdayColumnsPresent = hasAnyRecurringWeekdayColumn(headers);
       if (!weekdayColumnsPresent) {
         errors.push("Configurá al menos un día de trabajo para esta operación");
+      } else if (useStrictCanonicalCustomTimes && (!startTime || !endTime)) {
+        // Row stays invalid without building schedule days from defaults.
+      } else if (!startTime || !endTime) {
+        errors.push("Configurá horario de inicio y fin para esta operación");
       } else {
         const builtScheduleDays = buildRecurringImportScheduleDays(
           headers,
@@ -1507,8 +1529,10 @@ export const operationImportService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let oneTimeCreated: Operation[] = [];
+    let recurringCreated: Operation[] = [];
     try {
-      const oneTimeCreated =
+      oneTimeCreated =
         oneTimeRows.length > 0
           ? await operationRepository.createManyInTransaction(
               companyId,
@@ -1518,7 +1542,7 @@ export const operationImportService = {
                 .map((row) => toCreateInput(row, importDefaults)),
             )
           : [];
-      const recurringCreated =
+      recurringCreated =
         recurringBatchRows.length > 0
           ? await operationService.persistRecurringImportBatchInTransaction(
               companyId,
@@ -1528,17 +1552,6 @@ export const operationImportService = {
           : [];
 
       await transaction.commit();
-
-      const materialization = await operationService.materializeImportedRecurringOperations(
-        companyId,
-        recurringCreated,
-      );
-
-      return {
-        data: [...oneTimeCreated, ...recurringCreated],
-        count: oneTimeCreated.length + recurringCreated.length,
-        workdaySyncError: materialization.workdaySyncError,
-      };
     } catch (error) {
       await safeRollback(transaction);
       if (isActiveOperationDuplicateError(error)) {
@@ -1550,6 +1563,17 @@ export const operationImportService = {
       }
       throw error;
     }
+
+    const materialization = await operationService.materializeImportedRecurringOperations(
+      companyId,
+      recurringCreated,
+    );
+
+    return {
+      data: [...oneTimeCreated, ...recurringCreated],
+      count: oneTimeCreated.length + recurringCreated.length,
+      workdaySyncError: materialization.workdaySyncError,
+    };
   },
 
   async confirmOneTime(

@@ -408,19 +408,20 @@ export const operationService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let created: Operation[] = [];
     try {
-      const created = await this.persistRecurringImportBatchInTransaction(companyId, transaction, rows);
+      created = await this.persistRecurringImportBatchInTransaction(companyId, transaction, rows);
       await transaction.commit();
-
-      const materialization = await this.materializeImportedRecurringOperations(companyId, created);
-      return {
-        operations: created,
-        workdaySyncError: materialization.workdaySyncError,
-      };
     } catch (error) {
       await safeRollback(transaction);
       throw error;
     }
+
+    const materialization = await this.materializeImportedRecurringOperations(companyId, created);
+    return {
+      operations: created,
+      workdaySyncError: materialization.workdaySyncError,
+    };
   },
 
   async persistRecurringImportBatchInTransaction(

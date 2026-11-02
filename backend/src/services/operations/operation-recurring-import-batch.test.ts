@@ -11,6 +11,7 @@ import { operationScheduleRepository } from "../../repositories/operations/opera
 import { operationShiftRepository } from "../../repositories/operations/operation-shift.repository";
 import { operationShiftVersionRepository } from "../../repositories/operations/operation-shift-version.repository";
 import { recurringWorkdayMaterializationService } from "../workdays/recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "../workdays/recurring-workday-sync.service";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 
 const COMPANY_ID = "company-1";
@@ -275,6 +276,42 @@ describe("operationService.createRecurringImportBatch", () => {
     assert.equal(result.operations.length, 1);
     assert.ok(result.workdaySyncError);
     assert.equal(result.workdaySyncError?.code, "RECURRING_WORKDAY_SYNC_FAILED");
+    assert.equal(transactionCommitted, true);
+    assert.equal(transactionRollbackCalls, 0);
+  });
+
+  it("does not rollback when post-commit materialization throws an unexpected error", async () => {
+    setupUnitTestEnv();
+    setTestPool({ connected: true } as sql.ConnectionPool);
+    patchTransaction();
+    mockPersistDependencies();
+
+    mock.method(operationRepository, "createRecurring", async () => ({
+      id: "operation-1",
+      serviceId: SERVICE_ID,
+      operationKind: "RECURRING",
+      scheduleMode: "SINGLE",
+      scheduledStart: null,
+      scheduledEnd: null,
+      earlyToleranceMinutes: 15,
+      lateToleranceMinutes: 15,
+      earlyToleranceSource: "COMPANY_DEFAULT",
+      lateToleranceSource: "COMPANY_DEFAULT",
+      status: "SCHEDULED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(recurringWorkdaySyncService, "runOperationSync", async () => {
+      throw new Error("unexpected materialization failure");
+    });
+
+    const { operationService } = await import("./operation.service");
+
+    await assert.rejects(
+      () => operationService.createRecurringImportBatch(COMPANY_ID, [buildBatchRow()]),
+      /unexpected materialization failure/,
+    );
+
     assert.equal(transactionCommitted, true);
     assert.equal(transactionRollbackCalls, 0);
   });

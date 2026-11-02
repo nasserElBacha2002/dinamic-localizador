@@ -45,6 +45,7 @@ jobs:
     name: build-and-push-website-image
     needs: validate
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       website_image: ${{ steps.image.outputs.website_image }}
     steps:

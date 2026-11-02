@@ -600,8 +600,8 @@ export const absenceRequestRepository = {
     return result.recordset.map((row) => ({
       id: String((row as { id: string }).id),
       absenceTypeName: String((row as { absence_type_name: string }).absence_type_name),
-      startDate: String((row as { start_date: string }).start_date).slice(0, 10),
-      endDate: String((row as { end_date: string }).end_date).slice(0, 10),
+      startDate: toDateOnlyString((row as { start_date: Date | string }).start_date),
+      endDate: toDateOnlyString((row as { end_date: Date | string }).end_date),
       status: String((row as { status: string }).status) as AbsenceRequestStatus,
       reason: String((row as { reason: string }).reason ?? ""),
     }));
@@ -636,8 +636,8 @@ export const absenceRequestRepository = {
     }
     return {
       id: String(row.id),
-      startDate: String(row.start_date).slice(0, 10),
-      endDate: String(row.end_date).slice(0, 10),
+      startDate: toDateOnlyString(row.start_date as Date | string),
+      endDate: toDateOnlyString(row.end_date as Date | string),
       reason: String(row.reason ?? ""),
     };
   },

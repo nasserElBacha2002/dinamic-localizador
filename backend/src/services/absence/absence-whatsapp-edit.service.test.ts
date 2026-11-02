@@ -110,5 +110,56 @@ describe("absenceWhatsappEditService.startEditFlow", () => {
 
     assert.equal(updatedState, "WAITING_ABSENCE_EDIT_FIELD_MENU");
     assert.match(message, /¿Qué querés modificar\?/);
+    assert.match(message, /Desde: 10\/11\/2026/);
+    assert.match(message, /Hasta: 12\/11\/2026/);
+    assert.doesNotMatch(message, /undefined/);
+  });
+
+  it("lists several requests with Spanish dates and status", async () => {
+    setupUnitTestEnv();
+    const { absenceRequestRepository } = await import(
+      "../../repositories/absence/absence-request.repository"
+    );
+    const { botSessionService } = await import("../bot/bot-session.service");
+    const { absenceWhatsappEditService } = await import("./absence-whatsapp-edit.service");
+
+    mock.method(absenceRequestRepository, "listEmployeeEditableRequests", async () => [
+      {
+        id: "req-1",
+        absenceTypeName: "Vacaciones",
+        startDate: "2026-11-05",
+        endDate: "2026-11-09",
+        status: "PENDING" as const,
+        reason: "vacas",
+      },
+      {
+        id: "req-2",
+        absenceTypeName: "Enfermedad",
+        startDate: "2026-12-01",
+        endDate: "2026-12-02",
+        status: "NEEDS_INFO" as const,
+        reason: "",
+      },
+    ]);
+    mock.method(botSessionService, "updateAbsenceSession", async (_companyId, _id, input) => {
+      return { ...kindSession(), state: input.state, contextJson: input.contextJson };
+    });
+
+    let message = "";
+    await absenceWhatsappEditService.startEditFlow("co-1", {
+      employeeId: "emp-1",
+      phoneFrom: "+5491111111111",
+      phoneTo: "+10000000000",
+      kindSelectionSession: kindSession(),
+      respond: async (input) => {
+        message = input.message;
+        return input.message;
+      },
+    });
+
+    assert.match(message, /05\/11\/2026 al 09\/11\/2026 — Pendiente de revisión/);
+    assert.match(message, /01\/12\/2026 al 02\/12\/2026 — Requiere información/);
+    assert.doesNotMatch(message, /undefined/);
+    assert.doesNotMatch(message, /\bPENDING\b/);
   });
 });

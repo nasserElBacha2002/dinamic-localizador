@@ -8,6 +8,7 @@ import {
   isNegativeConfirmation,
 } from "../../utils/absence/absence-intent";
 import { formatAbsenceDateDisplay } from "../../utils/absence-date";
+import { resolveAbsenceRequestAlertStatusLabel } from "../../utils/admin-alert/absence-request-alert-status";
 import { parseSpanishDateInput } from "../bot/bot-date.parser";
 
 type RespondFn = (input: {
@@ -23,6 +24,11 @@ const INVALID_DATE_MESSAGE =
 const serializeContext = (context: ReturnType<typeof botSessionService.parseContext>) =>
   JSON.stringify(context);
 
+const formatReasonDisplay = (reason: string | null | undefined): string => {
+  const trimmed = reason?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : "Sin motivo";
+};
+
 const formatRequestLine = (
   index: number,
   row: {
@@ -32,7 +38,7 @@ const formatRequestLine = (
     status: string;
   },
 ): string =>
-  `${index + 1}. ${row.absenceTypeName} — ${formatAbsenceDateDisplay(row.startDate)} al ${formatAbsenceDateDisplay(row.endDate)} — ${row.status}`;
+  `${index + 1}. ${row.absenceTypeName} — ${formatAbsenceDateDisplay(row.startDate)} al ${formatAbsenceDateDisplay(row.endDate)} — ${resolveAbsenceRequestAlertStatusLabel(row.status)}`;
 
 export const absenceWhatsappEditService = {
   isEditSession(session: BotSession): boolean {
@@ -207,7 +213,7 @@ export const absenceWhatsappEditService = {
         "Tu solicitud actual:",
         `Desde: ${formatAbsenceDateDisplay(row.startDate)}`,
         `Hasta: ${formatAbsenceDateDisplay(row.endDate)}`,
-        `Motivo: ${row.reason}`,
+        `Motivo: ${formatReasonDisplay(row.reason)}`,
         "",
         "¿Qué querés modificar?",
         "1. Fecha desde",
@@ -263,8 +269,8 @@ export const absenceWhatsappEditService = {
             "Tu solicitud pendiente:",
             `Desde: ${formatAbsenceDateDisplay(detail.startDate)}`,
             `Hasta: ${formatAbsenceDateDisplay(detail.endDate)}`,
-            `Motivo: ${detail.reason}`,
-            `Estado: ${detail.status}`,
+            `Motivo: ${formatReasonDisplay(detail.reason)}`,
+            `Estado: ${resolveAbsenceRequestAlertStatusLabel(detail.status)}`,
           ].join("\n"),
           employeeId: input.employeeId,
           phoneFrom: input.phoneTo,
@@ -543,7 +549,7 @@ export const absenceWhatsappEditService = {
         "Resumen actualizado:",
         `Desde: ${formatAbsenceDateDisplay(draft.startDate!)}`,
         `Hasta: ${formatAbsenceDateDisplay(draft.endDate!)}`,
-        `Motivo: ${draft.reason}`,
+        `Motivo: ${formatReasonDisplay(draft.reason)}`,
         "",
         "¿Confirmás los cambios? Respondé SI o NO.",
       ].join("\n"),

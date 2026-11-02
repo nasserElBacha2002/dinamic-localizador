@@ -10,6 +10,10 @@ export type BotSessionState =
   | "WAITING_ABSENCE_END_DATE"
   | "WAITING_ABSENCE_REASON"
   | "WAITING_ABSENCE_CONFIRMATION"
+  | "WAITING_ABSENCE_EDIT_REQUEST_SELECTION"
+  | "WAITING_ABSENCE_EDIT_FIELD_MENU"
+  | "WAITING_ABSENCE_EDIT_CONFIRMATION"
+  | "WAITING_ABSENCE_OVERLAP_PROMPT"
   | "WAITING_CONFIRM_ATTENDANCE_SELECTION"
   | "WAITING_UNAVAILABILITY_SELECTION"
   | "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE"
@@ -113,9 +117,11 @@ export interface BotSessionContext {
   pendingLocation?: PendingBotLocation;
   /** WAITING_CHECKOUT_LOCATION without prior check-in attendance. */
   checkoutWithoutArrival?: boolean;
-  flow?: "ABSENCE_REQUEST";
+  flow?: "ABSENCE_REQUEST" | "ABSENCE_EDIT" | "ABSENCE_OVERLAP_PROMPT";
+  /** Editable request picker (WhatsApp self-service edit). */
+  absenceEditOptions?: string[];
   /** Snapshot for WAITING_ABSENCE_KIND_SELECTION (unified absence/unavailability entry). */
-  absenceKindOptions?: Array<"single_workday" | "absence" | "vacation">;
+  absenceKindOptions?: Array<"single_workday" | "absence" | "vacation" | "edit_request">;
   attendanceConfirmation?: {
     operationId: string;
     /** @deprecated Read compat for sessions created before Phase 3 rename */
@@ -126,6 +132,8 @@ export interface BotSessionContext {
     validUntil?: string;
   };
   absenceDraft?: {
+    requestId?: string;
+    editAll?: boolean;
     absenceTypeId?: string;
     absenceTypeCode?: string;
     /** Unified flow: type list excludes VACATION after "Informar una ausencia". */

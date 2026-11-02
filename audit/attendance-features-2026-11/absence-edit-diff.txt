@@ -1,0 +1,809 @@
+diff --git a/backend/src/services/absence/absence-bot.service.ts b/backend/src/services/absence/absence-bot.service.ts
+index 063d32f..8efaf00 100644
+--- a/backend/src/services/absence/absence-bot.service.ts
++++ b/backend/src/services/absence/absence-bot.service.ts
+@@ -8,6 +8,7 @@ import {
+   ingestTwilioMediaAsAbsenceAttachments,
+ } from "./absence-attachment-whatsapp.service";
+ import { absenceRequestService } from "./absence-request.service";
++import { absenceWhatsappEditService } from "./absence-whatsapp-edit.service";
+ import { botSessionService } from "../bot/bot-session.service";
+ import {
+   detectAbsenceTypeCode,
+@@ -333,6 +334,10 @@ export const absenceBotService = {
+     webhookPayload?: Record<string, unknown>;
+     respond: RespondFn;
+   }): Promise<string> {
++    if (absenceWhatsappEditService.isEditSession(input.session)) {
++      return absenceWhatsappEditService.handleEditSession(companyId, input);
++    }
++
+     if (isAbsenceCancelIntent(input.body)) {
+       await botSessionService.cancelSession(companyId, input.session.id, input.session);
+       return input.respond({
+diff --git a/backend/src/services/absence/absence-request.service.ts b/backend/src/services/absence/absence-request.service.ts
+index 3a5417d..905fcb6 100644
+--- a/backend/src/services/absence/absence-request.service.ts
++++ b/backend/src/services/absence/absence-request.service.ts
+@@ -1,8 +1,10 @@
+ import sql from "mssql";
+ import {
+   ABSENCE_ADMIN_EDITABLE_STATUSES,
++  ABSENCE_EMPLOYEE_EDITABLE_STATUSES,
+   assertAbsenceTransition,
+   isAbsenceAdminEditableStatus,
++  isAbsenceEmployeeEditableStatus,
+ } from "../../constants/absence-transitions";
+ import { getPool } from "../../database/connection";
+ import { AppError } from "../../errors/app-error";
+@@ -38,6 +40,7 @@ import { employeeWorkdayAbsenceReconciliationService } from "../workdays/employe
+ import { resolveAttachmentPolicy } from "../../domain/absence-attachment-policy";
+ import { absenceAttachmentService } from "./absence-attachment.service";
+ import { adminAlertAbsencePendingService } from "../admin-alerts/admin-alert-absence-pending.service";
++import { adminAlertAbsenceUpdatedService } from "../admin-alerts/admin-alert-absence-updated.service";
+ 
+ const resolveCompanyTimezone = (companyId: string) =>
+   absenceOperationImpactService.getOperationTimezone(companyId);
+@@ -610,16 +613,25 @@ export const absenceRequestService = {
+     companyId: string,
+     input: Omit<CreateAbsenceRequestInput, "requestedVia" | "sourceMessageSid"> & {
+       sourceMessageSid: string;
++      conversationId?: string | null;
+     },
+   ): Promise<{ detail: AbsenceRequestDetail; isExisting: boolean }> {
++    const healAdminAlertIfExisting = async (detail: AbsenceRequestDetail): Promise<void> => {
++      await adminAlertAbsencePendingService.ensureOperationalForExistingRequest(companyId, detail, {
++        conversationId: input.conversationId ?? null,
++      });
++    };
++
+     if (input.sourceMessageSid) {
+       const existing = await absenceRequestRepository.findBySourceMessageSid(
+         companyId,
+         input.sourceMessageSid,
+       );
+       if (existing) {
++        const detail = await this.getById(companyId, existing.id);
++        await healAdminAlertIfExisting(detail);
+         return {
+-          detail: await this.getById(companyId, existing.id),
++          detail,
+           isExisting: true,
+         };
+       }
+@@ -646,8 +658,10 @@ export const absenceRequestService = {
+           input.sourceMessageSid,
+         );
+         if (existing) {
++          const detail = await this.getById(companyId, existing.id);
++          await healAdminAlertIfExisting(detail);
+           return {
+-            detail: await this.getById(companyId, existing.id),
++            detail,
+             isExisting: true,
+           };
+         }
+@@ -984,4 +998,202 @@ export const absenceRequestService = {
+ 
+     return this.getById(companyId, requestId);
+   },
++
++  async updateFromWhatsapp(
++    companyId: string,
++    requestId: string,
++    input: {
++      employeeId: string;
++      startDate?: string;
++      endDate?: string;
++      reason?: string;
++      sourceMessageSid: string;
++      conversationId?: string | null;
++    },
++  ): Promise<{ detail: AbsenceRequestDetail; isExisting: boolean }> {
++    const idempotencyComment = `whatsapp-edit:${input.sourceMessageSid}`;
++    const timezone = await resolveCompanyTimezone(companyId);
++    const pool = getPool();
++    const transaction = new sql.Transaction(pool);
++    await transaction.begin();
++
++    try {
++      const existing = await absenceRequestRepository.findByIdForUpdate(
++        companyId,
++        requestId,
++        transaction,
++      );
++      if (!existing) {
++        throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
++      }
++      if (existing.employeeId !== input.employeeId) {
++        throw new AppError(403, "ABSENCE_FORBIDDEN", "No podés modificar esta solicitud.");
++      }
++      if (!isAbsenceEmployeeEditableStatus(existing.status)) {
++        throw new AppError(
++          409,
++          "ABSENCE_NOT_EDITABLE",
++          "La solicitud cambió de estado mientras la estabas modificando. Volvé a consultarla.",
++        );
++      }
++
++      const alreadyApplied = await absenceRequestRepository.hasEventWithComment(
++        companyId,
++        requestId,
++        idempotencyComment,
++        transaction,
++      );
++      if (alreadyApplied) {
++        await transaction.commit();
++        return { detail: await this.getById(companyId, requestId), isExisting: true };
++      }
++
++      const payload = await resolveEditablePayload(
++        companyId,
++        existing,
++        {
++          startDate: input.startDate,
++          endDate: input.endDate,
++          reason: input.reason,
++        },
++        timezone,
++        { blockIfRequiresAttachment: false },
++      );
++
++      await acquireTransactionAppLock(transaction, {
++        resource: absenceEmployeeLockResource(companyId, existing.employeeId),
++        timeoutError: new AppError(
++          409,
++          "ABSENCE_LOCK_TIMEOUT",
++          "No se pudo adquirir el bloqueo de ausencias. Reintentá.",
++        ),
++      });
++
++      await assertNoOverlap(
++        companyId,
++        existing.employeeId,
++        payload.startDate,
++        payload.endDate,
++        existing.id,
++        transaction,
++      );
++
++      const nextReservationVersion = (existing.reservationVersion ?? 1) + 1;
++      await absenceBalanceImpactService.onRequestEdited(
++        companyId,
++        {
++          requestId,
++          employeeId: existing.employeeId,
++          previous: existing,
++          next: {
++            absenceTypeId: payload.absenceTypeId,
++            startDate: payload.startDate,
++            endDate: payload.endDate,
++            totalDays: payload.totalDays,
++            reservationVersion: nextReservationVersion,
++            yearAllocationsJson: payload.yearAllocationsJson,
++          },
++          nextReservationVersion,
++        },
++        { employeeId: input.employeeId },
++        transaction,
++      );
++
++      const updated = await absenceRequestRepository.updateEditableFields(
++        companyId,
++        requestId,
++        {
++          absenceTypeId: payload.absenceTypeId,
++          startDate: payload.startDate,
++          endDate: payload.endDate,
++          startPeriod: payload.startPeriod,
++          endPeriod: payload.endPeriod,
++          totalDays: payload.totalDays,
++          reason: payload.reason,
++          calculationMode: payload.calculationMode,
++          calendarId: payload.calendarId,
++          calendarTimezone: payload.calendarTimezone,
++          calculationVersion: payload.calculationVersion,
++          calendarVersion: payload.calendarVersion,
++          calculationInputHash: payload.calculationInputHash,
++          reservationVersion: nextReservationVersion,
++          yearAllocationsJson: payload.yearAllocationsJson,
++          onlyIfStatusIn: [...ABSENCE_EMPLOYEE_EDITABLE_STATUSES],
++        },
++        transaction,
++      );
++      if (!updated) {
++        throw new AppError(
++          409,
++          "ABSENCE_NOT_EDITABLE",
++          "La solicitud cambió de estado mientras la estabas modificando. Volvé a consultarla.",
++        );
++      }
++
++      await absenceRequestRepository.createEvent(
++        companyId,
++        {
++          absenceRequestId: requestId,
++          eventType: "UPDATED",
++          oldStatus: existing.status,
++          newStatus: existing.status,
++          performedByEmployeeId: input.employeeId,
++          comment: idempotencyComment,
++        },
++        transaction,
++      );
++
++      await auditService.log(
++        companyId,
++        {
++          entityType: "absence_request",
++          entityId: requestId,
++          action: "UPDATED",
++          previousData: {
++            startDate: existing.startDate,
++            endDate: existing.endDate,
++            reason: existing.reason,
++            totalDays: existing.totalDays,
++          },
++          newData: {
++            startDate: updated.startDate,
++            endDate: updated.endDate,
++            reason: updated.reason,
++            totalDays: updated.totalDays,
++            updatedVia: "WHATSAPP",
++            sourceMessageSid: input.sourceMessageSid,
++          },
++          userId: null,
++        },
++        transaction,
++      );
++
++      await transaction.commit();
++      await absenceOperationalImpactRepository.bumpOperationalImpactVersion(companyId, requestId);
++
++      const detail = await this.getById(companyId, requestId);
++      await adminAlertAbsenceUpdatedService.emitOperationalForUpdatedRequest({
++        companyId,
++        requestId,
++        employeeId: detail.employeeId,
++        employeeName: detail.employee.name,
++        absenceTypeName: detail.absenceType.name,
++        previousStartDate: existing.startDate,
++        previousEndDate: existing.endDate,
++        startDate: detail.startDate,
++        endDate: detail.endDate,
++        totalDays: detail.totalDays,
++        sourceMessageSid: input.sourceMessageSid,
++        conversationId: input.conversationId ?? null,
++      });
++
++      return { detail, isExisting: false };
++    } catch (error) {
++      return rollbackTransactionSafely(
++        transaction,
++        { operation: "absence-request.updateFromWhatsapp", companyId, entityId: requestId },
++        error,
++      );
++    }
++  },
+ };
+diff --git a/backend/src/services/absence/absence-whatsapp-edit.service.ts b/backend/src/services/absence/absence-whatsapp-edit.service.ts
+new file mode 100644
+index 0000000..82eb37d
+--- /dev/null
++++ b/backend/src/services/absence/absence-whatsapp-edit.service.ts
+@@ -0,0 +1,399 @@
++import type { BotSession } from "../../types/twilio.types";
++import { AppError } from "../../errors/app-error";
++import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
++import { absenceRequestService } from "./absence-request.service";
++import { botSessionService } from "../bot/bot-session.service";
++import {
++  isAffirmativeConfirmation,
++  isNegativeConfirmation,
++} from "../../utils/absence/absence-intent";
++import { formatAbsenceDateDisplay } from "../../utils/absence-date";
++import { parseSpanishDateInput } from "../bot/bot-date.parser";
++
++type RespondFn = (input: {
++  message: string;
++  employeeId: string | null;
++  phoneFrom: string;
++  phoneTo: string;
++}) => Promise<string>;
++
++const INVALID_DATE_MESSAGE =
++  "No pude interpretar la fecha. Usá el formato DD/MM/AAAA, por ejemplo 05/07/2026.";
++
++const serializeContext = (context: ReturnType<typeof botSessionService.parseContext>) =>
++  JSON.stringify(context);
++
++const formatRequestLine = (
++  index: number,
++  row: {
++    absenceTypeName: string;
++    startDate: string;
++    endDate: string;
++    status: string;
++  },
++): string =>
++  `${index + 1}. ${row.absenceTypeName} — ${formatAbsenceDateDisplay(row.startDate)} al ${formatAbsenceDateDisplay(row.endDate)} — ${row.status}`;
++
++export const absenceWhatsappEditService = {
++  isEditSession(session: BotSession): boolean {
++    const context = botSessionService.parseContext(session.contextJson);
++    return context.flow === "ABSENCE_EDIT" || session.state.startsWith("WAITING_ABSENCE_EDIT_");
++  },
++
++  async startEditFlow(
++    companyId: string,
++    input: {
++      employeeId: string;
++      phoneFrom: string;
++      phoneTo: string;
++      respond: RespondFn;
++    },
++  ): Promise<string> {
++    const editable = await absenceRequestRepository.listEmployeeEditableRequests(
++      companyId,
++      input.employeeId,
++    );
++    if (editable.length === 0) {
++      return input.respond({
++        message: "No tenés solicitudes pendientes que puedas modificar.",
++        employeeId: input.employeeId,
++        phoneFrom: input.phoneTo,
++        phoneTo: input.phoneFrom,
++      });
++    }
++
++    if (editable.length === 1) {
++      await botSessionService.createAbsenceSession(companyId, {
++        employeeId: input.employeeId,
++        phoneNumber: input.phoneFrom,
++        state: "WAITING_ABSENCE_EDIT_FIELD_MENU",
++        contextJson: serializeContext({
++          flow: "ABSENCE_EDIT",
++          absenceDraft: {
++            requestId: editable[0].id,
++            absenceTypeId: undefined,
++            startDate: editable[0].startDate,
++            endDate: editable[0].endDate,
++            reason: editable[0].reason,
++          },
++        }),
++      });
++      return this.promptFieldMenu(input, editable[0]);
++    }
++
++    await botSessionService.createAbsenceSession(companyId, {
++      employeeId: input.employeeId,
++      phoneNumber: input.phoneFrom,
++      state: "WAITING_ABSENCE_EDIT_REQUEST_SELECTION",
++      contextJson: serializeContext({
++        flow: "ABSENCE_EDIT",
++        absenceEditOptions: editable.map((row) => row.id),
++      }),
++    });
++
++    const lines = editable.map((row, index) => formatRequestLine(index, row));
++    return input.respond({
++      message: ["Elegí la solicitud a modificar:", "", ...lines, "", "Respondé con el número."].join(
++        "\n",
++      ),
++      employeeId: input.employeeId,
++      phoneFrom: input.phoneTo,
++      phoneTo: input.phoneFrom,
++    });
++  },
++
++  promptFieldMenu(
++    input: {
++      employeeId: string;
++      phoneFrom: string;
++      phoneTo: string;
++      respond: RespondFn;
++    },
++    row: { startDate: string; endDate: string; reason: string },
++  ): Promise<string> {
++    return input.respond({
++      message: [
++        "Tu solicitud actual:",
++        `Desde: ${formatAbsenceDateDisplay(row.startDate)}`,
++        `Hasta: ${formatAbsenceDateDisplay(row.endDate)}`,
++        `Motivo: ${row.reason}`,
++        "",
++        "¿Qué querés modificar?",
++        "1. Fecha desde",
++        "2. Fecha hasta",
++        "3. Motivo",
++        "4. Todo",
++        "5. Cancelar",
++      ].join("\n"),
++      employeeId: input.employeeId,
++      phoneFrom: input.phoneTo,
++      phoneTo: input.phoneFrom,
++    });
++  },
++
++  async handleEditSession(
++    companyId: string,
++    input: {
++      session: BotSession;
++      body: string;
++      employeeId: string;
++      phoneFrom: string;
++      phoneTo: string;
++      messageSid: string;
++      respond: RespondFn;
++    },
++  ): Promise<string> {
++    const context = botSessionService.parseContext(input.session.contextJson);
++    const draft = context.absenceDraft ?? {};
++
++    if (input.session.state === "WAITING_ABSENCE_EDIT_REQUEST_SELECTION") {
++      const selection = Number.parseInt(input.body.trim(), 10);
++      const ids = context.absenceEditOptions ?? [];
++      const requestId = Number.isFinite(selection) ? ids[selection - 1] : undefined;
++      if (!requestId) {
++        return input.respond({
++          message: "Opción inválida. Respondé con el número de la solicitud.",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      const detail = await absenceRequestService.getById(companyId, requestId);
++      draft.requestId = detail.id;
++      draft.startDate = detail.startDate;
++      draft.endDate = detail.endDate;
++      draft.reason = detail.reason;
++      await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++        state: "WAITING_ABSENCE_EDIT_FIELD_MENU",
++        contextJson: serializeContext({ ...context, flow: "ABSENCE_EDIT", absenceDraft: draft }),
++      });
++      return this.promptFieldMenu(input, {
++        startDate: detail.startDate,
++        endDate: detail.endDate,
++        reason: detail.reason,
++      });
++    }
++
++    if (input.session.state === "WAITING_ABSENCE_EDIT_FIELD_MENU") {
++      const choice = input.body.trim();
++      if (choice === "5") {
++        await botSessionService.cancelSession(companyId, input.session.id, input.session);
++        return input.respond({
++          message: "Modificación cancelada.",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      const nextState =
++        choice === "1"
++          ? "WAITING_ABSENCE_START_DATE"
++          : choice === "2"
++            ? "WAITING_ABSENCE_END_DATE"
++            : choice === "3"
++              ? "WAITING_ABSENCE_REASON"
++              : choice === "4"
++                ? "WAITING_ABSENCE_START_DATE"
++                : null;
++      if (!nextState || !draft.requestId) {
++        return input.respond({
++          message: "Respondé con un número del 1 al 5.",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      draft.editAll = choice === "4";
++      await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++        state: nextState,
++        contextJson: serializeContext({ ...context, flow: "ABSENCE_EDIT", absenceDraft: draft }),
++      });
++      if (nextState === "WAITING_ABSENCE_START_DATE") {
++        return input.respond({
++          message: "Ingresá la nueva fecha de inicio (DD/MM/AAAA).",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      if (nextState === "WAITING_ABSENCE_END_DATE") {
++        return input.respond({
++          message: "Ingresá la nueva fecha de fin (DD/MM/AAAA).",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      return input.respond({
++        message: "Escribí el nuevo motivo.",
++        employeeId: input.employeeId,
++        phoneFrom: input.phoneTo,
++        phoneTo: input.phoneFrom,
++      });
++    }
++
++    if (
++      context.flow === "ABSENCE_EDIT" &&
++      (input.session.state === "WAITING_ABSENCE_START_DATE" ||
++        input.session.state === "WAITING_ABSENCE_END_DATE" ||
++        input.session.state === "WAITING_ABSENCE_REASON")
++    ) {
++      if (input.session.state === "WAITING_ABSENCE_START_DATE") {
++        const parsed = parseSpanishDateInput(input.body);
++        if (!parsed) {
++          return input.respond({
++            message: INVALID_DATE_MESSAGE,
++            employeeId: input.employeeId,
++            phoneFrom: input.phoneTo,
++            phoneTo: input.phoneFrom,
++          });
++        }
++        draft.startDate = parsed.iso;
++        if (draft.editAll) {
++          await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++            state: "WAITING_ABSENCE_END_DATE",
++            contextJson: serializeContext({ ...context, absenceDraft: draft }),
++          });
++          return input.respond({
++            message: "Ingresá la nueva fecha de fin (DD/MM/AAAA).",
++            employeeId: input.employeeId,
++            phoneFrom: input.phoneTo,
++            phoneTo: input.phoneFrom,
++          });
++        }
++        await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++          state: "WAITING_ABSENCE_EDIT_CONFIRMATION",
++          contextJson: serializeContext({ ...context, absenceDraft: draft }),
++        });
++        return this.promptEditConfirmation(input, draft);
++      }
++
++      if (input.session.state === "WAITING_ABSENCE_END_DATE") {
++        const parsed = parseSpanishDateInput(input.body);
++        if (!parsed) {
++          return input.respond({
++            message: INVALID_DATE_MESSAGE,
++            employeeId: input.employeeId,
++            phoneFrom: input.phoneTo,
++            phoneTo: input.phoneFrom,
++          });
++        }
++        draft.endDate = parsed.iso;
++        if (draft.editAll) {
++          await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++            state: "WAITING_ABSENCE_REASON",
++            contextJson: serializeContext({ ...context, absenceDraft: draft }),
++          });
++          return input.respond({
++            message: "Escribí el nuevo motivo.",
++            employeeId: input.employeeId,
++            phoneFrom: input.phoneTo,
++            phoneTo: input.phoneFrom,
++          });
++        }
++        await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++          state: "WAITING_ABSENCE_EDIT_CONFIRMATION",
++          contextJson: serializeContext({ ...context, absenceDraft: draft }),
++        });
++        return this.promptEditConfirmation(input, draft);
++      }
++
++      if (input.session.state === "WAITING_ABSENCE_REASON") {
++        const reason = input.body.trim();
++        if (reason.length < 3) {
++          return input.respond({
++            message: "El motivo debe tener al menos 3 caracteres.",
++            employeeId: input.employeeId,
++            phoneFrom: input.phoneTo,
++            phoneTo: input.phoneFrom,
++          });
++        }
++        draft.reason = reason;
++        await botSessionService.updateAbsenceSession(companyId, input.session.id, {
++          state: "WAITING_ABSENCE_EDIT_CONFIRMATION",
++          contextJson: serializeContext({ ...context, absenceDraft: draft }),
++        });
++        return this.promptEditConfirmation(input, draft);
++      }
++    }
++
++    if (input.session.state === "WAITING_ABSENCE_EDIT_CONFIRMATION") {
++      if (isNegativeConfirmation(input.body)) {
++        await botSessionService.cancelSession(companyId, input.session.id, input.session);
++        return input.respond({
++          message: "Modificación cancelada.",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      if (!isAffirmativeConfirmation(input.body)) {
++        return input.respond({
++          message: "Respondé SI para confirmar o NO para cancelar.",
++          employeeId: input.employeeId,
++          phoneFrom: input.phoneTo,
++          phoneTo: input.phoneFrom,
++        });
++      }
++      if (!draft.requestId || !draft.startDate || !draft.endDate || !draft.reason) {
++        throw new AppError(409, "ABSENCE_EDIT_INCOMPLETE", "Faltan datos de la modificación.");
++      }
++      const { detail, isExisting } = await absenceRequestService.updateFromWhatsapp(
++        companyId,
++        draft.requestId,
++        {
++          employeeId: input.employeeId,
++          startDate: draft.startDate,
++          endDate: draft.endDate,
++          reason: draft.reason,
++          sourceMessageSid: input.messageSid,
++        },
++      );
++      await botSessionService.completeSession(
++        companyId,
++        input.session.id,
++        undefined,
++        input.session,
++      );
++      return input.respond({
++        message: isExisting
++          ? "Tu modificación ya había sido registrada."
++          : `Listo. Actualizamos tu solicitud (${formatAbsenceDateDisplay(detail.startDate)} al ${formatAbsenceDateDisplay(detail.endDate)}).`,
++        employeeId: input.employeeId,
++        phoneFrom: input.phoneTo,
++        phoneTo: input.phoneFrom,
++      });
++    }
++
++    return input.respond({
++      message: "No pudimos continuar con la modificación. Intentá de nuevo desde el menú.",
++      employeeId: input.employeeId,
++      phoneFrom: input.phoneTo,
++      phoneTo: input.phoneFrom,
++    });
++  },
++
++  promptEditConfirmation(
++    input: {
++      employeeId: string;
++      phoneFrom: string;
++      phoneTo: string;
++      respond: RespondFn;
++    },
++    draft: { startDate?: string; endDate?: string; reason?: string },
++  ): Promise<string> {
++    return input.respond({
++      message: [
++        "Resumen actualizado:",
++        `Desde: ${formatAbsenceDateDisplay(draft.startDate!)}`,
++        `Hasta: ${formatAbsenceDateDisplay(draft.endDate!)}`,
++        `Motivo: ${draft.reason}`,
++        "",
++        "¿Confirmás los cambios? Respondé SI o NO.",
++      ].join("\n"),
++      employeeId: input.employeeId,
++      phoneFrom: input.phoneTo,
++      phoneTo: input.phoneFrom,
++    });
++  },
++};
+diff --git a/database/migrations/154_bot_session_absence_edit_states.sql b/database/migrations/154_bot_session_absence_edit_states.sql
+new file mode 100644
+index 0000000..63f1113
+--- /dev/null
++++ b/database/migrations/154_bot_session_absence_edit_states.sql
+@@ -0,0 +1,110 @@
++-- WhatsApp self-service edit flow for pending absence requests.
++
++IF EXISTS (
++    SELECT 1
++    FROM sys.check_constraints
++    WHERE name = N'CK_bot_sessions_state'
++      AND parent_object_id = OBJECT_ID(N'dbo.bot_sessions')
++)
++BEGIN
++    ALTER TABLE dbo.bot_sessions DROP CONSTRAINT CK_bot_sessions_state;
++END;
++GO
++
++ALTER TABLE dbo.bot_sessions
++    ADD CONSTRAINT CK_bot_sessions_state
++    CHECK (state IN (
++        N'WAITING_MENU_SELECTION',
++        N'WAITING_LOCATION',
++        N'WAITING_OPERATION_SELECTION',
++        N'WAITING_CHECKOUT_LOCATION',
++        N'WAITING_CHECKOUT_OPERATION_SELECTION',
++        N'WAITING_ABSENCE_KIND_SELECTION',
++        N'WAITING_ABSENCE_TYPE',
++        N'WAITING_ABSENCE_START_DATE',
++        N'WAITING_ABSENCE_END_DATE',
++        N'WAITING_ABSENCE_REASON',
++        N'WAITING_ABSENCE_CONFIRMATION',
++        N'WAITING_ABSENCE_EDIT_REQUEST_SELECTION',
++        N'WAITING_ABSENCE_EDIT_FIELD_MENU',
++        N'WAITING_ABSENCE_EDIT_CONFIRMATION',
++        N'WAITING_CONFIRM_ATTENDANCE_SELECTION',
++        N'WAITING_UNAVAILABILITY_SELECTION',
++        N'WAITING_ATTENDANCE_CONFIRMATION_RESPONSE',
++        N'WAITING_PAYROLL_RECEIPT_PERIOD',
++        N'COMPLETED',
++        N'CANCELLED',
++        N'EXPIRED'
++    ));
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UX_bot_sessions_active_employee'
++      AND object_id = OBJECT_ID(N'dbo.bot_sessions')
++)
++BEGIN
++    DROP INDEX UX_bot_sessions_active_employee ON dbo.bot_sessions;
++END;
++GO
++
++CREATE UNIQUE INDEX UX_bot_sessions_active_employee
++    ON dbo.bot_sessions (employee_id)
++    WHERE is_simulation = 0
++      AND state IN (
++        N'WAITING_MENU_SELECTION',
++        N'WAITING_LOCATION',
++        N'WAITING_OPERATION_SELECTION',
++        N'WAITING_CHECKOUT_LOCATION',
++        N'WAITING_CHECKOUT_OPERATION_SELECTION',
++        N'WAITING_ABSENCE_KIND_SELECTION',
++        N'WAITING_ABSENCE_TYPE',
++        N'WAITING_ABSENCE_START_DATE',
++        N'WAITING_ABSENCE_END_DATE',
++        N'WAITING_ABSENCE_REASON',
++        N'WAITING_ABSENCE_CONFIRMATION',
++        N'WAITING_ABSENCE_EDIT_REQUEST_SELECTION',
++        N'WAITING_ABSENCE_EDIT_FIELD_MENU',
++        N'WAITING_ABSENCE_EDIT_CONFIRMATION',
++        N'WAITING_CONFIRM_ATTENDANCE_SELECTION',
++        N'WAITING_UNAVAILABILITY_SELECTION',
++        N'WAITING_ATTENDANCE_CONFIRMATION_RESPONSE',
++        N'WAITING_PAYROLL_RECEIPT_PERIOD'
++      );
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UX_bot_sessions_active_simulation'
++      AND object_id = OBJECT_ID(N'dbo.bot_sessions')
++)
++BEGIN
++    DROP INDEX UX_bot_sessions_active_simulation ON dbo.bot_sessions;
++END;
++GO
++
++CREATE UNIQUE INDEX UX_bot_sessions_active_simulation
++    ON dbo.bot_sessions (employee_id, simulation_session_id)
++    WHERE is_simulation = 1
++      AND simulation_session_id IS NOT NULL
++      AND state IN (
++        N'WAITING_MENU_SELECTION',
++        N'WAITING_LOCATION',
++        N'WAITING_OPERATION_SELECTION',
++        N'WAITING_CHECKOUT_LOCATION',
++        N'WAITING_CHECKOUT_OPERATION_SELECTION',
++        N'WAITING_ABSENCE_KIND_SELECTION',
++        N'WAITING_ABSENCE_TYPE',
++        N'WAITING_ABSENCE_START_DATE',
++        N'WAITING_ABSENCE_END_DATE',
++        N'WAITING_ABSENCE_REASON',
++        N'WAITING_ABSENCE_CONFIRMATION',
++        N'WAITING_ABSENCE_EDIT_REQUEST_SELECTION',
++        N'WAITING_ABSENCE_EDIT_FIELD_MENU',
++        N'WAITING_ABSENCE_EDIT_CONFIRMATION',
++        N'WAITING_CONFIRM_ATTENDANCE_SELECTION',
++        N'WAITING_UNAVAILABILITY_SELECTION',
++        N'WAITING_ATTENDANCE_CONFIRMATION_RESPONSE',
++        N'WAITING_PAYROLL_RECEIPT_PERIOD'
++      );
++GO

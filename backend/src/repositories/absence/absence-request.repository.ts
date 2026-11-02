@@ -1,5 +1,9 @@
 import sql from "mssql";
-import { ABSENCE_OVERLAP_STATUS_SQL, toAbsenceStatusSqlInList } from "../../constants/absence-transitions";
+import {
+  ABSENCE_EMPLOYEE_EDITABLE_STATUSES,
+  ABSENCE_OVERLAP_STATUS_SQL,
+  toAbsenceStatusSqlInList,
+} from "../../constants/absence-transitions";
 import { getPool } from "../../database/connection";
 import type {
   AbsenceDayPeriod,
@@ -543,6 +547,141 @@ export const absenceRequestRepository = {
     return result.recordset.map((row) =>
       mapAbsenceRequestEventRow(row as Record<string, unknown>),
     );
+  },
+
+  async hasEventWithComment(
+    companyId: string,
+    absenceRequestId: string,
+    comment: string,
+    transaction?: sql.Transaction,
+  ): Promise<boolean> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .input("comment", sql.NVarChar(1000), comment)
+      .query(`
+        SELECT TOP 1 id
+        FROM absence_request_events
+        WHERE company_id = @companyId
+          AND absence_request_id = @absenceRequestId
+          AND comment = @comment
+      `);
+    return Boolean(result.recordset[0]);
+  },
+
+  async listEmployeeEditableRequests(
+    companyId: string,
+    employeeId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      absenceTypeName: string;
+      startDate: string;
+      endDate: string;
+      status: AbsenceRequestStatus;
+      reason: string;
+    }>
+  > {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT ar.id, ar.start_date, ar.end_date, ar.status, ar.reason, at.name AS absence_type_name
+        FROM absence_requests ar
+        INNER JOIN absence_types at ON at.id = ar.absence_type_id AND at.company_id = @companyId
+        WHERE ar.company_id = @companyId
+          AND ar.employee_id = @employeeId
+          AND ar.status IN (${toAbsenceStatusSqlInList([...ABSENCE_EMPLOYEE_EDITABLE_STATUSES])})
+        ORDER BY ar.start_date DESC
+      `);
+    return result.recordset.map((row) => ({
+      id: String((row as { id: string }).id),
+      absenceTypeName: String((row as { absence_type_name: string }).absence_type_name),
+      startDate: String((row as { start_date: string }).start_date).slice(0, 10),
+      endDate: String((row as { end_date: string }).end_date).slice(0, 10),
+      status: String((row as { status: string }).status) as AbsenceRequestStatus,
+      reason: String((row as { reason: string }).reason ?? ""),
+    }));
+  },
+
+  async findEditableOverlappingRequest(
+    companyId: string,
+    employeeId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{ id: string; startDate: string; endDate: string; reason: string } | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("startDate", sql.Date, startDate)
+      .input("endDate", sql.Date, endDate)
+      .query(`
+        SELECT TOP 1 ar.id, ar.start_date, ar.end_date, ar.reason
+        FROM absence_requests ar
+        WHERE ar.company_id = @companyId
+          AND ar.employee_id = @employeeId
+          AND ar.status IN (${toAbsenceStatusSqlInList([...ABSENCE_EMPLOYEE_EDITABLE_STATUSES])})
+          AND ar.start_date <= @endDate
+          AND ar.end_date >= @startDate
+        ORDER BY ar.created_at DESC
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      id: String(row.id),
+      startDate: String(row.start_date).slice(0, 10),
+      endDate: String(row.end_date).slice(0, 10),
+      reason: String(row.reason ?? ""),
+    };
+  },
+
+  async findWhatsappEditAuditContext(
+    companyId: string,
+    requestId: string,
+    sourceMessageSid: string,
+  ): Promise<{ previousStartDate: string; previousEndDate: string } | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("requestId", sql.UniqueIdentifier, requestId)
+      .input("needle", sql.NVarChar(200), `%${sourceMessageSid}%`)
+      .query(`
+        SELECT TOP 1 previous_data, new_data
+        FROM audit_logs
+        WHERE company_id = @companyId
+          AND entity_type = N'absence_request'
+          AND entity_id = @requestId
+          AND action = N'UPDATED'
+          AND new_data LIKE @needle
+        ORDER BY created_at DESC
+      `);
+    const row = result.recordset[0] as { previous_data?: string; new_data?: string } | undefined;
+    if (!row?.previous_data) {
+      return null;
+    }
+    try {
+      const previous = JSON.parse(String(row.previous_data)) as {
+        startDate?: string;
+        endDate?: string;
+      };
+      if (!previous.startDate || !previous.endDate) {
+        return null;
+      }
+      return {
+        previousStartDate: String(previous.startDate).slice(0, 10),
+        previousEndDate: String(previous.endDate).slice(0, 10),
+      };
+    } catch {
+      return null;
+    }
   },
 
   async findAffectedAssignments(

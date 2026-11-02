@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import {
@@ -149,6 +150,36 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
           assert.equal(error.code, "INSUFFICIENT_ABSENCE_BALANCE");
           return true;
         },
+      );
+      await transaction.rollback();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  });
+
+  it("skips balance gate when allowInsufficientBalance override is set", async () => {
+    const { absenceBalanceService } = await import("./absence-balance.service");
+    const { getPool } = await import("../../database/connection");
+    const { companyId, employee } = await requireActiveEmployee();
+    const vacationType = await requireVacationType(companyId);
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      await absenceBalanceService.ensureSufficientBalanceForApproval(
+        companyId,
+        {
+          id: randomUUID(),
+          employeeId: employee.id,
+          absenceTypeId: vacationType.id,
+          startDate: `${TEST_YEAR}-06-01`,
+          endDate: `${TEST_YEAR}-06-30`,
+          totalDays: 999,
+          status: "PENDING",
+        },
+        transaction,
+        { allowInsufficientBalance: true },
       );
       await transaction.rollback();
     } catch (error) {

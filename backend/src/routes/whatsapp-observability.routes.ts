@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { requirePlatformAdmin } from "../middleware/require-platform-admin";
 import { validate } from "../middleware/validate";
 import {
+  observabilityConversationExportQuerySchema,
   observabilityConversationIdParamSchema,
   observabilityErrorCodeParamSchema,
   observabilityFlowIdParamSchema,
@@ -39,6 +40,12 @@ whatsappObservabilityRouter.get(
   "/conversations/:conversationId",
   validate(observabilityConversationIdParamSchema, "params"),
   asyncHandler(whatsappObservabilityController.getConversation),
+);
+whatsappObservabilityRouter.get(
+  "/conversations/:conversationId/export",
+  validate(observabilityConversationIdParamSchema, "params"),
+  validate(observabilityConversationExportQuerySchema, "query"),
+  asyncHandler(whatsappObservabilityController.exportConversation),
 );
 whatsappObservabilityRouter.post(
   "/conversations/:conversationId/reveal-phone",

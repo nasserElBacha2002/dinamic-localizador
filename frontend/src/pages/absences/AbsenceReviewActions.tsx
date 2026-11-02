@@ -4,7 +4,7 @@ import { ActionMenu, type ActionMenuItem } from "../../design-system";
 
 export function AbsenceReviewActions({
   canReview,
-  insufficientBalance,
+  insufficientBalance: _insufficientBalance,
   approvePending,
   coverageHref,
   onApprove,
@@ -55,7 +55,7 @@ export function AbsenceReviewActions({
         ) : canReview ? (
           <Button
             onClick={onApprove}
-            disabled={approvePending || insufficientBalance}
+            disabled={approvePending}
             loading={approvePending}
           >
             Aprobar

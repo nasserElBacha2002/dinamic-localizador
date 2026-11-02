@@ -9,6 +9,10 @@ export const observabilityConversationIdParamSchema = z.object({
   conversationId: uuid,
 });
 
+export const observabilityConversationExportQuerySchema = z.object({
+  format: z.enum(["json", "html"]).default("json"),
+});
+
 export const observabilityMessageIdParamSchema = z.object({
   messageId: uuid,
 });

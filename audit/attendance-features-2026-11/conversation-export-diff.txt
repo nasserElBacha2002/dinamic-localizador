@@ -1,0 +1,548 @@
+diff --git a/backend/src/controllers/whatsapp-observability.controller.ts b/backend/src/controllers/whatsapp-observability.controller.ts
+index b54a935..70b6af6 100644
+--- a/backend/src/controllers/whatsapp-observability.controller.ts
++++ b/backend/src/controllers/whatsapp-observability.controller.ts
+@@ -1,6 +1,7 @@
+ import type { Request, Response } from "express";
+ import type { ObservabilityListMessagesQuery } from "../schemas/whatsapp-observability.schema";
+ import { whatsappObservabilityService } from "../services/whatsapp/whatsapp-observability.service";
++import { whatsappConversationExportService } from "../services/whatsapp/whatsapp-conversation-export.service";
+ 
+ export const whatsappObservabilityController = {
+   async listConversations(req: Request, res: Response) {
+@@ -35,6 +36,27 @@ export const whatsappObservabilityController = {
+     res.status(200).json({ data: detail });
+   },
+ 
++  async exportConversation(req: Request, res: Response) {
++    const conversationId = String(req.params.conversationId);
++    const format = (req.validatedQuery as { format: "json" | "html" }).format;
++    if (format === "html") {
++      const html = await whatsappConversationExportService.exportHtml(
++        conversationId,
++        req.auth!.userId,
++      );
++      const filename = `whatsapp-conversation-${conversationId}.html`;
++      res.setHeader("Content-Type", "text/html; charset=utf-8");
++      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
++      res.status(200).send(html);
++      return;
++    }
++    const document = await whatsappConversationExportService.exportJson(
++      conversationId,
++      req.auth!.userId,
++    );
++    res.status(200).json({ data: document });
++  },
++
+   async revealPhone(req: Request, res: Response) {
+     const result = await whatsappObservabilityService.revealPhone(
+       String(req.params.conversationId),
+diff --git a/backend/src/routes/whatsapp-observability.routes.ts b/backend/src/routes/whatsapp-observability.routes.ts
+index 72e5091..3e01768 100644
+--- a/backend/src/routes/whatsapp-observability.routes.ts
++++ b/backend/src/routes/whatsapp-observability.routes.ts
+@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/async-handler";
+ import { requirePlatformAdmin } from "../middleware/require-platform-admin";
+ import { validate } from "../middleware/validate";
+ import {
++  observabilityConversationExportQuerySchema,
+   observabilityConversationIdParamSchema,
+   observabilityErrorCodeParamSchema,
+   observabilityFlowIdParamSchema,
+@@ -40,6 +41,12 @@ whatsappObservabilityRouter.get(
+   validate(observabilityConversationIdParamSchema, "params"),
+   asyncHandler(whatsappObservabilityController.getConversation),
+ );
++whatsappObservabilityRouter.get(
++  "/conversations/:conversationId/export",
++  validate(observabilityConversationIdParamSchema, "params"),
++  validate(observabilityConversationExportQuerySchema, "query"),
++  asyncHandler(whatsappObservabilityController.exportConversation),
++);
+ whatsappObservabilityRouter.post(
+   "/conversations/:conversationId/reveal-phone",
+   validate(observabilityConversationIdParamSchema, "params"),
+diff --git a/backend/src/services/whatsapp/whatsapp-conversation-export.service.ts b/backend/src/services/whatsapp/whatsapp-conversation-export.service.ts
+new file mode 100644
+index 0000000..3652431
+--- /dev/null
++++ b/backend/src/services/whatsapp/whatsapp-conversation-export.service.ts
+@@ -0,0 +1,148 @@
++import { AppError } from "../../errors/app-error";
++import { whatsappObservabilityRepository } from "../../repositories/whatsapp/whatsapp-observability.repository";
++import { whatsappFlowExecutionRepository } from "../../repositories/whatsapp/whatsapp-flow-execution.repository";
++import { whatsappProviderEventRepository } from "../../repositories/whatsapp/whatsapp-provider-event.repository";
++import { mapMessageToObservabilityDto } from "../../utils/whatsapp/whatsapp-observability-message-dto";
++import {
++  renderWhatsappConversationExportHtml,
++  type WhatsappConversationExportDocument,
++} from "../../utils/whatsapp/whatsapp-conversation-export-html";
++import { whatsappObservabilityService } from "./whatsapp-observability.service";
++
++const MAX_EXPORT_MESSAGES = 5000;
++
++const collectRequestIds = (metadataJson: string | null): string[] => {
++  if (!metadataJson) {
++    return [];
++  }
++  try {
++    const parsed = JSON.parse(metadataJson) as Record<string, unknown>;
++    const ids: string[] = [];
++    for (const key of ["absenceRequestId", "requestId", "replacementRequestId"]) {
++      const value = parsed[key];
++      if (typeof value === "string" && value.length > 0) {
++        ids.push(value);
++      }
++    }
++    return ids;
++  } catch {
++    return [];
++  }
++};
++
++export const whatsappConversationExportService = {
++  async buildDocument(conversationId: string, userId: string): Promise<WhatsappConversationExportDocument> {
++    whatsappObservabilityService.assertUiEnabled();
++    const detail = await whatsappObservabilityRepository.getConversationDetail(conversationId);
++    if (!detail) {
++      throw new AppError(404, "CONVERSATION_NOT_FOUND", "Conversación no encontrada.");
++    }
++
++    const rawMessages = await whatsappObservabilityRepository.listAllMessagesAsc(
++      conversationId,
++      MAX_EXPORT_MESSAGES,
++    );
++    const messages = rawMessages.map((message) => {
++      const dto = mapMessageToObservabilityDto(message);
++      return {
++        id: dto.id,
++        createdAt: dto.createdAt,
++        direction: dto.direction,
++        body: dto.body ?? null,
++        providerStatus: dto.providerStatus ?? null,
++        messageSid: dto.messageSid ?? dto.providerMessageSid ?? null,
++        errorCode: dto.providerErrorCode ?? dto.processingErrorCode ?? null,
++        errorMessage: dto.providerErrorMessage ?? null,
++      };
++    });
++
++    const executionSummaries = await whatsappFlowExecutionRepository.listByConversation(conversationId);
++    const executions = await Promise.all(
++      executionSummaries.map(async (summary) => {
++        const full = await whatsappFlowExecutionRepository.findById(summary.id);
++        let intent: string | null = null;
++        if (full?.metadataJson) {
++          try {
++            const meta = JSON.parse(full.metadataJson) as { intent?: unknown };
++            intent = typeof meta.intent === "string" ? meta.intent : null;
++          } catch {
++            intent = null;
++          }
++        }
++        return {
++          id: summary.id,
++          flowType: summary.flowType,
++          intent,
++          status: summary.status,
++          resultCode: summary.resultCode ?? null,
++          startedAt: summary.startedAt,
++          finishedAt: summary.finishedAt ?? null,
++          durationMs: summary.durationMs ?? null,
++          errorCode: summary.errorCode ?? full?.errorCode ?? null,
++          errorMessage: full?.errorMessage ?? null,
++          metadataJson: full?.metadataJson ?? null,
++        };
++      }),
++    );
++
++    const providerEvents = (await whatsappProviderEventRepository.listByConversation(conversationId)).map(
++      (event) => ({
++        messageSid: event.providerMessageSid ?? null,
++        direction: null,
++        providerStatus: event.providerStatus,
++        eventType: event.eventType,
++        receivedAt: event.receivedAt,
++        errorCode: event.errorCode ?? null,
++        errorMessage: event.errorMessage ?? null,
++      }),
++    );
++
++    const requestIds = [
++      ...new Set(executions.flatMap((execution) => collectRequestIds(execution.metadataJson))),
++    ];
++
++    const document: WhatsappConversationExportDocument = {
++      exportedAt: new Date().toISOString(),
++      header: {
++        conversationId: detail.id,
++        phoneMasked: detail.phoneMasked,
++        companyId: detail.companyId,
++        employeeId: detail.employeeId,
++        status: detail.status,
++        startedAt: detail.startedAt,
++        lastActivityAt: detail.lastActivityAt,
++        messageCount: detail.messageCount,
++        errorCount: detail.errorCount,
++        lastResultCode: detail.lastResultCode ?? null,
++        lastFlowType: detail.lastFlowType ?? null,
++      },
++      messages,
++      executions,
++      providerEvents,
++      technicalIds: {
++        conversationId: detail.id,
++        employeeId: detail.employeeId,
++        companyId: detail.companyId,
++        messageIds: messages.map((message) => message.id),
++        flowExecutionIds: executions.map((execution) => execution.id),
++        requestIds,
++      },
++    };
++
++    await whatsappObservabilityService.auditExport(conversationId, userId, detail.companyId, {
++      messageCount: messages.length,
++      executionCount: executions.length,
++    });
++
++    return document;
++  },
++
++  async exportJson(conversationId: string, userId: string): Promise<WhatsappConversationExportDocument> {
++    return this.buildDocument(conversationId, userId);
++  },
++
++  async exportHtml(conversationId: string, userId: string): Promise<string> {
++    const document = await this.buildDocument(conversationId, userId);
++    return renderWhatsappConversationExportHtml(document);
++  },
++};
+diff --git a/backend/src/utils/whatsapp/whatsapp-conversation-export-html.test.ts b/backend/src/utils/whatsapp/whatsapp-conversation-export-html.test.ts
+new file mode 100644
+index 0000000..1d1bda9
+--- /dev/null
++++ b/backend/src/utils/whatsapp/whatsapp-conversation-export-html.test.ts
+@@ -0,0 +1,63 @@
++import assert from "node:assert/strict";
++import { describe, it } from "node:test";
++import { renderWhatsappConversationExportHtml } from "./whatsapp-conversation-export-html";
++
++describe("whatsapp conversation export html", () => {
++  it("renders chronological messages and escapes html", () => {
++    const html = renderWhatsappConversationExportHtml({
++      exportedAt: "2026-11-02T12:00:00.000Z",
++      header: {
++        conversationId: "11111111-1111-1111-1111-111111111111",
++        phoneMasked: "****1234",
++        companyId: "22222222-2222-2222-2222-222222222222",
++        employeeId: "33333333-3333-3333-3333-333333333333",
++        status: "ACTIVE",
++        startedAt: "2026-11-01T10:00:00.000Z",
++        lastActivityAt: "2026-11-02T11:00:00.000Z",
++        messageCount: 2,
++        errorCount: 1,
++        lastResultCode: "ABSENCE_FLOW",
++        lastFlowType: "ABSENCE",
++      },
++      messages: [
++        {
++          id: "a",
++          createdAt: "2026-11-01T10:01:00.000Z",
++          direction: "INBOUND",
++          body: "<script>alert(1)</script>",
++          providerStatus: null,
++          messageSid: "SM1",
++          errorCode: null,
++          errorMessage: null,
++        },
++        {
++          id: "b",
++          createdAt: "2026-11-01T10:02:00.000Z",
++          direction: "OUTBOUND",
++          body: "OK",
++          providerStatus: "delivered",
++          messageSid: "SM2",
++          errorCode: "63016",
++          errorMessage: "failed",
++        },
++      ],
++      executions: [],
++      providerEvents: [],
++      technicalIds: {
++        conversationId: "11111111-1111-1111-1111-111111111111",
++        employeeId: "33333333-3333-3333-3333-333333333333",
++        companyId: "22222222-2222-2222-2222-222222222222",
++        messageIds: ["a", "b"],
++        flowExecutionIds: [],
++        requestIds: [],
++      },
++    });
++
++    assert.match(html, /Empleado/);
++    assert.match(html, /Sistema/);
++    assert.match(html, /2026-11-01T10:01:00.000Z/);
++    assert.match(html, /2026-11-01T10:02:00.000Z/);
++    assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
++    assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
++  });
++});
+diff --git a/backend/src/utils/whatsapp/whatsapp-conversation-export-html.ts b/backend/src/utils/whatsapp/whatsapp-conversation-export-html.ts
+new file mode 100644
+index 0000000..68b5bbb
+--- /dev/null
++++ b/backend/src/utils/whatsapp/whatsapp-conversation-export-html.ts
+@@ -0,0 +1,170 @@
++const escapeHtml = (value: string): string =>
++  value
++    .replace(/&/g, "&amp;")
++    .replace(/</g, "&lt;")
++    .replace(/>/g, "&gt;")
++    .replace(/"/g, "&quot;");
++
++export type WhatsappConversationExportDocument = {
++  exportedAt: string;
++  header: {
++    conversationId: string;
++    phoneMasked: string;
++    companyId: string | null;
++    employeeId: string | null;
++    status: string;
++    startedAt: string;
++    lastActivityAt: string;
++    messageCount: number;
++    errorCount: number;
++    lastResultCode: string | null;
++    lastFlowType: string | null;
++  };
++  messages: Array<{
++    id: string;
++    createdAt: string;
++    direction: string;
++    body: string | null;
++    providerStatus: string | null;
++    messageSid: string | null;
++    errorCode: string | null;
++    errorMessage: string | null;
++  }>;
++  executions: Array<{
++    id: string;
++    flowType: string;
++    intent: string | null;
++    status: string;
++    resultCode: string | null;
++    startedAt: string;
++    finishedAt: string | null;
++    durationMs: number | null;
++    errorCode: string | null;
++    errorMessage: string | null;
++    metadataJson: string | null;
++  }>;
++  providerEvents: Array<{
++    messageSid: string | null;
++    direction: string | null;
++    providerStatus: string;
++    eventType: string;
++    receivedAt: string;
++    errorCode: string | null;
++    errorMessage: string | null;
++  }>;
++  technicalIds: {
++    conversationId: string;
++    employeeId: string | null;
++    companyId: string | null;
++    messageIds: string[];
++    flowExecutionIds: string[];
++    requestIds: string[];
++  };
++};
++
++export const renderWhatsappConversationExportHtml = (
++  doc: WhatsappConversationExportDocument,
++): string => {
++  const messageRows = doc.messages
++    .map((message) => {
++      const speaker = message.direction === "INBOUND" ? "Empleado" : "Sistema";
++      const body = message.body?.trim() ? escapeHtml(message.body) : "—";
++      return `<tr>
++  <td>${escapeHtml(message.createdAt)}</td>
++  <td>${escapeHtml(speaker)}</td>
++  <td>${escapeHtml(message.direction)}</td>
++  <td><pre class="body">${body}</pre></td>
++  <td>${escapeHtml(message.providerStatus ?? "—")}</td>
++  <td>${escapeHtml(message.messageSid ?? "—")}</td>
++  <td>${escapeHtml(message.errorCode ?? "—")}</td>
++</tr>`;
++    })
++    .join("\n");
++
++  const executionRows = doc.executions
++    .map(
++      (execution) => `<tr>
++  <td>${escapeHtml(execution.flowType)}</td>
++  <td>${escapeHtml(execution.intent ?? "—")}</td>
++  <td>${escapeHtml(execution.resultCode ?? "—")}</td>
++  <td>${escapeHtml(execution.startedAt)}</td>
++  <td>${escapeHtml(execution.finishedAt ?? "—")}</td>
++  <td>${escapeHtml(execution.errorCode ?? "—")}</td>
++  <td>${escapeHtml(execution.errorMessage ?? "—")}</td>
++</tr>`,
++    )
++    .join("\n");
++
++  const providerRows = doc.providerEvents
++    .map(
++      (event) => `<tr>
++  <td>${escapeHtml(event.messageSid ?? "—")}</td>
++  <td>${escapeHtml(event.direction ?? "—")}</td>
++  <td>${escapeHtml(event.providerStatus)}</td>
++  <td>${escapeHtml(event.eventType)}</td>
++  <td>${escapeHtml(event.receivedAt)}</td>
++  <td>${escapeHtml(event.errorCode ?? "—")}</td>
++  <td>${escapeHtml(event.errorMessage ?? "—")}</td>
++</tr>`,
++    )
++    .join("\n");
++
++  return `<!DOCTYPE html>
++<html lang="es">
++<head>
++  <meta charset="utf-8" />
++  <title>Export conversación WhatsApp ${escapeHtml(doc.header.conversationId)}</title>
++  <style>
++    body { font-family: system-ui, sans-serif; font-size: 12px; color: #111; margin: 24px; }
++    h1, h2 { margin: 0 0 8px; }
++    table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; }
++    th, td { border: 1px solid #ccc; padding: 6px 8px; vertical-align: top; text-align: left; }
++    th { background: #f0f0f0; }
++    pre.body { margin: 0; white-space: pre-wrap; font-family: inherit; }
++    .meta { margin-bottom: 16px; }
++    @media print { body { margin: 12px; } }
++  </style>
++</head>
++<body>
++  <h1>Exportación de conversación WhatsApp</h1>
++  <p class="meta">Generado: ${escapeHtml(doc.exportedAt)}</p>
++  <h2>Cabecera</h2>
++  <table>
++    <tr><th>Conversation ID</th><td>${escapeHtml(doc.header.conversationId)}</td></tr>
++    <tr><th>Teléfono (enmascarado)</th><td>${escapeHtml(doc.header.phoneMasked)}</td></tr>
++    <tr><th>company_id</th><td>${escapeHtml(doc.header.companyId ?? "—")}</td></tr>
++    <tr><th>employee_id</th><td>${escapeHtml(doc.header.employeeId ?? "—")}</td></tr>
++    <tr><th>Estado</th><td>${escapeHtml(doc.header.status)}</td></tr>
++    <tr><th>Inicio</th><td>${escapeHtml(doc.header.startedAt)}</td></tr>
++    <tr><th>Última actividad</th><td>${escapeHtml(doc.header.lastActivityAt)}</td></tr>
++    <tr><th>Mensajes</th><td>${doc.header.messageCount}</td></tr>
++    <tr><th>Errores</th><td>${doc.header.errorCount}</td></tr>
++    <tr><th>Último resultado</th><td>${escapeHtml(doc.header.lastResultCode ?? "—")}</td></tr>
++  </table>
++  <h2>Chat completo</h2>
++  <table>
++    <thead><tr><th>Timestamp</th><th>Rol</th><th>Direction</th><th>Body</th><th>Provider status</th><th>Message SID</th><th>Error</th></tr></thead>
++    <tbody>${messageRows || "<tr><td colspan=\"7\">Sin mensajes</td></tr>"}</tbody>
++  </table>
++  <h2>Ejecuciones</h2>
++  <table>
++    <thead><tr><th>Flow type</th><th>Intent</th><th>Result</th><th>Inicio</th><th>Fin</th><th>Error code</th><th>Error message</th></tr></thead>
++    <tbody>${executionRows || "<tr><td colspan=\"7\">Sin ejecuciones</td></tr>"}</tbody>
++  </table>
++  <h2>Twilio / proveedor</h2>
++  <table>
++    <thead><tr><th>MessageSid</th><th>Direction</th><th>Status</th><th>Evento</th><th>Recibido</th><th>Error code</th><th>Error message</th></tr></thead>
++    <tbody>${providerRows || "<tr><td colspan=\"7\">Sin eventos de proveedor</td></tr>"}</tbody>
++  </table>
++  <h2>IDs técnicos</h2>
++  <table>
++    <tr><th>conversation id</th><td>${escapeHtml(doc.technicalIds.conversationId)}</td></tr>
++    <tr><th>employee id</th><td>${escapeHtml(doc.technicalIds.employeeId ?? "—")}</td></tr>
++    <tr><th>company id</th><td>${escapeHtml(doc.technicalIds.companyId ?? "—")}</td></tr>
++    <tr><th>message ids</th><td>${escapeHtml(doc.technicalIds.messageIds.join(", ") || "—")}</td></tr>
++    <tr><th>flow execution ids</th><td>${escapeHtml(doc.technicalIds.flowExecutionIds.join(", ") || "—")}</td></tr>
++    <tr><th>request ids</th><td>${escapeHtml(doc.technicalIds.requestIds.join(", ") || "—")}</td></tr>
++  </table>
++</body>
++</html>`;
++};
+diff --git a/frontend/src/api/whatsapp-observability.api.ts b/frontend/src/api/whatsapp-observability.api.ts
+index e45fffc..83374f5 100644
+--- a/frontend/src/api/whatsapp-observability.api.ts
++++ b/frontend/src/api/whatsapp-observability.api.ts
+@@ -155,3 +155,21 @@ export async function revealWhatsappConversationPhone(
+   );
+   return data.data;
+ }
++
++export async function exportWhatsappConversation(
++  conversationId: string,
++  format: "json" | "html",
++): Promise<Blob | Record<string, unknown>> {
++  if (format === "html") {
++    const response = await apiClient.get(
++      `platform/observability/whatsapp/conversations/${conversationId}/export`,
++      { params: { format: "html" }, responseType: "blob" },
++    );
++    return response.data as Blob;
++  }
++  const { data } = await apiClient.get<{ data: Record<string, unknown> }>(
++    `platform/observability/whatsapp/conversations/${conversationId}/export`,
++    { params: { format: "json" } },
++  );
++  return data.data;
++}
+diff --git a/frontend/src/pages/platform/observability/WhatsappConversationDetailPage.tsx b/frontend/src/pages/platform/observability/WhatsappConversationDetailPage.tsx
+index 79112fe..3d69141 100644
+--- a/frontend/src/pages/platform/observability/WhatsappConversationDetailPage.tsx
++++ b/frontend/src/pages/platform/observability/WhatsappConversationDetailPage.tsx
+@@ -353,15 +353,50 @@ export function WhatsappConversationDetailPage() {
+     }
+   };
+ 
++  const handleExport = async (format: "json" | "html") => {
++    if (!conversationId) {
++      return;
++    }
++    const { exportWhatsappConversation } = await import("../../../api/whatsapp-observability.api");
++    const payload = await exportWhatsappConversation(conversationId, format);
++    const blob =
++      payload instanceof Blob
++        ? payload
++        : new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
++    const extension = format === "html" ? "html" : "json";
++    const url = URL.createObjectURL(blob);
++    const anchor = document.createElement("a");
++    anchor.href = url;
++    anchor.download = `whatsapp-conversation-${conversationId}.${extension}`;
++    anchor.click();
++    URL.revokeObjectURL(url);
++  };
++
+   return (
+     <>
+       <PageHeader
+         title={`Conversación ${displayPhone}`}
+         description="Detalle de mensajes, ejecuciones de flujo y eventos del proveedor."
+         action={
+-          <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
+-            Volver al listado
+-          </Button>
++          <Group gap="sm">
++            <Button
++              variant="light"
++              onClick={() => void handleExport("html")}
++              disabled={!conversationId}
++            >
++              Exportar PDF
++            </Button>
++            <Button
++              variant="light"
++              onClick={() => void handleExport("json")}
++              disabled={!conversationId}
++            >
++              Exportar JSON
++            </Button>
++            <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
++              Volver al listado
++            </Button>
++          </Group>
+         }
+       />
+ 

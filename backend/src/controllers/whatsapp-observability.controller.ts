@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import type { ObservabilityListMessagesQuery } from "../schemas/whatsapp-observability.schema";
 import { whatsappObservabilityService } from "../services/whatsapp/whatsapp-observability.service";
+import { whatsappConversationExportService } from "../services/whatsapp/whatsapp-conversation-export.service";
 
 export const whatsappObservabilityController = {
   async listConversations(req: Request, res: Response) {
@@ -33,6 +34,27 @@ export const whatsappObservabilityController = {
       req.auth!.userId,
     );
     res.status(200).json({ data: detail });
+  },
+
+  async exportConversation(req: Request, res: Response) {
+    const conversationId = String(req.params.conversationId);
+    const format = (req.validatedQuery as { format: "json" | "html" }).format;
+    if (format === "html") {
+      const html = await whatsappConversationExportService.exportHtml(
+        conversationId,
+        req.auth!.userId,
+      );
+      const filename = `whatsapp-conversation-${conversationId}.html`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.status(200).send(html);
+      return;
+    }
+    const document = await whatsappConversationExportService.exportJson(
+      conversationId,
+      req.auth!.userId,
+    );
+    res.status(200).json({ data: document });
   },
 
   async revealPhone(req: Request, res: Response) {

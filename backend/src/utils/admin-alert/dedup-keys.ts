@@ -37,6 +37,12 @@ export const buildAbsencePendingDedupKey = (absenceRequestId: string): string =>
 export const buildAbsenceCreatedOperationalDedupKey = (absenceRequestId: string): string =>
   `absence-created:operational:${normalizeId(absenceRequestId)}`;
 
+export const buildAbsenceUpdatedOperationalDedupKey = (
+  absenceRequestId: string,
+  sourceMessageSid: string,
+): string =>
+  `absence-updated:operational:${normalizeId(absenceRequestId)}:${sourceMessageSid.trim()}`;
+
 /** @deprecated Use buildAbsenceCreatedOperationalDedupKey */
 export const buildAbsencePendingOperationalDedupKey = buildAbsenceCreatedOperationalDedupKey;
 

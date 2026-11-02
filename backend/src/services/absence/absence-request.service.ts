@@ -1,8 +1,10 @@
 import sql from "mssql";
 import {
   ABSENCE_ADMIN_EDITABLE_STATUSES,
+  ABSENCE_EMPLOYEE_EDITABLE_STATUSES,
   assertAbsenceTransition,
   isAbsenceAdminEditableStatus,
+  isAbsenceEmployeeEditableStatus,
 } from "../../constants/absence-transitions";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
@@ -38,6 +40,10 @@ import { employeeWorkdayAbsenceReconciliationService } from "../workdays/employe
 import { resolveAttachmentPolicy } from "../../domain/absence-attachment-policy";
 import { absenceAttachmentService } from "./absence-attachment.service";
 import { adminAlertAbsencePendingService } from "../admin-alerts/admin-alert-absence-pending.service";
+import {
+  ensureWhatsappEditPostCommitSideEffects,
+  resolveWhatsappEditPreviousDates,
+} from "./absence-request-whatsapp-edit-side-effects";
 
 const resolveCompanyTimezone = (companyId: string) =>
   absenceOperationImpactService.getOperationTimezone(companyId);
@@ -610,16 +616,25 @@ export const absenceRequestService = {
     companyId: string,
     input: Omit<CreateAbsenceRequestInput, "requestedVia" | "sourceMessageSid"> & {
       sourceMessageSid: string;
+      conversationId?: string | null;
     },
   ): Promise<{ detail: AbsenceRequestDetail; isExisting: boolean }> {
+    const healAdminAlertIfExisting = async (detail: AbsenceRequestDetail): Promise<void> => {
+      await adminAlertAbsencePendingService.ensureOperationalForExistingRequest(companyId, detail, {
+        conversationId: input.conversationId ?? null,
+      });
+    };
+
     if (input.sourceMessageSid) {
       const existing = await absenceRequestRepository.findBySourceMessageSid(
         companyId,
         input.sourceMessageSid,
       );
       if (existing) {
+        const detail = await this.getById(companyId, existing.id);
+        await healAdminAlertIfExisting(detail);
         return {
-          detail: await this.getById(companyId, existing.id),
+          detail,
           isExisting: true,
         };
       }
@@ -646,8 +661,10 @@ export const absenceRequestService = {
           input.sourceMessageSid,
         );
         if (existing) {
+          const detail = await this.getById(companyId, existing.id);
+          await healAdminAlertIfExisting(detail);
           return {
-            detail: await this.getById(companyId, existing.id),
+            detail,
             isExisting: true,
           };
         }
@@ -983,5 +1000,212 @@ export const absenceRequestService = {
     }
 
     return this.getById(companyId, requestId);
+  },
+
+  async updateFromWhatsapp(
+    companyId: string,
+    requestId: string,
+    input: {
+      employeeId: string;
+      startDate?: string;
+      endDate?: string;
+      reason?: string;
+      sourceMessageSid: string;
+      conversationId?: string | null;
+    },
+  ): Promise<{ detail: AbsenceRequestDetail; isExisting: boolean }> {
+    const idempotencyComment = `whatsapp-edit:${input.sourceMessageSid}`;
+    const timezone = await resolveCompanyTimezone(companyId);
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const existing = await absenceRequestRepository.findByIdForUpdate(
+        companyId,
+        requestId,
+        transaction,
+      );
+      if (!existing) {
+        throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
+      }
+      if (existing.employeeId !== input.employeeId) {
+        throw new AppError(403, "ABSENCE_FORBIDDEN", "No podés modificar esta solicitud.");
+      }
+      if (!isAbsenceEmployeeEditableStatus(existing.status)) {
+        throw new AppError(
+          409,
+          "ABSENCE_NOT_EDITABLE",
+          "La solicitud cambió de estado mientras la estabas modificando. Volvé a consultarla.",
+        );
+      }
+
+      const alreadyApplied = await absenceRequestRepository.hasEventWithComment(
+        companyId,
+        requestId,
+        idempotencyComment,
+        transaction,
+      );
+      if (alreadyApplied) {
+        await transaction.commit();
+        const detail = await this.getById(companyId, requestId);
+        const previousDates = await resolveWhatsappEditPreviousDates(
+          companyId,
+          requestId,
+          input.sourceMessageSid,
+          detail.startDate,
+          detail.endDate,
+        );
+        await ensureWhatsappEditPostCommitSideEffects({
+          companyId,
+          requestId,
+          sourceMessageSid: input.sourceMessageSid,
+          conversationId: input.conversationId ?? null,
+          previousStartDate: previousDates.previousStartDate,
+          previousEndDate: previousDates.previousEndDate,
+        });
+        return { detail, isExisting: true };
+      }
+
+      const payload = await resolveEditablePayload(
+        companyId,
+        existing,
+        {
+          startDate: input.startDate,
+          endDate: input.endDate,
+          reason: input.reason,
+        },
+        timezone,
+        { blockIfRequiresAttachment: false },
+      );
+
+      await acquireTransactionAppLock(transaction, {
+        resource: absenceEmployeeLockResource(companyId, existing.employeeId),
+        timeoutError: new AppError(
+          409,
+          "ABSENCE_LOCK_TIMEOUT",
+          "No se pudo adquirir el bloqueo de ausencias. Reintentá.",
+        ),
+      });
+
+      await assertNoOverlap(
+        companyId,
+        existing.employeeId,
+        payload.startDate,
+        payload.endDate,
+        existing.id,
+        transaction,
+      );
+
+      const nextReservationVersion = (existing.reservationVersion ?? 1) + 1;
+      await absenceBalanceImpactService.onRequestEdited(
+        companyId,
+        {
+          requestId,
+          employeeId: existing.employeeId,
+          previous: existing,
+          next: {
+            absenceTypeId: payload.absenceTypeId,
+            startDate: payload.startDate,
+            endDate: payload.endDate,
+            totalDays: payload.totalDays,
+            reservationVersion: nextReservationVersion,
+            yearAllocationsJson: payload.yearAllocationsJson,
+          },
+          nextReservationVersion,
+        },
+        { employeeId: input.employeeId },
+        transaction,
+      );
+
+      const updated = await absenceRequestRepository.updateEditableFields(
+        companyId,
+        requestId,
+        {
+          absenceTypeId: payload.absenceTypeId,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          startPeriod: payload.startPeriod,
+          endPeriod: payload.endPeriod,
+          totalDays: payload.totalDays,
+          reason: payload.reason,
+          calculationMode: payload.calculationMode,
+          calendarId: payload.calendarId,
+          calendarTimezone: payload.calendarTimezone,
+          calculationVersion: payload.calculationVersion,
+          calendarVersion: payload.calendarVersion,
+          calculationInputHash: payload.calculationInputHash,
+          reservationVersion: nextReservationVersion,
+          yearAllocationsJson: payload.yearAllocationsJson,
+          onlyIfStatusIn: [...ABSENCE_EMPLOYEE_EDITABLE_STATUSES],
+        },
+        transaction,
+      );
+      if (!updated) {
+        throw new AppError(
+          409,
+          "ABSENCE_NOT_EDITABLE",
+          "La solicitud cambió de estado mientras la estabas modificando. Volvé a consultarla.",
+        );
+      }
+
+      await absenceRequestRepository.createEvent(
+        companyId,
+        {
+          absenceRequestId: requestId,
+          eventType: "UPDATED",
+          oldStatus: existing.status,
+          newStatus: existing.status,
+          performedByEmployeeId: input.employeeId,
+          comment: idempotencyComment,
+        },
+        transaction,
+      );
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "absence_request",
+          entityId: requestId,
+          action: "UPDATED",
+          previousData: {
+            startDate: existing.startDate,
+            endDate: existing.endDate,
+            reason: existing.reason,
+            totalDays: existing.totalDays,
+          },
+          newData: {
+            startDate: updated.startDate,
+            endDate: updated.endDate,
+            reason: updated.reason,
+            totalDays: updated.totalDays,
+            updatedVia: "WHATSAPP",
+            sourceMessageSid: input.sourceMessageSid,
+          },
+          userId: null,
+        },
+        transaction,
+      );
+
+      await transaction.commit();
+
+      await ensureWhatsappEditPostCommitSideEffects({
+        companyId,
+        requestId,
+        sourceMessageSid: input.sourceMessageSid,
+        conversationId: input.conversationId ?? null,
+        previousStartDate: existing.startDate,
+        previousEndDate: existing.endDate,
+      });
+
+      const detail = await this.getById(companyId, requestId);
+      return { detail, isExisting: false };
+    } catch (error) {
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "absence-request.updateFromWhatsapp", companyId, entityId: requestId },
+        error,
+      );
+    }
   },
 };

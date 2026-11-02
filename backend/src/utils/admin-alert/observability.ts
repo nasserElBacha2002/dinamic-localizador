@@ -12,7 +12,8 @@ type AdminAlertObservabilityEvent =
   | "ATTENDANCE_ALERT_EVALUATED"
   | "ATTENDANCE_THRESHOLD_CROSSED"
   | "ATTENDANCE_ALERT_BASELINED"
-  | "ATTENDANCE_ALERT_COOLDOWN_SKIPPED";
+  | "ATTENDANCE_ALERT_COOLDOWN_SKIPPED"
+  | "ABSENCE_REQUEST_ADMIN_ALERT_EMIT";
 
 type AdminAlertObservabilityPayload = {
   companyId?: string;
@@ -36,6 +37,12 @@ type AdminAlertObservabilityPayload = {
   actorUserId?: string;
   suppressedCount?: number;
   configVersion?: string;
+  category?: string;
+  enqueuedCount?: number;
+  dedupSkippedCount?: number;
+  recipientSkippedCount?: number;
+  emitOutcome?: string;
+  conversationId?: string | null;
 };
 
 export const logAdminAlertEvent = (

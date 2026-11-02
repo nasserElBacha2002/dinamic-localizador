@@ -1,6 +1,12 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS } from "../../constants/operation-import";
-import { operationImportService } from "../../services/operations/operation-import.service";
+import { operationImportService, buildRecurringImportConfirmPayload } from "../../services/operations/operation-import.service";
+import type {
+  OperationImportConfirmRow,
+  OperationImportPreviewRow,
+} from "../../types/operation-import";
+import { isRecurringImportConfirmRow } from "../../types/operation-import";
+import { collapseRecurringMultiShiftConfirmRows } from "../../utils/operations/operation-import-multi-shift";
 import { auditService } from "../../services/audit.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { DEFAULT_IMPORT_MAX_ROWS } from "../constants";
@@ -19,12 +25,55 @@ import type {
   ImportTemplate,
 } from "../types";
 
-type OperationConfirmPayload = {
+type OperationOneTimeConfirmPayload = {
   serviceId: string;
   scheduledStart: string;
   scheduledEnd: string;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
+  earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+  lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+};
+
+type OperationConfirmPayload = OperationOneTimeConfirmPayload | OperationImportConfirmRow;
+
+const buildConfirmPayload = (row: OperationImportPreviewRow): OperationConfirmPayload | null => {
+  if (row.operationKind === "RECURRING") {
+    return buildRecurringImportConfirmPayload(row);
+  }
+
+  if (
+    row.status !== "valid" ||
+    !row.serviceId ||
+    row.earlyToleranceMinutes === null ||
+    row.lateToleranceMinutes === null
+  ) {
+    return null;
+  }
+
+  if (!row.scheduledStart || !row.scheduledEnd) {
+    return null;
+  }
+
+  return {
+    serviceId: row.serviceId,
+    scheduledStart: row.scheduledStart,
+    scheduledEnd: row.scheduledEnd,
+    earlyToleranceMinutes: row.earlyToleranceMinutes,
+    lateToleranceMinutes: row.lateToleranceMinutes,
+    earlyToleranceSource: row.earlyToleranceSource,
+    lateToleranceSource: row.lateToleranceSource,
+  };
+};
+
+const estimateCreatedOperations = (rows: PreparedImportRow[]): number => {
+  const confirmRows = rows
+    .map((row) => row.payload)
+    .filter((payload): payload is OperationImportConfirmRow => payload != null);
+  const recurringRows = confirmRows.filter(isRecurringImportConfirmRow);
+  const oneTimeRows = confirmRows.length - recurringRows.length;
+  const collapsedRecurring = collapseRecurringMultiShiftConfirmRows(recurringRows);
+  return oneTimeRows + collapsedRecurring.length;
 };
 
 const toRowErrors = (messages: string[]): ImportRowError[] =>
@@ -43,40 +92,56 @@ const buildOperationsPrepared = async (
 ): Promise<PreparedImport> => {
   const result = await operationImportService.previewFile(companyId, buffer, fileName);
   const rows: PreparedImportRow[] = result.rows.map((row) => {
-    const values = {
-      punto: row.punto || row.legacyLocation,
-      serviceName: row.serviceName ?? "",
-      rawFecha: row.rawFecha,
-      parsedOperationDate: row.parsedOperationDate ?? "",
-      fechaInicio: row.fechaInicio,
-      fechaFin: row.fechaFin,
-      scheduledStartDisplay: row.scheduledStartDisplay,
-      scheduledEndDisplay: row.scheduledEndDisplay,
-    };
     const errors = toRowErrors(row.errors);
-    const payload: OperationConfirmPayload | null =
-      row.status === "valid" &&
-      row.serviceId &&
-      row.scheduledStart &&
-      row.scheduledEnd &&
-      row.earlyToleranceMinutes !== null &&
-      row.lateToleranceMinutes !== null
-        ? {
-            serviceId: row.serviceId,
-            scheduledStart: row.scheduledStart,
-            scheduledEnd: row.scheduledEnd,
-            earlyToleranceMinutes: row.earlyToleranceMinutes,
-            lateToleranceMinutes: row.lateToleranceMinutes,
-          }
-        : null;
+    const payload = buildConfirmPayload(row);
 
     return {
       rowNumber: row.rowNumber,
-      values,
+      values: {
+        punto: row.punto || row.legacyLocation,
+        serviceName: row.serviceName ?? "",
+        operationKind: row.operationKind,
+        rawFecha: row.rawFecha,
+        parsedOperationDate: row.parsedOperationDate ?? "",
+        fechaInicio: row.fechaInicio,
+        fechaFin: row.fechaFin,
+        validFrom: row.validFrom ?? "",
+        validUntil: row.validUntil ?? "",
+        scheduleSource: row.scheduleSource ?? "",
+        scheduleMode: row.scheduleMode,
+        shiftCode: row.shiftCode ?? "",
+        scheduledStartDisplay: row.scheduledStartDisplay,
+        scheduledEndDisplay: row.scheduledEndDisplay,
+        scheduleTimezone: row.scheduleTimezone ?? "",
+      },
       errors,
       payload,
     };
   });
+
+  const displayColumns =
+    result.format === "recurring"
+      ? [
+          { key: "punto", header: "Sucursal" },
+          { key: "serviceName", header: "Servicio resuelto" },
+          { key: "validFrom", header: "Vigencia desde" },
+          { key: "validUntil", header: "Vigencia hasta" },
+          { key: "scheduleMode", header: "Modo horario" },
+          { key: "shiftCode", header: "Turno" },
+          { key: "scheduleSource", header: "Origen horario" },
+          { key: "scheduledStartDisplay", header: "Horario" },
+          { key: "scheduleTimezone", header: "Zona horaria" },
+        ]
+      : [
+          { key: "punto", header: result.format === "client" ? "PUNTO" : "Servicio" },
+          { key: "serviceName", header: "Servicio resuelto" },
+          {
+            key: "rawFecha",
+            header: result.format === "client" ? "Fecha original" : "Inicio original",
+          },
+          { key: "scheduledStartDisplay", header: "Inicio" },
+          { key: "scheduledEndDisplay", header: "Fin" },
+        ];
 
   return {
     entityType: "operations",
@@ -86,13 +151,7 @@ const buildOperationsPrepared = async (
     fileType: result.fileType,
     format: result.format,
     requireAllRowsValid: true,
-    displayColumns: [
-      { key: "punto", header: result.format === "client" ? "PUNTO" : "Servicio" },
-      { key: "serviceName", header: "Servicio resuelto" },
-      { key: "rawFecha", header: result.format === "client" ? "Fecha original" : "Inicio original" },
-      { key: "scheduledStartDisplay", header: "Inicio" },
-      { key: "scheduledEndDisplay", header: "Fin" },
-    ],
+    displayColumns,
     fileErrors: result.fileErrors,
     rows,
     summary: {
@@ -101,7 +160,7 @@ const buildOperationsPrepared = async (
       invalidRows: result.summary.invalidRows,
       warningRows: 0,
       canConfirm: result.summary.canConfirm,
-      createdEstimate: result.summary.validRows,
+      createdEstimate: estimateCreatedOperations(rows),
       updatedEstimate: 0,
     },
   };
@@ -163,9 +222,10 @@ export const operationsImportStrategy: ImportStrategy = {
 
     const confirmRows = prepared.rows
       .filter((row) => row.payload)
-      .map((row) => row.payload as OperationConfirmPayload);
+      .map((row) => row.payload as OperationImportConfirmRow);
 
     const created = await operationImportService.confirm(companyId, confirmRows);
+    const fileErrors = created.workdaySyncError ? [created.workdaySyncError.message] : [];
 
     await logAuditSafe("import.operations.execute", () =>
       auditService.log(companyId, {
@@ -208,7 +268,7 @@ export const operationsImportStrategy: ImportStrategy = {
         },
         errors: [],
       })),
-      fileErrors: [],
+      fileErrors,
     };
 
     return result;

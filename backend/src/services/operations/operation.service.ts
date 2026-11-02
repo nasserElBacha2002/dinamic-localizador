@@ -282,20 +282,8 @@ export const operationService = {
       lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
     },
   ) {
-    if (input.scheduleSource === "COMPANY") {
-      assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
-    }
+    await this.assertRecurringCreateInput(companyId, input);
 
-    if (input.scheduleSource === "CUSTOM") {
-      const normalizedDays = normalizeWeeklyScheduleDays(input.scheduleDays ?? []);
-      const validation = validateWeeklyScheduleDays(normalizedDays);
-      if (!validation.valid) {
-        throw new AppError(400, validation.code, validation.message);
-      }
-    }
-
-    const settings = await companySettingsRepository.findByCompanyId(companyId);
-    const customTimezone = resolveOperationTimezone(settings?.operationTimezone);
     const wantsMulti =
       (input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" && (input.shifts?.length ?? 0) > 0;
 
@@ -304,29 +292,12 @@ export const operationService = {
     await transaction.begin();
 
     try {
-      const operation = await operationRepository.createRecurring(
+      const operation = await this.createRecurringInTransaction(
         companyId,
-        {
-          serviceId: input.serviceId,
-          earlyToleranceMinutes: tolerances.earlyToleranceMinutes,
-          lateToleranceMinutes: tolerances.lateToleranceMinutes,
-          earlyToleranceSource: tolerances.earlyToleranceSource,
-          lateToleranceSource: tolerances.lateToleranceSource,
-        },
         transaction,
+        input,
+        tolerances,
       );
-
-      await operationScheduleRepository.createInTransaction(companyId, transaction, {
-        operationId: operation.id,
-        scheduleSource: input.scheduleSource,
-        timezone: input.scheduleSource === "CUSTOM" ? customTimezone : null,
-        validFrom: input.validFrom,
-        validUntil: input.validUntil ?? null,
-        days:
-          input.scheduleSource === "CUSTOM"
-            ? normalizeWeeklyScheduleDays(input.scheduleDays ?? [])
-            : undefined,
-      });
 
       if (wantsMulti) {
         await seedMultiShiftOnCreateInTransaction(
@@ -353,6 +324,146 @@ export const operationService = {
       await transaction.rollback();
       throw error;
     }
+  },
+
+  async assertRecurringCreateInput(
+    companyId: string,
+    input: CreateRecurringOperationInput,
+  ): Promise<void> {
+    if (input.scheduleSource === "COMPANY") {
+      assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
+    }
+
+    if (input.scheduleSource === "CUSTOM") {
+      const normalizedDays = normalizeWeeklyScheduleDays(input.scheduleDays ?? []);
+      const validation = validateWeeklyScheduleDays(normalizedDays);
+      if (!validation.valid) {
+        throw new AppError(400, validation.code, validation.message);
+      }
+    }
+
+    if ((input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" && (input.shifts?.length ?? 0) > 0) {
+      return;
+    }
+  },
+
+  async createRecurringInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: CreateRecurringOperationInput,
+    tolerances: {
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+    },
+  ) {
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const customTimezone = resolveOperationTimezone(settings?.operationTimezone);
+
+    const operation = await operationRepository.createRecurring(
+      companyId,
+      {
+        serviceId: input.serviceId,
+        earlyToleranceMinutes: tolerances.earlyToleranceMinutes,
+        lateToleranceMinutes: tolerances.lateToleranceMinutes,
+        earlyToleranceSource: tolerances.earlyToleranceSource,
+        lateToleranceSource: tolerances.lateToleranceSource,
+      },
+      transaction,
+    );
+
+    await operationScheduleRepository.createInTransaction(companyId, transaction, {
+      operationId: operation.id,
+      scheduleSource: input.scheduleSource,
+      timezone: input.scheduleSource === "CUSTOM" ? customTimezone : null,
+      validFrom: input.validFrom,
+      validUntil: input.validUntil ?? null,
+      days:
+        input.scheduleSource === "CUSTOM"
+          ? normalizeWeeklyScheduleDays(input.scheduleDays ?? [])
+          : undefined,
+    });
+
+    return operation;
+  },
+
+  async createRecurringImportBatch(
+    companyId: string,
+    rows: Array<{
+      input: CreateRecurringOperationInput;
+      tolerances: {
+        earlyToleranceMinutes: number;
+        lateToleranceMinutes: number;
+        earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+        lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      };
+    }>,
+  ) {
+    for (const row of rows) {
+      await this.assertRecurringCreateInput(companyId, row.input);
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    const created = [];
+    try {
+      for (const row of rows) {
+        const operation = await this.createRecurringInTransaction(
+          companyId,
+          transaction,
+          row.input,
+          row.tolerances,
+        );
+
+        const wantsMulti =
+          (row.input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" &&
+          (row.input.shifts?.length ?? 0) > 0;
+        if (wantsMulti) {
+          await seedMultiShiftOnCreateInTransaction(
+            companyId,
+            operation.id,
+            row.input.validFrom,
+            row.input.shifts ?? [],
+            transaction,
+          );
+        }
+
+        created.push(operation);
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await safeRollback(transaction);
+      throw error;
+    }
+
+    for (const operation of created) {
+      try {
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          operation.id,
+          () =>
+            recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id),
+          "recurring operation import",
+        );
+      } catch (error) {
+        if (error instanceof AppError && error.code === "RECURRING_WORKDAY_SYNC_FAILED") {
+          return {
+            operations: created,
+            workdaySyncError: error,
+          };
+        }
+        throw error;
+      }
+    }
+
+    return {
+      operations: created,
+      workdaySyncError: null,
+    };
   },
 
   async list(companyId: string, query: ListOperationsQuery) {

@@ -21,10 +21,10 @@ export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
     description: "Cargá un CSV o XLSX, revisá la vista previa y confirmá la importación.",
     help: [
       "Formatos: CSV y XLSX.",
-      "Formato mínimo: Sucursal, Fecha.",
-      "También se acepta el formato extendido legacy con fecha_inicio y fecha_fin.",
+      "Operación puntual (ONE_TIME): Sucursal + Fecha, o legacy con fecha_inicio y fecha_fin.",
+      "Operación fija (RECURRING): Sucursal + vigencia_desde; opcionales vigencia_hasta, horario_inicio, horario_fin, origen_horario (EMPRESA/CUSTOM), días lunes–domingo (1/S) y tolerancias.",
       "Los horarios y tolerancias faltantes usan la configuración de operaciones de la empresa.",
-      "Solo se crean operaciones nuevas; los duplicados se rechazan.",
+      "Solo se crean operaciones nuevas; los duplicados puntual se rechazan.",
     ].join(" "),
     permission: "operations:manage",
     successMessage: `${terminology.operation.plural} importadas correctamente.`,

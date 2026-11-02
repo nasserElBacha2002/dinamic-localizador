@@ -143,30 +143,44 @@ export const absenceWhatsappEditService = {
       });
     };
 
-    if (editable.length === 1) {
+    try {
+      if (editable.length === 1) {
+        await persistEditSession(
+          "WAITING_ABSENCE_EDIT_FIELD_MENU",
+          serializeContext({
+            flow: "ABSENCE_EDIT",
+            absenceDraft: {
+              requestId: editable[0].id,
+              absenceTypeId: undefined,
+              startDate: editable[0].startDate,
+              endDate: editable[0].endDate,
+              reason: editable[0].reason,
+            },
+          }),
+        );
+        return this.promptFieldMenu(input, editable[0]);
+      }
+
       await persistEditSession(
-        "WAITING_ABSENCE_EDIT_FIELD_MENU",
+        "WAITING_ABSENCE_EDIT_REQUEST_SELECTION",
         serializeContext({
           flow: "ABSENCE_EDIT",
-          absenceDraft: {
-            requestId: editable[0].id,
-            absenceTypeId: undefined,
-            startDate: editable[0].startDate,
-            endDate: editable[0].endDate,
-            reason: editable[0].reason,
-          },
+          absenceEditOptions: editable.map((row) => row.id),
         }),
       );
-      return this.promptFieldMenu(input, editable[0]);
+    } catch (error) {
+      console.error("[absence-whatsapp-edit] failed to persist edit session", {
+        employeeId: input.employeeId,
+        error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
+      return input.respond({
+        message:
+          "No pude iniciar la modificación de la solicitud. Intentá de nuevo en un momento.",
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
     }
-
-    await persistEditSession(
-      "WAITING_ABSENCE_EDIT_REQUEST_SELECTION",
-      serializeContext({
-        flow: "ABSENCE_EDIT",
-        absenceEditOptions: editable.map((row) => row.id),
-      }),
-    );
 
     const lines = editable.map((row, index) => formatRequestLine(index, row));
     return input.respond({

@@ -2172,7 +2172,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     );
 
     assert.match(response, /ABSENCE_KIND_STARTED/);
-    assert.deepEqual(capturedKindKeys, ["single_workday", "absence"]);
+    assert.deepEqual(capturedKindKeys, ["single_workday", "absence", "edit_request"]);
   });
 
   it("unified absence kind 1 routes to punctual unavailability for today's RECURRING occurrence", async () => {

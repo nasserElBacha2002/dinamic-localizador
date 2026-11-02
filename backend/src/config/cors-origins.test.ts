@@ -23,4 +23,13 @@ describe("parseCorsOrigins", () => {
     );
     assert.deepEqual(origins, ["https://app.example.com"]);
   });
+
+  it("supports production app subdomain from domain separation plan", () => {
+    const origins = parseCorsOrigins(
+      "production",
+      "https://app.dinamicoperations.com",
+      "https://app.dinamicoperations.com",
+    );
+    assert.deepEqual(origins, ["https://app.dinamicoperations.com"]);
+  });
 });

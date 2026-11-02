@@ -68,6 +68,12 @@ review/
 /phase*-diffstat.txt
 /phase*-status.txt
 /phase*-tests.txt
+/domain-separation-phase1-*.txt
+/docs/domain-separation-phase1/domain-separation-phase1-diff.txt
+/docs/domain-separation-phase1/domain-separation-phase1-diffstat.txt
+/docs/domain-separation-phase1/domain-separation-phase1-status.txt
+/docs/domain-separation-phase1/domain-separation-phase1-tests.txt
+/docs/domain-separation-phase1/domain-separation-phase1-untracked.txt
 /latest-diff.txt
 /latest-diffstat.txt
 /latest-status.txt

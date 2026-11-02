@@ -23,6 +23,16 @@ describe("password-reset-email", () => {
     assert.equal(url.includes("evil"), false);
   });
 
+  it("preserves token query when FRONTEND_URL is app subdomain", () => {
+    (env as { FRONTEND_URL: string }).FRONTEND_URL = "https://app.dinamicoperations.com";
+    const token = "reset-token-abc";
+    const url = buildPasswordResetUrl(token);
+    assert.equal(
+      url,
+      `https://app.dinamicoperations.com/reset-password?token=${encodeURIComponent(token)}`,
+    );
+  });
+
   it("mentions expiry and ignore-if-unsolicited copy", () => {
     const token = generateOpaqueToken();
     const email = buildPasswordResetEmail({

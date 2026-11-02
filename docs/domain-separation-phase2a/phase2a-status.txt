@@ -1,0 +1,5 @@
+BLOCKED
+
+Reason: Public DNS for app.dinamicoperations.com has no A record (dig empty; curl NXDOMAIN). Nginx bootstrap, Certbot, and HTTPS final require operator actions on DNS provider and production SSH. Apex and api baselines verified OK from external checks; no production nginx/env changes applied from this execution.
+
+Next unblock: Create A record app -> 170.239.85.196 (consistent with apex/api), then follow docs/domain-separation-phase2a/03-nginx-bootstrap.md through 05-https-smoke-tests.md.

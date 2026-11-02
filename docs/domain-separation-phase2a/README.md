@@ -41,10 +41,14 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Estado de ejecución
 
 ```text
-PENDING_MANUAL
+BLOCKED — ver phase2a-status.txt
 ```
 
-La Fase 2A requiere acceso a Hostinger/DNS y SSH al servidor de producción. No se ejecuta desde el repositorio.
+Evidencia y runbook por paso: `01-precheck.md` … `09-phase2a-summary.md`.
+
+**Bloqueador actual (2026-11-02):** no existe registro DNS `A` para `app.dinamicoperations.com` (apex/api → `170.239.85.196`). Crear registro en proveedor DNS, luego ejecutar bootstrap/Certbot vía SSH.
+
+La Fase 2A requiere acceso a Hostinger/DNS y SSH al servidor de producción; el agente documentó baseline público pero no aplicó Nginx en prod.
 
 ## Post-2A
 

@@ -36,6 +36,10 @@ describe("operation-timezones", () => {
     );
   });
 
+  it("preserves curated preferred timezone ids even when offsets collide", () => {
+    assert.equal(getCanonicalOperationTimezone("America/New_York"), "America/New_York");
+  });
+
   it("includes current value when offset is not in curated list", () => {
     const options = getOperationTimezoneOptions("Asia/Tokyo");
     assert.ok(options.some((option) => option.value === "Asia/Tokyo"));

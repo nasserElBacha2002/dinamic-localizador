@@ -127,4 +127,35 @@ describe("CORS browser boundary policy", () => {
     assert.match(allowHeaders, /authorization/);
     assert.match(allowHeaders, /content-type/);
   });
+
+  it("allows https://app.dinamicoperations.com when configured for domain separation", async () => {
+    const origins = parseCorsOrigins(
+      "production",
+      "https://app.dinamicoperations.com",
+      "https://app.dinamicoperations.com",
+    );
+    const baseUrl = await start(origins);
+    const response = await fetch(`${baseUrl}/api/health`, {
+      headers: { Origin: "https://app.dinamicoperations.com" },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(
+      response.headers.get("access-control-allow-origin"),
+      "https://app.dinamicoperations.com",
+    );
+  });
+
+  it("rejects apex marketing origin when only app subdomain is allowlisted", async () => {
+    const origins = parseCorsOrigins(
+      "production",
+      "https://app.dinamicoperations.com",
+      "https://app.dinamicoperations.com",
+    );
+    const baseUrl = await start(origins);
+    const response = await fetch(`${baseUrl}/api/health`, {
+      headers: { Origin: "https://dinamicoperations.com" },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
+  });
 });

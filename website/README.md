@@ -2,12 +2,13 @@
 
 Sitio comercial (landing) independiente del frontend operativo (`../frontend`).
 
-## Dominios objetivo (referencia)
+## Dominios objetivo (separación website / app)
 
-- `https://dinamicoperations.com/` → website (este proyecto)
-- `https://dinamicoperations.com/login` (y resto de rutas app) → `../frontend`
-- `https://api.dinamicoperations.com` → `../backend`
+- `https://dinamicoperations.com/` → website (este proyecto) y SEO público
+- `https://app.dinamicoperations.com/` → aplicación operativa (`../frontend`)
+- `https://api.dinamicoperations.com` → backend / API / webhooks Twilio
 
+Preparación en repo: [docs/domain-separation-phase1/](../docs/domain-separation-phase1/).  
 Cutover operativo: [docs/production-domain-cutover.md](../docs/production-domain-cutover.md)
 
 ## Desarrollo
@@ -21,15 +22,20 @@ Puerto por defecto: **8085**.
 
 ## Variables
 
-Ver `.env.example`. Por defecto el CTA **Ingresar** apunta a `/login` (mismo dominio). `VITE_OPERATIONS_APP_URL` es opcional para desarrollo con app en otro puerto.
+Ver `.env.example`. El CTA **Ingresar** usa `getOperationsLoginUrl()`:
+
+- Sin `VITE_OPERATIONS_APP_URL` → enlace relativo `/login` (compatibilidad pre-cutover en el mismo host).
+- Con `VITE_OPERATIONS_APP_URL` → enlace absoluto a la app (p. ej. `http://localhost:8084/login` en local o `https://app.dinamicoperations.com/login` en producción).
+
+En CI, la variable proviene de GitHub **`vars.VITE_OPERATIONS_APP_URL`** (configurar en el cutover; vacío mantiene `/login` relativo).
 
 ## SEO
 
-Metadata principal en `index.html` (title, description, canonical, og:url). `useLandingDocumentMeta` puede complementar en runtime.
+Metadata principal en `index.html` (title, description, canonical, og:url). `useLandingDocumentMeta` complementa en runtime.
 
-Archivos estáticos para Google Search Console:
+Archivos públicos solo en este proyecto:
 
 - `https://dinamicoperations.com/sitemap.xml`
 - `https://dinamicoperations.com/robots.txt`
 
-Hay un solo par de URLs de dominio: `https://dinamicoperations.com/sitemap.xml` y `/robots.txt`. El catch-all del host manda todo lo que no es `/` a la app, así que esos archivos también están en `frontend/public/` (y el Nginx de la app los sirve como estáticos, sin caer en la SPA). Las copias de este proyecto quedan alineadas para cuando el Nginx del host proxee esas rutas al website.
+La app operativa tiene política SEO distinta (`noindex`, sin sitemap de marketing). Ver auditoría en `docs/domain-separation-audit/`.

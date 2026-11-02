@@ -18,4 +18,10 @@ describe("operations-app-url", () => {
     assert.equal(getOperationsAppUrl(), "http://localhost:8084");
     assert.equal(getOperationsLoginUrl(), "http://localhost:8084/login");
   });
+
+  it("builds production-style login URL when app subdomain is configured", () => {
+    (globalThis as { __VITE_OPERATIONS_APP_URL__?: string }).__VITE_OPERATIONS_APP_URL__ =
+      "https://app.dinamicoperations.com";
+    assert.equal(getOperationsLoginUrl(), "https://app.dinamicoperations.com/login");
+  });
 });

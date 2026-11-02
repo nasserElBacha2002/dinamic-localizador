@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
+import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
+
+setupUnitTestEnv();
+
+import { env } from "../../config/env";
 import { buildInvitationAcceptUrl, buildInvitationEmail } from "./invitation-email";
 
 describe("invitation-email", () => {
+  const originalUrl = env.FRONTEND_URL;
+
+  afterEach(() => {
+    (env as { FRONTEND_URL: string }).FRONTEND_URL = originalUrl;
+  });
+
   it("builds accept URL from FRONTEND_URL without leaking token into subject", () => {
     const token = "abcdefghijklmnopqrstuvwxyz0123456789ABCD";
     const url = buildInvitationAcceptUrl(token);
@@ -24,6 +35,16 @@ describe("invitation-email", () => {
     assert.match(email.html, /&lt;Corp&gt;/);
     assert.match(email.text, /crear tu cuenta/i);
     assert.equal(email.html.includes("no-referrer"), true);
+  });
+
+  it("preserves invitation token when FRONTEND_URL is app subdomain", () => {
+    (env as { FRONTEND_URL: string }).FRONTEND_URL = "https://app.dinamicoperations.com";
+    const token = "invite-token-xyz";
+    const url = buildInvitationAcceptUrl(token);
+    assert.equal(
+      url,
+      `https://app.dinamicoperations.com/invitations/accept?token=${encodeURIComponent(token)}`,
+    );
   });
 
   it("uses existing-user copy when userExists", () => {

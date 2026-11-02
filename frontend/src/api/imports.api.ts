@@ -7,9 +7,13 @@ import type {
 } from "../types/import";
 import { scopedApiClient } from "./scoped-client";
 
-export async function downloadImportTemplate(entityType: ImportEntityType): Promise<Blob> {
+export async function downloadImportTemplate(
+  entityType: ImportEntityType,
+  variant?: string,
+): Promise<Blob> {
   const { data } = await scopedApiClient.get<Blob>(`imports/${entityType}/template`, {
     responseType: "blob",
+    params: variant ? { variant } : undefined,
   });
   return data;
 }

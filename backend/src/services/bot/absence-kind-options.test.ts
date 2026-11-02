@@ -19,7 +19,7 @@ describe("buildAvailableAbsenceKindOptions", () => {
   it("includes workday, absence and vacation when both modules are enabled", () => {
     assert.deepEqual(
       buildAvailableAbsenceKindOptions(allEnabled()).map((option) => option.key),
-      ["single_workday", "absence", "vacation"],
+      ["single_workday", "absence", "vacation", "edit_request"],
     );
   });
 
@@ -37,7 +37,7 @@ describe("buildAvailableAbsenceKindOptions", () => {
     states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     assert.deepEqual(
       buildAvailableAbsenceKindOptions(states).map((option) => option.key),
-      ["absence", "vacation"],
+      ["absence", "vacation", "edit_request"],
     );
   });
 });
@@ -58,5 +58,6 @@ describe("buildAbsenceKindSelectionPrompt", () => {
     assert.match(message, /1\. No voy a una jornada/);
     assert.match(message, /2\. Informar una ausencia/);
     assert.match(message, /3\. Solicitar vacaciones/);
+    assert.match(message, /4\. Modificar una solicitud/);
   });
 });

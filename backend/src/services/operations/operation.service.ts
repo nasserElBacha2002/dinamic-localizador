@@ -408,7 +408,7 @@ export const operationService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
-    let created: Operation[] = [];
+    let created: Operation[];
     try {
       created = await this.persistRecurringImportBatchInTransaction(companyId, transaction, rows);
       await transaction.commit();

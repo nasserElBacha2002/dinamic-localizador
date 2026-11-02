@@ -45,7 +45,6 @@ describe("whatsappCompanyContextService", () => {
   it("prefers an active session company over default company fallback", async () => {
     setupUnitTestEnv();
     const { botSessionRepository } = await import("../../repositories/whatsapp/bot-session.repository");
-    const { companyAlertRecipientRepository } = await import("../../repositories/companies/company-alert-recipient.repository");
     const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { companyRepository } = await import("../../repositories/companies/company.repository");
     const { whatsappCompanyContextService } = await import("./whatsapp-company-context.service");

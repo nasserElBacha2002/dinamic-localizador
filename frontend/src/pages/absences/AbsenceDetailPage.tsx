@@ -229,7 +229,6 @@ export function AbsenceDetailPage() {
         action={
           <AbsenceReviewActions
             canReview={canReview}
-            insufficientBalance={insufficientBalance}
             approvePending={approveMutation.isPending}
             coverageHref={coverageHref}
             onApprove={() => {

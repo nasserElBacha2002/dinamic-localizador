@@ -4,7 +4,6 @@ import { ActionMenu, type ActionMenuItem } from "../../design-system";
 
 export function AbsenceReviewActions({
   canReview,
-  insufficientBalance: _insufficientBalance,
   approvePending,
   coverageHref,
   onApprove,
@@ -14,7 +13,6 @@ export function AbsenceReviewActions({
   onBack,
 }: {
   canReview: boolean;
-  insufficientBalance: boolean;
   approvePending: boolean;
   coverageHref?: string | null;
   onApprove: () => void;

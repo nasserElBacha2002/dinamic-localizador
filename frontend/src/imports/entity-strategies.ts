@@ -2,6 +2,12 @@ import type { ImportEntityType } from "../types/import";
 import type { CompanyPermission } from "../types/permissions";
 import { terminology } from "../domain/terminology";
 
+export interface ImportTemplateDownloadOption {
+  variant: string;
+  label: string;
+  fileName: string;
+}
+
 export interface ImportEntityUiStrategy {
   entityType: ImportEntityType;
   label: string;
@@ -11,6 +17,7 @@ export interface ImportEntityUiStrategy {
   permission: CompanyPermission;
   successMessage: string;
   templateFileName: string;
+  templateDownloads?: ImportTemplateDownloadOption[];
 }
 
 export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
@@ -21,10 +28,12 @@ export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
     description: "Cargá un CSV o XLSX, revisá la vista previa y confirmá la importación.",
     help: [
       "Formatos: CSV y XLSX.",
-      "Operación puntual (ONE_TIME): Sucursal + Fecha, o legacy con fecha_inicio y fecha_fin.",
-      "Operación fija (RECURRING): Sucursal + vigencia_desde; opcionales vigencia_hasta, horario_inicio, horario_fin, origen_horario (EMPRESA/CUSTOM), días lunes–domingo (1/S) y tolerancias.",
-      "Los horarios y tolerancias faltantes usan la configuración de operaciones de la empresa.",
-      "Solo se crean operaciones nuevas; los duplicados puntual se rechazan.",
+      "La misma plantilla permite importar operaciones puntuales, fijas y multi-turno. Elegí el tipo en cada fila (PUNTUAL, FIJA o MULTI_TURNO).",
+      "Puntual: completá Sucursal, Tipo=PUNTUAL y Fecha; el resto de columnas puede quedar vacío.",
+      "Fija: Tipo=FIJA y Vigencia desde. Si dejás horarios y días vacíos, se usa el horario semanal de la empresa; si completás horario y/o días, se usa un horario personalizado para esa fila.",
+      "Multi-turno: una fila por turno con el mismo Tipo=MULTI_TURNO, misma sucursal y misma vigencia desde; indicá Turno codigo y horarios por fila.",
+      "Los valores faltantes usan la configuración de operaciones de la empresa.",
+      "Solo se crean operaciones nuevas; los duplicados se rechazan.",
     ].join(" "),
     permission: "operations:manage",
     successMessage: `${terminology.operation.plural} importadas correctamente.`,

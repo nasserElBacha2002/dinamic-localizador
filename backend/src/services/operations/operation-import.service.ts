@@ -10,6 +10,7 @@ import {
   IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE,
   UNSUPPORTED_FILE_TYPE_MESSAGE,
 } from "../../constants/operation-import";
+import type { ScheduleSource } from "../../constants/schedule-source";
 import { getPool } from "../../database/connection";
 import { AppError } from "../../errors/app-error";
 import { companyShiftTemplateRepository } from "../../repositories/companies/company-shift-template.repository";
@@ -27,6 +28,10 @@ import type {
 } from "../../types/operation-import";
 import { isMultiShiftCollapsedImportRow, isRecurringImportConfirmRow } from "../../types/operation-import";
 import { mapImportHeaders } from "../../utils/operations/operation-import-headers";
+import {
+  parseCanonicalOperationImportRowType,
+  type CanonicalOperationImportRowType,
+} from "../../utils/operations/operation-import-canonical";
 import { createOperationImportDateTimeUtils } from "../../utils/operations/operation-import-datetime";
 import {
   buildRecurringImportScheduleDays,
@@ -60,6 +65,7 @@ import {
 } from "../../utils/operations/operation-import-multi-shift";
 import { isOperationStartInPast } from "../../utils/operations/operation-lifecycle";
 import { isActiveOperationDuplicateError } from "../../utils/operations/active-operation-duplicate-errors";
+import { safeRollback } from "../../utils/safe-transaction";
 import {
   buildScheduleSummaryLabel,
   isOvernightSchedule,
@@ -239,6 +245,95 @@ const parseTolerance = (
   };
 };
 
+type ValidateImportRowOptions = {
+  outputFormat?: OperationImportPreviewRow["format"];
+  scheduleModeOverride?: RecurringImportScheduleMode;
+  scheduleSourceOverride?: ScheduleSource;
+  inferCanonicalSingleScheduleSource?: boolean;
+};
+
+const validateCanonicalRow = (
+  rowNumber: number,
+  row: string[],
+  headers: string[],
+  serviceLookup: Map<string, Service[]>,
+  oneTimeSeenKeys: Set<string>,
+  recurringSeen: RecurringImportSeenState,
+  normalization: ImportNormalizationContext,
+): OperationImportPreviewRow => {
+  const rowTypeResolution = parseCanonicalOperationImportRowType(
+    getCell(row, headers, "import_row_type"),
+  );
+  if (rowTypeResolution.error || !rowTypeResolution.type) {
+    return {
+      rowNumber,
+      format: "canonical",
+      operationKind: "ONE_TIME",
+      ...emptyRecurringPreviewFields,
+      punto: getCell(row, headers, "location").trim(),
+      legacyLocation: getCell(row, headers, "location").trim(),
+      serviceId: null,
+      serviceName: null,
+      rawFecha: "",
+      parsedOperationDate: null,
+      fechaInicio: "",
+      fechaFin: "",
+      scheduledStart: null,
+      scheduledEnd: null,
+      scheduledStartDisplay: "",
+      scheduledEndDisplay: "",
+      toleranciaTemprana: "",
+      toleranciaTardia: "",
+      earlyToleranceMinutes: null,
+      lateToleranceMinutes: null,
+      earlyToleranceSource: "COMPANY_DEFAULT",
+      lateToleranceSource: "COMPANY_DEFAULT",
+      earlyToleranceDisplay: "",
+      lateToleranceDisplay: "",
+      status: "invalid",
+      errors: [rowTypeResolution.error ?? "Tipo de operación inválido"],
+    };
+  }
+
+  if (rowTypeResolution.type === "PUNTUAL") {
+    return validateClientRow(
+      rowNumber,
+      row,
+      headers,
+      serviceLookup,
+      oneTimeSeenKeys,
+      normalization,
+      { outputFormat: "canonical" },
+    );
+  }
+
+  if (rowTypeResolution.type === "FIJA") {
+    return validateRecurringRow(
+      rowNumber,
+      row,
+      headers,
+      serviceLookup,
+      recurringSeen,
+      normalization,
+      { outputFormat: "canonical", scheduleModeOverride: "SINGLE", inferCanonicalSingleScheduleSource: true },
+    );
+  }
+
+  return validateRecurringRow(
+    rowNumber,
+    row,
+    headers,
+    serviceLookup,
+    recurringSeen,
+    normalization,
+    {
+      outputFormat: "canonical",
+      scheduleModeOverride: "MULTI_SHIFT",
+      scheduleSourceOverride: "COMPANY",
+    },
+  );
+};
+
 const getCell = (row: string[], headers: string[], key: string): string => {
   const index = headers.indexOf(key);
   if (index === -1) {
@@ -321,6 +416,7 @@ const validateClientRow = (
   serviceLookup: Map<string, Service[]>,
   seenKeys: Set<string>,
   normalization: ImportNormalizationContext,
+  options: ValidateImportRowOptions = {},
 ): OperationImportPreviewRow => {
   const locationValue = getCell(row, headers, "location").trim();
   const rawFecha = getCell(row, headers, "fecha").trim();
@@ -393,7 +489,7 @@ const validateClientRow = (
 
   return {
     rowNumber,
-    format: "client",
+    format: options.outputFormat ?? "client",
     operationKind: "ONE_TIME",
     ...emptyRecurringPreviewFields,
     punto: locationValue,
@@ -626,6 +722,7 @@ const validateRecurringRow = (
   serviceLookup: Map<string, Service[]>,
   seen: RecurringImportSeenState,
   normalization: ImportNormalizationContext,
+  options: ValidateImportRowOptions = {},
 ): OperationImportPreviewRow => {
   const locationValue = getCell(row, headers, "location").trim();
   const rawValidFrom = getCell(row, headers, "vigencia_desde").trim();
@@ -652,7 +749,9 @@ const validateRecurringRow = (
     errors.push("tipo_operacion ONE_TIME no es compatible con el formato recurrente de importación");
   }
 
-  const scheduleModeResolution = parseRecurringImportScheduleMode(rawScheduleMode);
+  const scheduleModeResolution = options.scheduleModeOverride
+    ? { mode: options.scheduleModeOverride, error: null }
+    : parseRecurringImportScheduleMode(rawScheduleMode);
   if (scheduleModeResolution.error) {
     errors.push(scheduleModeResolution.error);
   }
@@ -675,7 +774,17 @@ const validateRecurringRow = (
   if (scheduleSourceResolution.error) {
     errors.push(scheduleSourceResolution.error);
   }
-  let scheduleSource = scheduleSourceResolution.value ?? "CUSTOM";
+  let scheduleSource =
+    options.scheduleSourceOverride ?? scheduleSourceResolution.value ?? "CUSTOM";
+  if (options.scheduleSourceOverride) {
+    scheduleSource = options.scheduleSourceOverride;
+  } else if (
+    options.inferCanonicalSingleScheduleSource &&
+    scheduleMode === "SINGLE" &&
+    !rawScheduleSource.trim()
+  ) {
+    scheduleSource = hasRecurringImportCustomScheduleColumnValues(headers, row) ? "CUSTOM" : "COMPANY";
+  }
   if (scheduleMode === "MULTI_SHIFT") {
     if (scheduleSource === "CUSTOM" && rawScheduleSource.trim()) {
       errors.push(IMPORT_RECURRING_MULTI_SHIFT_CUSTOM_SOURCE_MESSAGE);
@@ -759,10 +868,13 @@ const validateRecurringRow = (
       shiftEndTime = shiftTimes.endTime;
     }
 
+    const shiftDaysBuilt = buildRecurringImportShiftEnabledDays(headers, row);
+    errors.push(...shiftDaysBuilt.errors);
+
     if (!recurringImportRowHasWeekdayValues(headers, row)) {
       errors.push(IMPORT_RECURRING_MULTI_SHIFT_WEEKDAY_REQUIRED_MESSAGE);
     } else {
-      shiftEnabledDays = buildRecurringImportShiftEnabledDays(headers, row);
+      shiftEnabledDays = shiftDaysBuilt.days;
       if (!shiftEnabledDays.some((day) => day.isEnabled)) {
         errors.push(IMPORT_RECURRING_MULTI_SHIFT_WEEKDAY_REQUIRED_MESSAGE);
       }
@@ -803,9 +915,14 @@ const validateRecurringRow = (
       if (!weekdayColumnsPresent) {
         errors.push("Configurá al menos un día de trabajo para esta operación");
       } else {
-        scheduleDays = normalizeWeeklyScheduleDays(
-          buildRecurringImportScheduleDays(headers, row, startTime, endTime),
+        const builtScheduleDays = buildRecurringImportScheduleDays(
+          headers,
+          row,
+          startTime,
+          endTime,
         );
+        errors.push(...builtScheduleDays.errors);
+        scheduleDays = normalizeWeeklyScheduleDays(builtScheduleDays.scheduleDays);
         const validation = validateWeeklyScheduleDays(scheduleDays);
         if (!validation.valid) {
           errors.push(validation.message);
@@ -861,7 +978,7 @@ const validateRecurringRow = (
 
   return {
     rowNumber,
-    format: "recurring",
+    format: options.outputFormat ?? "recurring",
     operationKind: "RECURRING",
     scheduleMode,
     multiShiftGroupKey,
@@ -966,6 +1083,202 @@ export type OperationImportConfirmResult = {
   workdaySyncError: AppError | null;
 };
 
+const validateOneTimeImportConfirmRows = async (
+  companyId: string,
+  rows: OperationImportConfirmRow[],
+  serviceById: Map<string, Service>,
+): Promise<void> => {
+  const seenKeys = new Set<string>();
+
+  for (const row of rows) {
+    if (isRecurringImportConfirmRow(row)) {
+      continue;
+    }
+
+    const service = serviceById.get(row.serviceId);
+    if (!service) {
+      throw new AppError(
+        400,
+        "OPERATION_IMPORT_INVALID",
+        "La importación contiene filas inválidas. Revisá el archivo y volvé a intentar.",
+      );
+    }
+
+    if (!service.active) {
+      throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
+    }
+
+    if (isOperationStartInPast(row.scheduledStart)) {
+      throw new AppError(
+        400,
+        "OPERATION_START_IN_PAST",
+        "No se puede programar una operación con fecha de inicio en el pasado",
+      );
+    }
+
+    if (new Date(row.scheduledEnd) <= new Date(row.scheduledStart)) {
+      throw new AppError(
+        400,
+        "INVALID_OPERATION_DATE_RANGE",
+        "scheduledEnd debe ser posterior a scheduledStart",
+      );
+    }
+
+    const duplicateKey = buildOperationDuplicateKey(row.serviceId, row.scheduledStart);
+    if (seenKeys.has(duplicateKey)) {
+      throw new AppError(
+        400,
+        "OPERATION_IMPORT_INVALID",
+        "La importación contiene filas duplicadas para el mismo servicio y fecha de inicio",
+      );
+    }
+    seenKeys.add(duplicateKey);
+  }
+
+  const existingKeys = await operationRepository.findExistingActiveKeys(
+    companyId,
+    rows
+      .filter((row) => !isRecurringImportConfirmRow(row))
+      .map((row) => ({
+        serviceId: row.serviceId,
+        scheduledStart: (row as { scheduledStart: string }).scheduledStart,
+      })),
+  );
+  if (existingKeys.size > 0) {
+    throw new AppError(
+      409,
+      "OPERATION_DUPLICATE",
+      "Ya existe una operación para ese servicio y fecha de inicio",
+    );
+  }
+};
+
+const validateAndBuildRecurringImportBatchRows = async (
+  companyId: string,
+  rows: OperationImportRecurringConfirmRow[],
+  importDefaults: ImportOperationalDefaults,
+  serviceById: Map<string, Service>,
+) => {
+  try {
+    assertRecurringMultiShiftConfirmGroupsConsistent(rows);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === IMPORT_RECURRING_MULTI_SHIFT_GROUP_INCONSISTENT_MESSAGE
+    ) {
+      throw new AppError(400, "OPERATION_IMPORT_INVALID", error.message);
+    }
+    throw error;
+  }
+
+  const collapsedRows = collapseRecurringMultiShiftConfirmRows(rows);
+  const seenKeys = new Set<string>();
+
+  for (const row of collapsedRows) {
+    const service = serviceById.get(row.serviceId);
+    if (!service) {
+      throw new AppError(
+        400,
+        "OPERATION_IMPORT_INVALID",
+        "La importación contiene filas inválidas. Revisá el archivo y volvé a intentar.",
+      );
+    }
+
+    if (!service.active) {
+      throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
+    }
+
+    if (row.validUntil && row.validUntil < row.validFrom) {
+      throw new AppError(
+        400,
+        "INVALID_OPERATION_DATE_RANGE",
+        "La fecha de finalización no puede ser anterior a la fecha de inicio",
+      );
+    }
+
+    if (isMultiShiftCollapsedImportRow(row)) {
+      if (row.scheduleSource !== "COMPANY" || row.shifts.length < 1) {
+        throw new AppError(
+          400,
+          "OPERATION_IMPORT_INVALID",
+          "La importación contiene operaciones multi-turno inválidas. Revisá el archivo y volvé a intentar.",
+        );
+      }
+
+      const templateSortOrderById = new Map<string, number>();
+      const shiftCodes = new Set<string>();
+      for (const shift of row.shifts) {
+        const normalizedCode = normalizeRecurringImportShiftCode(shift.code, shift.name);
+        if (shiftCodes.has(normalizedCode)) {
+          throw new AppError(
+            400,
+            "OPERATION_IMPORT_INVALID",
+            IMPORT_RECURRING_MULTI_SHIFT_SHIFT_CODE_DUPLICATE_MESSAGE,
+          );
+        }
+        shiftCodes.add(normalizedCode);
+
+        if (shift.templateId) {
+          const template = await companyShiftTemplateRepository.findById(companyId, shift.templateId);
+          if (!template) {
+            throw new AppError(
+              400,
+              "OPERATION_IMPORT_INVALID",
+              IMPORT_RECURRING_MULTI_SHIFT_TEMPLATE_NOT_FOUND_MESSAGE,
+            );
+          }
+          if (!template.isActive) {
+            throw new AppError(
+              400,
+              "OPERATION_IMPORT_INVALID",
+              IMPORT_RECURRING_MULTI_SHIFT_TEMPLATE_INACTIVE_MESSAGE,
+            );
+          }
+          templateSortOrderById.set(shift.templateId, template.sortOrder);
+        }
+      }
+
+      row.shifts = orderRecurringMultiShiftImportSeeds(row.shifts, templateSortOrderById);
+    } else if ((row.scheduleMode ?? "SINGLE") === "MULTI_SHIFT") {
+      throw new AppError(
+        400,
+        "OPERATION_IMPORT_INVALID",
+        "La importación contiene operaciones multi-turno inválidas. Revisá el archivo y volvé a intentar.",
+      );
+    }
+
+    const duplicateKey = buildRecurringDuplicateKey(row.serviceId, row.validFrom);
+    if (seenKeys.has(duplicateKey)) {
+      throw new AppError(
+        400,
+        "OPERATION_IMPORT_INVALID",
+        "La importación contiene filas duplicadas para el mismo servicio y vigencia_desde",
+      );
+    }
+    seenKeys.add(duplicateKey);
+  }
+
+  const existingKeys = await operationRepository.findExistingActiveRecurringKeys(
+    companyId,
+    collapsedRows.map((row) => ({
+      serviceId: row.serviceId,
+      validFrom: row.validFrom,
+    })),
+  );
+  if (existingKeys.size > 0) {
+    throw new AppError(409, "OPERATION_DUPLICATE", IMPORT_RECURRING_DUPLICATE_MESSAGE);
+  }
+
+  for (const row of collapsedRows) {
+    await operationService.assertRecurringCreateInput(companyId, toRecurringCreateInput(row));
+  }
+
+  return collapsedRows.map((row) => ({
+    input: toRecurringCreateInput(row),
+    tolerances: resolveImportTolerances(row, importDefaults),
+  }));
+};
+
 const emptyPreview = (
   fileErrors: string[],
   fileType: SpreadsheetFileType | null = null,
@@ -1059,28 +1372,36 @@ export const operationImportService = {
       }
 
       const previewRow =
-        format === "client"
+        format === "canonical"
+          ? validateCanonicalRow(
+              index + 2,
+              row,
+              mapped,
+              serviceLookup,
+              seenKeys,
+              recurringSeen,
+              normalization,
+            )
+          : format === "client"
           ? validateClientRow(index + 2, row, mapped, serviceLookup, seenKeys, normalization)
           : format === "legacy"
             ? validateLegacyRow(index + 2, row, mapped, serviceLookup, seenKeys, normalization)
-            : validateRecurringRow(index + 2, row, mapped, serviceLookup, recurringSeen, normalization);
+            : validateRecurringRow(
+                index + 2,
+                row,
+                mapped,
+                serviceLookup,
+                recurringSeen,
+                normalization,
+              );
       rows.push(previewRow);
     }
 
-    if (format === "recurring") {
+    if (format === "recurring" || format === "canonical") {
       finalizeRecurringMultiShiftPreviewGroups(rows);
     }
 
-    if (format !== "recurring") {
-      const pairsToCheck = rows
-        .filter((row) => row.serviceId && row.scheduledStart && row.errors.length === 0)
-        .map((row) => ({
-          serviceId: row.serviceId as string,
-          scheduledStart: row.scheduledStart as string,
-        }));
-      const existingKeys = await operationRepository.findExistingActiveKeys(companyId, pairsToCheck);
-      markExistingOperationConflicts(rows, existingKeys);
-    } else {
+    if (format === "recurring" || format === "canonical") {
       const recurringPairs = Array.from(
         rows
           .filter((row) => row.serviceId && row.validFrom && row.errors.length === 0)
@@ -1101,6 +1422,19 @@ export const operationImportService = {
         recurringPairs,
       );
       markExistingRecurringConflicts(rows, existingRecurringKeys);
+    }
+
+    if (format === "client" || format === "legacy" || format === "canonical") {
+      const pairsToCheck = rows
+        .filter((row) => row.serviceId && row.scheduledStart && row.errors.length === 0)
+        .map((row) => ({
+          serviceId: row.serviceId as string,
+          scheduledStart: row.scheduledStart as string,
+        }));
+      if (pairsToCheck.length > 0) {
+        const existingKeys = await operationRepository.findExistingActiveKeys(companyId, pairsToCheck);
+        markExistingOperationConflicts(rows, existingKeys);
+      }
     }
 
     const fileErrors: string[] = [];
@@ -1138,10 +1472,12 @@ export const operationImportService = {
     const oneTimeRows = rows.filter((row) => !isRecurringImportConfirmRow(row));
 
     if (recurringRows.length > 0 && oneTimeRows.length > 0) {
-      throw new AppError(
-        400,
-        "OPERATION_IMPORT_INVALID",
-        "No se pueden mezclar filas ONE_TIME y RECURRING en la misma confirmación",
+      return this.confirmMixedInTransaction(
+        companyId,
+        oneTimeRows,
+        recurringRows,
+        importDefaults,
+        serviceById,
       );
     }
 
@@ -1152,75 +1488,77 @@ export const operationImportService = {
     return this.confirmOneTime(companyId, oneTimeRows, importDefaults, serviceById);
   },
 
+  async confirmMixedInTransaction(
+    companyId: string,
+    oneTimeRows: OperationImportConfirmRow[],
+    recurringRows: OperationImportRecurringConfirmRow[],
+    importDefaults: ImportOperationalDefaults,
+    serviceById: Map<string, Service>,
+  ): Promise<OperationImportConfirmResult> {
+    await validateOneTimeImportConfirmRows(companyId, oneTimeRows, serviceById);
+    const recurringBatchRows = await validateAndBuildRecurringImportBatchRows(
+      companyId,
+      recurringRows,
+      importDefaults,
+      serviceById,
+    );
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const oneTimeCreated =
+        oneTimeRows.length > 0
+          ? await operationRepository.createManyInTransaction(
+              companyId,
+              transaction,
+              oneTimeRows
+                .filter((row) => !isRecurringImportConfirmRow(row))
+                .map((row) => toCreateInput(row, importDefaults)),
+            )
+          : [];
+      const recurringCreated =
+        recurringBatchRows.length > 0
+          ? await operationService.persistRecurringImportBatchInTransaction(
+              companyId,
+              transaction,
+              recurringBatchRows,
+            )
+          : [];
+
+      await transaction.commit();
+
+      const materialization = await operationService.materializeImportedRecurringOperations(
+        companyId,
+        recurringCreated,
+      );
+
+      return {
+        data: [...oneTimeCreated, ...recurringCreated],
+        count: oneTimeCreated.length + recurringCreated.length,
+        workdaySyncError: materialization.workdaySyncError,
+      };
+    } catch (error) {
+      await safeRollback(transaction);
+      if (isActiveOperationDuplicateError(error)) {
+        throw new AppError(
+          409,
+          "OPERATION_DUPLICATE",
+          "Ya existe una operación para ese servicio y fecha de inicio",
+        );
+      }
+      throw error;
+    }
+  },
+
   async confirmOneTime(
     companyId: string,
     rows: OperationImportConfirmRow[],
     importDefaults: ImportOperationalDefaults,
     serviceById: Map<string, Service>,
   ): Promise<OperationImportConfirmResult> {
-    const seenKeys = new Set<string>();
-
-    for (const row of rows) {
-      if (isRecurringImportConfirmRow(row)) {
-        continue;
-      }
-
-      const service = serviceById.get(row.serviceId);
-      if (!service) {
-        throw new AppError(
-          400,
-          "OPERATION_IMPORT_INVALID",
-          "La importación contiene filas inválidas. Revisá el archivo y volvé a intentar.",
-        );
-      }
-
-      if (!service.active) {
-        throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
-      }
-
-      if (isOperationStartInPast(row.scheduledStart)) {
-        throw new AppError(
-          400,
-          "OPERATION_START_IN_PAST",
-          "No se puede programar una operación con fecha de inicio en el pasado",
-        );
-      }
-
-      if (new Date(row.scheduledEnd) <= new Date(row.scheduledStart)) {
-        throw new AppError(
-          400,
-          "INVALID_OPERATION_DATE_RANGE",
-          "scheduledEnd debe ser posterior a scheduledStart",
-        );
-      }
-
-      const duplicateKey = buildOperationDuplicateKey(row.serviceId, row.scheduledStart);
-      if (seenKeys.has(duplicateKey)) {
-        throw new AppError(
-          400,
-          "OPERATION_IMPORT_INVALID",
-          "La importación contiene filas duplicadas para el mismo servicio y fecha de inicio",
-        );
-      }
-      seenKeys.add(duplicateKey);
-    }
-
-    const existingKeys = await operationRepository.findExistingActiveKeys(
-      companyId,
-      rows
-        .filter((row) => !isRecurringImportConfirmRow(row))
-        .map((row) => ({
-          serviceId: row.serviceId,
-          scheduledStart: (row as { scheduledStart: string }).scheduledStart,
-        })),
-    );
-    if (existingKeys.size > 0) {
-      throw new AppError(
-        409,
-        "OPERATION_DUPLICATE",
-        "Ya existe una operación para ese servicio y fecha de inicio",
-      );
-    }
+    await validateOneTimeImportConfirmRows(companyId, rows, serviceById);
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -1254,124 +1592,12 @@ export const operationImportService = {
     importDefaults: ImportOperationalDefaults,
     serviceById: Map<string, Service>,
   ): Promise<OperationImportConfirmResult> {
-    try {
-      assertRecurringMultiShiftConfirmGroupsConsistent(rows);
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === IMPORT_RECURRING_MULTI_SHIFT_GROUP_INCONSISTENT_MESSAGE
-      ) {
-        throw new AppError(400, "OPERATION_IMPORT_INVALID", error.message);
-      }
-      throw error;
-    }
-
-    const collapsedRows = collapseRecurringMultiShiftConfirmRows(rows);
-    const seenKeys = new Set<string>();
-
-    for (const row of collapsedRows) {
-      const service = serviceById.get(row.serviceId);
-      if (!service) {
-        throw new AppError(
-          400,
-          "OPERATION_IMPORT_INVALID",
-          "La importación contiene filas inválidas. Revisá el archivo y volvé a intentar.",
-        );
-      }
-
-      if (!service.active) {
-        throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
-      }
-
-      if (row.validUntil && row.validUntil < row.validFrom) {
-        throw new AppError(
-          400,
-          "INVALID_OPERATION_DATE_RANGE",
-          "La fecha de finalización no puede ser anterior a la fecha de inicio",
-        );
-      }
-
-      if (isMultiShiftCollapsedImportRow(row)) {
-        if (row.scheduleSource !== "COMPANY" || row.shifts.length < 1) {
-          throw new AppError(
-            400,
-            "OPERATION_IMPORT_INVALID",
-            "La importación contiene operaciones multi-turno inválidas. Revisá el archivo y volvé a intentar.",
-          );
-        }
-
-        const templateSortOrderById = new Map<string, number>();
-        const shiftCodes = new Set<string>();
-        for (const shift of row.shifts) {
-          const normalizedCode = normalizeRecurringImportShiftCode(shift.code, shift.name);
-          if (shiftCodes.has(normalizedCode)) {
-            throw new AppError(
-              400,
-              "OPERATION_IMPORT_INVALID",
-              IMPORT_RECURRING_MULTI_SHIFT_SHIFT_CODE_DUPLICATE_MESSAGE,
-            );
-          }
-          shiftCodes.add(normalizedCode);
-
-          if (shift.templateId) {
-            const template = await companyShiftTemplateRepository.findById(companyId, shift.templateId);
-            if (!template) {
-              throw new AppError(
-                400,
-                "OPERATION_IMPORT_INVALID",
-                IMPORT_RECURRING_MULTI_SHIFT_TEMPLATE_NOT_FOUND_MESSAGE,
-              );
-            }
-            if (!template.isActive) {
-              throw new AppError(
-                400,
-                "OPERATION_IMPORT_INVALID",
-                IMPORT_RECURRING_MULTI_SHIFT_TEMPLATE_INACTIVE_MESSAGE,
-              );
-            }
-            templateSortOrderById.set(shift.templateId, template.sortOrder);
-          }
-        }
-
-        row.shifts = orderRecurringMultiShiftImportSeeds(row.shifts, templateSortOrderById);
-      } else if ((row.scheduleMode ?? "SINGLE") === "MULTI_SHIFT") {
-        throw new AppError(
-          400,
-          "OPERATION_IMPORT_INVALID",
-          "La importación contiene operaciones multi-turno inválidas. Revisá el archivo y volvé a intentar.",
-        );
-      }
-
-      const duplicateKey = buildRecurringDuplicateKey(row.serviceId, row.validFrom);
-      if (seenKeys.has(duplicateKey)) {
-        throw new AppError(
-          400,
-          "OPERATION_IMPORT_INVALID",
-          "La importación contiene filas duplicadas para el mismo servicio y vigencia_desde",
-        );
-      }
-      seenKeys.add(duplicateKey);
-    }
-
-    const existingKeys = await operationRepository.findExistingActiveRecurringKeys(
+    const batchRows = await validateAndBuildRecurringImportBatchRows(
       companyId,
-      collapsedRows.map((row) => ({
-        serviceId: row.serviceId,
-        validFrom: row.validFrom,
-      })),
+      rows,
+      importDefaults,
+      serviceById,
     );
-    if (existingKeys.size > 0) {
-      throw new AppError(409, "OPERATION_DUPLICATE", IMPORT_RECURRING_DUPLICATE_MESSAGE);
-    }
-
-    for (const row of collapsedRows) {
-      await operationService.assertRecurringCreateInput(companyId, toRecurringCreateInput(row));
-    }
-
-    const batchRows = collapsedRows.map((row) => ({
-      input: toRecurringCreateInput(row),
-      tolerances: resolveImportTolerances(row, importDefaults),
-    }));
 
     const batchResult = await operationService.createRecurringImportBatch(companyId, batchRows);
     return {

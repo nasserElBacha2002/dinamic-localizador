@@ -1,12 +1,13 @@
 import type { Request, Response } from "express";
 import { importOrchestrator } from "../imports/orchestrator";
-import type { ImportExecuteBody, ImportFileBody } from "../schemas/import.schema";
+import type { ImportExecuteBody, ImportFileBody, ImportTemplateQuery } from "../schemas/import.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const importController = {
   async template(req: Request, res: Response) {
     const entityType = String(req.params.entityType);
-    const template = importOrchestrator.getTemplate(entityType);
+    const query = (req.validatedQuery ?? {}) as ImportTemplateQuery;
+    const template = importOrchestrator.getTemplate(entityType, query.variant);
     res.setHeader("Content-Type", template.contentType);
     res.setHeader(
       "Content-Disposition",

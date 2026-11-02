@@ -48,7 +48,10 @@ describe("import strategy registry", () => {
       const body = template.body.toString("utf8");
       assert.ok(body.length > 0);
       const lines = body.split(/\r?\n/).filter((line) => line.length > 0);
-      assert.ok(lines.length >= 2, "template should include header and sample row");
+      assert.ok(lines.length >= 1, "template should include a header row");
+      if (strategy.entityType !== "operations") {
+        assert.ok(lines.length >= 2, "template should include header and sample row");
+      }
       const commaCountInHeader = (lines[0].match(/,/g) ?? []).length;
       if (commaCountInHeader > 0) {
         assert.match(body, /,/);

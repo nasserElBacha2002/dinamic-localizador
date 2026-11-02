@@ -6,6 +6,9 @@ import {
   IMPORT_MISSING_RECURRING_VALID_FROM_MESSAGE,
   OPERATION_IMPORT_COLUMN_ALIASES,
 } from "../../constants/operation-import";
+import {
+  isCanonicalOperationImportHeaders,
+} from "./operation-import-canonical";
 import type { OperationImportFormat } from "../../types/operation-import";
 import { normalizeCsvHeader } from "../csv-parse";
 import { RECURRING_IMPORT_WEEKDAY_HEADER_KEYS } from "./operation-import-recurring";
@@ -28,6 +31,10 @@ const EXTENDED_START_DATE_ALIASES = new Set(
 
 const EXTENDED_END_DATE_ALIASES = new Set(
   OPERATION_IMPORT_COLUMN_ALIASES.endDate.map((header) => normalizeImportColumnName(header)),
+);
+
+const IMPORT_ROW_TYPE_ALIASES = new Set(
+  OPERATION_IMPORT_COLUMN_ALIASES.importRowType.map((header) => normalizeImportColumnName(header)),
 );
 
 const LOCATION_TYPE_ALIASES = new Set(
@@ -87,8 +94,15 @@ const OPTIONAL_HEADER_ALIASES = new Set([
   ...RECURRING_IMPORT_WEEKDAY_HEADER_KEYS,
 ]);
 
-export const resolveImportHeaderColumn = (header: string): string => {
+export const resolveImportHeaderColumn = (
+  header: string,
+  options: { canonical?: boolean } = {},
+): string => {
   const normalized = normalizeImportColumnName(header);
+
+  if (options.canonical && IMPORT_ROW_TYPE_ALIASES.has(normalized)) {
+    return "import_row_type";
+  }
 
   if (EXTENDED_END_DATE_ALIASES.has(normalized)) {
     return "fecha_fin";
@@ -164,8 +178,26 @@ export interface MappedImportHeaders {
 }
 
 export const mapImportHeaders = (headers: string[]): MappedImportHeaders => {
-  const mapped = headers.map((header) => resolveImportHeaderColumn(header));
+  const canonical = isCanonicalOperationImportHeaders(headers);
+  const mapped = headers.map((header) =>
+    resolveImportHeaderColumn(header, { canonical }),
+  );
   const mappedSet = new Set(mapped);
+
+  if (canonical) {
+    const fileErrors: string[] = [];
+    if (!mappedSet.has("location")) {
+      fileErrors.push(IMPORT_MISSING_LOCATION_MESSAGE);
+    }
+    if (!mappedSet.has("import_row_type")) {
+      fileErrors.push("La columna Tipo es obligatoria en la plantilla unificada de operaciones.");
+    }
+    return {
+      mapped,
+      format: fileErrors.length === 0 ? "canonical" : null,
+      fileErrors,
+    };
+  }
 
   const hasLocation = mappedSet.has("location");
   const hasClientDate = mappedSet.has("fecha");

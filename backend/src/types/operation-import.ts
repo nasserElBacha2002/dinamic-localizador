@@ -2,7 +2,7 @@ import type { ScheduleSource } from "../constants/schedule-source";
 import type { WeeklyScheduleDay } from "./schedule";
 
 export type OperationImportRowStatus = "valid" | "invalid";
-export type OperationImportFormat = "client" | "legacy" | "recurring";
+export type OperationImportFormat = "client" | "legacy" | "recurring" | "canonical";
 export type OperationImportScheduleMode = "SINGLE" | "MULTI_SHIFT";
 
 export interface OperationImportRecurringShiftConfirmInput {

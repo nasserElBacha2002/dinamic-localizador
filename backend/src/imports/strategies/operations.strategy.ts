@@ -1,5 +1,13 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
-import { CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS } from "../../constants/operation-import";
+import {
+  OPERATION_CANONICAL_DOWNLOAD_TEMPLATE_HEADERS,
+  OPERATION_CANONICAL_TEMPLATE_FILE_NAME,
+  OPERATION_IMPORT_TEMPLATE_FILE_NAMES,
+  OPERATION_ONE_TIME_DOWNLOAD_TEMPLATE_HEADERS,
+  OPERATION_RECURRING_MULTI_SHIFT_DOWNLOAD_TEMPLATE_HEADERS,
+  OPERATION_RECURRING_SINGLE_DOWNLOAD_TEMPLATE_HEADERS,
+  type OperationImportTemplateVariant,
+} from "../../constants/operation-import";
 import { operationImportService, buildRecurringImportConfirmPayload } from "../../services/operations/operation-import.service";
 import type {
   OperationImportConfirmRow,
@@ -120,7 +128,17 @@ const buildOperationsPrepared = async (
   });
 
   const displayColumns =
-    result.format === "recurring"
+    result.format === "canonical"
+      ? [
+          { key: "punto", header: "Sucursal" },
+          { key: "serviceName", header: "Servicio resuelto" },
+          { key: "operationKind", header: "Tipo importado" },
+          { key: "rawFecha", header: "Fecha / vigencia" },
+          { key: "scheduleMode", header: "Modo horario" },
+          { key: "shiftCode", header: "Turno" },
+          { key: "scheduledStartDisplay", header: "Horario" },
+        ]
+      : result.format === "recurring"
       ? [
           { key: "punto", header: "Sucursal" },
           { key: "serviceName", header: "Servicio resuelto" },
@@ -166,6 +184,33 @@ const buildOperationsPrepared = async (
   };
 };
 
+const OPERATION_TEMPLATE_HEADERS_BY_VARIANT = {
+  one_time: OPERATION_ONE_TIME_DOWNLOAD_TEMPLATE_HEADERS,
+  recurring_single: OPERATION_RECURRING_SINGLE_DOWNLOAD_TEMPLATE_HEADERS,
+  recurring_multi_shift: OPERATION_RECURRING_MULTI_SHIFT_DOWNLOAD_TEMPLATE_HEADERS,
+} as const satisfies Record<
+  OperationImportTemplateVariant,
+  readonly string[]
+>;
+
+export const buildOperationImportTemplate = (
+  variant?: OperationImportTemplateVariant,
+): ImportTemplate => {
+  if (!variant) {
+    return {
+      fileName: OPERATION_CANONICAL_TEMPLATE_FILE_NAME,
+      contentType: "text/csv; charset=utf-8",
+      body: buildCsvTemplate([...OPERATION_CANONICAL_DOWNLOAD_TEMPLATE_HEADERS], []),
+    };
+  }
+
+  return {
+    fileName: OPERATION_IMPORT_TEMPLATE_FILE_NAMES[variant],
+    contentType: "text/csv; charset=utf-8",
+    body: buildCsvTemplate([...OPERATION_TEMPLATE_HEADERS_BY_VARIANT[variant]], []),
+  };
+};
+
 export const operationsImportStrategy: ImportStrategy = {
   entityType: "operations",
   permission: "operations:manage",
@@ -175,13 +220,7 @@ export const operationsImportStrategy: ImportStrategy = {
   strategyVersion: IMPORT_STRATEGY_VERSION,
 
   buildTemplate(): ImportTemplate {
-    return {
-      fileName: "plantilla-importacion-operaciones.csv",
-      contentType: "text/csv; charset=utf-8",
-      body: buildCsvTemplate([...CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS], [
-        ["Sucursal Ejemplo", "25/07/2026"],
-      ]),
-    };
+    return buildOperationImportTemplate();
   },
 
   prepare(companyId, buffer, fileName) {

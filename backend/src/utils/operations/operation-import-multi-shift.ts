@@ -221,12 +221,15 @@ const WEEKDAY_TO_ISO: Record<Weekday, number> = {
 export const buildRecurringImportShiftEnabledDays = (
   headers: string[],
   row: string[],
-): { dayOfWeek: number; isEnabled: boolean }[] => {
-  const scheduleDays = buildRecurringImportScheduleDays(headers, row, "00:00", "00:00");
-  return WEEKDAYS.map((dayOfWeek) => ({
-    dayOfWeek: WEEKDAY_TO_ISO[dayOfWeek],
-    isEnabled: scheduleDays.find((day) => day.dayOfWeek === dayOfWeek)?.isEnabled ?? false,
-  }));
+): { days: { dayOfWeek: number; isEnabled: boolean }[]; errors: string[] } => {
+  const { scheduleDays, errors } = buildRecurringImportScheduleDays(headers, row, "00:00", "00:00");
+  return {
+    days: WEEKDAYS.map((dayOfWeek) => ({
+      dayOfWeek: WEEKDAY_TO_ISO[dayOfWeek],
+      isEnabled: scheduleDays.find((day) => day.dayOfWeek === dayOfWeek)?.isEnabled ?? false,
+    })),
+    errors,
+  };
 };
 
 export const parseRecurringImportShiftTimes = (
@@ -416,7 +419,7 @@ export const recurringImportRowHasWeekdayValues = (headers: string[], row: strin
   if (!hasAnyRecurringWeekdayColumn(headers)) {
     return false;
   }
-  return buildRecurringImportShiftEnabledDays(headers, row).some((day) => day.isEnabled);
+  return buildRecurringImportShiftEnabledDays(headers, row).days.some((day) => day.isEnabled);
 };
 
 export const normalizeRecurringImportShiftCode = (rawCode: string, rawName: string): string =>

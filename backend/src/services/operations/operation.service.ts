@@ -45,7 +45,7 @@ import {
   validateWeeklyScheduleDays,
   weeklySchedulesEqual,
 } from "../../utils/operations/weekly-schedule";
-import type { OperationDetail, OperationWithService } from "../../types/domain";
+import type { Operation, OperationDetail, OperationWithService } from "../../types/domain";
 import { assertCompanyWorkScheduleExists } from "../../utils/operations/recurring-schedule-consistency";
 import { detectOneTimeScheduleAffectingChanges } from "../../utils/operations/one-time-schedule-change";
 import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";
@@ -408,39 +408,64 @@ export const operationService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
-    const created = [];
     try {
-      for (const row of rows) {
-        const operation = await this.createRecurringInTransaction(
-          companyId,
-          transaction,
-          row.input,
-          row.tolerances,
-        );
-
-        const wantsMulti =
-          (row.input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" &&
-          (row.input.shifts?.length ?? 0) > 0;
-        if (wantsMulti) {
-          await seedMultiShiftOnCreateInTransaction(
-            companyId,
-            operation.id,
-            row.input.validFrom,
-            row.input.shifts ?? [],
-            transaction,
-          );
-        }
-
-        created.push(operation);
-      }
-
+      const created = await this.persistRecurringImportBatchInTransaction(companyId, transaction, rows);
       await transaction.commit();
+
+      const materialization = await this.materializeImportedRecurringOperations(companyId, created);
+      return {
+        operations: created,
+        workdaySyncError: materialization.workdaySyncError,
+      };
     } catch (error) {
       await safeRollback(transaction);
       throw error;
     }
+  },
 
-    for (const operation of created) {
+  async persistRecurringImportBatchInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    rows: Array<{
+      input: CreateRecurringOperationInput;
+      tolerances: {
+        earlyToleranceMinutes: number;
+        lateToleranceMinutes: number;
+        earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+        lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      };
+    }>,
+  ) {
+    const created = [];
+    for (const row of rows) {
+      const operation = await this.createRecurringInTransaction(
+        companyId,
+        transaction,
+        row.input,
+        row.tolerances,
+      );
+
+      const wantsMulti =
+        (row.input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" &&
+        (row.input.shifts?.length ?? 0) > 0;
+      if (wantsMulti) {
+        await seedMultiShiftOnCreateInTransaction(
+          companyId,
+          operation.id,
+          row.input.validFrom,
+          row.input.shifts ?? [],
+          transaction,
+        );
+      }
+
+      created.push(operation);
+    }
+
+    return created;
+  },
+
+  async materializeImportedRecurringOperations(companyId: string, operations: Operation[]) {
+    for (const operation of operations) {
       try {
         await recurringWorkdaySyncService.runOperationSync(
           companyId,
@@ -452,7 +477,6 @@ export const operationService = {
       } catch (error) {
         if (error instanceof AppError && error.code === "RECURRING_WORKDAY_SYNC_FAILED") {
           return {
-            operations: created,
             workdaySyncError: error,
           };
         }
@@ -461,7 +485,6 @@ export const operationService = {
     }
 
     return {
-      operations: created,
       workdaySyncError: null,
     };
   },

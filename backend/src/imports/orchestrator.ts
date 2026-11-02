@@ -1,4 +1,5 @@
 import { AppError } from "../errors/app-error";
+import { isOperationImportTemplateVariant } from "../constants/operation-import";
 import { importJobRepository } from "../repositories/import-job.repository";
 import { auditService } from "../services/audit.service";
 import { logAuditSafe } from "../utils/audit-post-commit";
@@ -13,6 +14,7 @@ import {
   type PreparedImport,
 } from "./prepared-import";
 import { importStrategyRegistry } from "./registry";
+import { buildOperationImportTemplate } from "./strategies/operations.strategy";
 import type { ImportExecuteResult, ImportPreviewResult, ImportTemplate } from "./types";
 
 const logImportEvent = (event: string, payload: Record<string, unknown>): void => {
@@ -148,7 +150,21 @@ export const importOrchestrator = {
     return importStrategyRegistry.get(entityType);
   },
 
-  getTemplate(entityType: string): ImportTemplate {
+  getTemplate(entityType: string, variant?: string): ImportTemplate {
+    if (entityType === "operations") {
+      if (variant === undefined) {
+        return buildOperationImportTemplate();
+      }
+      if (!isOperationImportTemplateVariant(variant)) {
+        throw new AppError(
+          400,
+          "IMPORT_TEMPLATE_VARIANT_INVALID",
+          "Variante de plantilla no soportada.",
+        );
+      }
+      return buildOperationImportTemplate(variant);
+    }
+
     return importStrategyRegistry.get(entityType).buildTemplate();
   },
 

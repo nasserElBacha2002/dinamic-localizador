@@ -61,6 +61,87 @@ export const RECURRING_IMPORT_RECOMMENDED_TEMPLATE_HEADERS = [
   "origen_horario",
 ] as const;
 
+/** Official unified operations import template (headers only). */
+export const OPERATION_CANONICAL_DOWNLOAD_TEMPLATE_HEADERS = [
+  "Sucursal",
+  "Tipo",
+  "Fecha",
+  "Vigencia desde",
+  "Vigencia hasta",
+  "Horario inicio",
+  "Horario fin",
+  "Lunes",
+  "Martes",
+  "Miercoles",
+  "Jueves",
+  "Viernes",
+  "Sabado",
+  "Domingo",
+  "Turno codigo",
+  "Turno nombre",
+  "Plantilla turno",
+  "Tolerancia temprana",
+  "Tolerancia tardia",
+] as const;
+
+export const OPERATION_CANONICAL_TEMPLATE_FILE_NAME = "plantilla-importacion-operaciones.csv";
+
+export const OPERATION_IMPORT_TEMPLATE_VARIANTS = [
+  "one_time",
+  "recurring_single",
+  "recurring_multi_shift",
+] as const;
+
+export type OperationImportTemplateVariant = (typeof OPERATION_IMPORT_TEMPLATE_VARIANTS)[number];
+
+export const isOperationImportTemplateVariant = (
+  value: string,
+): value is OperationImportTemplateVariant =>
+  (OPERATION_IMPORT_TEMPLATE_VARIANTS as readonly string[]).includes(value);
+
+/** Downloadable ONE_TIME (client format) template headers. */
+export const OPERATION_ONE_TIME_DOWNLOAD_TEMPLATE_HEADERS = [
+  ...CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS,
+  ...LEGACY_IMPORT_OPTIONAL_HEADERS,
+] as const;
+
+/** Downloadable RECURRING SINGLE template headers. */
+export const OPERATION_RECURRING_SINGLE_DOWNLOAD_TEMPLATE_HEADERS = [
+  ...RECURRING_IMPORT_RECOMMENDED_TEMPLATE_HEADERS,
+  ...LEGACY_IMPORT_OPTIONAL_HEADERS,
+] as const;
+
+/** Downloadable RECURRING MULTI_SHIFT template headers (origen_horario fijo en EMPRESA). */
+export const OPERATION_RECURRING_MULTI_SHIFT_DOWNLOAD_TEMPLATE_HEADERS = [
+  "Sucursal",
+  "vigencia_desde",
+  "vigencia_hasta",
+  "horario_inicio",
+  "horario_fin",
+  "lunes",
+  "martes",
+  "miercoles",
+  "jueves",
+  "viernes",
+  "sabado",
+  "domingo",
+  "modo_horario",
+  "turno_codigo",
+  "turno_nombre",
+  "plantilla_turno",
+  "tolerancia_temprana",
+  "tolerancia_tardia",
+] as const;
+
+export const OPERATION_IMPORT_TEMPLATE_FILE_NAMES: Record<
+  OperationImportTemplateVariant,
+  string
+> = {
+  one_time: "plantilla-importacion-operaciones-puntual.csv",
+  recurring_single: "plantilla-importacion-operaciones-fija.csv",
+  recurring_multi_shift: "plantilla-importacion-operaciones-multi-turno.csv",
+};
+
 export const OPERATION_IMPORT_COLUMN_ALIASES = {
   location: [
     "PUNTO",
@@ -84,6 +165,7 @@ export const OPERATION_IMPORT_COLUMN_ALIASES = {
     "fecha_de_inicio",
   ],
   endDate: ["fecha_fin", "Fecha Fin", "Fecha de fin", "fecha de fin", "fecha_de_fin"],
+  importRowType: ["Tipo", "tipo"],
   locationType: [
     "Formato",
     "formato",

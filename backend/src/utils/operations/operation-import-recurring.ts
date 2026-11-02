@@ -14,24 +14,30 @@ const RECURRING_WEEKDAY_COLUMN_KEYS: Record<string, Weekday> = {
 };
 
 const TRUTHY_DAY_VALUES = new Set(["1", "s", "si", "sí", "true", "x", "yes", "y"]);
+const FALSY_DAY_VALUES = new Set(["0", "no", "false"]);
 
 export const RECURRING_IMPORT_WEEKDAY_HEADER_KEYS = Object.keys(RECURRING_WEEKDAY_COLUMN_KEYS);
 
-export const parseRecurringImportDayFlag = (raw: string): boolean => {
+export const parseRecurringImportDayFlag = (
+  raw: string,
+): { value: boolean; error: string | null } => {
   const normalized = raw.trim().toLowerCase();
   if (!normalized) {
-    return false;
+    return { value: false, error: null };
   }
 
   if (TRUTHY_DAY_VALUES.has(normalized)) {
-    return true;
+    return { value: true, error: null };
   }
 
-  if (/^(no|0|false)$/i.test(normalized)) {
-    return false;
+  if (FALSY_DAY_VALUES.has(normalized)) {
+    return { value: false, error: null };
   }
 
-  return false;
+  return {
+    value: false,
+    error: `Valor de día inválido: ${raw.trim()}`,
+  };
 };
 
 export const parseRecurringImportScheduleSource = (
@@ -109,8 +115,9 @@ export const buildRecurringImportScheduleDays = (
   row: string[],
   startTime: string,
   endTime: string,
-): WeeklyScheduleDay[] => {
+): { scheduleDays: WeeklyScheduleDay[]; errors: string[] } => {
   const enabledByWeekday = new Map<Weekday, boolean>();
+  const errors: string[] = [];
 
   for (const [columnKey, weekday] of Object.entries(RECURRING_WEEKDAY_COLUMN_KEYS)) {
     const index = headers.indexOf(columnKey);
@@ -118,10 +125,14 @@ export const buildRecurringImportScheduleDays = (
       continue;
     }
 
-    enabledByWeekday.set(weekday, parseRecurringImportDayFlag(row[index] ?? ""));
+    const parsed = parseRecurringImportDayFlag(row[index] ?? "");
+    if (parsed.error) {
+      errors.push(parsed.error);
+    }
+    enabledByWeekday.set(weekday, parsed.value);
   }
 
-  return WEEKDAYS.map((dayOfWeek) => {
+  const scheduleDays = WEEKDAYS.map((dayOfWeek) => {
     const isEnabled = enabledByWeekday.get(dayOfWeek) ?? false;
     return {
       dayOfWeek,
@@ -130,6 +141,8 @@ export const buildRecurringImportScheduleDays = (
       endTime: isEnabled ? endTime : null,
     };
   });
+
+  return { scheduleDays, errors };
 };
 
 export const hasAnyRecurringWeekdayColumn = (headers: string[]): boolean =>

@@ -509,6 +509,61 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
     assert.equal(second.recovered, 0);
   });
 
+  it("reconciliation after live emit failure does not enqueue REQUEST for dual-toggle recipients", async () => {
+    const { absenceRequestService } = await import("../absence/absence-request.service");
+    const { adminAlertService } = await import("./admin-alert.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+
+    const { companyId, vacation, employee } = await seedCompany();
+    await createOperationalRecipient(companyId, { alsoRequestAlerts: true });
+
+    mock.method(adminAlertService, "emit", async () => {
+      throw new Error("simulated enqueue failure");
+    });
+
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 21);
+    const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
+      employeeId: employee.id,
+      absenceTypeId: vacation.id,
+      startDate: day,
+      endDate: day,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      reason: "Vacaciones",
+      sourceMessageSid: uniqueMessageSid(),
+    });
+
+    assert.equal(await countOutboxForRequest(companyId, detail.id), 0);
+    mock.restoreAll();
+
+    const recovery = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.ok(recovery.recovered >= 1);
+    assert.equal(await countOutboxForDedup(companyId, createdOperationalDedup(detail.id)), 1);
+    assert.equal(await countOutboxForDedup(companyId, buildAbsencePendingDedupKey(detail.id)), 0);
+
+    const categories = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("requestId", sql.UniqueIdentifier, detail.id)
+      .query(`
+        SELECT template_category, COUNT(*) AS total
+        FROM whatsapp_admin_alert_notifications
+        WHERE company_id = @companyId AND absence_request_id = @requestId
+        GROUP BY template_category
+      `);
+    const categoryMap = new Map(
+      categories.recordset.map((row) => [
+        String((row as Record<string, unknown>).template_category),
+        Number((row as Record<string, unknown>).total),
+      ]),
+    );
+    assert.equal(categoryMap.get("OPERATIONAL"), 1);
+    assert.equal(categoryMap.get("REQUEST") ?? 0, 0);
+  });
+
   it("creates one operational outbox row per operational recipient", async () => {
     const { absenceRequestService } = await import("../absence/absence-request.service");
     const { companyId, vacation, employee } = await seedCompany();

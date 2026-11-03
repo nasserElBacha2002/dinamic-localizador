@@ -3,6 +3,7 @@ import { ABSENCE_REQUEST_PENDING_STATUS_LABEL } from "../../constants/admin-aler
 import { getPool } from "../../database/connection";
 import { buildAbsenceRequestAdminUrl } from "../../utils/admin-alert/absence-request-admin-url";
 import { resolveAbsenceRequestAlertStatusLabel } from "../../utils/admin-alert/absence-request-alert-status";
+import { toDateOnlyString } from "../../utils/row-mappers";
 import type {
   AdminAlertOutboxObligation,
   AdminAlertRequestTemplatePayload,
@@ -11,6 +12,10 @@ import type {
 
 const toIso = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+/** SQL DATE must not go through String(date).slice(0, 10) — that yields "Sun Dec 27" → year 2001. */
+const toAbsenceDateIso = (value: unknown): string =>
+  toDateOnlyString(value instanceof Date ? value : String(value ?? ""));
 
 /** Matches `whatsapp-edit:{MessageSid}` written by `updateFromWhatsapp`. */
 const WHATSAPP_EDIT_EVENT_COMMENT_PREFIX = "whatsapp-edit:";
@@ -208,6 +213,11 @@ export const adminAlertContextRepository = {
     });
   },
 
+  /**
+   * Legacy admin_request_alert fallback for pending WhatsApp absences.
+   * Restricted to request-only recipients so dual-toggle admins are not
+   * recovered with both REQUEST and OPERATIONAL templates.
+   */
   async listMissingPendingAbsenceObligations(
     batchSize = 50,
   ): Promise<AdminAlertOutboxObligation[]> {
@@ -236,6 +246,7 @@ export const adminAlertContextRepository = {
           ON car.company_id = ar.company_id
           AND car.is_enabled = 1
           AND car.receive_request_alerts = 1
+          AND car.receive_operational_alerts = 0
           AND car.created_at <= ar.created_at
         INNER JOIN employees e
           ON e.id = ar.employee_id AND e.company_id = ar.company_id
@@ -270,8 +281,8 @@ export const adminAlertContextRepository = {
 
     return result.recordset.map((row) => {
       const record = row as Record<string, unknown>;
-      const startDate = String(record.start_date).slice(0, 10);
-      const endDate = String(record.end_date).slice(0, 10);
+      const startDate = toAbsenceDateIso(record.start_date);
+      const endDate = toAbsenceDateIso(record.end_date);
       return {
         companyId: String(record.company_id),
         recipientId: String(record.recipient_id),
@@ -353,8 +364,8 @@ export const adminAlertContextRepository = {
     return result.recordset.map((row) => {
       const record = row as Record<string, unknown>;
       const requestId = String(record.request_id);
-      const startDate = String(record.start_date).slice(0, 10);
-      const endDate = String(record.end_date).slice(0, 10);
+      const startDate = toAbsenceDateIso(record.start_date);
+      const endDate = toAbsenceDateIso(record.end_date);
       const totalDaysRaw = record.total_days;
       const totalDays =
         totalDaysRaw == null || totalDaysRaw === ""
@@ -453,8 +464,8 @@ export const adminAlertContextRepository = {
     return result.recordset.map((row) => {
       const record = row as Record<string, unknown>;
       const requestId = String(record.request_id);
-      const startDate = String(record.start_date).slice(0, 10);
-      const endDate = String(record.end_date).slice(0, 10);
+      const startDate = toAbsenceDateIso(record.start_date);
+      const endDate = toAbsenceDateIso(record.end_date);
       const totalDaysRaw = record.total_days;
       const totalDays =
         totalDaysRaw == null || totalDaysRaw === ""

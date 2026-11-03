@@ -24,6 +24,13 @@ describe("toDateOnlyString", () => {
     const parsed = JSON.parse(payload) as { workDate: string };
     assert.equal(toDateOnlyString(parsed.workDate), "2026-07-13");
   });
+
+  it("does not use String(date).slice(0, 10), which drops the year to a weekday prefix", () => {
+    const sqlDate = new Date("2026-12-28T00:00:00.000Z");
+    const sliced = String(sqlDate).slice(0, 10);
+    assert.equal(/^\d{4}-\d{2}-\d{2}$/.test(sliced), false);
+    assert.equal(toDateOnlyString(sqlDate), "2026-12-28");
+  });
 });
 
 describe("mapAssignmentRow", () => {

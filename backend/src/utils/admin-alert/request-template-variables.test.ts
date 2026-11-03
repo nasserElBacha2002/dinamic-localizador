@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { toDateOnlyString } from "../row-mappers";
 import {
   buildAbsenceRequestAlertTitle,
   buildAdminRequestAlertTemplateVariables,
@@ -29,6 +30,12 @@ describe("formatAbsenceRequestPeriodDisplay", () => {
 
   it("omits redundant range for single day", () => {
     assert.equal(formatAbsenceRequestPeriodDisplay("2026-09-03", "2026-09-03"), "03/09/2026");
+  });
+
+  it("keeps the calendar year from SQL DATE UTC midnight values", () => {
+    const start = toDateOnlyString(new Date("2026-12-28T00:00:00.000Z"));
+    const end = toDateOnlyString(new Date("2027-01-31T00:00:00.000Z"));
+    assert.equal(formatAbsenceRequestPeriodDisplay(start, end), "28/12/2026 – 31/01/2027");
   });
 });
 

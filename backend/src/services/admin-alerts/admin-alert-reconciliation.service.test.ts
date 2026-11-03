@@ -100,6 +100,53 @@ describe("adminAlertReconciliationService", () => {
     assert.equal(result.recovered, 0);
   });
 
+  it("does not materialize REQUEST when OPERATIONAL covers the same recipient and request", async () => {
+    const { adminAlertContextRepository } = await import(
+      "../../repositories/admin-alerts/admin-alert-context.repository"
+    );
+    const { adminAlertService } = await import("./admin-alert.service");
+    const { adminAlertReconciliationService } = await import(
+      "./admin-alert-reconciliation.service"
+    );
+
+    const operationalObligation = {
+      ...sampleObligation,
+      category: "OPERATIONAL" as const,
+      deduplicationKey: "absence-created:operational:req-1",
+    };
+
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingPendingAbsenceObligations",
+      async () => [sampleObligation],
+    );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingCreatedAbsenceOperationalObligations",
+      async () => [operationalObligation],
+    );
+    mock.method(
+      adminAlertContextRepository,
+      "listMissingUpdatedAbsenceOperationalObligations",
+      async () => [],
+    );
+
+    const enqueuedKeys: string[] = [];
+    mock.method(
+      adminAlertService,
+      "enqueueObligation",
+      async (obligation: { deduplicationKey: string }) => {
+        enqueuedKeys.push(obligation.deduplicationKey);
+        return { enqueued: 1, dedupSkipped: 0, recipientSkipped: 0 };
+      },
+    );
+
+    const result = await adminAlertReconciliationService.reconcilePendingAbsenceRequests();
+    assert.deepEqual(enqueuedKeys, ["absence-created:operational:req-1"]);
+    assert.equal(result.scanned, 1);
+    assert.equal(result.recovered, 1);
+  });
+
   it("materializes missing updated absence operational obligations", async () => {
     const { adminAlertContextRepository } = await import(
       "../../repositories/admin-alerts/admin-alert-context.repository"

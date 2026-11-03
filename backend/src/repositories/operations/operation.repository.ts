@@ -10,6 +10,7 @@ import {
   mapOperationWithServiceRow,
   mapEmployeeRow,
   mapServiceRow,
+  toDateOnlyString,
 } from "../../utils/row-mappers";
 import { operationWorkdayRepository } from "./operation-workday.repository";
 import { companySettingsRepository } from "../companies/company-settings.repository";
@@ -204,6 +205,53 @@ export const operationRepository = {
         const serviceId = String(row.service_id);
         const scheduledStart = new Date(row.scheduled_start as Date | string).toISOString();
         existing.add(`${serviceId}|${scheduledStart}`);
+      }
+    }
+
+    return existing;
+  },
+
+  async findExistingActiveRecurringKeys(
+    companyId: string,
+    pairs: Array<{ serviceId: string; validFrom: string }>,
+  ): Promise<Set<string>> {
+    if (pairs.length === 0) {
+      return new Set();
+    }
+
+    const pool = getPool();
+    const existing = new Set<string>();
+    const chunkSize = 100;
+
+    for (let offset = 0; offset < pairs.length; offset += chunkSize) {
+      const chunk = pairs.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const valueClauses: string[] = [];
+
+      chunk.forEach((pair, index) => {
+        request.input(`serviceId${index}`, sql.UniqueIdentifier, pair.serviceId);
+        request.input(`validFrom${index}`, sql.Date, pair.validFrom);
+        valueClauses.push(`(@serviceId${index}, @validFrom${index})`);
+      });
+
+      const result = await request.query(`
+        SELECT i.service_id, os.valid_from
+        FROM scheduled_operations i
+        INNER JOIN operation_schedules os
+          ON os.company_id = i.company_id
+         AND os.operation_id = i.id
+        INNER JOIN (VALUES ${valueClauses.join(", ")}) AS p(service_id, valid_from)
+          ON i.service_id = p.service_id
+         AND os.valid_from = p.valid_from
+        WHERE i.company_id = @companyId
+          AND i.operation_kind = N'RECURRING'
+          AND i.status <> 'CANCELLED'
+      `);
+
+      for (const row of result.recordset) {
+        const serviceId = String(row.service_id);
+        const validFrom = toDateOnlyString(row.valid_from as Date | string);
+        existing.add(`${serviceId}|${validFrom}`);
       }
     }
 

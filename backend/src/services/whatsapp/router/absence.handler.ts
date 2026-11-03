@@ -1,6 +1,7 @@
 import { WHATSAPP_RESULT_CODES } from "../../../constants/whatsapp-observability";
 import { absenceTypeRepository } from "../../../repositories/absence/absence-type.repository";
 import { absenceBotService } from "../../absence/absence-bot.service";
+import { absenceWhatsappEditService } from "../../absence/absence-whatsapp-edit.service";
 import { ACTIVE_ATTENDANCE_FLOW_MESSAGE, MODULE_DISABLED_MESSAGE } from "../../bot/bot-response.builder";
 import {
   buildAvailableAbsenceKindOptions,
@@ -72,7 +73,7 @@ const respondModuleBlocked = (
 const dispatchAbsenceKind = async (
   ctx: WhatsAppRouterContext,
   handlers: WhatsAppRouterHandlers,
-  kind: "single_workday" | "absence" | "vacation",
+  kind: "single_workday" | "absence" | "vacation" | "edit_request",
   session: BotSession | null,
 ): Promise<string> => {
   const respond = bindAbsenceRespond(ctx, handlers);
@@ -89,6 +90,16 @@ const dispatchAbsenceKind = async (
 
   if (getAbsenceModuleBlockedMessage(ctx.moduleStates)) {
     return respondModuleBlocked(ctx, handlers, "absences");
+  }
+
+  if (kind === "edit_request") {
+    return absenceWhatsappEditService.startEditFlow(ctx.companyId, {
+      employeeId: ctx.employeeId!,
+      phoneFrom: ctx.phoneFrom,
+      phoneTo: ctx.phoneTo,
+      respond,
+      kindSelectionSession: session,
+    });
   }
 
   if (kind === "vacation") {

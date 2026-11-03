@@ -133,4 +133,45 @@ describe("whatsapp turn routing resolver (authoritative)", () => {
     assert.equal(p.resolvedHandler, r.resolvedHandler);
     assert.equal(p.resolvedIntent, r.resolvedIntent);
   });
+
+  it("numeric selection in WAITING_ABSENCE_KIND_SELECTION continues absence flow", () => {
+    const session = criticalSession({
+      intent: "ABSENCE",
+      state: "WAITING_ABSENCE_KIND_SELECTION",
+      operationId: null,
+      contextJson: JSON.stringify({
+        flow: "ABSENCE_REQUEST",
+        absenceKindOptions: ["single_workday", "absence", "vacation", "edit_request"],
+      }),
+    });
+    const r = resolveWhatsAppTextTurn({
+      body: "4",
+      session,
+      moduleStates: new Map([
+        ["absences", true],
+        ["operations", true],
+      ] as const),
+    });
+    assert.equal(r.continueActiveSession, true);
+    assert.equal(r.cancelSessionBeforeDispatch, false);
+    assert.equal(r.resolvedHandler, "ABSENCE");
+    assert.equal(r.resolvedIntent, "absence");
+    assert.equal(r.flowType, "ABSENCE");
+
+    const c = whatsappTurnClassificationService.classify({
+      companyId: "co",
+      employeeId: "emp",
+      messageSid: "SM-edit-kind",
+      messageType: "TEXT",
+      activeSessionIntent: "ABSENCE",
+      activeSessionState: "WAITING_ABSENCE_KIND_SELECTION",
+      resolvedIntent: r.resolvedIntent,
+      resolvedHandler: r.resolvedHandler,
+      relatedOperationId: r.relatedOperationId,
+      globalCommand: r.globalCommand,
+      correlatedSystemInteraction: null,
+      nowMs: 1,
+    });
+    assert.equal(c.classification, "EMPLOYEE_LIMITED");
+  });
 });

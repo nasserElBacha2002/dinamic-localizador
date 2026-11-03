@@ -323,9 +323,24 @@ export const createOperationImportDateTimeUtils = (
     };
   };
 
+  const parseOperationImportDateOnly = (
+    raw: string,
+  ): { dateOnly: string } | { error: string } => {
+    const parsed = parseOperationImportDateValue(raw);
+    if ("error" in parsed) {
+      return parsed;
+    }
+
+    const { year, month, day } = parsed.parts;
+    return {
+      dateOnly: `${year}-${pad2(month)}-${pad2(day)}`,
+    };
+  };
+
   return {
     parseOperationImportDateValue,
     parseOperationImportDateTime,
+    parseOperationImportDateOnly,
     buildClientOperationSchedule,
     localPartsToIso,
     dateToOperationImportDateParts,

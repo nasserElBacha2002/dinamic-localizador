@@ -710,7 +710,6 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
     const count = Number(result.recordset[0].production_without_workday);
     assert.ok(Number.isFinite(count));
     // Legacy orphans remain visible via listCombinedAttendanceUniverse when count > 0.
-    // eslint-disable-next-line no-console -- preflight evidence for review package
     console.log(`PREFLIGHT_production_without_workday=${count}`);
 
     const dangling = await pool.request().query(`
@@ -724,7 +723,6 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
     `);
     const danglingCount = Number(dangling.recordset[0].dangling_workday_refs);
     assert.ok(Number.isFinite(danglingCount));
-    // eslint-disable-next-line no-console -- preflight evidence for review package
     console.log(`PREFLIGHT_dangling_workday_refs=${danglingCount}`);
 
     const indexes = await pool.request().query(`
@@ -738,7 +736,6 @@ describeDatabaseIntegration("attendance list expected workdays integration", () 
       ORDER BY i.name, ic.key_ordinal
     `);
     for (const row of indexes.recordset) {
-      // eslint-disable-next-line no-console -- preflight evidence for review package
       console.log(
         `PREFLIGHT_INDEX name=${row.index_name} unique=${row.is_unique} ord=${row.key_ordinal} col=${row.col_name}`,
       );

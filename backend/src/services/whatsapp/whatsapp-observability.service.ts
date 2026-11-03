@@ -253,4 +253,21 @@ export const whatsappObservabilityService = {
     return detail;
   },
 
+  async auditExport(
+    conversationId: string,
+    userId: string,
+    companyId: string | null,
+    meta: Record<string, unknown>,
+  ): Promise<void> {
+    this.assertUiEnabled();
+    await auditObservabilityAccess({
+      companyId,
+      userId,
+      entityType: "whatsapp_conversation",
+      entityId: conversationId,
+      action: "OBSERVABILITY_EXPORT",
+      newData: meta,
+    });
+  },
+
 };

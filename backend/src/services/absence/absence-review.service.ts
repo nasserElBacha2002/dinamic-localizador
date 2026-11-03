@@ -13,6 +13,7 @@ import { auditService } from "../audit.service";
 import { absenceAttachmentService } from "./absence-attachment.service";
 import { absenceBalanceService } from "./absence-balance.service";
 import { absenceBalanceImpactService } from "./absence-balance-impact.service";
+import { absenceTypeRepository } from "../../repositories/absence/absence-type.repository";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "../workdays/employee-workday-absence-reconciliation.service";
@@ -25,6 +26,7 @@ const transition = async (input: {
   action: "APPROVE" | "REJECT" | "NEEDS_INFO" | "UPDATE_NEEDS_INFO_COMMENT" | "CANCEL";
   comment?: string | null;
   cancelledAt?: Date | null;
+  allowInsufficientBalance?: boolean;
 }) => {
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -59,11 +61,44 @@ const transition = async (input: {
       );
     }
 
+    let balanceOverrideAudit: Record<string, unknown> | null = null;
+    if (action === "APPROVE" && input.allowInsufficientBalance) {
+      const absenceType = await absenceTypeRepository.findById(
+        input.companyId,
+        existing.absenceTypeId,
+      );
+      if (absenceType?.deductsBalance) {
+        const impact = await absenceBalanceService.getSummaryForRequest(
+          input.companyId,
+          existing,
+          absenceType,
+        );
+        balanceOverrideAudit = {
+          balanceApprovalOverride: true,
+          requestedDays: existing.totalDays,
+          balanceBefore: impact.availableDays ?? null,
+          balanceAfter: impact.availableAfterApproval ?? null,
+          approvedAt: new Date().toISOString(),
+          approvedByUserId: input.userId,
+        };
+      } else {
+        balanceOverrideAudit = {
+          balanceApprovalOverride: true,
+          requestedDays: existing.totalDays,
+          approvedAt: new Date().toISOString(),
+          approvedByUserId: input.userId,
+        };
+      }
+    }
+
     if (rule.affectsBalance) {
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         input.companyId,
         existing,
         transaction,
+        {
+          allowInsufficientBalance: input.allowInsufficientBalance === true,
+        },
       );
     }
 
@@ -143,7 +178,15 @@ const transition = async (input: {
         entityId: input.requestId,
         action: rule.eventType,
         previousData: existing as unknown as Record<string, unknown>,
-        newData: updated as unknown as Record<string, unknown>,
+        newData: {
+          ...(updated as unknown as Record<string, unknown>),
+          ...(balanceOverrideAudit ?? {}),
+          ...(input.action === "APPROVE" &&
+          input.allowInsufficientBalance &&
+          !balanceOverrideAudit
+            ? { balanceApprovalOverride: true }
+            : {}),
+        },
         reason: input.comment ?? null,
         userId: input.userId,
       },
@@ -168,7 +211,12 @@ const transition = async (input: {
 };
 
 export const absenceReviewService = {
-  async approve(companyId: string, requestId: string, userId: string) {
+  async approve(
+    companyId: string,
+    requestId: string,
+    userId: string,
+    options?: { allowInsufficientBalance?: boolean },
+  ) {
     const existing = await absenceRequestRepository.findById(companyId, requestId);
     if (!existing) {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
@@ -183,6 +231,7 @@ export const absenceReviewService = {
           requestId,
           userId,
           action: "APPROVE",
+          allowInsufficientBalance: options?.allowInsufficientBalance,
         }),
       () =>
         employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(

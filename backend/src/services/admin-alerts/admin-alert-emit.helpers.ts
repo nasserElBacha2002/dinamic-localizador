@@ -9,6 +9,7 @@ export type AdminAlertEmitSource =
   | "absence-request-pending"
   | "absence-request-pending-operational"
   | "absence-request-created-operational"
+  | "absence-request-updated-operational"
   | "attendance-threshold-crossed";
 
 /**

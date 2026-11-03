@@ -309,7 +309,11 @@ export function ImportPage() {
             <Button onClick={() => fileInputRef.current?.click()} loading={previewMutation.isPending}>
               Cargar archivo
             </Button>
-            <Button variant="default" onClick={() => void handleDownloadTemplate()} loading={templateLoading}>
+            <Button
+              variant="default"
+              onClick={() => void handleDownloadTemplate()}
+              loading={templateLoading}
+            >
               Descargar plantilla
             </Button>
             <Button

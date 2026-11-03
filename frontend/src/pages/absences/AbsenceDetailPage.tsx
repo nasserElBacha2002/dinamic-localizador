@@ -156,9 +156,11 @@ export function AbsenceDetailPage() {
     notifications.show({ color, message });
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (allowInsufficientBalance = false) => {
     try {
-      const result = await approveMutation.mutateAsync();
+      const result = await approveMutation.mutateAsync(
+        allowInsufficientBalance ? { allowInsufficientBalance: true } : undefined,
+      );
       setApproveOpen(false);
       notify(
         buildAbsenceApprovalSuccessMessage({
@@ -227,7 +229,6 @@ export function AbsenceDetailPage() {
         action={
           <AbsenceReviewActions
             canReview={canReview}
-            insufficientBalance={insufficientBalance}
             approvePending={approveMutation.isPending}
             coverageHref={coverageHref}
             onApprove={() => {
@@ -249,7 +250,8 @@ export function AbsenceDetailPage() {
       />
       {canReview && insufficientBalance ? (
         <Alert color="warning" variant="light">
-          Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
+          El empleado no tiene saldo suficiente para cubrir esta solicitud. Podés aprobar igualmente si
+          hay un acuerdo previo; el saldo resultante puede quedar negativo.
         </Alert>
       ) : null}
 
@@ -374,7 +376,7 @@ export function AbsenceDetailPage() {
       <ResponsiveModal
         opened={approveOpen}
         onClose={approveMutation.isPending ? () => undefined : () => setApproveOpen(false)}
-        title="Confirmar aprobación"
+        title={insufficientBalance ? "El empleado no tiene saldo suficiente" : "Confirmar aprobación"}
         bodyMode="normal"
         closeOnClickOutside={!approveMutation.isPending}
         closeOnEscape={!approveMutation.isPending}
@@ -389,15 +391,27 @@ export function AbsenceDetailPage() {
             </Button>
             <Button
               color="success"
-              onClick={() => void handleApprove()}
+              onClick={() => void handleApprove(insufficientBalance)}
               loading={approveMutation.isPending}
             >
-              Aprobar
+              {insufficientBalance ? "Aprobar igualmente" : "Aprobar"}
             </Button>
           </Group>
         }
       >
         <Stack gap="sm">
+          {insufficientBalance && detail.balanceImpact ? (
+            <Alert color="warning" variant="light">
+              <Text size="sm">
+                Días solicitados: {detail.totalDays}. Saldo disponible:{" "}
+                {detail.balanceImpact.availableDays ?? "—"}. Saldo resultante:{" "}
+                {detail.balanceImpact.availableAfterApproval ?? "—"}.
+              </Text>
+              <Text size="sm" mt="xs">
+                La aprobación registrará un override de saldo insuficiente.
+              </Text>
+            </Alert>
+          ) : null}
           {impactQuery.data ? (
             <>
               <Text size="sm">{approvalImpactPreview}</Text>

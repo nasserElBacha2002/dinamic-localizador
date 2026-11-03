@@ -1,4 +1,5 @@
 import type { AbsenceDayPeriod } from "../types/absence";
+import { toDateOnlyString } from "./row-mappers";
 
 export interface ParsedAbsenceDate {
   year: number;
@@ -9,9 +10,13 @@ export interface ParsedAbsenceDate {
 
 const pad2 = (value: number): string => String(value).padStart(2, "0");
 
-export const formatAbsenceDateDisplay = (iso: string): string => {
-  const [year, month, day] = iso.split("-");
-  return `${day}/${month}/${year}`;
+export const formatAbsenceDateDisplay = (value: string | Date): string => {
+  const iso = toDateOnlyString(value);
+  const parsed = parseAbsenceDateInput(iso);
+  if (!parsed) {
+    return iso;
+  }
+  return `${pad2(parsed.day)}/${pad2(parsed.month)}/${parsed.year}`;
 };
 
 export const parseSpanishDateInput = (raw: string): ParsedAbsenceDate | null => {

@@ -74,4 +74,13 @@ describe("operation import headers", () => {
     assert.equal(result.format, null);
     assert.ok(result.fileErrors.includes(IMPORT_MISSING_DATE_MESSAGE));
   });
+
+  it("maps legacy Tipo as location type outside canonical template", () => {
+    const mapped = mapImportHeaders(["Sucursal", "Fecha", "Tipo"]);
+    assert.equal(mapped.format, "client");
+    assert.ok(mapped.mapped.includes("location_type"));
+    assert.ok(!mapped.mapped.includes("import_row_type"));
+    assert.equal(resolveImportHeaderColumn("Tipo"), "location_type");
+    assert.equal(resolveImportHeaderColumn("Tipo", { canonical: true }), "import_row_type");
+  });
 });

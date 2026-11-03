@@ -20,6 +20,14 @@ describe("adminAlertAbsencePendingService", () => {
       captured = input;
       return { enqueued: 1, dedupSkipped: 0, recipientSkipped: 0 };
     });
+    const { companySettingsRepository } = await import(
+      "../../repositories/companies/company-settings.repository"
+    );
+    mock.method(companySettingsRepository, "findByCompanyId", async () => ({
+      companyId: "company-1",
+      adminAlertsEnabled: true,
+      adminAlertDeliveryMode: "WHATSAPP_LEGACY",
+    }));
 
     await adminAlertAbsencePendingService.emitOperationalForCreatedRequest({
       companyId: "company-1",

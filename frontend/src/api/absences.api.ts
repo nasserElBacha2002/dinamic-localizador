@@ -65,9 +65,13 @@ export async function createAbsenceRequest(input: CreateAbsenceRequestInput): Pr
   return data.data;
 }
 
-export async function approveAbsenceRequest(id: string): Promise<AbsenceRequestDetail> {
+export async function approveAbsenceRequest(
+  id: string,
+  input?: { allowInsufficientBalance?: boolean },
+): Promise<AbsenceRequestDetail> {
   const { data } = await scopedApiClient.patch<SingleResponse<AbsenceRequestDetail>>(
     `absence-requests/${id}/approve`,
+    input ?? {},
   );
   return data.data;
 }

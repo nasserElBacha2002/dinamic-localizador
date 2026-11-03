@@ -43,3 +43,11 @@ export const importExecuteBodySchema = z
 
 export type ImportFileBody = z.infer<typeof importFileBodySchema>;
 export type ImportExecuteBody = z.infer<typeof importExecuteBodySchema>;
+
+export const importTemplateQuerySchema = z.object({
+  variant: z
+    .enum(["one_time", "recurring_single", "recurring_multi_shift"])
+    .optional(),
+});
+
+export type ImportTemplateQuery = z.infer<typeof importTemplateQuerySchema>;

@@ -66,6 +66,21 @@ describe("phase6 bot flow behavioral characterization", () => {
       candidates: [],
       hasJustifiedWorkdayInWindow: false,
     }));
+    mock.method(employeeWorkdayAvailabilityService, "diagnoseCheckInUnavailability", async () => ({
+      candidateFrom: "2026-07-05T00:00:00.000Z",
+      candidateTo: "2026-07-07T00:00:00.000Z",
+      rawCandidateCount: 0,
+      eligibleCandidateCount: 0,
+      hasJustifiedWorkdayInWindow: false,
+      reasonCodes: [],
+      candidateEvaluations: [],
+      nearbyWorkdayCount: 0,
+      assignedOperationCount: 0,
+      operationIds: [],
+      workdayIds: [],
+      timezone: "America/Argentina/Buenos_Aires",
+    }));
+    const warnMock = mock.method(console, "warn", () => undefined);
 
     const twiml = await runWithBotRuntimeContext(simulationContext, async () =>
       runWithBotRuntimeSettings(runtimeSettings(), async () =>
@@ -79,6 +94,12 @@ describe("phase6 bot flow behavioral characterization", () => {
     );
 
     assert.match(twiml, new RegExp(NO_OPERATION_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.equal(
+      warnMock.mock.calls.some((call) =>
+        String(call.arguments[0] ?? "").includes("CHECKIN_UNAVAILABILITY_DIAGNOSIS_FAILED"),
+      ),
+      false,
+    );
   });
 
   it("invalid checkout selection returns INVALID_SELECTION (I)", async () => {

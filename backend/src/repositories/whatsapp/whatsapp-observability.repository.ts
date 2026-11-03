@@ -189,6 +189,64 @@ export const whatsappObservabilityRepository = {
     };
   },
 
+  async listAllMessagesAsc(
+    conversationId: string,
+    maxRows: number,
+  ): Promise<WhatsAppMessage[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("conversationId", sql.UniqueIdentifier, conversationId)
+      .input("maxRows", sql.Int, maxRows)
+      .query(`
+        SELECT TOP (@maxRows) *
+        FROM whatsapp_messages
+        WHERE conversation_id = @conversationId
+        ORDER BY created_at ASC, id ASC
+      `);
+    return (result.recordset as Record<string, unknown>[]).map(mapWhatsAppMessageRow);
+  },
+
+  async countMessagesByConversation(conversationId: string): Promise<number> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("conversationId", sql.UniqueIdentifier, conversationId)
+      .query(`
+        SELECT COUNT(1) AS total
+        FROM whatsapp_messages
+        WHERE conversation_id = @conversationId
+      `);
+    return Number((result.recordset[0] as { total: number }).total ?? 0);
+  },
+
+  async listMessagesAscPage(input: {
+    conversationId: string;
+    limit: number;
+    afterCreatedAt?: string | null;
+    afterId?: string | null;
+  }): Promise<WhatsAppMessage[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("conversationId", sql.UniqueIdentifier, input.conversationId)
+      .input("limit", sql.Int, input.limit)
+      .input("afterCreatedAt", sql.DateTime2, input.afterCreatedAt ?? null)
+      .input("afterId", sql.UniqueIdentifier, input.afterId ?? null)
+      .query(`
+        SELECT TOP (@limit) *
+        FROM whatsapp_messages
+        WHERE conversation_id = @conversationId
+          AND (
+            @afterCreatedAt IS NULL
+            OR created_at > @afterCreatedAt
+            OR (created_at = @afterCreatedAt AND id > @afterId)
+          )
+        ORDER BY created_at ASC, id ASC
+      `);
+    return (result.recordset as Record<string, unknown>[]).map(mapWhatsAppMessageRow);
+  },
+
   async getMessageDetail(messageId: string) {
     const message = await whatsappMessageRepository.findByIdGlobal(messageId);
     if (!message) {

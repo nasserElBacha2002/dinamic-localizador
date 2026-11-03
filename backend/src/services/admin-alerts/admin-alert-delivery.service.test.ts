@@ -198,4 +198,89 @@ describe("adminAlertDeliveryService", () => {
     assert.equal(result.skipped, 1);
     assert.equal(skippedCode, "CATEGORY_DISABLED");
   });
+
+  it("delivers OPERATIONAL ABSENCE_REQUEST_PENDING under DAILY_EMAIL without channel cutover skip", async () => {
+    const { env } = await import("../../config/env");
+    const previousOperationalSid = env.TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID;
+    (env as { TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID?: string }).TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID =
+      "HXoperationaltest";
+
+    const { companyAlertRecipientRepository } = await import(
+      "../../repositories/companies/company-alert-recipient.repository"
+    );
+    const { companySettingsRepository } = await import(
+      "../../repositories/companies/company-settings.repository"
+    );
+    const { adminAlertNotificationRepository } = await import(
+      "../../repositories/admin-alerts/admin-alert-notification.repository"
+    );
+    const { whatsappMessageRepository } = await import(
+      "../../repositories/whatsapp/whatsapp-message.repository"
+    );
+    const { twilioOutboundService } = await import("../whatsapp/twilio-outbound.service");
+    const { adminAlertDeliveryService } = await import("./admin-alert-delivery.service");
+
+    const operationalNotification = {
+      ...baseNotification,
+      alertType: "ABSENCE_REQUEST_PENDING" as const,
+      templateCategory: "OPERATIONAL" as const,
+      absenceRequestId: "req-daily-email",
+      deduplicationKey: "absence-created:operational:req-daily-email",
+    };
+
+    mock.method(adminAlertNotificationRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(adminAlertNotificationRepository, "getDeliveryQueueStats", async () => ({
+      pendingCount: 0,
+      dynamicPendingCount: 0,
+      oldestPendingAgeMinutes: null,
+    }));
+    mock.method(adminAlertNotificationRepository, "claimNextBatch", async () => [operationalNotification]);
+    mock.method(companyAlertRecipientRepository, "findById", async () => ({
+      id: "recipient-1",
+      companyId: "company-1",
+      userId: null,
+      phoneNumber: "+5491112345678",
+      displayName: null,
+      isEnabled: true,
+      receiveOperationalAlerts: true,
+      receiveRequestAlerts: true,
+      receiveSecurityAlerts: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    mock.method(companySettingsRepository, "findByCompanyId", async () => ({
+      companyId: "company-1",
+      adminAlertsEnabled: true,
+      adminAlertDeliveryMode: "DAILY_EMAIL",
+    }));
+
+    let terminalSkipCode: string | null = null;
+    mock.method(adminAlertNotificationRepository, "markTerminalSkip", async (input: {
+      errorCode: string;
+    }) => {
+      terminalSkipCode = input.errorCode;
+    });
+    mock.method(adminAlertNotificationRepository, "beginSendAttempt", async () => ({
+      id: "attempt-1",
+    }));
+    mock.method(adminAlertNotificationRepository, "markSendAttemptAccepted", async () => undefined);
+    mock.method(adminAlertNotificationRepository, "markSendAccepted", async () => undefined);
+    mock.method(whatsappMessageRepository, "create", async () => undefined);
+
+    let sendInvoked = false;
+    mock.method(twilioOutboundService, "sendWhatsAppTemplate", async () => {
+      sendInvoked = true;
+      return { messageSid: "SMtest123" };
+    });
+
+    try {
+      const result = await adminAlertDeliveryService.processPendingBatch(1);
+      assert.equal(result.sent, 1);
+      assert.equal(terminalSkipCode, null);
+      assert.equal(sendInvoked, true);
+    } finally {
+      (env as { TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID?: string }).TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID =
+        previousOperationalSid;
+    }
+  });
 });

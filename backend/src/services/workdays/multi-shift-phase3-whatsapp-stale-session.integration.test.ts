@@ -224,6 +224,24 @@ const setupCommonWebhookMocks = async () => {
   }));
   mock.method(whatsappUsageQuotaService, "recordExemptCritical", async () => undefined);
   mock.method(whatsappUsageQuotaService, "recordAmbiguousHeld", async () => undefined);
+  mock.method(
+    employeeWorkdayAvailabilityService,
+    "diagnoseCheckInUnavailability",
+    async () => ({
+      candidateFrom: "2026-07-05T00:00:00.000Z",
+      candidateTo: "2026-07-07T00:00:00.000Z",
+      rawCandidateCount: 0,
+      eligibleCandidateCount: 0,
+      hasJustifiedWorkdayInWindow: false,
+      reasonCodes: [],
+      candidateEvaluations: [],
+      nearbyWorkdayCount: 0,
+      assignedOperationCount: 0,
+      operationIds: [],
+      workdayIds: [],
+      timezone: TIMEZONE,
+    }),
+  );
   mock.method(employeeRepository, "findById", async () => ({
     id: employeeA,
     name: "Worker",

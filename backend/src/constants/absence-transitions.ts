@@ -16,6 +16,12 @@ export const ABSENCE_ADMIN_EDITABLE_STATUSES = [
   "NEEDS_INFO",
 ] as const satisfies readonly AbsenceRequestStatus[];
 
+/** Employee self-service edit via WhatsApp while review is still open. */
+export const ABSENCE_EMPLOYEE_EDITABLE_STATUSES = [
+  "PENDING",
+  "NEEDS_INFO",
+] as const satisfies readonly AbsenceRequestStatus[];
+
 export type AbsenceTransitionAction =
   | "APPROVE"
   | "REJECT"
@@ -120,6 +126,9 @@ export const assertAbsenceTransition = (
 
 export const isAbsenceAdminEditableStatus = (status: AbsenceRequestStatus): boolean =>
   (ABSENCE_ADMIN_EDITABLE_STATUSES as readonly AbsenceRequestStatus[]).includes(status);
+
+export const isAbsenceEmployeeEditableStatus = (status: AbsenceRequestStatus): boolean =>
+  (ABSENCE_EMPLOYEE_EDITABLE_STATUSES as readonly AbsenceRequestStatus[]).includes(status);
 
 /** Statuses that still accept admin review actions (approve/reject/cancel). */
 export const isAbsenceReviewableStatus = (status: AbsenceRequestStatus): boolean =>

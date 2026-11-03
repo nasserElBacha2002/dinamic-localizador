@@ -1,0 +1,21 @@
+ A audit/attendance-features-2026-11/final-closure/final-closure-tests.txt
+ M backend/src/repositories/admin-alerts/admin-alert-context.repository.ts
+ M backend/src/routes/whatsapp-observability-conversations.integration.test.ts
+ M backend/src/services/absence/absence-request-whatsapp-edit-side-effects.test.ts
+ M backend/src/services/absence/absence-request-whatsapp-edit-side-effects.ts
+ M backend/src/services/absence/absence-request.service.ts
+ M backend/src/services/absence/absence-request.updateFromWhatsapp-idempotency.test.ts
+ A backend/src/services/absence/absence-review-balance-override.integration.test.ts
+ M backend/src/services/admin-alerts/admin-alert-absence-pending.integration.test.ts
+ M backend/src/services/admin-alerts/admin-alert-absence-updated.service.ts
+ M backend/src/services/admin-alerts/admin-alert-emit.helpers.ts
+ M backend/src/services/admin-alerts/admin-alert-reconciliation.integration.test.ts
+ M backend/src/services/admin-alerts/admin-alert-reconciliation.service.test.ts
+ M backend/src/services/admin-alerts/admin-alert-reconciliation.service.ts
+ M backend/src/services/whatsapp/whatsapp-conversation-export-messages.test.ts
+ M backend/src/services/whatsapp/whatsapp-conversation-export-messages.ts
+ M backend/src/services/whatsapp/whatsapp-conversation-export.service.test.ts
+ M backend/src/services/whatsapp/whatsapp-conversation-export.service.ts
+ M backend/src/utils/whatsapp/whatsapp-conversation-export-html.test.ts
+ M backend/src/utils/whatsapp/whatsapp-conversation-export-html.ts
+?? audit/attendance-features-2026-11/final-closure/final-closure-status.txt

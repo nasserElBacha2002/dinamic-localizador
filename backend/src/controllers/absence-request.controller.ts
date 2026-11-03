@@ -39,10 +39,12 @@ export const absenceRequestController = {
 
   async approve(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
+    const body = req.body as { allowInsufficientBalance?: boolean };
     const request = await absenceReviewService.approve(
       companyId,
       String(req.params.id),
       req.auth!.userId,
+      { allowInsufficientBalance: body.allowInsufficientBalance === true },
     );
     res.status(200).json({ data: request });
   },

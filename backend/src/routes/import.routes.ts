@@ -7,6 +7,7 @@ import {
   importEntityTypeParamSchema,
   importExecuteBodySchema,
   importFileBodySchema,
+  importTemplateQuerySchema,
 } from "../schemas/import.schema";
 import type { NextFunction, Request, Response } from "express";
 
@@ -46,6 +47,7 @@ export const importRouter = Router({ mergeParams: true });
 importRouter.get(
   "/:entityType/template",
   validate(importEntityTypeParamSchema, "params"),
+  validate(importTemplateQuerySchema, "query"),
   requireImportStrategyAccess,
   asyncHandler(importController.template),
 );

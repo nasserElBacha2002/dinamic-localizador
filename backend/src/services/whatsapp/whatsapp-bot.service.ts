@@ -393,12 +393,14 @@ export const whatsappBotService = {
         return response;
       };
 
+      // Await so handler/SQL rejections are caught below. A bare `return promise`
+      // skips this try/catch and 500s the bot simulator.
       if (trace) {
-        return runWithRoutingResultScope(() =>
+        return await runWithRoutingResultScope(() =>
           runWithObservabilityTrace(trace, processInbound),
         );
       }
-      return runWithRoutingResultScope(processInbound);
+      return await runWithRoutingResultScope(processInbound);
     } catch (error) {
       systemLogger.error({
         module: "whatsapp-webhook",

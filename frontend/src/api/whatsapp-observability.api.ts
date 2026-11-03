@@ -155,3 +155,21 @@ export async function revealWhatsappConversationPhone(
   );
   return data.data;
 }
+
+export async function exportWhatsappConversation(
+  conversationId: string,
+  format: "json" | "html",
+): Promise<Blob | Record<string, unknown>> {
+  if (format === "html") {
+    const response = await apiClient.get(
+      `platform/observability/whatsapp/conversations/${conversationId}/export`,
+      { params: { format: "html" }, responseType: "blob" },
+    );
+    return response.data as Blob;
+  }
+  const { data } = await apiClient.get<{ data: Record<string, unknown> }>(
+    `platform/observability/whatsapp/conversations/${conversationId}/export`,
+    { params: { format: "json" } },
+  );
+  return data.data;
+}

@@ -353,15 +353,50 @@ export function WhatsappConversationDetailPage() {
     }
   };
 
+  const handleExport = async (format: "json" | "html") => {
+    if (!conversationId) {
+      return;
+    }
+    const { exportWhatsappConversation } = await import("../../../api/whatsapp-observability.api");
+    const payload = await exportWhatsappConversation(conversationId, format);
+    const blob =
+      payload instanceof Blob
+        ? payload
+        : new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const extension = format === "html" ? "html" : "json";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `whatsapp-conversation-${conversationId}.${extension}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <>
       <PageHeader
         title={`Conversación ${displayPhone}`}
         description="Detalle de mensajes, ejecuciones de flujo y eventos del proveedor."
         action={
-          <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
-            Volver al listado
-          </Button>
+          <Group gap="sm">
+            <Button
+              variant="light"
+              onClick={() => void handleExport("html")}
+              disabled={!conversationId}
+            >
+              Exportar HTML (imprimible)
+            </Button>
+            <Button
+              variant="light"
+              onClick={() => void handleExport("json")}
+              disabled={!conversationId}
+            >
+              Exportar JSON
+            </Button>
+            <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
+              Volver al listado
+            </Button>
+          </Group>
         }
       />
 

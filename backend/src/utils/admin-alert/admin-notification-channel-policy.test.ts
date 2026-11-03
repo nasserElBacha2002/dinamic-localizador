@@ -57,15 +57,17 @@ describe("admin-notification-channel-policy", () => {
     );
   });
 
-  it("treats ABSENCE_REQUEST_PENDING as AUDIT_ONLY under DAILY_EMAIL (no third urgent WA)", () => {
-    assert.equal(
-      decideAdminNotificationChannel({ mode: daily, alertType: "ABSENCE_REQUEST_PENDING" }),
-      "AUDIT_ONLY",
-    );
-    assert.equal(
-      decideAdminNotificationChannel({ mode: legacy, alertType: "ABSENCE_REQUEST_PENDING" }),
-      "WHATSAPP_URGENT",
-    );
+  it("keeps ABSENCE_REQUEST_PENDING on WhatsApp under DAILY_EMAIL (immediate admin action)", () => {
+    for (const mode of [legacy, daily]) {
+      assert.equal(
+        decideAdminNotificationChannel({ mode, alertType: "ABSENCE_REQUEST_PENDING" }),
+        "WHATSAPP_URGENT",
+      );
+      assert.equal(
+        shouldMaterializeAdminWhatsApp({ mode, alertType: "ABSENCE_REQUEST_PENDING" }),
+        true,
+      );
+    }
   });
 
   it("forwards location as AUDIT_ONLY under strict DAILY_EMAIL unless security WA enabled", () => {

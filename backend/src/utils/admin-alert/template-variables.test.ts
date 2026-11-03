@@ -100,6 +100,9 @@ describe("buildAdminOperationalAlertTemplateVariables", () => {
     assert.equal(vars["1"], "Nueva solicitud de ausencia");
     assert.equal(vars["2"], "Juan Pérez");
     assert.match(vars["3"], /Vacaciones/);
+    assert.match(vars["3"], /01\/09\/2026/);
+    assert.match(vars["3"], /07\/09\/2026/);
+    assert.doesNotMatch(vars["3"], /2001/);
     assert.match(vars["3"], /5 días/);
     assert.match(vars["3"], /Pendiente de revisión/);
     assert.match(vars["4"], /\/absences\/req-1/);

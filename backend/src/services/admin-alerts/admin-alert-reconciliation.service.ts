@@ -12,6 +12,26 @@ export type AdminAlertReconciliationResult = {
   pendingAbsenceRecovered: number;
 };
 
+const absenceRecipientCoverageKey = (
+  obligation: Pick<AdminAlertOutboxObligation, "companyId" | "recipientId" | "absenceRequestId">,
+): string =>
+  `${obligation.companyId.trim().toLowerCase()}:${obligation.recipientId.trim().toLowerCase()}:${(obligation.absenceRequestId ?? "").trim().toLowerCase()}`;
+
+/**
+ * Dual-toggle recipients must not receive both admin_request_alert and
+ * admin_operational_alert for the same absence. REQUEST is only a fallback
+ * for request-only recipients; OPERATIONAL is canonical when both exist.
+ */
+const dropRequestCoveredByOperational = (
+  requestObligations: AdminAlertOutboxObligation[],
+  operationalObligations: AdminAlertOutboxObligation[],
+): AdminAlertOutboxObligation[] => {
+  const covered = new Set(operationalObligations.map(absenceRecipientCoverageKey));
+  return requestObligations.filter(
+    (obligation) => !covered.has(absenceRecipientCoverageKey(obligation)),
+  );
+};
+
 const materializeObligations = async (
   obligations: AdminAlertOutboxObligation[],
 ): Promise<{ scanned: number; recovered: number }> => {
@@ -76,14 +96,14 @@ export const adminAlertReconciliationService = {
   ): Promise<{ scanned: number; recovered: number }> {
     const [requestObligations, operationalObligations, updatedOperationalObligations] =
       await Promise.all([
-      adminAlertContextRepository.listMissingPendingAbsenceObligations(batchSize),
-      adminAlertContextRepository.listMissingCreatedAbsenceOperationalObligations(batchSize),
-      adminAlertContextRepository.listMissingUpdatedAbsenceOperationalObligations(batchSize),
-    ]);
+        adminAlertContextRepository.listMissingPendingAbsenceObligations(batchSize),
+        adminAlertContextRepository.listMissingCreatedAbsenceOperationalObligations(batchSize),
+        adminAlertContextRepository.listMissingUpdatedAbsenceOperationalObligations(batchSize),
+      ]);
     return materializeObligations([
-      ...requestObligations,
       ...operationalObligations,
       ...updatedOperationalObligations,
+      ...dropRequestCoveredByOperational(requestObligations, operationalObligations),
     ]);
   },
 

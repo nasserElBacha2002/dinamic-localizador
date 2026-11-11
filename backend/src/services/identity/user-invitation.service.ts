@@ -23,6 +23,7 @@ import {
 } from "../../utils/identity/invitation-token";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../../utils/sql-server-errors";
 import { logAuditSafe } from "../../utils/audit-post-commit";
+import { operationalManagerActivationService } from "../employees/operational-manager-activation.service";
 import { sendEmail } from "../email.service";
 import { buildInvitationEmail } from "./invitation-email";
 import { auditService } from "../audit.service";
@@ -70,6 +71,7 @@ export interface IssueInvitationInput {
   origin: UserInvitationOrigin;
   /** When false, OWNER role cannot be assigned. */
   canAssignOwner?: boolean;
+  linkedEmployeeId?: string | null;
 }
 
 export interface IssueInvitationResult {
@@ -177,6 +179,7 @@ export async function persistPendingInvitation(
     role: CompanyRole;
     invitedByUserId: string | null;
     targetUserId?: string | null;
+    linkedEmployeeId?: string | null;
     tokenHash: string;
     origin: UserInvitationOrigin;
     expiresAt: Date;
@@ -192,6 +195,7 @@ export async function persistPendingInvitation(
         role: input.role,
         invitedByUserId: input.invitedByUserId,
         targetUserId: input.targetUserId ?? null,
+        linkedEmployeeId: input.linkedEmployeeId ?? null,
         tokenHash: input.tokenHash,
         origin: input.origin,
         expiresAt: input.expiresAt,
@@ -292,6 +296,7 @@ export const userInvitationService = {
               role: input.role,
               invitedByUserId: input.invitedByUserId,
               targetUserId: existingUser?.id ?? null,
+              linkedEmployeeId: input.linkedEmployeeId ?? null,
               tokenHash,
               origin: input.origin,
               expiresAt,
@@ -371,6 +376,25 @@ export const userInvitationService = {
           : "Invitación enviada por correo."
         : "Invitación creada, pero el correo no se pudo enviar. Podés reintentar el envío.",
     };
+  },
+
+  async issueOperationalManagerInvitation(input: {
+    companyId: string;
+    email: string;
+    inviteeName?: string | null;
+    invitedByUserId: string | null;
+    linkedEmployeeId: string;
+  }): Promise<IssueInvitationResult> {
+    return this.issueInvitation({
+      companyId: input.companyId,
+      email: input.email,
+      role: "OPERATIONAL_MANAGER",
+      inviteeName: input.inviteeName,
+      invitedByUserId: input.invitedByUserId,
+      origin: "MANUAL",
+      canAssignOwner: false,
+      linkedEmployeeId: input.linkedEmployeeId,
+    });
   },
 
   async deliverEmail(invitationId: string, rawToken: string): Promise<{
@@ -801,6 +825,16 @@ export const userInvitationService = {
             },
             transaction,
           );
+          if (invitation.role === "OPERATIONAL_MANAGER" && invitation.linkedEmployeeId) {
+            await operationalManagerActivationService.finalizeInvitationAcceptInTransaction(
+              invitation.companyId,
+              transaction,
+              {
+                userId: resolvedUser.id,
+                employeeId: invitation.linkedEmployeeId,
+              },
+            );
+          }
         }
         await transaction.commit();
         return {
@@ -895,6 +929,17 @@ export const userInvitationService = {
         },
         transaction,
       );
+
+      if (invitation.role === "OPERATIONAL_MANAGER" && invitation.linkedEmployeeId) {
+        await operationalManagerActivationService.finalizeInvitationAcceptInTransaction(
+          invitation.companyId,
+          transaction,
+          {
+            userId: resolvedUser.id,
+            employeeId: invitation.linkedEmployeeId,
+          },
+        );
+      }
 
       await transaction.commit();
 

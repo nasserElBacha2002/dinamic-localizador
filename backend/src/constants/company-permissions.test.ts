@@ -69,17 +69,30 @@ describe("company permissions", () => {
       assert.ok(!roleHasPermission("SUPERVISOR", permission));
       assert.ok(!roleHasPermission("READ_ONLY", permission));
       assert.ok(!roleHasPermission("OPERATOR", permission));
+      assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", permission));
     }
   });
 
-  it("grants manual attendance create/edit to OWNER/ADMIN/SUPERVISOR only", () => {
+  it("grants manual attendance create/edit to OWNER/ADMIN/SUPERVISOR/OPERATIONAL_MANAGER only", () => {
     for (const permission of ["attendance:manual_create", "attendance:manual_edit"] as const) {
       assert.ok(roleHasPermission("OWNER", permission));
       assert.ok(roleHasPermission("ADMIN", permission));
       assert.ok(roleHasPermission("SUPERVISOR", permission));
+      assert.ok(roleHasPermission("OPERATIONAL_MANAGER", permission));
       assert.ok(!roleHasPermission("OPERATOR", permission));
       assert.ok(!roleHasPermission("READ_ONLY", permission));
       assert.ok(!roleHasPermission("HR", permission));
     }
+  });
+
+  it("scopes OPERATIONAL_MANAGER to teams/absences without structural operations or employee admin", () => {
+    assert.ok(roleHasPermission("OPERATIONAL_MANAGER", "operations:teams:manage"));
+    assert.ok(roleHasPermission("OPERATIONAL_MANAGER", "absences:review"));
+    assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", "operations:manage"));
+    assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", "employees:read"));
+    assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", "employees:manage"));
+    assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", "users:manage"));
+    assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", "company:settings:update"));
+    assert.ok(!roleHasPermission("OPERATIONAL_MANAGER", "services:manage"));
   });
 });

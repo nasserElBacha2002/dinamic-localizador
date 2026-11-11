@@ -126,3 +126,23 @@ export const operationShiftExceptionLockResource = (
   workDate: string,
 ): string =>
   `op-shift-ex:${companyId}:${operationId}:${operationShiftId}:${workDate}`.toLowerCase();
+
+/** Serializes charge-holder period writes for one user on one operation. */
+export const operationChargeAssignmentLockResource = (
+  companyId: string,
+  operationId: string,
+  userId: string,
+): string => `op-charge:${companyId}:${operationId}:${userId}`.toLowerCase();
+
+/** Serializes user ↔ employee link create/replace for one user in a company. */
+export const companyUserEmployeeLinkLockResource = (
+  companyId: string,
+  userId: string,
+): string => `user-employee-link:${companyId}:${userId}`.toLowerCase();
+
+/**
+ * Stable charge-assignment lock order (deadlock-safe across assign / end / cancel / revoke / link flows):
+ * 1. companyUserEmployeeLinkLockResource
+ * 2. operationChargeAssignmentLockResource
+ * 3. Row locks (UPDLOCK) on operation_charge_assignments
+ */

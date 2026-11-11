@@ -29,10 +29,7 @@ export function ServiceDetailPage() {
   const { goBackToList } = useListBackNavigation("/services");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "services:manage");
-  const canCreateOperation = hasPermission(
-    permissionsQuery.data?.permissions,
-    "operations:manage",
-  );
+  const canCreateOperation = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
   const serviceQuery = useService(id);
 
   if (!id) {

@@ -21,7 +21,7 @@ import {
 } from "../../utils/operation-detail-display";
 import { getOperationDisplayName } from "../../utils/operation-display";
 import { isOperationEditable } from "../../utils/operation-status";
-import { hasPermission } from "../../utils/permissions";
+import { canManageOperationStructure } from "../../utils/operation-permissions";
 
 /** Dedicated `/operations/:id/edit` route for all editable operation configuration. */
 export function OperationEditPage() {
@@ -30,7 +30,7 @@ export function OperationEditPage() {
   const location = useLocation();
   const unsaved = useUnsavedChangesController({ active: true });
   const permissionsQuery = useCompanyPermissions();
-  const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
+  const canManage = canManageOperationStructure(permissionsQuery.data?.permissions);
   const operationQuery = useOperation(id);
   const updateMutation = useUpdateOperation(id ?? "");
   const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(operationQuery.data));

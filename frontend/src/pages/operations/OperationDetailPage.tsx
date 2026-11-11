@@ -32,7 +32,10 @@ import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { getEntityEditPath } from "../../utils/entity-routes";
 import { getOperationDisplayName } from "../../utils/operation-display";
-import { hasPermission } from "../../utils/permissions";
+import {
+  canManageOperationStructure,
+  canManageOperationTeams,
+} from "../../utils/operation-permissions";
 import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
 import {
   formatOperationDetailScheduleTitle,
@@ -162,15 +165,16 @@ export function OperationDetailPage() {
     );
   }
 
-  const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
+  const canManageTeams = canManageOperationTeams(permissionsQuery.data?.permissions);
+  const canManageStructure = canManageOperationStructure(permissionsQuery.data?.permissions);
   const canViewAttendance = canAccessModuleRoute(
     modulesQuery.data,
     permissionsQuery.data?.permissions,
     "attendance",
   );
-  const canAssign = canManage && isOperationAssignable(operation.status);
-  const canEdit = canManage && isOperationEditable(operation.status);
-  const canReactivate = canManage && isOperationReactivatable(operation.status);
+  const canAssign = canManageTeams && isOperationAssignable(operation.status);
+  const canEdit = canManageStructure && isOperationEditable(operation.status);
+  const canReactivate = canManageStructure && isOperationReactivatable(operation.status);
   const serviceDisplayName = getOperationDisplayName(operation);
   const serviceDetailId = operation.serviceId || operation.service?.id;
   const serviceFieldValue = (

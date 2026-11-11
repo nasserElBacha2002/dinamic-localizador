@@ -72,6 +72,7 @@ const ROLE_NAMES: Record<CompanyRole, string> = {
   ADMIN: "Administrador",
   HR: "RRHH",
   SUPERVISOR: "Supervisor",
+  OPERATIONAL_MANAGER: "Encargado operativo",
   OPERATOR: "Operador",
   READ_ONLY: "Solo lectura",
 };
@@ -83,6 +84,8 @@ const ROLE_DESCRIPTIONS: Record<CompanyRole, string> = {
     "Administra la operación diaria y la configuración. No gestiona usuarios de la empresa.",
   HR: "Gestiona colaboradores, ausencias y recibos de sueldo, con lectura de asistencias y reportes.",
   SUPERVISOR: "Consulta la operación y revisa asistencias.",
+  OPERATIONAL_MANAGER:
+    "Gestiona equipos y asignaciones en operaciones existentes, asistencias y ausencias. No administra la configuración estructural de operaciones ni módulos de RRHH.",
   OPERATOR: "Consulta operaciones y asistencias. Acceso operativo limitado a lectura.",
   READ_ONLY: "Consulta información operativa en modo solo lectura.",
 };
@@ -157,7 +160,15 @@ export const PERMISSION_CATALOG = {
     module: "operations",
     moduleLabel: MODULE_LABELS.operations,
     label: "Administrar operaciones",
-    description: "Permite crear, editar y gestionar operaciones y equipos.",
+    description:
+      "Permite crear, modificar y cancelar operaciones, turnos y configuración estructural.",
+  },
+  "operations:teams:manage": {
+    module: "operations",
+    moduleLabel: MODULE_LABELS.operations,
+    label: "Gestionar equipos operativos",
+    description:
+      "Permite armar equipos, asignar colaboradores y gestionar cobertura en operaciones existentes.",
   },
   "attendance:read": {
     module: "attendance",

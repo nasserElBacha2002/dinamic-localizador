@@ -10,6 +10,7 @@ export const COMPANY_ROLE_RANK: Record<CompanyRole, number> = {
   ADMIN: 80,
   HR: 60,
   SUPERVISOR: 40,
+  OPERATIONAL_MANAGER: 35,
   OPERATOR: 20,
   READ_ONLY: 10,
 };

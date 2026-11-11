@@ -23,6 +23,10 @@ import {
   listEmployeesQuerySchema,
   updateEmployeeSchema,
 } from "../schemas/employee.schema";
+import {
+  inviteOperationalAccessSchema,
+  linkOperationalAccessSchema,
+} from "../schemas/employee-operational-access.schema";
 
 export const employeeRouter = Router();
 
@@ -94,14 +98,14 @@ employeeRouter.get(
 );
 employeeRouter.get(
   "/:id/operational-availability",
-  requirePermission("employees:read"),
+  requireAnyPermission("employees:read", "operations:teams:manage"),
   validate(employeeIdParamSchema, "params"),
   asyncHandler(employeeController.getOperationalAvailability),
 );
 employeeRouter.get(
   "/:id/operations",
-  requirePermission("employees:read"),
-  requireAnyPermission("operations:read", "operations:manage"),
+  requireAnyPermission("employees:read", "operations:teams:manage"),
+  requireAnyPermission("operations:read", "operations:manage", "operations:teams:manage"),
   validate(employeeIdParamSchema, "params"),
   validate(listEmployeeOperationsQuerySchema, "query"),
   asyncHandler(employeeController.listOperations),
@@ -112,6 +116,32 @@ employeeRouter.post(
   validate(employeeIdParamSchema, "params"),
   validate(deactivateEmployeeSchema),
   asyncHandler(employeeController.deactivate),
+);
+employeeRouter.get(
+  "/:id/operational-access",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  asyncHandler(employeeController.getOperationalAccess),
+);
+employeeRouter.post(
+  "/:id/operational-access/link",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  validate(linkOperationalAccessSchema),
+  asyncHandler(employeeController.linkOperationalAccess),
+);
+employeeRouter.post(
+  "/:id/operational-access/invite",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  validate(inviteOperationalAccessSchema),
+  asyncHandler(employeeController.inviteOperationalAccess),
+);
+employeeRouter.delete(
+  "/:id/operational-access",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  asyncHandler(employeeController.revokeOperationalAccess),
 );
 employeeRouter.get(
   "/:id",

@@ -55,6 +55,7 @@ export const companyRoleLabels = {
   ADMIN: "Administrador",
   HR: "RRHH",
   SUPERVISOR: "Supervisor",
+  OPERATIONAL_MANAGER: "Encargado operativo",
   OPERATOR: "Operador",
   READ_ONLY: "Solo lectura",
 } as const;

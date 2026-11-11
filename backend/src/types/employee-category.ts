@@ -13,6 +13,7 @@ export interface EmployeeCategory {
 export interface EmployeeCategorySummary {
   id: string;
   name: string;
+  normalizedName?: string;
   isSystem: boolean;
   isActive: boolean;
 }

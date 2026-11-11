@@ -110,6 +110,7 @@ describe("company-role-hierarchy (frontend)", () => {
       "ADMIN",
       "HR",
       "SUPERVISOR",
+      "OPERATIONAL_MANAGER",
       "OPERATOR",
       "READ_ONLY",
     ]);
@@ -118,6 +119,7 @@ describe("company-role-hierarchy (frontend)", () => {
       "ADMIN",
       "HR",
       "SUPERVISOR",
+      "OPERATIONAL_MANAGER",
       "OPERATOR",
       "READ_ONLY",
     ]);

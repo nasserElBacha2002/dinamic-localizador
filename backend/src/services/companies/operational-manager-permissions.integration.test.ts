@@ -9,18 +9,18 @@ import {
   describeDatabaseIntegration,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
-} from "../test-helpers/integration-test";
-import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
-import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
-import { getPool } from "../database/connection";
-import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
-import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
-import { hashPassword } from "../utils/password";
-import { userRepository } from "../repositories/identity/user.repository";
-import { userCompanyMembershipRepository } from "../repositories/companies/user-company-membership.repository";
-import { companyUserEmployeeLinkService } from "./companies/company-user-employee-link.service";
-import { employeeCategoryRepository } from "../repositories/employees/employee-category.repository";
-import { OPERATIONAL_CHARGE_HOLDER_CATEGORY_NORMALIZED_NAME } from "../constants/operational-charge-holder";
+} from "../../test-helpers/integration-test";
+import { apiRequest, signTestToken, startTestServer } from "../../test-helpers/http-test";
+import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
+import { getPool } from "../../database/connection";
+import { createIntegrationFixtureTracker } from "../../test-helpers/integration-cleanup";
+import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
+import { hashPassword } from "../../utils/password";
+import { userRepository } from "../../repositories/identity/user.repository";
+import { userCompanyMembershipRepository } from "../../repositories/companies/user-company-membership.repository";
+import { companyUserEmployeeLinkService } from "./company-user-employee-link.service";
+import { employeeCategoryRepository } from "../../repositories/employees/employee-category.repository";
+import { OPERATIONAL_CHARGE_HOLDER_CATEGORY_NORMALIZED_NAME } from "../../constants/operational-charge-holder";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const uniquePhone = (seed: number): string =>
@@ -48,7 +48,7 @@ describeDatabaseIntegration("OPERATIONAL_MANAGER permissions integration", () =>
     setupUnitTestEnv();
     await setupDatabaseIntegration();
 
-    const { app } = await import("../app");
+    const { app } = await import("../../app");
     const server = await startTestServer(app);
     baseUrl = server.baseUrl;
     closeServer = server.close;

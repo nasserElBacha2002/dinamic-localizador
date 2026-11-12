@@ -1,0 +1,41 @@
+# implementation-corrections-tests.txt
+# Generated: 2026-11-11
+
+## Backend build
+Command: cd backend && npm run build
+Result: PASS
+
+## Frontend build
+Command: cd frontend && npm run build
+Result: PASS
+
+## Backend lint
+Command: cd backend && npm run lint
+Result: FAIL (pre-existing + unrelated)
+- backend/src/services/employees/employee.service.ts:232-233 no-useless-assignment (pre-existing, not touched in this pass)
+Note: employee-operational-access.service.ts unused import fixed.
+
+## Unit tests
+Command: cd backend && npx tsx --test src/constants/company-permissions.test.ts src/constants/company-role-hierarchy.test.ts
+Result: PASS (13 tests)
+
+Command: cd backend && npx tsx --test src/services/operations/operation-charge-assignment.service.test.ts
+Result: SKIPPED (sandbox EPERM on first attempt; not re-run in this batch)
+
+## Integration tests (RUN_DB_INTEGRATION_TESTS=true)
+Command: npx tsx --test src/database/migration-155-157-operational-charge.integration.test.ts
+Result: PASS (6 tests, incl. 158 rollback THROW assertion)
+
+Command: npx tsx --test src/services/operational-manager-permissions.integration.test.ts
+Result: PASS (2 tests, isolated tenant)
+
+Command: npx tsx --test src/services/employees/employee-operational-access.integration.test.ts
+Result: PASS (2 tests)
+
+## Omitted / not executed in this pass
+- Full operation-charge-assignment.integration.test.ts suite
+- Frontend lint/typecheck standalone (frontend build includes tsc -b: PASS)
+- E2E UI flows for charge assignments (HTTP added; minimal UI for charges not added)
+- Alert/summary scoping by operation_charge_assignments (not implemented)
+- Cross-tenant negative HTTP matrix beyond permissions test
+- Migration 158 rollback execution against DB with OM rows (static script check only)

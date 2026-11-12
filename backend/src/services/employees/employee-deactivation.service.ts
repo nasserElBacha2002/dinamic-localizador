@@ -16,6 +16,7 @@ import { resolveOperationTimezone } from "../../utils/operations/operation-timez
 import { safeRollback } from "../../utils/safe-transaction";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { auditService } from "../audit.service";
+import { operationChargeRevocationService } from "../operations/operation-charge-revocation.service";
 
 export interface EmployeeDeactivationImpact {
   collaboratorId: string;
@@ -220,6 +221,17 @@ export const employeeDeactivationService = {
       if (!employee) {
         throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
       }
+
+      await operationChargeRevocationService.revokeForEmployeeCollaboratorInTransaction(
+        companyId,
+        transaction,
+        {
+          employeeId,
+          actorUserId: userId ?? null,
+          reason: "EMPLOYEE_DEACTIVATED",
+          referenceAt,
+        },
+      );
 
       await transaction.commit();
       transactionClosed = true;

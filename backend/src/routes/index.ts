@@ -7,6 +7,7 @@ import { employeeCategoryRouter } from "./employee-category.routes";
 import { locationZoneRouter } from "./location-zone.routes";
 import { healthRouter } from "./health.routes";
 import { operationAssignmentRouter } from "./operation-assignment.routes";
+import { operationChargeAssignmentRouter } from "./operation-charge-assignment.routes";
 import { workTeamRouter } from "./work-team.routes";
 import {
   operationWorkTeamAssignmentRouter,
@@ -44,6 +45,7 @@ import { companyInvitationRouter, publicInvitationRouter } from "./user-invitati
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
 import { asyncHandler } from "../middleware/async-handler";
+import { enforceOperationalManagerEligibility } from "../middleware/operational-manager-eligibility";
 import {
   loadCompanyModuleStates,
   requireAnyCompanyModule,
@@ -103,6 +105,7 @@ const mountEmployeeRoutes = (router: Router) => {
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
+companyScopedOperationalRouter.use(asyncHandler(enforceOperationalManagerEligibility));
 companyScopedOperationalRouter.use("/users", companyUserRouter);
 companyScopedOperationalRouter.use("/invitations", companyInvitationRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
@@ -129,6 +132,11 @@ companyScopedOperationalRouter.use(
   "/operations/:operationId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
   operationAssignmentRouter,
+);
+companyScopedOperationalRouter.use(
+  "/operations/:operationId/charge-assignments",
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
+  operationChargeAssignmentRouter,
 );
 companyScopedOperationalRouter.use(
   "/operations/:operationId/work-teams",
@@ -245,6 +253,11 @@ operationalRouter.use(
   "/operations/:operationId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
   operationAssignmentRouter,
+);
+operationalRouter.use(
+  "/operations/:operationId/charge-assignments",
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
+  operationChargeAssignmentRouter,
 );
 operationalRouter.use(
   "/operations/:operationId/work-teams",

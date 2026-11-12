@@ -127,12 +127,18 @@ describe("LandingPage", () => {
   });
 
   it("video usa headline Planificá Detectá Resolvé con bajada", () => {
-    const { getByRole, container } = renderPage(<LandingPage />);
+    const { getByRole, getByTestId, container } = renderPage(<LandingPage />);
     const section = container.querySelector("#como-funciona");
     assert.ok(section);
     assert.ok(getByRole("heading", { level: 2, name: /PLANIFICÁ\s+DETECTÁ\s+RESOLVÉ/i }));
     assert.match(section.textContent ?? "", /Mirá cómo Dinamic Operations convierte/i);
     assert.equal(container.querySelectorAll('[data-testid="product-flow-divider"]').length, 0);
+    const video = getByTestId("product-video") as HTMLVideoElement;
+    assert.equal(video.getAttribute("src"), "/video/dinamic-operations-60s-horizontal.mp4");
+    assert.equal(video.hasAttribute("autoplay"), true);
+    assert.equal(video.muted, true);
+    assert.equal(video.loop, true);
+    assert.ok(getByRole("button", { name: /Activar sonido del video/i }));
   });
 
   it("no muestra éxito falso en el formulario demo", () => {

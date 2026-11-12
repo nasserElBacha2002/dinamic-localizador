@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { workTeamAssignmentController } from "../controllers/work-team-assignment.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireOperationsTeamManage, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import { assignmentParamsSchema } from "../schemas/assignment.schema";
 import {
@@ -14,14 +14,14 @@ export const operationWorkTeamAssignmentRouter = Router({ mergeParams: true });
 
 operationWorkTeamAssignmentRouter.post(
   "/assign-preview",
-  requirePermission("operations:manage"),
+  requireOperationsTeamManage(),
   validate(assignmentParamsSchema, "params"),
   validate(workTeamAssignPreviewSchema),
   asyncHandler(workTeamAssignmentController.preview),
 );
 operationWorkTeamAssignmentRouter.post(
   "/assign",
-  requirePermission("operations:manage"),
+  requireOperationsTeamManage(),
   validate(assignmentParamsSchema, "params"),
   validate(workTeamAssignConfirmSchema),
   asyncHandler(workTeamAssignmentController.confirm),

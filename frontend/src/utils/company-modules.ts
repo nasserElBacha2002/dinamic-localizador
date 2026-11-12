@@ -120,6 +120,7 @@ export const MODULE_ROUTE_ACCESS = {
     requiredAnyPermission: [
       "operations:read",
       "operations:manage",
+      "operations:teams:manage",
     ] as const satisfies readonly CompanyPermission[],
   },
 } as const;
@@ -187,6 +188,7 @@ export function getAdminNavItems({
       canShowNavItem(modules, permissions, ["operations"], [
         "operations:read",
         "operations:manage",
+        "operations:teams:manage",
       ])
     ) {
       items.push({ label: terminology.operation.plural, path: "/operations", section: "operation" });

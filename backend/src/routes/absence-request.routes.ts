@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { absenceRequestController } from "../controllers/absence-request.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireOperationsTeamManage, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   absenceOperationalConflictIdParamSchema,
@@ -48,7 +48,7 @@ absenceRequestRouter.get(
 
 absenceRequestRouter.post(
   "/:id/operational-conflicts/:conflictId/resolve",
-  requirePermission("operations:manage"),
+  requireOperationsTeamManage(),
   validate(absenceOperationalConflictIdParamSchema, "params"),
   validate(resolveAbsenceOperationalConflictSchema),
   asyncHandler(absenceRequestController.resolveOperationalConflict),
@@ -56,7 +56,7 @@ absenceRequestRouter.post(
 
 absenceRequestRouter.post(
   "/:id/reconcile-operational-impact",
-  requirePermission("operations:manage"),
+  requireOperationsTeamManage(),
   validate(absenceRequestIdParamSchema, "params"),
   validate(reconcileAbsenceOperationalImpactSchema),
   asyncHandler(absenceRequestController.reconcileOperationalImpact),

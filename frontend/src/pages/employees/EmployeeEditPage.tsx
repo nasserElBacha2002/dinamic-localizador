@@ -22,6 +22,10 @@ import type { EmployeeDeactivationImpact } from "../../types/employee-deactivati
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { getEntityDetailPath } from "../../utils/entity-routes";
+import { EmployeeOperationalAccessSection } from "../../components/employees/EmployeeOperationalAccessSection";
+import { OPERATIONAL_CHARGE_HOLDER_CATEGORY_NORMALIZED_NAME } from "../../constants/operational-charge-holder";
+import { hasPermission } from "../../utils/permissions";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 
 export function EmployeeEditPage() {
   const navigate = useNavigate();
@@ -29,6 +33,8 @@ export function EmployeeEditPage() {
   const { id } = useParams<{ id: string }>();
   const unsaved = useUnsavedChangesController({ active: true });
   const employeeQuery = useEmployee(id);
+  const permissionsQuery = useCompanyPermissions();
+  const canManageEmployees = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
   const employeeClientsQuery = useEmployeeClients(id);
   const updateMutation = useUpdateEmployee(id ?? "");
   const replaceClientsMutation = useReplaceEmployeeClients(id ?? "");
@@ -62,6 +68,9 @@ export function EmployeeEditPage() {
   }
 
   const employee = employeeQuery.data;
+  const isEncargadoCategory =
+    employee.category?.normalizedName === OPERATIONAL_CHARGE_HOLDER_CATEGORY_NORMALIZED_NAME ||
+    employee.category?.name === "Encargado";
   const formBusy =
     updateMutation.isPending || deactivateMutation.isPending || replaceClientsMutation.isPending || impactLoading;
 
@@ -216,6 +225,14 @@ export function EmployeeEditPage() {
         onDirtyChange={unsaved.setDirty}
         onSubmit={handleSubmit}
       />
+
+      {canManageEmployees && (
+        <EmployeeOperationalAccessSection
+          employeeId={employee.id}
+          employeeName={employee.name}
+          visible={isEncargadoCategory}
+        />
+      )}
 
       <EmployeeDeactivationDialog
         open={Boolean(deactivationImpact)}

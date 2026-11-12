@@ -23,7 +23,7 @@ import {
 } from "../../pages/absences/absence-detail-planning";
 import { formatAbsenceDate } from "../../utils/absence-labels";
 import { getApiErrorMessage } from "../../utils/errors";
-import { hasPermission } from "../../utils/permissions";
+import { hasAnyPermission, hasPermission } from "../../utils/permissions";
 import { operationalWorkdaySituationLabels } from "../../utils/operational-workday-presentation";
 
 const newCommandId = (): string =>
@@ -49,10 +49,10 @@ export function AbsenceOperationalImpactSection({ requestId, requestStatus }: Pr
   const permissionsQuery = useCompanyPermissions();
   const impactQuery = useAbsenceOperationalImpact(requestId);
   const resolveMutation = useResolveAbsenceOperationalConflict(requestId);
-  const canManageOperations = hasPermission(
-    permissionsQuery.data?.permissions,
+  const canManageOperations = hasAnyPermission(permissionsQuery.data?.permissions, [
     "operations:manage",
-  );
+    "operations:teams:manage",
+  ]);
   const canViewOperations =
     canManageOperations ||
     hasPermission(permissionsQuery.data?.permissions, "operations:read");

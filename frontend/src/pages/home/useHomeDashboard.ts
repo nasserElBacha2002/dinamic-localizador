@@ -47,6 +47,7 @@ export function useHomeDashboard() {
   const canReadOperations = hasAnyPermission(permissions, [
     "operations:read",
     "operations:manage",
+    "operations:teams:manage",
   ]);
   const canAccessReports = canAccessModuleRoute(modules, permissions, "reports");
 

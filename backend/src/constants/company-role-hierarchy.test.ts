@@ -47,12 +47,14 @@ describe("company-role-hierarchy", () => {
       "ADMIN",
       "HR",
       "SUPERVISOR",
+      "OPERATIONAL_MANAGER",
       "OPERATOR",
       "READ_ONLY",
     ]);
     assert.deepEqual(listAssignableCompanyRoles("ADMIN", false), [
       "HR",
       "SUPERVISOR",
+      "OPERATIONAL_MANAGER",
       "OPERATOR",
       "READ_ONLY",
     ]);
@@ -64,12 +66,14 @@ describe("company-role-hierarchy", () => {
       "ADMIN",
       "HR",
       "SUPERVISOR",
+      "OPERATIONAL_MANAGER",
       "OPERATOR",
       "READ_ONLY",
     ]);
     assert.deepEqual(listInvitableCompanyRoles("ADMIN", false), [
       "HR",
       "SUPERVISOR",
+      "OPERATIONAL_MANAGER",
       "OPERATOR",
       "READ_ONLY",
     ]);

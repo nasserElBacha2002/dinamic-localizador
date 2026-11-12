@@ -112,6 +112,37 @@ describe("company modules frontend module", () => {
     );
   });
 
+  it("shows scoped nav for Encargado operativo (teams + attendance + absences + stats)", () => {
+    const items = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: [
+        "company:read",
+        "operations:read",
+        "operations:teams:manage",
+        "attendance:read",
+        "attendance:review",
+        "absences:read",
+        "absences:review",
+        "reports:read",
+      ],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    const paths = items.map((item) => item.path);
+    assert.ok(paths.includes("/settings/security"));
+    assert.ok(paths.includes("/operations"));
+    assert.ok(paths.includes("/attendance"));
+    assert.ok(paths.includes("/absences"));
+    assert.ok(paths.includes("/statistics"));
+    assert.equal(paths.includes("/employees"), false);
+    assert.equal(paths.includes("/work-teams"), false);
+    assert.equal(paths.includes("/clients"), false);
+    assert.equal(paths.includes("/services"), false);
+    assert.equal(paths.includes("/imports"), false);
+    assert.equal(paths.includes("/settings/company"), false);
+    assert.equal(paths.includes("/settings/users"), false);
+  });
+
   it("shows only Operaciones and Asistencias for OPERATOR with all modules enabled", () => {
     const items = getAdminNavItems({
       modules: allEnabledModules,
@@ -136,6 +167,7 @@ describe("company modules frontend module", () => {
       permissions: [
         "company:read",
         "employees:read",
+        "employees:manage",
         "services:read",
         "operations:read",
         "attendance:read",

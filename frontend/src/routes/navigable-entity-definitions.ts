@@ -54,7 +54,7 @@ export const NAVIGABLE_ENTITY_DEFINITIONS: Record<
   operation: {
     buildPath: (id) => getEntityDetailPath("operations", id),
     moduleKey: "operations",
-    requiredAnyPermission: ["operations:read", "operations:manage"],
+    requiredAnyPermission: ["operations:read", "operations:manage", "operations:teams:manage"],
   },
   attendance: {
     buildPath: (id) => `/attendance/${id}`,

@@ -106,6 +106,10 @@ export const requireAnyPermission = (...permissions: CompanyPermission[]) => {
   };
 };
 
+/** Teams, assignments, and coverage — includes Encargado operativo (`operations:teams:manage`). */
+export const requireOperationsTeamManage = () =>
+  requireAnyPermission("operations:manage", "operations:teams:manage");
+
 /**
  * After query validation: when validatedQuery.export === true, require reports:export.
  * Must run after `validate(..., "query")`.

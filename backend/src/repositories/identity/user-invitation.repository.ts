@@ -20,6 +20,7 @@ export const mapUserInvitationRow = (row: Record<string, unknown>): UserInvitati
   role: String(row.role),
   invitedByUserId: row.invited_by_user_id == null ? null : String(row.invited_by_user_id),
   targetUserId: row.target_user_id == null ? null : String(row.target_user_id),
+  linkedEmployeeId: row.linked_employee_id == null ? null : String(row.linked_employee_id),
   tokenHash: String(row.token_hash),
   tokenVersion: Number(row.token_version ?? 1),
   status: String(row.status) as UserInvitationStatus,
@@ -42,6 +43,7 @@ export interface CreateUserInvitationInput {
   role: CompanyRole;
   invitedByUserId?: string | null;
   targetUserId?: string | null;
+  linkedEmployeeId?: string | null;
   tokenHash: string;
   origin: UserInvitationOrigin;
   expiresAt: Date;
@@ -60,19 +62,20 @@ export const userInvitationRepository = {
       .input("role", sql.NVarChar(30), input.role)
       .input("invitedByUserId", sql.UniqueIdentifier, input.invitedByUserId ?? null)
       .input("targetUserId", sql.UniqueIdentifier, input.targetUserId ?? null)
+      .input("linkedEmployeeId", sql.UniqueIdentifier, input.linkedEmployeeId ?? null)
       .input("tokenHash", sql.Char(64), input.tokenHash)
       .input("origin", sql.NVarChar(40), input.origin)
       .input("expiresAt", sql.DateTime2, input.expiresAt)
       .query(`
         INSERT INTO user_invitations (
           company_id, email_normalized, invitee_name, role,
-          invited_by_user_id, target_user_id, token_hash, status, origin, expires_at,
+          invited_by_user_id, target_user_id, linked_employee_id, token_hash, status, origin, expires_at,
           token_version, last_email_error_code
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @emailNormalized, @inviteeName, @role,
-          @invitedByUserId, @targetUserId, @tokenHash, 'PENDING', @origin, @expiresAt,
+          @invitedByUserId, @targetUserId, @linkedEmployeeId, @tokenHash, 'PENDING', @origin, @expiresAt,
           1, NULL
         )
       `);
@@ -198,6 +201,31 @@ export const userInvitationRepository = {
         companyName: String((row as Record<string, unknown>).company_name ?? ""),
       })),
     };
+  },
+
+  async revokePendingByLinkedEmployeeInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    employeeId: string,
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        UPDATE user_invitations
+        SET status = N'REVOKED',
+            revoked_at = SYSUTCDATETIME(),
+            updated_at = SYSUTCDATETIME(),
+            last_email_error_code = CASE
+              WHEN last_email_error_code = 'EMAIL_SEND_IN_PROGRESS' THEN NULL
+              ELSE last_email_error_code
+            END
+        OUTPUT INSERTED.id
+        WHERE company_id = @companyId
+          AND linked_employee_id = @employeeId
+          AND status = N'PENDING'
+      `);
+    return result.recordset.length;
   },
 
   async revokePending(

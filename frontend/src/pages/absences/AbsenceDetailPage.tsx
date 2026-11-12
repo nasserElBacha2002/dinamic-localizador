@@ -38,7 +38,7 @@ import {
   selectPrimaryCoverageOperationId,
   shouldOfferCoverageAction,
 } from "./absence-detail-planning";
-import { hasPermission } from "../../utils/permissions";
+import { hasAnyPermission, hasPermission } from "../../utils/permissions";
 import { AbsenceNeedsInfoEditor } from "./AbsenceNeedsInfoEditor";
 import { AbsenceReviewActions } from "./AbsenceReviewActions";
 import {
@@ -56,10 +56,10 @@ export function AbsenceDetailPage() {
     permissionsQuery.data?.permissions,
     "absences:balance:update",
   );
-  const canManageOperations = hasPermission(
-    permissionsQuery.data?.permissions,
+  const canManageOperations = hasAnyPermission(permissionsQuery.data?.permissions, [
     "operations:manage",
-  );
+    "operations:teams:manage",
+  ]);
 
   const requestQuery = useAbsenceRequest(id);
   const typesQuery = useAbsenceTypes();

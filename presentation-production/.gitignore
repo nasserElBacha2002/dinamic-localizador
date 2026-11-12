@@ -1,0 +1,4 @@
+# Local presentation production workspace.
+# Files already tracked stay versioned. New local artifacts stay out of git.
+*
+!.gitignore

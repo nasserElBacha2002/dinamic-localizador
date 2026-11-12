@@ -8,6 +8,7 @@ export type CompanyPermission =
   | "services:manage"
   | "operations:read"
   | "operations:manage"
+  | "operations:teams:manage"
   | "attendance:read"
   | "attendance:review"
   | "attendance:manual_create"

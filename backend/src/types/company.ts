@@ -34,6 +34,7 @@ export const COMPANY_ROLES = [
   "ADMIN",
   "HR",
   "SUPERVISOR",
+  "OPERATIONAL_MANAGER",
   "OPERATOR",
   "READ_ONLY",
 ] as const;
@@ -187,6 +188,7 @@ export type CompanyPermission =
   | "services:manage"
   | "operations:read"
   | "operations:manage"
+  | "operations:teams:manage"
   | "attendance:read"
   | "attendance:review"
   | "attendance:manual_create"

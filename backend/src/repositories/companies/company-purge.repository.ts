@@ -46,6 +46,8 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
 
     DELETE FROM employee_workdays WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.operation_charge_assignments', N'U') IS NOT NULL
+      DELETE FROM operation_charge_assignments WHERE company_id = @companyId;
     DELETE FROM operation_assignments WHERE company_id = @companyId;
     DELETE FROM operation_workdays WHERE company_id = @companyId;
 
@@ -136,6 +138,8 @@ export const deleteCompanyOperationalDataSetBased = async (
     IF OBJECT_ID(N'dbo.employee_attendance_alert_state', N'U') IS NOT NULL
       DELETE FROM employee_attendance_alert_state WHERE company_id = @companyId;
 
+    IF OBJECT_ID(N'dbo.company_user_employee_links', N'U') IS NOT NULL
+      DELETE FROM company_user_employee_links WHERE company_id = @companyId;
     DELETE FROM employees WHERE company_id = @companyId;
   `);
 };

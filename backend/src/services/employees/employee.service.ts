@@ -13,6 +13,16 @@ import { companyAbsenceSettingsService } from "../companies/company-absence-sett
 import { normalizePhoneNumber } from "../../utils/phone";
 import { buildPaginationMeta } from "../../utils/pagination";
 import { classifyEmployeeUniqueViolation } from "../../imports/constraint-classifiers";
+import { safeRollback } from "../../utils/safe-transaction";
+import { isEmployeeRecordOperationalChargeHolder } from "../../utils/employees/operational-charge-holder";
+import { operationChargeRevocationService } from "../operations/operation-charge-revocation.service";
+import { employeeDeactivationRepository } from "../../repositories/employees/employee-deactivation.repository";
+import { auditService } from "../audit.service";
+import { companyUserEmployeeLinkRepository } from "../../repositories/companies/company-user-employee-link.repository";
+import {
+  acquireTransactionAppLock,
+  companyUserEmployeeLinkLockResource,
+} from "../../utils/sql-app-lock";
 
 /**
  * Explicit creation policy:
@@ -188,8 +198,8 @@ export const employeeService = {
     return employee;
   },
 
-  async update(companyId: string, id: string, input: UpdateEmployeeInput) {
-    await this.getById(companyId, id);
+  async update(companyId: string, id: string, input: UpdateEmployeeInput, actorUserId?: string | null) {
+    const existing = await this.getById(companyId, id);
 
     if (input.active === false) {
       throw new AppError(
@@ -202,20 +212,96 @@ export const employeeService = {
     const updatePayload: UpdateEmployeeInput & { phoneNumber?: string } = { ...input };
     if (input.phoneNumber !== undefined) {
       const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
-      const existing = await employeeRepository.findByPhone(companyId, normalizedPhone);
-      if (existing && existing.id !== id) {
+      const phoneConflict = await employeeRepository.findByPhone(companyId, normalizedPhone);
+      if (phoneConflict && phoneConflict.id !== id) {
         throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
       }
       updatePayload.phoneNumber = normalizedPhone;
     }
 
-    // Location-zone assignability (incl. historical inactive keep) is enforced only in
-    // employeeRepository.update — single write-time authority.
+    const mayAffectChargeHolder = await isEmployeeRecordOperationalChargeHolder(companyId, existing);
+    const chargeHolderPanelLink = mayAffectChargeHolder
+      ? await companyUserEmployeeLinkRepository.findByEmployeeId(companyId, id)
+      : null;
 
-    const updated = await employeeRepository.update(companyId, id, updatePayload);
-    if (!updated) {
-      throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let transactionClosed = false;
+    let updated: Employee | null = null;
+    let revokedAssignmentIds: string[] = [];
+
+    try {
+      if (chargeHolderPanelLink) {
+        await acquireTransactionAppLock(transaction, {
+          resource: companyUserEmployeeLinkLockResource(companyId, chargeHolderPanelLink.userId),
+        });
+      }
+
+      const locked = await employeeDeactivationRepository.lockEmployeeForUpdate(companyId, id, transaction);
+      if (!locked) {
+        throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+      }
+
+      const beforeUpdate = await employeeRepository.findById(companyId, id, transaction);
+      if (!beforeUpdate) {
+        throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+      }
+
+      const wasChargeHolder = await isEmployeeRecordOperationalChargeHolder(companyId, beforeUpdate);
+
+      updated = await employeeRepository.update(companyId, id, updatePayload, transaction);
+      if (!updated) {
+        throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+      }
+
+      const isChargeHolder = await isEmployeeRecordOperationalChargeHolder(companyId, updated);
+      if (wasChargeHolder && !isChargeHolder) {
+        revokedAssignmentIds = await operationChargeRevocationService.revokeForEmployeeCollaboratorInTransaction(
+          companyId,
+          transaction,
+          {
+            employeeId: id,
+            actorUserId: actorUserId ?? null,
+            reason: "EMPLOYEE_CATEGORY_CHANGED",
+            linkLockAlreadyHeld: Boolean(chargeHolderPanelLink),
+          },
+        );
+
+        await auditService.log(
+          companyId,
+          {
+            entityType: "employee",
+            entityId: id,
+            action: "operational_charge_revoked",
+            previousData: {
+              categoryId: beforeUpdate.categoryId,
+            },
+            newData: {
+              categoryId: updated.categoryId,
+              reason: "EMPLOYEE_CATEGORY_CHANGED",
+              revokedAssignmentIds,
+            },
+            userId: actorUserId ?? null,
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+      transactionClosed = true;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      const classified = classifyEmployeeUniqueViolation(error);
+      if (classified) {
+        throw new AppError(409, classified.code, classified.message);
+      }
+      throw error;
     }
-    return updated;
+
+    return updated!;
   },
 };

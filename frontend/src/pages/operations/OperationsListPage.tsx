@@ -40,7 +40,7 @@ import { getOperationServiceAddress } from "./operations-list-columns";
 import { getOperationDisplayName } from "../../utils/operation-display";
 import { operationStatusLabels } from "../../utils/labels";
 import { operationStatusTone } from "../../utils/operation-status-display";
-import { hasPermission } from "../../utils/permissions";
+import { canManageOperationStructure } from "../../utils/operation-permissions";
 import {
   buildOperationTableDefaults,
   OPERATION_TABLE_FIELDS,
@@ -54,10 +54,7 @@ export function OperationsListPage() {
   const location = useLocation();
   const listNav = useListNavigationState(OPERATIONS_LIST_PATH);
   const permissionsQuery = useCompanyPermissions();
-  const canManageOperations = hasPermission(
-    permissionsQuery.data?.permissions,
-    "operations:manage",
-  );
+  const canManageOperations = canManageOperationStructure(permissionsQuery.data?.permissions);
   const [defaultDateRange] = useState<DateRangeValue>(() => getDefaultOperationDateRange());
   const defaultDateFields = useMemo(
     () => dateRangeToUrlFields(defaultDateRange),

@@ -29,6 +29,7 @@ export interface UserInvitation {
   role: string;
   invitedByUserId: string | null;
   targetUserId: string | null;
+  linkedEmployeeId: string | null;
   tokenHash: string;
   tokenVersion: number;
   status: UserInvitationStatus;

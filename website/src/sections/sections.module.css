@@ -1068,20 +1068,6 @@
   display: none;
 }
 
-.videoFrame {
-  margin-top: 2rem;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--m-radius-lg);
-  border: 1px solid var(--m-border);
-  background: radial-gradient(circle at 30% 20%, rgba(255, 106, 0, 0.15), transparent 55%),
-    linear-gradient(135deg, #0f1e2b, #1a3347);
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.85);
-  text-align: center;
-  padding: 1.5rem;
-}
-
 .videoLabel {
   margin: 0;
   font-size: 1rem;
@@ -2305,10 +2291,39 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
-.videoFrame {
+.videoSection .videoFrame {
   position: relative;
-  border: none;
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
+  border-radius: var(--m-radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #060d14;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+}
+
+.videoElement {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #060d14;
+}
+
+.videoOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 13, 20, 0.28);
+  pointer-events: none;
+}
+
+.videoOverlay .videoPlay {
+  pointer-events: auto;
 }
 
 .videoPlay {
@@ -2319,25 +2334,45 @@
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   font-size: 1.35rem;
-  cursor: default;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
 }
 
-.videoTimeline {
+.videoPlay:hover {
+  transform: scale(1.04);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.videoPlay:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 4px;
+}
+
+.videoUnmute {
   position: absolute;
-  left: 1.25rem;
-  right: 1.25rem;
+  right: 1rem;
   bottom: 1rem;
-  height: 4px;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(8, 16, 24, 0.72);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.videoTimeline span {
-  display: block;
-  width: 35%;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--m-brand);
+.videoUnmute:hover {
+  background: rgba(8, 16, 24, 0.88);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.videoUnmute:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 2px;
 }
 
 .narrativeStory {

@@ -77,6 +77,9 @@ export const mapEmployeeRow = (row: Record<string, unknown>): Employee => {
         ? {
             id: categoryId,
             name: categoryName,
+            normalizedName: row.category_normalized_name
+              ? String(row.category_normalized_name)
+              : undefined,
             isSystem: Boolean(row.category_is_system),
             isActive: Boolean(row.category_is_active),
           }

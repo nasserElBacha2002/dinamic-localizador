@@ -3,6 +3,7 @@ export type CompanyRole =
   | "ADMIN"
   | "HR"
   | "SUPERVISOR"
+  | "OPERATIONAL_MANAGER"
   | "OPERATOR"
   | "READ_ONLY";
 

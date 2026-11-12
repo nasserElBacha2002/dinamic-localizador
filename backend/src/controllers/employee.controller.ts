@@ -7,6 +7,7 @@ import { employeeClientService } from "../services/employees/employee-client.ser
 import type { ListEmployeeOperationsQuery } from "../schemas/employee.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 import { projectEmployeeForRole } from "../utils/employees/employee-residence-privacy";
+import { employeeOperationalAccessService } from "../services/employees/employee-operational-access.service";
 
 export const employeeController = {
   async create(req: Request, res: Response) {
@@ -99,6 +100,57 @@ export const employeeController = {
         removedWorkTeams: result.removedWorkTeams,
       },
     });
+  },
+
+  async getOperationalAccess(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await employeeOperationalAccessService.getStatus(companyId, String(req.params.id));
+    res.status(200).json({ data });
+  },
+
+  async linkOperationalAccess(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await employeeOperationalAccessService.linkExistingUser(
+      companyId,
+      req.auth?.userId ?? null,
+      String(req.params.id),
+      String(req.body.userId),
+      req.companyRole,
+      Boolean(req.isPlatformAdmin),
+    );
+    res.status(200).json({ data });
+  },
+
+  async inviteOperationalAccess(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await employeeOperationalAccessService.inviteUser(
+      companyId,
+      req.auth?.userId ?? null,
+      String(req.params.id),
+      req.body,
+      req.companyRole,
+      Boolean(req.isPlatformAdmin),
+    );
+    res.status(201).json({
+      data: {
+        invitationId: result.invitation.id,
+        email: result.invitation.emailNormalized,
+        status: result.invitation.status,
+        expiresAt: result.invitation.expiresAt,
+        emailSent: result.emailSent,
+      },
+      message: result.message,
+    });
+  },
+
+  async revokeOperationalAccess(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await employeeOperationalAccessService.revokeAccess(
+      companyId,
+      req.auth?.userId ?? null,
+      String(req.params.id),
+    );
+    res.status(200).json({ data });
   },
 
   /** @deprecated Prefer POST /:id/deactivate. Soft-deactivates without profile updates. */

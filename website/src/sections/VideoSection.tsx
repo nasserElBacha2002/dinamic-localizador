@@ -1,9 +1,64 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RevealOnView } from "../components/RevealOnView";
 import { SectionCtaBand } from "../components/SectionCtaBand";
+import { PRODUCT_VIDEO } from "../content/landing-content";
 import shared from "../styles/landing-shared.module.css";
 import classes from "./sections.module.css";
 
 export function VideoSection() {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [needsTap, setNeedsTap] = useState(false);
+  const [muted, setMuted] = useState(true);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    const el = videoRef.current;
+    if (!frame || !el) return;
+
+    const tryPlay = () => {
+      if (!el.paused) {
+        setNeedsTap(false);
+        return;
+      }
+      el.muted = true;
+      void el.play()
+        .then(() => setNeedsTap(false))
+        .catch(() => setNeedsTap(true));
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) tryPlay();
+        else el.pause();
+      },
+      { threshold: 0.35 },
+    );
+    const onPlaying = () => setNeedsTap(false);
+    el.addEventListener("playing", onPlaying);
+    io.observe(frame);
+
+    return () => {
+      io.disconnect();
+      el.removeEventListener("playing", onPlaying);
+    };
+  }, []);
+
+  const play = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = true;
+    void el.play().then(() => setNeedsTap(false)).catch(() => undefined);
+  }, []);
+
+  const unmute = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = false;
+    setMuted(false);
+    void el.play().catch(() => undefined);
+  }, []);
+
   return (
     <RevealOnView
       as="section"
@@ -22,17 +77,34 @@ export function VideoSection() {
         <p className={classes.videoSectionLead}>
           Mirá cómo Dinamic Operations convierte lo que pasa en la operación en acciones concretas.
         </p>
-        <div
-          className={classes.videoFrame}
-          role="group"
-          aria-label="Video demostrativo próximamente"
-        >
-          <button type="button" className={classes.videoPlay} aria-label="Reproducir video demostrativo">
-            ▶
-          </button>
-          <div className={classes.videoTimeline}>
-            <span />
-          </div>
+        <div ref={frameRef} className={classes.videoFrame} role="group" aria-label={PRODUCT_VIDEO.title}>
+          <video
+            ref={videoRef}
+            className={classes.videoElement}
+            src={PRODUCT_VIDEO.src}
+            width={PRODUCT_VIDEO.width}
+            height={PRODUCT_VIDEO.height}
+            preload="auto"
+            playsInline
+            autoPlay
+            muted
+            loop
+            controls={!muted}
+            data-testid="product-video"
+            aria-label={PRODUCT_VIDEO.title}
+          />
+          {needsTap ? (
+            <div className={classes.videoOverlay}>
+              <button type="button" className={classes.videoPlay} aria-label="Reproducir video demostrativo" onClick={play}>
+                ▶
+              </button>
+            </div>
+          ) : null}
+          {muted && !needsTap ? (
+            <button type="button" className={classes.videoUnmute} onClick={unmute} aria-label="Activar sonido del video">
+              Activar sonido
+            </button>
+          ) : null}
         </div>
         <SectionCtaBand
           testId="cta-post-video"

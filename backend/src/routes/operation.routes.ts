@@ -4,7 +4,7 @@ import { operationController } from "../controllers/operation.controller";
 import { operationRecommendationController } from "../controllers/operation-recommendation.controller";
 import { operationWorkdayController } from "../controllers/operation-workday.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireOperationsTeamManage, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   operationImportConfirmSchema,
@@ -54,14 +54,14 @@ operationRouter.get(
 );
 operationRouter.get(
   "/:id/recommendations/employees",
-  requirePermission("operations:manage"),
+  requireOperationsTeamManage(),
   validate(operationIdParamSchema, "params"),
   validate(listEmployeeRecommendationsQuerySchema, "query"),
   asyncHandler(operationRecommendationController.listEmployeeRecommendations),
 );
 operationRouter.post(
   "/:id/recommendations/team",
-  requirePermission("operations:manage"),
+  requireOperationsTeamManage(),
   validate(operationIdParamSchema, "params"),
   validate(recommendOperationTeamSchema),
   asyncHandler(operationRecommendationController.recommendTeam),

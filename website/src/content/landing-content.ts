@@ -1,3 +1,11 @@
+/** Fuente del master: presentation-production/video-60s/output/ (carpeta gitignored). Copiar al actualizar. */
+export const PRODUCT_VIDEO = {
+  src: "/video/dinamic-operations-60s-horizontal.mp4",
+  title: "Dinamic Operations — demostración de 60 segundos",
+  width: 1920,
+  height: 1080,
+} as const;
+
 export const LANDING_SEO = {
   title: "Dinamic Operations | Planificá y mantené cubiertos tus servicios",
   description:

@@ -17,6 +17,7 @@ const readEmployeeLookups = requireAnyPermission(
   "employees:read",
   "attendance:read",
   "operations:read",
+  "operations:teams:manage",
   "absences:read",
 );
 

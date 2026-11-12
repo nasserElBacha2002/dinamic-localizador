@@ -128,6 +128,10 @@ export const deleteOperationCascade = async (
           WHERE company_id = @companyId AND operation_id = @operationId
         );
 
+      IF OBJECT_ID(N'dbo.operation_charge_assignments', N'U') IS NOT NULL
+        DELETE FROM operation_charge_assignments
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
       DELETE FROM operation_assignments
       WHERE company_id = @companyId AND operation_id = @operationId;
 
@@ -358,6 +362,20 @@ export const deleteEmployeeCascade = async (
 
       IF OBJECT_ID(N'dbo.employee_clients', N'U') IS NOT NULL
         DELETE FROM employee_clients
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.company_user_employee_links', N'U') IS NOT NULL
+      BEGIN
+        UPDATE company_user_employee_links
+        SET previous_employee_id = NULL
+        WHERE company_id = @companyId AND previous_employee_id = @employeeId;
+
+        DELETE FROM company_user_employee_links
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+      END;
+
+      IF OBJECT_ID(N'dbo.operation_charge_assignments', N'U') IS NOT NULL
+        DELETE FROM operation_charge_assignments
         WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM employees

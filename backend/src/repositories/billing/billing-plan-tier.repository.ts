@@ -37,14 +37,42 @@ export const billingPlanTierRepository = {
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
   },
 
-  async findById(tierId: string): Promise<BillingPlanTier | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async findById(tierId: string, transaction?: sql.Transaction): Promise<BillingPlanTier | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request.input("tierId", sql.UniqueIdentifier, tierId).query(`
+        SELECT TOP 1 *
+        FROM dbo.billing_plan_tiers
+        WHERE id = @tierId
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
+  /** Non-authoritative plan lookup to acquire applock before tier row locks. */
+  async findBillingPlanIdByTierIdInTransaction(
+    tierId: string,
+    transaction: sql.Transaction,
+  ): Promise<string | null> {
+    const result = await new sql.Request(transaction)
+      .input("tierId", sql.UniqueIdentifier, tierId)
+      .query(`
+        SELECT TOP 1 billing_plan_id
+        FROM dbo.billing_plan_tiers
+        WHERE id = @tierId
+      `);
+    const row = result.recordset[0] as { billing_plan_id?: string } | undefined;
+    return row?.billing_plan_id ? String(row.billing_plan_id) : null;
+  },
+
+  async findByIdForUpdate(
+    tierId: string,
+    transaction: sql.Transaction,
+  ): Promise<BillingPlanTier | null> {
+    const result = await new sql.Request(transaction)
       .input("tierId", sql.UniqueIdentifier, tierId)
       .query(`
         SELECT TOP 1 *
-        FROM dbo.billing_plan_tiers
+        FROM dbo.billing_plan_tiers WITH (UPDLOCK, ROWLOCK)
         WHERE id = @tierId
       `);
     const row = result.recordset[0] as Record<string, unknown> | undefined;
@@ -129,7 +157,9 @@ export const billingPlanTierRepository = {
     },
     transaction?: sql.Transaction,
   ): Promise<BillingPlanTier> {
-    const existing = await this.findById(tierId);
+    const existing = transaction
+      ? await this.findByIdForUpdate(tierId, transaction)
+      : await this.findById(tierId);
     if (!existing) {
       throw new Error("Billing plan tier not found");
     }

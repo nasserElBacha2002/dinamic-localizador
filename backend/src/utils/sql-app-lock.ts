@@ -140,13 +140,22 @@ export const companyUserEmployeeLinkLockResource = (
   userId: string,
 ): string => `user-employee-link:${companyId}:${userId}`.toLowerCase();
 
-/** Serializes versioned price writes for one tier applicability key. */
+/** Serializes tier seat-range writes for one commercial plan. */
+export const billingPlanTierLockResource = (billingPlanId: string): string =>
+  `billing-tier:${billingPlanId}`.toLowerCase();
+
+/** Serializes versioned price writes for one tier applicability key (includes price_kind). */
 export const billingPlanPriceLockResource = (
   billingPlanTierId: string,
   currency: string,
   billingPeriod: string,
+  priceKind: string,
 ): string =>
-  `billing-price:${billingPlanTierId}:${currency}:${billingPeriod}`.toLowerCase();
+  `billing-price:${billingPlanTierId}:${currency}:${billingPeriod}:${priceKind}`.toLowerCase();
+
+/** Serializes subscription and term writes for one company. */
+export const billingSubscriptionCompanyLockResource = (companyId: string): string =>
+  `billing-subscription:${companyId}`.toLowerCase();
 
 /**
  * Stable charge-assignment lock order (deadlock-safe across assign / end / cancel / revoke / link flows):

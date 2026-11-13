@@ -37,7 +37,9 @@ BEGIN
             CONSTRAINT DF_billing_plans_updated_at DEFAULT SYSUTCDATETIME(),
         CONSTRAINT UQ_billing_plans_plan_code UNIQUE (plan_code),
         CONSTRAINT CK_billing_plans_plan_code_format CHECK (
-            plan_code = UPPER(plan_code) AND plan_code NOT LIKE '% %'
+            LEN(plan_code) >= 1
+            AND plan_code = UPPER(plan_code)
+            AND plan_code NOT LIKE '% %'
         ),
         CONSTRAINT CK_billing_plans_plan_kind CHECK (
             plan_kind IN (N'STANDARD', N'CUSTOM')
@@ -83,11 +85,15 @@ BEGIN
             FOREIGN KEY (billing_plan_id) REFERENCES dbo.billing_plans (id),
         CONSTRAINT UQ_billing_plan_tiers_plan_code UNIQUE (billing_plan_id, tier_code),
         CONSTRAINT CK_billing_plan_tiers_code_format CHECK (
-            tier_code = UPPER(tier_code) AND tier_code NOT LIKE '% %'
+            LEN(tier_code) >= 1
+            AND tier_code = UPPER(tier_code)
+            AND tier_code NOT LIKE '% %'
         ),
-        CONSTRAINT CK_billing_plan_tiers_seat_min CHECK (seat_min >= 1),
+        CONSTRAINT CK_billing_plan_tiers_seat_min CHECK (
+            seat_min >= 1 AND seat_min <= 2147483647
+        ),
         CONSTRAINT CK_billing_plan_tiers_seat_range CHECK (
-            seat_max IS NULL OR seat_max >= seat_min
+            seat_max IS NULL OR (seat_max >= seat_min AND seat_max <= 2147483647)
         ),
         CONSTRAINT CK_billing_plan_tiers_sort_order_nonneg CHECK (sort_order >= 0)
     );
@@ -151,13 +157,24 @@ BEGIN
             billing_plan_tier_id,
             currency,
             billing_period,
+            price_kind,
             effective_from,
             effective_to
         );
 END;
 GO
 
--- At most one open-ended price per tier + currency + period.
+/* One open-ended row per tier + currency + period + price_kind (regular vs promotional). */
+IF EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'UX_bpp_open_applicability'
+      AND object_id = OBJECT_ID(N'dbo.billing_plan_prices')
+)
+BEGIN
+    DROP INDEX UX_bpp_open_applicability ON dbo.billing_plan_prices;
+END;
+GO
+
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
     WHERE name = N'UX_bpp_open_applicability'
@@ -168,7 +185,8 @@ BEGIN
         ON dbo.billing_plan_prices (
             billing_plan_tier_id,
             currency,
-            billing_period
+            billing_period,
+            price_kind
         )
         WHERE effective_to IS NULL;
 END;

@@ -18,15 +18,18 @@ import type {
   BillingPlanPrice,
   BillingPlanTier,
 } from "../../types/billing-catalog";
-import { assertValidEffectiveRange } from "../../utils/billing/effective-period";
 import {
-  assertValidSeatRange,
-  doSeatRangesOverlap,
-} from "../../utils/billing/tier-seat-range";
+  assertPositiveInteger,
+  assertSeatCapacity,
+  assertValidEffectiveInstant,
+} from "../../utils/billing/catalog-input";
+import { assertValidEffectiveRange } from "../../utils/billing/effective-period";
+import { doSeatRangesOverlap } from "../../utils/billing/tier-seat-range";
 import { isDecimalString, normalizeDecimalString } from "../../utils/money-decimal";
 import {
   acquireTransactionAppLock,
   billingPlanPriceLockResource,
+  billingPlanTierLockResource,
 } from "../../utils/sql-app-lock";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../../utils/sql-server-errors";
 
@@ -90,7 +93,7 @@ const mapDuplicatePlanCode = (error: unknown): AppError | null => {
     return new AppError(
       409,
       "BILLING_PRICE_OPEN_APPLICABILITY",
-      "Ya hay un precio vigente abierto para este escalón, moneda y período.",
+      "Ya hay un precio vigente abierto para este escalón, moneda, período y tipo de precio.",
     );
   }
   return new AppError(409, "BILLING_DUPLICATE_KEY", "Conflicto de unicidad en el catálogo de billing.");
@@ -211,7 +214,10 @@ export const billingCatalogService = {
     }
 
     try {
-      assertValidSeatRange(input.seatMin, input.seatMax);
+      assertSeatCapacity(input.seatMin, input.seatMax);
+      if (input.sortOrder !== undefined) {
+        assertPositiveInteger(input.sortOrder, "sortOrder");
+      }
     } catch {
       throw new AppError(400, "BILLING_INVALID_SEAT_RANGE", "Rango de colaboradores inválido.");
     }
@@ -221,14 +227,26 @@ export const billingCatalogService = {
     await transaction.begin();
 
     try {
-      const activeTiers = await billingPlanTierRepository.listActiveByPlanForUpdate(
-        planId,
-        transaction,
-      );
-      assertTierSeatRangeNoOverlap(activeTiers, {
-        seatMin: input.seatMin,
-        seatMax: input.seatMax,
+      await acquireTransactionAppLock(transaction, {
+        resource: billingPlanTierLockResource(planId),
+        timeoutError: new AppError(
+          409,
+          "BILLING_TIER_LOCK_TIMEOUT",
+          "No se pudo registrar el escalón. Reintentá.",
+        ),
       });
+
+      const willBeActive = input.isActive !== false;
+      if (willBeActive) {
+        const activeTiers = await billingPlanTierRepository.listActiveByPlanForUpdate(
+          planId,
+          transaction,
+        );
+        assertTierSeatRangeNoOverlap(activeTiers, {
+          seatMin: input.seatMin,
+          seatMax: input.seatMax,
+        });
+      }
 
       const tier = await billingPlanTierRepository.insert(
         planId,
@@ -265,26 +283,46 @@ export const billingCatalogService = {
       isActive?: boolean;
     },
   ): Promise<BillingPlanTier> {
-    const existing = await billingPlanTierRepository.findById(tierId);
-    if (!existing) {
+    const prelimTier = await billingPlanTierRepository.findById(tierId);
+    if (!prelimTier) {
       throw new AppError(404, "BILLING_TIER_NOT_FOUND", "Escalón de plan no encontrado.");
     }
-
-    const seatMin = input.seatMin ?? existing.seatMin;
-    const seatMax = input.seatMax === undefined ? existing.seatMax : input.seatMax;
-    try {
-      assertValidSeatRange(seatMin, seatMax);
-    } catch {
-      throw new AppError(400, "BILLING_INVALID_SEAT_RANGE", "Rango de colaboradores inválido.");
-    }
-
-    const willBeActive = input.isActive === undefined ? existing.isActive : input.isActive;
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
+      await acquireTransactionAppLock(transaction, {
+        resource: billingPlanTierLockResource(prelimTier.billingPlanId),
+        timeoutError: new AppError(
+          409,
+          "BILLING_TIER_LOCK_TIMEOUT",
+          "No se pudo actualizar el escalón. Reintentá.",
+        ),
+      });
+
+      const existing = await billingPlanTierRepository.findByIdForUpdate(tierId, transaction);
+      if (!existing) {
+        throw new AppError(404, "BILLING_TIER_NOT_FOUND", "Escalón de plan no encontrado.");
+      }
+      if (existing.billingPlanId !== prelimTier.billingPlanId) {
+        throw new AppError(409, "BILLING_TIER_PLAN_CHANGED", "El escalón cambió durante la operación.");
+      }
+
+      const seatMin = input.seatMin ?? existing.seatMin;
+      const seatMax = input.seatMax === undefined ? existing.seatMax : input.seatMax;
+      try {
+        assertSeatCapacity(seatMin, seatMax);
+        if (input.sortOrder !== undefined) {
+          assertPositiveInteger(input.sortOrder, "sortOrder");
+        }
+      } catch {
+        throw new AppError(400, "BILLING_INVALID_SEAT_RANGE", "Rango de colaboradores inválido.");
+      }
+
+      const willBeActive = input.isActive === undefined ? existing.isActive : input.isActive;
+
       if (willBeActive) {
         const activeTiers = await billingPlanTierRepository.listActiveByPlanForUpdate(
           existing.billingPlanId,
@@ -350,6 +388,10 @@ export const billingCatalogService = {
 
     const effectiveTo = input.effectiveTo ?? null;
     try {
+      assertValidEffectiveInstant(input.effectiveFrom);
+      if (effectiveTo) {
+        assertValidEffectiveInstant(effectiveTo);
+      }
       assertValidEffectiveRange(input.effectiveFrom, effectiveTo);
     } catch {
       throw new AppError(400, "BILLING_INVALID_EFFECTIVE_RANGE", "Vigencia de precio inválida.");
@@ -365,6 +407,7 @@ export const billingCatalogService = {
           input.billingPlanTierId,
           currency,
           billingPeriod,
+          priceKind,
         ),
         timeoutError: new AppError(
           409,
@@ -377,6 +420,7 @@ export const billingCatalogService = {
         billingPlanTierId: input.billingPlanTierId,
         currency,
         billingPeriod,
+        priceKind,
         effectiveTo: input.effectiveFrom,
       });
 
@@ -386,6 +430,7 @@ export const billingCatalogService = {
           billingPlanTierId: input.billingPlanTierId,
           currency,
           billingPeriod,
+          priceKind,
           effectiveFrom: input.effectiveFrom,
           effectiveTo,
         },

@@ -1,5 +1,6 @@
 import { describe } from "node:test";
 import { config } from "dotenv";
+import type { ConnectionPool } from "mssql";
 
 config();
 
@@ -12,6 +13,67 @@ const REQUIRED_INTEGRATION_ENV = [
   "DB_PASSWORD",
   "JWT_SECRET",
 ] as const;
+
+/** CI and local Docker SQL use this database name (see quality-gate.yml). */
+export const INTEGRATION_DATABASE_NAME = "dinamic_attendance";
+
+/**
+ * Guards test-only DDL/repair helpers. Test opt-in (RUN_DB_INTEGRATION_TESTS) is separate from
+ * explicit schema DDL authorization (INTEGRATION_SQL_DDL_ALLOWED). CI sets the latter on disposable SQL.
+ */
+export const assertSafeIntegrationDatabaseTarget = (): void => {
+  if (process.env.RUN_DB_INTEGRATION_TESTS !== "true") {
+    throw new Error("Refusing integration SQL DDL: RUN_DB_INTEGRATION_TESTS is not true.");
+  }
+  if (process.env.INTEGRATION_SQL_DDL_ALLOWED !== "true") {
+    throw new Error(
+      "Refusing integration SQL DDL: INTEGRATION_SQL_DDL_ALLOWED is not true (explicit disposable-target authorization required).",
+    );
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Refusing integration SQL DDL when NODE_ENV=production.");
+  }
+
+  const dbName = process.env.DB_NAME?.trim() ?? "";
+  if (dbName !== INTEGRATION_DATABASE_NAME) {
+    throw new Error(
+      `Refusing integration SQL DDL on DB_NAME=${dbName || "(empty)"}; expected ${INTEGRATION_DATABASE_NAME}.`,
+    );
+  }
+};
+
+/**
+ * Confirms the live SQL connection matches the configured disposable integration target.
+ * Call after connectDatabase() and before applying test-only DDL.
+ */
+export const assertSafeIntegrationDatabaseConnectedTarget = async (
+  pool: ConnectionPool,
+): Promise<void> => {
+  assertSafeIntegrationDatabaseTarget();
+
+  const result = await pool.request().query(`
+    SELECT DB_NAME() AS connected_db_name
+  `);
+
+  const connectedDbName = String(result.recordset[0]?.connected_db_name ?? "");
+  const expectedDbName = process.env.DB_NAME?.trim() ?? "";
+  if (connectedDbName !== expectedDbName) {
+    throw new Error(
+      `Refusing integration SQL DDL: connected DB_NAME()=${connectedDbName} but DB_NAME env=${expectedDbName}.`,
+    );
+  }
+
+  const migrationTable = await pool.request().query(`
+    SELECT 1 AS found
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'system_migrations'
+  `);
+  if (!migrationTable.recordset[0]) {
+    throw new Error(
+      "Refusing integration SQL DDL: system_migrations is missing (target is not a migrated integration database).",
+    );
+  }
+};
 
 /** Requires explicit opt-in so CI/unit runs do not attempt localhost SQL connections. */
 export const isDatabaseIntegrationEnabled = (): boolean =>

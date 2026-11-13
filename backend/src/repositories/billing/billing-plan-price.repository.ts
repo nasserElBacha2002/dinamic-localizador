@@ -48,6 +48,20 @@ const PRICE_OVERLAP_CLAUSE = `
 `;
 
 export const billingPlanPriceRepository = {
+  async findById(priceId: string): Promise<BillingPlanPrice | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("priceId", sql.UniqueIdentifier, priceId)
+      .query(`
+        SELECT TOP 1 *
+        FROM dbo.billing_plan_prices
+        WHERE id = @priceId
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
   async listByTierId(billingPlanTierId: string): Promise<BillingPlanPrice[]> {
     const pool = getPool();
     const result = await pool
@@ -57,7 +71,7 @@ export const billingPlanPriceRepository = {
         SELECT *
         FROM dbo.billing_plan_prices
         WHERE billing_plan_tier_id = @billingPlanTierId
-        ORDER BY effective_from DESC, created_at DESC
+        ORDER BY price_kind ASC, effective_from DESC, created_at DESC
       `);
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
   },
@@ -66,14 +80,17 @@ export const billingPlanPriceRepository = {
     billingPlanTierId: string;
     currency: string;
     billingPeriod: BillingPeriod;
+    priceKind: BillingPriceKind;
     at: Date;
   }): Promise<BillingPlanPrice | null> {
     const pool = getPool();
+    const priceKind = assertPriceKind(input.priceKind);
     const result = await pool
       .request()
       .input("billingPlanTierId", sql.UniqueIdentifier, input.billingPlanTierId)
       .input("currency", sql.Char(3), normalizeCurrency(input.currency))
       .input("billingPeriod", sql.NVarChar(10), input.billingPeriod)
+      .input("priceKind", sql.NVarChar(20), priceKind)
       .input("at", sql.DateTime2, input.at)
       .query(`
         SELECT TOP 1 *
@@ -81,6 +98,7 @@ export const billingPlanPriceRepository = {
         WHERE billing_plan_tier_id = @billingPlanTierId
           AND currency = @currency
           AND billing_period = @billingPeriod
+          AND price_kind = @priceKind
           AND effective_from <= @at
           AND (effective_to IS NULL OR effective_to > @at)
         ORDER BY effective_from DESC
@@ -96,15 +114,18 @@ export const billingPlanPriceRepository = {
       billingPlanTierId: string;
       currency: string;
       billingPeriod: BillingPeriod;
+      priceKind: BillingPriceKind;
       effectiveFrom: Date;
       effectiveTo: Date | null;
       excludePriceId?: string;
     },
   ): Promise<BillingPlanPrice | null> {
+    const priceKind = assertPriceKind(input.priceKind);
     const request = new sql.Request(transaction)
       .input("billingPlanTierId", sql.UniqueIdentifier, input.billingPlanTierId)
       .input("currency", sql.Char(3), normalizeCurrency(input.currency))
       .input("billingPeriod", sql.NVarChar(10), input.billingPeriod)
+      .input("priceKind", sql.NVarChar(20), priceKind)
       .input("effectiveFrom", sql.DateTime2, input.effectiveFrom)
       .input("effectiveTo", sql.DateTime2, input.effectiveTo);
 
@@ -118,6 +139,7 @@ export const billingPlanPriceRepository = {
       WHERE billing_plan_tier_id = @billingPlanTierId
         AND currency = @currency
         AND billing_period = @billingPeriod
+        AND price_kind = @priceKind
         ${input.excludePriceId ? "AND id <> @excludePriceId" : ""}
         AND ${PRICE_OVERLAP_CLAUSE}
     `);
@@ -126,19 +148,26 @@ export const billingPlanPriceRepository = {
     return row ? mapRow(row) : null;
   },
 
+  /**
+   * Closes open versions of the same price_kind that started strictly before @effectiveTo.
+   * Historical rows with explicit effective_to are never modified.
+   */
   async closeOpenPricesBeforeInTransaction(
     transaction: sql.Transaction,
     input: {
       billingPlanTierId: string;
       currency: string;
       billingPeriod: BillingPeriod;
+      priceKind: BillingPriceKind;
       effectiveTo: Date;
     },
   ): Promise<number> {
+    const priceKind = assertPriceKind(input.priceKind);
     const result = await new sql.Request(transaction)
       .input("billingPlanTierId", sql.UniqueIdentifier, input.billingPlanTierId)
       .input("currency", sql.Char(3), normalizeCurrency(input.currency))
       .input("billingPeriod", sql.NVarChar(10), input.billingPeriod)
+      .input("priceKind", sql.NVarChar(20), priceKind)
       .input("effectiveTo", sql.DateTime2, input.effectiveTo)
       .query(`
         UPDATE dbo.billing_plan_prices
@@ -146,6 +175,7 @@ export const billingPlanPriceRepository = {
         WHERE billing_plan_tier_id = @billingPlanTierId
           AND currency = @currency
           AND billing_period = @billingPeriod
+          AND price_kind = @priceKind
           AND effective_to IS NULL
           AND effective_from < @effectiveTo
       `);

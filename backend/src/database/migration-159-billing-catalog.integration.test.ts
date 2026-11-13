@@ -52,6 +52,25 @@ describeDatabaseIntegration("migration 159 billing commercial catalog", () => {
         AND name = N'UX_bpp_open_applicability'
     `);
     assert.equal(indexes.recordset.length, 1);
+
+  const indexColumns = await getPool().request().query(`
+      SELECT c.name AS column_name
+      FROM sys.indexes i
+      INNER JOIN sys.index_columns ic
+        ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+      INNER JOIN sys.columns c
+        ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+      WHERE i.object_id = OBJECT_ID(N'dbo.billing_plan_prices')
+        AND i.name = N'UX_bpp_open_applicability'
+      ORDER BY ic.key_ordinal ASC
+    `);
+    const columnNames = indexColumns.recordset.map((row) => String(row.column_name));
+    assert.deepEqual(columnNames, [
+      "billing_plan_tier_id",
+      "currency",
+      "billing_period",
+      "price_kind",
+    ]);
   });
 
   it("migration script is present for review", () => {
@@ -60,5 +79,16 @@ describeDatabaseIntegration("migration 159 billing commercial catalog", () => {
     assert.match(script, /billing_plan_tiers/);
     assert.match(script, /billing_plan_prices/);
     assert.doesNotMatch(script, /INSERT INTO dbo\.billing_plan/i);
+  });
+
+  it("rollback script guards partial schema and uses exclusive locks", () => {
+    const rollback = readFileSync(
+      join(migrationsDir, "rollback", "159_billing_commercial_catalog_rollback.sql"),
+      "utf8",
+    );
+    assert.match(rollback, /TABLOCKX/);
+    assert.match(rollback, /BEGIN TRANSACTION/i);
+    assert.match(rollback, /partial billing catalog schema/i);
+    assert.match(rollback, /DISPOSABLE DATABASES ONLY/i);
   });
 });

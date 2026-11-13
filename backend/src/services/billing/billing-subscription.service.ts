@@ -596,7 +596,7 @@ export const billingSubscriptionService = {
       validateEffectiveRange(input.effectiveFrom, effectiveTo);
       wrapTermWithinSubscription(subscription, input.effectiveFrom, effectiveTo);
 
-      await billingSubscriptionTermRepository.closeOpenTermsBeforeInTransaction(transaction, {
+      await billingSubscriptionTermRepository.closeTermsBeforeEffectiveInTransaction(transaction, {
         billingSubscriptionId: subscription.id,
         effectiveTo: input.effectiveFrom,
       });

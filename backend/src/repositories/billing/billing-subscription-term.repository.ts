@@ -159,7 +159,11 @@ export const billingSubscriptionTermRepository = {
       `);
   },
 
-  async closeOpenTermsBeforeInTransaction(
+  /**
+   * Closes prior term versions that extend past @effectiveTo (including bounded rows).
+   * Never mutates agreed amounts on historical rows.
+   */
+  async closeTermsBeforeEffectiveInTransaction(
     transaction: sql.Transaction,
     input: {
       billingSubscriptionId: string;
@@ -173,8 +177,9 @@ export const billingSubscriptionTermRepository = {
         UPDATE dbo.billing_subscription_terms
         SET effective_to = @effectiveTo
         WHERE billing_subscription_id = @billingSubscriptionId
-          AND effective_to IS NULL
+          AND cancelled_at IS NULL
           AND effective_from < @effectiveTo
+          AND (effective_to IS NULL OR effective_to > @effectiveTo)
       `);
 
     return Number(result.rowsAffected[0] ?? 0);

@@ -93,6 +93,23 @@ describeDatabaseIntegration("migration 160 billing subscriptions", () => {
     assert.doesNotMatch(script, /INSERT INTO dbo\.billing_subscriptions/i);
   });
 
+  it("rollback 162 validates under lock in a single transactional DDL batch", () => {
+    const rollback = readFileSync(
+      join(migrationsDir, "rollback", "162_billing_subscription_term_cancellation_rollback.sql"),
+      "utf8",
+    );
+    const tablock = rollback.indexOf("TABLOCKX");
+    const dataGuard = rollback.indexOf("cancelled_at data");
+    const dropIndex = rollback.indexOf("DROP INDEX");
+    assert.ok(dataGuard >= 0);
+    assert.ok(tablock >= 0);
+    assert.ok(tablock < dataGuard);
+    assert.ok(dropIndex > dataGuard);
+    assert.match(rollback, /sp_executesql/i);
+    assert.match(rollback, /DISPOSABLE DATABASES ONLY/i);
+    assert.equal((rollback.match(/COMMIT TRANSACTION/g) ?? []).length, 1);
+  });
+
   it("rollback script guards partial schema and uses exclusive locks", () => {
     const rollback = readFileSync(
       join(migrationsDir, "rollback", "160_billing_subscriptions_rollback.sql"),

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import sql from "mssql";
 import { getPool } from "../database/connection";
-import { applySqlScriptInTransaction } from "../database/run-migrations";
+import { applySqlScriptInTransaction, getAppliedMigrations } from "../database/run-migrations";
 import {
   assertSafeIntegrationDatabaseConnectedTarget,
   assertSafeIntegrationDatabaseTarget,
@@ -46,9 +46,41 @@ const termCancelledAtColumnExists = async (): Promise<boolean> => {
   return Boolean(result.recordset[0]);
 };
 
+const termsTriggerEnforcesBoundedOpenEnd = async (): Promise<boolean> => {
+  const result = await getPool().request().query(`
+    SELECT 1 AS found
+    FROM sys.sql_modules m
+    INNER JOIN sys.triggers t ON m.object_id = t.object_id
+    WHERE t.name = N'TR_billing_subscription_terms_within_subscription'
+      AND m.definition LIKE N'%cancelled_at IS NULL%'
+      AND m.definition LIKE N'%i.effective_to IS NULL%'
+  `);
+  return Boolean(result.recordset[0]);
+};
+
+const assertMigrationSchemaConsistency = async (
+  applied: Set<string>,
+  migrationName: string,
+  schemaOk: () => Promise<boolean>,
+  detail: string,
+): Promise<void> => {
+  const registered = applied.has(migrationName);
+  const ok = await schemaOk();
+  if (registered && !ok) {
+    throw new Error(
+      `Integration DB inconsistent: ${migrationName} registered in system_migrations but ${detail} missing.`,
+    );
+  }
+  if (!registered && ok) {
+    throw new Error(
+      `Integration DB inconsistent: ${detail} present without ${migrationName} in system_migrations. Run platform migrate or repair manually.`,
+    );
+  }
+};
+
 let ensureMigrationPromise: Promise<void> | null = null;
 
-/** Applies migrations 160–162 when integration DB has not migrated yet (local dev / CI only). */
+/** Applies migrations 160–162 when not registered in system_migrations (disposable DB / CI only). */
 export const ensureBillingSubscriptionsMigration = async (): Promise<void> => {
   assertSafeIntegrationDatabaseTarget();
 
@@ -58,25 +90,48 @@ export const ensureBillingSubscriptionsMigration = async (): Promise<void> => {
       const pool = getPool();
       await assertSafeIntegrationDatabaseConnectedTarget(pool);
 
-      if (!(await subscriptionsTableExists())) {
+      const applied = await getAppliedMigrations(pool);
+
+      await assertMigrationSchemaConsistency(
+        applied,
+        MIGRATION_FILE,
+        subscriptionsTableExists,
+        "billing_subscriptions tables",
+      );
+
+      if (!applied.has(MIGRATION_FILE)) {
         const script = readFileSync(join(migrationsDir, MIGRATION_FILE), "utf8");
-        await applySqlScriptInTransaction(getPool(), script, {
+        await applySqlScriptInTransaction(pool, script, {
           registerMigrationName: MIGRATION_FILE,
         });
+        applied.add(MIGRATION_FILE);
       }
 
-      if (!(await contractGuardTriggersApplied())) {
+      await assertMigrationSchemaConsistency(
+        applied,
+        GUARDS_MIGRATION_FILE,
+        contractGuardTriggersApplied,
+        "billing subscription contract guard triggers",
+      );
+
+      if (!applied.has(GUARDS_MIGRATION_FILE)) {
         const guards = readFileSync(join(migrationsDir, GUARDS_MIGRATION_FILE), "utf8");
-        await applySqlScriptInTransaction(getPool(), guards, {
+        await applySqlScriptInTransaction(pool, guards, {
           registerMigrationName: GUARDS_MIGRATION_FILE,
         });
+        applied.add(GUARDS_MIGRATION_FILE);
       }
 
-      const needsTermCancellationMigration =
-        !(await termCancelledAtColumnExists()) || !(await contractGuardTriggersApplied());
-      if (needsTermCancellationMigration) {
+      await assertMigrationSchemaConsistency(
+        applied,
+        CANCELLATION_MIGRATION_FILE,
+        async () => (await termCancelledAtColumnExists()) && (await termsTriggerEnforcesBoundedOpenEnd()),
+        "billing_subscription_terms cancelled_at and bounded-term trigger",
+      );
+
+      if (!applied.has(CANCELLATION_MIGRATION_FILE)) {
         const cancellation = readFileSync(join(migrationsDir, CANCELLATION_MIGRATION_FILE), "utf8");
-        await applySqlScriptInTransaction(getPool(), cancellation, {
+        await applySqlScriptInTransaction(pool, cancellation, {
           registerMigrationName: CANCELLATION_MIGRATION_FILE,
         });
       }

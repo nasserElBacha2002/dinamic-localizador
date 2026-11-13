@@ -38,7 +38,7 @@ const connectPool = async (): Promise<sql.ConnectionPool> =>
     },
   });
 
-const getAppliedMigrations = async (pool: sql.ConnectionPool): Promise<Set<string>> => {
+export const getAppliedMigrations = async (pool: sql.ConnectionPool): Promise<Set<string>> => {
   const tableExists = await pool.request().query(`
     SELECT 1 AS found
     FROM INFORMATION_SCHEMA.TABLES

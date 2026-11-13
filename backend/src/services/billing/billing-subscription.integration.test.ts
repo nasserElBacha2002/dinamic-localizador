@@ -3,6 +3,8 @@
  * Enable: RUN_DB_INTEGRATION_TESTS=true
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
@@ -21,8 +23,25 @@ import { billingSubscriptionRepository } from "../../repositories/billing/billin
 import { billingSubscriptionTermRepository } from "../../repositories/billing/billing-subscription-term.repository";
 import { billingCatalogService } from "./billing-catalog.service";
 import { billingSubscriptionService } from "./billing-subscription.service";
+import {
+  splitBatches,
+  stripLegacyDatabaseUse,
+} from "../../database/run-migrations";
+
+const migrationsDir =
+  process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");
 
 const uniqueSuffix = () => Date.now().toString(36);
+
+const runSqlScriptBatches = async (script: string): Promise<void> => {
+  const pool = getPool();
+  for (const batch of splitBatches(script)) {
+    const normalized = stripLegacyDatabaseUse(batch);
+    if (normalized) {
+      await pool.request().query(normalized);
+    }
+  }
+};
 
 describeDatabaseIntegration("billing subscription service integration", () => {
   const createdPlanIds: string[] = [];
@@ -612,6 +631,102 @@ describeDatabaseIntegration("billing subscription service integration", () => {
     assert.ok(row.recordset[0]?.effective_to);
   });
 
+  it("versions bounded yearly terms from USD 199 to USD 239 in July without overlapping intervals", async () => {
+    const company = await seedCompany();
+    const { plan, tier } = await seedPlanWithTier();
+    const yearStart = new Date("2026-01-01T00:00:00.000Z");
+    const yearEnd = new Date("2026-12-31T23:59:59.000Z");
+
+    const created = await billingSubscriptionService.createAdminSubscription({
+      companyId: company.id,
+      billingPlanId: plan.id,
+      billingPlanTierId: tier.id,
+      effectiveFrom: yearStart,
+      effectiveTo: yearEnd,
+      initialTerms: {
+        agreedAmount: "199.000000",
+        currency: "USD",
+        billingPeriod: "MONTHLY",
+        effectiveFrom: yearStart,
+        effectiveTo: yearEnd,
+        seatMin: 51,
+        seatMax: 100,
+      },
+    });
+    createdSubscriptionIds.push(created.id);
+
+    const july = new Date("2026-07-01T00:00:00.000Z");
+    await billingSubscriptionService.registerContractualTerms({
+      subscriptionId: created.id,
+      agreedAmount: "239.000000",
+      currency: "USD",
+      billingPeriod: "MONTHLY",
+      seatMin: 51,
+      seatMax: 100,
+      effectiveFrom: july,
+    });
+
+    const rows = await getPool()
+      .request()
+      .input("subscriptionId", sql.UniqueIdentifier, created.id)
+      .query(`
+        SELECT agreed_amount, effective_from, effective_to
+        FROM dbo.billing_subscription_terms
+        WHERE billing_subscription_id = @subscriptionId
+        ORDER BY effective_from ASC
+      `);
+    assert.equal(rows.recordset.length, 2);
+    assert.equal(normalizeDecimalString(String(rows.recordset[0].agreed_amount)), "199");
+    assert.equal(normalizeDecimalString(String(rows.recordset[1].agreed_amount)), "239");
+    assert.ok(rows.recordset[0].effective_to);
+    assert.equal(new Date(rows.recordset[0].effective_to as Date).toISOString(), july.toISOString());
+    assert.equal(new Date(rows.recordset[1].effective_from as Date).toISOString(), july.toISOString());
+    assert.ok(rows.recordset[1].effective_to);
+
+    const juneTerms = await billingSubscriptionService.getCurrentTerms(
+      created.id,
+      new Date("2026-06-15T00:00:00.000Z"),
+    );
+    const augustTerms = await billingSubscriptionService.getCurrentTerms(
+      created.id,
+      new Date("2026-08-15T00:00:00.000Z"),
+    );
+    assert.equal(juneTerms?.agreedAmount, "199");
+    assert.equal(augustTerms?.agreedAmount, "239");
+  });
+
+  it("returns SCHEDULED subscription at exact effective_from instant", async () => {
+    const company = await seedCompany();
+    const { plan, tier } = await seedPlanWithTier();
+    const scheduledStart = new Date("2026-09-01T00:00:00.000Z");
+
+    const scheduled = await billingSubscriptionService.createAdminSubscription({
+      companyId: company.id,
+      billingPlanId: plan.id,
+      billingPlanTierId: tier.id,
+      subscriptionStatus: "SCHEDULED",
+      effectiveFrom: scheduledStart,
+      initialTerms: {
+        agreedAmount: "120",
+        currency: "USD",
+        billingPeriod: "MONTHLY",
+        effectiveFrom: scheduledStart,
+        seatMin: 51,
+        seatMax: 100,
+      },
+    });
+    createdSubscriptionIds.push(scheduled.id);
+
+    const atStart = await billingSubscriptionService.getCurrentSubscription(company.id, scheduledStart);
+    assert.ok(atStart);
+    assert.equal(atStart.id, scheduled.id);
+    assert.equal(atStart.subscriptionStatus, "SCHEDULED");
+    assert.equal(
+      await billingSubscriptionService.getScheduledFutureSubscription(company.id, scheduledStart),
+      null,
+    );
+  });
+
   it("cancels future terms on finalize without artificial intervals", async () => {
     const { subscription } = await createActiveSubscription();
 
@@ -660,6 +775,64 @@ describeDatabaseIntegration("billing subscription service integration", () => {
           AND effective_to IS NULL
       `);
     assert.equal(Number(openTerms.recordset[0].c), 0);
+  });
+
+  it("rejects migration 162 rollback when cancelled_at data exists without partial DDL", async () => {
+    const { subscription } = await createActiveSubscription();
+
+    await billingSubscriptionService.registerContractualTerms({
+      subscriptionId: subscription.id,
+      agreedAmount: "300",
+      currency: "USD",
+      billingPeriod: "MONTHLY",
+      seatMin: 51,
+      seatMax: 100,
+      effectiveFrom: new Date("2026-11-01T00:00:00.000Z"),
+    });
+
+    await billingSubscriptionService.finalizeSubscription({
+      subscriptionId: subscription.id,
+      finalStatus: "ENDED",
+      endedAt: new Date("2026-10-01T00:00:00.000Z"),
+      effectiveTo: new Date("2026-10-01T00:00:00.000Z"),
+    });
+
+    const triggerBefore = await getPool().request().query(`
+      SELECT 1 AS found
+      FROM sys.sql_modules m
+      INNER JOIN sys.triggers t ON m.object_id = t.object_id
+      WHERE t.name = N'TR_billing_subscription_terms_within_subscription'
+        AND m.definition LIKE N'%cancelled_at IS NULL%'
+    `);
+    assert.equal(Boolean(triggerBefore.recordset[0]), true);
+
+    const rollback162 = readFileSync(
+      join(migrationsDir, "rollback", "162_billing_subscription_term_cancellation_rollback.sql"),
+      "utf8",
+    );
+
+    await assert.rejects(
+      () => runSqlScriptBatches(rollback162),
+      (error: unknown) => {
+        assert.match(String(error), /cancelled_at data|50162/i);
+        return true;
+      },
+    );
+
+    const columnAfter = await getPool().request().query(`
+      SELECT 1 AS found
+      WHERE COL_LENGTH(N'dbo.billing_subscription_terms', N'cancelled_at') IS NOT NULL
+    `);
+    assert.equal(Boolean(columnAfter.recordset[0]), true);
+
+    const triggerAfter = await getPool().request().query(`
+      SELECT 1 AS found
+      FROM sys.sql_modules m
+      INNER JOIN sys.triggers t ON m.object_id = t.object_id
+      WHERE t.name = N'TR_billing_subscription_terms_within_subscription'
+        AND m.definition LIKE N'%cancelled_at IS NULL%'
+    `);
+    assert.equal(Boolean(triggerAfter.recordset[0]), true);
   });
 
   it("rolls back subscription row when term insert fails after write in transaction", async () => {

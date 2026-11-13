@@ -140,6 +140,14 @@ export const companyUserEmployeeLinkLockResource = (
   userId: string,
 ): string => `user-employee-link:${companyId}:${userId}`.toLowerCase();
 
+/** Serializes versioned price writes for one tier applicability key. */
+export const billingPlanPriceLockResource = (
+  billingPlanTierId: string,
+  currency: string,
+  billingPeriod: string,
+): string =>
+  `billing-price:${billingPlanTierId}:${currency}:${billingPeriod}`.toLowerCase();
+
 /**
  * Stable charge-assignment lock order (deadlock-safe across assign / end / cancel / revoke / link flows):
  * 1. companyUserEmployeeLinkLockResource

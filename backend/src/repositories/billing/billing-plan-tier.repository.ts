@@ -37,6 +37,21 @@ export const billingPlanTierRepository = {
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
   },
 
+  async listByPlanIdInTransaction(
+    transaction: sql.Transaction,
+    billingPlanId: string,
+  ): Promise<BillingPlanTier[]> {
+    const result = await new sql.Request(transaction)
+      .input("billingPlanId", sql.UniqueIdentifier, billingPlanId)
+      .query(`
+        SELECT *
+        FROM dbo.billing_plan_tiers WITH (UPDLOCK, HOLDLOCK)
+        WHERE billing_plan_id = @billingPlanId
+        ORDER BY sort_order ASC, seat_min ASC
+      `);
+    return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
+  },
+
   async findById(tierId: string, transaction?: sql.Transaction): Promise<BillingPlanTier | null> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request.input("tierId", sql.UniqueIdentifier, tierId).query(`

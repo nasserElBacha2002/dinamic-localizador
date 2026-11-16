@@ -19,6 +19,9 @@ const mapRow = (row: Record<string, unknown>): BillingPlan => ({
   planKind: String(row.plan_kind) as BillingPlanKind,
   sortOrder: Number(row.sort_order),
   isActive: Boolean(row.is_active),
+  isPublicForNewSubscription: Boolean(
+    row.is_public_for_new_subscription ?? row.isPublicForNewSubscription ?? false,
+  ),
   createdAt: toIso(row.created_at as Date | string),
   updatedAt: toIso(row.updated_at as Date | string),
 });
@@ -40,6 +43,18 @@ export const billingPlanRepository = {
       SELECT *
       FROM dbo.billing_plans
       ${activeOnly ? "WHERE is_active = 1" : ""}
+      ORDER BY sort_order ASC, display_name ASC
+    `);
+    return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
+  },
+
+  async listPublicForNewSubscription(_at?: Date): Promise<BillingPlan[]> {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT *
+      FROM dbo.billing_plans
+      WHERE is_active = 1
+        AND is_public_for_new_subscription = 1
       ORDER BY sort_order ASC, display_name ASC
     `);
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
@@ -73,6 +88,21 @@ export const billingPlanRepository = {
     return row ? mapRow(row) : null;
   },
 
+  async findByCodeInTransaction(
+    transaction: sql.Transaction,
+    planCode: string,
+  ): Promise<BillingPlan | null> {
+    const result = await new sql.Request(transaction)
+      .input("planCode", sql.NVarChar(40), normalizePlanCode(planCode))
+      .query(`
+        SELECT TOP 1 *
+        FROM dbo.billing_plans WITH (UPDLOCK, HOLDLOCK)
+        WHERE plan_code = @planCode
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
   async insert(input: {
     planCode: string;
     displayName: string;
@@ -80,6 +110,7 @@ export const billingPlanRepository = {
     planKind?: BillingPlanKind;
     sortOrder?: number;
     isActive?: boolean;
+    isPublicForNewSubscription?: boolean;
   }): Promise<BillingPlan> {
     const pool = getPool();
     const planId = randomUUID();
@@ -95,13 +126,32 @@ export const billingPlanRepository = {
         .input("planKind", sql.NVarChar(20), planKind)
         .input("sortOrder", sql.Int, input.sortOrder ?? 0)
         .input("isActive", sql.Bit, input.isActive === false ? 0 : 1)
+        .input(
+          "isPublicForNewSubscription",
+          sql.Bit,
+          input.isPublicForNewSubscription === true ? 1 : 0,
+        )
         .query(`
           INSERT INTO dbo.billing_plans (
-            id, plan_code, display_name, description, plan_kind, sort_order, is_active
+            id,
+            plan_code,
+            display_name,
+            description,
+            plan_kind,
+            sort_order,
+            is_active,
+            is_public_for_new_subscription
           )
           OUTPUT INSERTED.*
           VALUES (
-            @planId, @planCode, @displayName, @description, @planKind, @sortOrder, @isActive
+            @planId,
+            @planCode,
+            @displayName,
+            @description,
+            @planKind,
+            @sortOrder,
+            @isActive,
+            @isPublicForNewSubscription
           )
         `);
       return mapRow(result.recordset[0] as Record<string, unknown>);
@@ -113,6 +163,78 @@ export const billingPlanRepository = {
     }
   },
 
+  async insertInTransaction(
+    transaction: sql.Transaction,
+    input: {
+      planCode: string;
+      displayName: string;
+      description?: string | null;
+      planKind?: BillingPlanKind;
+      sortOrder?: number;
+      isActive?: boolean;
+      isPublicForNewSubscription?: boolean;
+    },
+  ): Promise<BillingPlan> {
+    const planId = randomUUID();
+    const planKind = assertPlanKind(input.planKind ?? "STANDARD");
+
+    const result = await new sql.Request(transaction)
+      .input("planId", sql.UniqueIdentifier, planId)
+      .input("planCode", sql.NVarChar(40), normalizePlanCode(input.planCode))
+      .input("displayName", sql.NVarChar(120), input.displayName.trim())
+      .input("description", sql.NVarChar(500), input.description?.trim() || null)
+      .input("planKind", sql.NVarChar(20), planKind)
+      .input("sortOrder", sql.Int, input.sortOrder ?? 0)
+      .input("isActive", sql.Bit, input.isActive === false ? 0 : 1)
+      .input(
+        "isPublicForNewSubscription",
+        sql.Bit,
+        input.isPublicForNewSubscription === true ? 1 : 0,
+      )
+      .query(`
+        INSERT INTO dbo.billing_plans (
+          id,
+          plan_code,
+          display_name,
+          description,
+          plan_kind,
+          sort_order,
+          is_active,
+          is_public_for_new_subscription
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @planId,
+          @planCode,
+          @displayName,
+          @description,
+          @planKind,
+          @sortOrder,
+          @isActive,
+          @isPublicForNewSubscription
+        )
+      `);
+
+    return mapRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async setPublicForNewSubscriptionInTransaction(
+    transaction: sql.Transaction,
+    planId: string,
+    isPublicForNewSubscription: boolean,
+  ): Promise<void> {
+    await new sql.Request(transaction)
+      .input("planId", sql.UniqueIdentifier, planId)
+      .input("isPublicForNewSubscription", sql.Bit, isPublicForNewSubscription ? 1 : 0)
+      .query(`
+        UPDATE dbo.billing_plans
+        SET
+          is_public_for_new_subscription = @isPublicForNewSubscription,
+          updated_at = SYSUTCDATETIME()
+        WHERE id = @planId
+      `);
+  },
+
   async updateMetadata(
     planId: string,
     input: {
@@ -121,6 +243,7 @@ export const billingPlanRepository = {
       planKind?: BillingPlanKind;
       sortOrder?: number;
       isActive?: boolean;
+      isPublicForNewSubscription?: boolean;
     },
   ): Promise<BillingPlan> {
     const pool = getPool();
@@ -149,6 +272,17 @@ export const billingPlanRepository = {
         sql.Bit,
         input.isActive === undefined ? (existing.isActive ? 1 : 0) : input.isActive ? 1 : 0,
       )
+      .input(
+        "isPublicForNewSubscription",
+        sql.Bit,
+        input.isPublicForNewSubscription === undefined
+          ? existing.isPublicForNewSubscription
+            ? 1
+            : 0
+          : input.isPublicForNewSubscription
+            ? 1
+            : 0,
+      )
       .query(`
         UPDATE dbo.billing_plans
         SET
@@ -157,6 +291,7 @@ export const billingPlanRepository = {
           plan_kind = @planKind,
           sort_order = @sortOrder,
           is_active = @isActive,
+          is_public_for_new_subscription = @isPublicForNewSubscription,
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @planId

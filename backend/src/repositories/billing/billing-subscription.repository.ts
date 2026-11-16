@@ -26,6 +26,7 @@ const mapRow = (row: Record<string, unknown>): BillingSubscription => ({
   effectiveFrom: toIso(row.effective_from as Date | string),
   effectiveTo: optionalIso(row.effective_to),
   endedAt: optionalIso(row.ended_at),
+  adminRequestKey: row.admin_request_key == null ? null : String(row.admin_request_key),
   createdAt: toIso(row.created_at as Date | string),
   updatedAt: toIso(row.updated_at as Date | string),
 });
@@ -202,6 +203,25 @@ export const billingSubscriptionRepository = {
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
   },
 
+  async findByCompanyAdminRequestKey(
+    companyId: string,
+    adminRequestKey: string,
+    transaction?: sql.Transaction,
+  ): Promise<BillingSubscription | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("adminRequestKey", sql.NVarChar(128), adminRequestKey)
+      .query(`
+        SELECT TOP 1 *
+        FROM dbo.billing_subscriptions
+        WHERE company_id = @companyId
+          AND admin_request_key = @adminRequestKey
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
   async insertInTransaction(
     transaction: sql.Transaction,
     input: {
@@ -211,6 +231,7 @@ export const billingSubscriptionRepository = {
       subscriptionStatus: BillingSubscriptionStatus;
       effectiveFrom: Date;
       effectiveTo?: Date | null;
+      adminRequestKey?: string | null;
     },
   ): Promise<BillingSubscription> {
     const subscriptionId = randomUUID();
@@ -225,6 +246,7 @@ export const billingSubscriptionRepository = {
         .input("subscriptionStatus", sql.NVarChar(20), status)
         .input("effectiveFrom", sql.DateTime2, input.effectiveFrom)
         .input("effectiveTo", sql.DateTime2, input.effectiveTo ?? null)
+        .input("adminRequestKey", sql.NVarChar(128), input.adminRequestKey ?? null)
         .query(`
           DECLARE @inserted TABLE (
             id UNIQUEIDENTIFIER NOT NULL,
@@ -235,6 +257,7 @@ export const billingSubscriptionRepository = {
             effective_from DATETIME2 NOT NULL,
             effective_to DATETIME2 NULL,
             ended_at DATETIME2 NULL,
+            admin_request_key NVARCHAR(128) NULL,
             created_at DATETIME2 NOT NULL,
             updated_at DATETIME2 NOT NULL
           );
@@ -246,7 +269,8 @@ export const billingSubscriptionRepository = {
             billing_plan_tier_id,
             subscription_status,
             effective_from,
-            effective_to
+            effective_to,
+            admin_request_key
           )
           OUTPUT
             INSERTED.id,
@@ -257,6 +281,7 @@ export const billingSubscriptionRepository = {
             INSERTED.effective_from,
             INSERTED.effective_to,
             INSERTED.ended_at,
+            INSERTED.admin_request_key,
             INSERTED.created_at,
             INSERTED.updated_at
           INTO @inserted
@@ -267,7 +292,8 @@ export const billingSubscriptionRepository = {
             @billingPlanTierId,
             @subscriptionStatus,
             @effectiveFrom,
-            @effectiveTo
+            @effectiveTo,
+            @adminRequestKey
           );
 
           SELECT * FROM @inserted;

@@ -14,6 +14,7 @@ import {
   teardownDatabaseIntegration,
 } from "../../test-helpers/integration-test";
 import { ensureBillingCatalogMigration } from "../../test-helpers/ensure-billing-catalog-migration";
+import { ensureBillingPlanPublicOfferingMigration } from "../../test-helpers/ensure-billing-plan-public-offering-migration";
 import { isSqlDeadlockError } from "../../utils/sql-server-errors";
 import { billingCatalogService } from "./billing-catalog.service";
 
@@ -25,6 +26,7 @@ describeDatabaseIntegration("billing catalog service integration", () => {
   before(async () => {
     await setupDatabaseIntegration();
     await ensureBillingCatalogMigration();
+    await ensureBillingPlanPublicOfferingMigration();
   });
 
   after(async () => {

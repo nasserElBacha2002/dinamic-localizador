@@ -184,6 +184,7 @@ export const billingCatalogService = {
       planKind?: BillingPlanKind;
       sortOrder?: number;
       isActive?: boolean;
+      isPublicForNewSubscription?: boolean;
     },
   ): Promise<BillingPlan> {
     const existing = await billingPlanRepository.findById(planId);

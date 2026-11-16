@@ -76,6 +76,50 @@ export const billingPlanPriceRepository = {
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
   },
 
+  async listByTierIdInTransaction(
+    transaction: sql.Transaction,
+    billingPlanTierId: string,
+  ): Promise<BillingPlanPrice[]> {
+    const result = await new sql.Request(transaction)
+      .input("billingPlanTierId", sql.UniqueIdentifier, billingPlanTierId)
+      .query(`
+        SELECT *
+        FROM dbo.billing_plan_prices WITH (UPDLOCK, HOLDLOCK)
+        WHERE billing_plan_tier_id = @billingPlanTierId
+        ORDER BY price_kind ASC, effective_from DESC, created_at DESC
+      `);
+    return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
+  },
+
+  async findOpenByApplicabilityInTransaction(
+    transaction: sql.Transaction,
+    input: {
+      billingPlanTierId: string;
+      currency: string;
+      billingPeriod: BillingPeriod;
+      priceKind: BillingPriceKind;
+    },
+  ): Promise<BillingPlanPrice | null> {
+    const priceKind = assertPriceKind(input.priceKind);
+    const result = await new sql.Request(transaction)
+      .input("billingPlanTierId", sql.UniqueIdentifier, input.billingPlanTierId)
+      .input("currency", sql.Char(3), normalizeCurrency(input.currency))
+      .input("billingPeriod", sql.NVarChar(10), input.billingPeriod)
+      .input("priceKind", sql.NVarChar(20), priceKind)
+      .query(`
+        SELECT TOP 1 *
+        FROM dbo.billing_plan_prices WITH (UPDLOCK, HOLDLOCK)
+        WHERE billing_plan_tier_id = @billingPlanTierId
+          AND currency = @currency
+          AND billing_period = @billingPeriod
+          AND price_kind = @priceKind
+          AND effective_to IS NULL
+      `);
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
   async findActiveAt(input: {
     billingPlanTierId: string;
     currency: string;

@@ -12,6 +12,7 @@ export interface BillingPlan {
   planKind: BillingPlanKind;
   sortOrder: number;
   isActive: boolean;
+  isPublicForNewSubscription: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { applySqlScriptInTransaction, getAppliedMigrations } from "../database/run-migrations";
+import { assertBillingSubscriptionCommercialAuditSchemaIntegrity } from "../utils/billing/billing-subscription-commercial-audit-schema";
 import {
   assertSafeIntegrationDatabaseConnectedTarget,
   assertSafeIntegrationDatabaseTarget,
@@ -15,6 +16,7 @@ const migrationsDir =
 const MIGRATION_FILE = "160_billing_subscriptions.sql";
 const GUARDS_MIGRATION_FILE = "161_billing_subscriptions_contract_guards.sql";
 const CANCELLATION_MIGRATION_FILE = "162_billing_subscription_term_cancellation.sql";
+const COMMERCIAL_AUDIT_MIGRATION_FILE = "165_billing_subscription_term_commercial_audit.sql";
 
 const subscriptionsTableExists = async (): Promise<boolean> => {
   const result = await getPool()
@@ -36,6 +38,17 @@ const contractGuardTriggersApplied = async (): Promise<boolean> => {
        OR (parent_id = OBJECT_ID(N'dbo.billing_subscription_terms') AND name = N'TR_billing_subscription_terms_within_subscription')
   `);
   return result.recordset.length === 2;
+};
+
+const commercialAuditColumnsExist = async (): Promise<boolean> => {
+  const result = await getPool().request().query(`
+    SELECT 1 AS found
+    WHERE COL_LENGTH(N'dbo.billing_subscription_terms', N'commercial_reference') IS NOT NULL
+      AND COL_LENGTH(N'dbo.billing_subscription_terms', N'created_by_user_id') IS NOT NULL
+      AND COL_LENGTH(N'dbo.billing_subscription_terms', N'admin_request_key') IS NOT NULL
+      AND COL_LENGTH(N'dbo.billing_subscriptions', N'admin_request_key') IS NOT NULL
+  `);
+  return Boolean(result.recordset[0]);
 };
 
 const termCancelledAtColumnExists = async (): Promise<boolean> => {
@@ -134,7 +147,31 @@ export const ensureBillingSubscriptionsMigration = async (): Promise<void> => {
         await applySqlScriptInTransaction(pool, cancellation, {
           registerMigrationName: CANCELLATION_MIGRATION_FILE,
         });
+        applied.add(CANCELLATION_MIGRATION_FILE);
       }
+
+      await assertMigrationSchemaConsistency(
+        applied,
+        COMMERCIAL_AUDIT_MIGRATION_FILE,
+        commercialAuditColumnsExist,
+        "billing subscription commercial audit columns",
+      );
+
+      if (!applied.has(COMMERCIAL_AUDIT_MIGRATION_FILE)) {
+        const commercialAudit = readFileSync(
+          join(migrationsDir, COMMERCIAL_AUDIT_MIGRATION_FILE),
+          "utf8",
+        );
+        await applySqlScriptInTransaction(pool, commercialAudit, {
+          registerMigrationName: COMMERCIAL_AUDIT_MIGRATION_FILE,
+        });
+        applied.add(COMMERCIAL_AUDIT_MIGRATION_FILE);
+      }
+
+      await assertBillingSubscriptionCommercialAuditSchemaIntegrity(
+        pool,
+        await getAppliedMigrations(pool),
+      );
     })();
   }
 

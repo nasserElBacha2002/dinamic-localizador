@@ -18,13 +18,21 @@ import { billingPlanTierRepository } from "../../repositories/billing/billing-pl
 import { billingSubscriptionRepository } from "../../repositories/billing/billing-subscription.repository";
 import { billingSubscriptionTermRepository } from "../../repositories/billing/billing-subscription-term.repository";
 import { companyRepository } from "../../repositories/companies/company.repository";
+import { assertCompatibleSubscriptionContractTerms } from "./billing-subscription-contract-policy.service";
 import type {
   BillingSubscription,
   BillingSubscriptionTerm,
+  BillingSubscriptionTermResult,
   BillingSubscriptionWithTerms,
+  BillingSubscriptionWithTermsResult,
 } from "../../types/billing-subscription";
 import {
-  assertPositiveInteger,
+  assertExistingSubscriptionCreateMatchesSnapshot,
+  assertExistingTermMatchesSnapshot,
+  type AdminContractualTermSnapshot,
+  type AdminSubscriptionCreateSnapshot,
+} from "../../utils/billing/billing-admin-request-idempotency";
+import {
   assertSeatCapacity,
   assertValidEffectiveInstant,
 } from "../../utils/billing/catalog-input";
@@ -97,7 +105,54 @@ const mapDuplicateSubscription = (error: unknown): AppError | null => {
       "Ya hay condiciones contractuales abiertas para esta suscripción.",
     );
   }
+  if (constraint.includes("UX_BST_SUBSCRIPTION_ADMIN_REQUEST")) {
+    return new AppError(
+      409,
+      "BILLING_SUBSCRIPTION_TERM_ADMIN_REQUEST_EXISTS",
+      "Ya existe una versión contractual con la misma clave administrativa.",
+    );
+  }
+  if (constraint.includes("UX_BILLING_SUBSCRIPTIONS_COMPANY_ADMIN_REQUEST")) {
+    return new AppError(
+      409,
+      "BILLING_SUBSCRIPTION_ADMIN_REQUEST_EXISTS",
+      "Ya existe una suscripción comercial con la misma clave administrativa.",
+    );
+  }
   return new AppError(409, "BILLING_DUPLICATE_KEY", "Conflicto de unicidad en suscripción comercial.");
+};
+
+const normalizeAdminRequestKey = (value: string | null | undefined): string | null => {
+  if (value == null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 128) {
+    throw new AppError(
+      400,
+      "BILLING_INVALID_ADMIN_REQUEST_KEY",
+      "Clave de idempotencia administrativa inválida.",
+    );
+  }
+  return trimmed;
+};
+
+const normalizeCommercialReference = (value: string | null | undefined): string | null => {
+  if (value == null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.length > 500) {
+    throw new AppError(
+      400,
+      "BILLING_INVALID_COMMERCIAL_REFERENCE",
+      "La referencia comercial no puede superar 500 caracteres.",
+    );
+  }
+  return trimmed;
 };
 
 const validateEffectiveRange = (effectiveFrom: Date, effectiveTo: Date | null | undefined): void => {
@@ -310,8 +365,12 @@ export const billingSubscriptionService = {
       billingPlanPriceId?: string | null;
       effectiveFrom?: Date;
       effectiveTo?: Date | null;
+      commercialReference?: string | null;
+      createdByUserId?: string | null;
+      adminRequestKey?: string | null;
     };
-  }): Promise<BillingSubscriptionWithTerms> {
+    adminRequestKey?: string | null;
+  }): Promise<BillingSubscriptionWithTermsResult> {
     const company = await companyRepository.findById(input.companyId);
     if (!company) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa no encontrada.");
@@ -393,6 +452,67 @@ export const billingSubscriptionService = {
     );
     validateEffectiveRange(termEffectiveFrom, termEffectiveTo);
 
+    await assertCompatibleSubscriptionContractTerms({
+      companyId: input.companyId,
+      plan,
+      tierResolved: tierResolution?.tierId
+        ? {
+            tierId: tierResolution.tierId,
+            seatMin: tierResolution.seatMin,
+            seatMax: tierResolution.seatMax,
+          }
+        : null,
+      agreedAmount,
+      currency,
+      billingPeriod,
+      priceKind,
+      termEffectiveFrom,
+      seatMin,
+      seatMax: seatMax ?? null,
+      billingPlanPriceId: input.initialTerms.billingPlanPriceId,
+    });
+
+    const subscriptionAdminRequestKey = normalizeAdminRequestKey(input.adminRequestKey);
+    const termAdminRequestKey = normalizeAdminRequestKey(
+      input.initialTerms.adminRequestKey ?? input.adminRequestKey,
+    );
+    const commercialReference = normalizeCommercialReference(
+      input.initialTerms.commercialReference,
+    );
+
+    const createSnapshot: AdminSubscriptionCreateSnapshot = {
+      operation: "CREATE_SUBSCRIPTION",
+      companyId: input.companyId,
+      billingPlanId: plan.id,
+      billingPlanTierId: tierResolution?.tierId ?? null,
+      subscriptionStatus,
+      subscriptionEffectiveFrom: input.effectiveFrom,
+      subscriptionEffectiveTo: input.effectiveTo ?? null,
+      agreedAmount,
+      currency,
+      billingPeriod,
+      priceKind,
+      seatMin,
+      seatMax: seatMax ?? null,
+      termEffectiveFrom,
+      termEffectiveTo,
+      billingPlanPriceId: input.initialTerms.billingPlanPriceId ?? null,
+    };
+
+    const termSnapshot: AdminContractualTermSnapshot = {
+      operation: "REGISTER_TERMS",
+      subscriptionId: "",
+      agreedAmount,
+      currency,
+      billingPeriod,
+      priceKind,
+      seatMin,
+      seatMax: seatMax ?? null,
+      effectiveFrom: termEffectiveFrom,
+      effectiveTo: termEffectiveTo,
+      billingPlanPriceId: input.initialTerms.billingPlanPriceId ?? null,
+    };
+
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -407,46 +527,98 @@ export const billingSubscriptionService = {
         ),
       });
 
-      const openSubscriptions = await billingSubscriptionRepository.listOpenByCompanyForUpdate(
-        input.companyId,
-        transaction,
-      );
-      try {
-        assertNoOpenSubscriptionOverlap({
-          candidateFrom: input.effectiveFrom,
-          candidateTo: input.effectiveTo ?? null,
-          existing: openSubscriptions,
-        });
-      } catch {
-        throw new AppError(
-          409,
-          "BILLING_SUBSCRIPTION_PERIOD_OVERLAP",
-          "El período contractual se superpone con otra suscripción abierta.",
-        );
+      let resumeSubscription: BillingSubscription | null = null;
+
+      if (subscriptionAdminRequestKey) {
+        const existingSubscription =
+          await billingSubscriptionRepository.findByCompanyAdminRequestKey(
+            input.companyId,
+            subscriptionAdminRequestKey,
+            transaction,
+          );
+        if (existingSubscription) {
+          const terms = await billingSubscriptionTermRepository.listBySubscriptionId(
+            existingSubscription.id,
+            transaction,
+          );
+          const matchedTerm = assertExistingSubscriptionCreateMatchesSnapshot(
+            existingSubscription,
+            terms,
+            termAdminRequestKey ?? subscriptionAdminRequestKey,
+            createSnapshot,
+          );
+          if (matchedTerm) {
+            await transaction.commit();
+            return { ...existingSubscription, terms, idempotentReplay: true };
+          }
+          resumeSubscription = existingSubscription;
+        }
       }
 
-      const overlappingOpen =
-        await billingSubscriptionRepository.findOverlappingOpenByCompanyInTransaction(transaction, {
+      let subscription: BillingSubscription;
+      if (resumeSubscription) {
+        subscription = resumeSubscription;
+      } else {
+        const openSubscriptions = await billingSubscriptionRepository.listOpenByCompanyForUpdate(
+          input.companyId,
+          transaction,
+        );
+        try {
+          assertNoOpenSubscriptionOverlap({
+            candidateFrom: input.effectiveFrom,
+            candidateTo: input.effectiveTo ?? null,
+            existing: openSubscriptions,
+          });
+        } catch {
+          throw new AppError(
+            409,
+            "BILLING_SUBSCRIPTION_PERIOD_OVERLAP",
+            "El período contractual se superpone con otra suscripción abierta.",
+          );
+        }
+
+        const overlappingOpen =
+          await billingSubscriptionRepository.findOverlappingOpenByCompanyInTransaction(
+            transaction,
+            {
+              companyId: input.companyId,
+              effectiveFrom: input.effectiveFrom,
+              effectiveTo: input.effectiveTo ?? null,
+            },
+          );
+        if (overlappingOpen) {
+          throw new AppError(
+            409,
+            "BILLING_SUBSCRIPTION_PERIOD_OVERLAP",
+            "El período contractual se superpone con otra suscripción abierta.",
+          );
+        }
+
+        subscription = await billingSubscriptionRepository.insertInTransaction(transaction, {
           companyId: input.companyId,
+          billingPlanId: plan.id,
+          billingPlanTierId: tierResolution?.tierId ?? null,
+          subscriptionStatus,
           effectiveFrom: input.effectiveFrom,
           effectiveTo: input.effectiveTo ?? null,
+          adminRequestKey: subscriptionAdminRequestKey,
         });
-      if (overlappingOpen) {
-        throw new AppError(
-          409,
-          "BILLING_SUBSCRIPTION_PERIOD_OVERLAP",
-          "El período contractual se superpone con otra suscripción abierta.",
-        );
       }
 
-      const subscription = await billingSubscriptionRepository.insertInTransaction(transaction, {
-        companyId: input.companyId,
-        billingPlanId: plan.id,
-        billingPlanTierId: tierResolution?.tierId ?? null,
-        subscriptionStatus,
-        effectiveFrom: input.effectiveFrom,
-        effectiveTo: input.effectiveTo ?? null,
-      });
+      termSnapshot.subscriptionId = subscription.id;
+
+      if (termAdminRequestKey) {
+        const existingTerm = await billingSubscriptionTermRepository.findBySubscriptionAdminRequestKey(
+          subscription.id,
+          termAdminRequestKey,
+          transaction,
+        );
+        if (existingTerm) {
+          assertExistingTermMatchesSnapshot(existingTerm, termSnapshot);
+          await transaction.commit();
+          return { ...subscription, terms: [existingTerm], idempotentReplay: true };
+        }
+      }
 
       const overlapping = await billingSubscriptionTermRepository.findOverlappingInTransaction(
         transaction,
@@ -477,14 +649,38 @@ export const billingSubscriptionService = {
         billingPlanPriceId: input.initialTerms.billingPlanPriceId ?? null,
         effectiveFrom: termEffectiveFrom,
         effectiveTo: termEffectiveTo,
+        commercialReference,
+        createdByUserId: input.initialTerms.createdByUserId ?? null,
+        adminRequestKey: termAdminRequestKey,
       });
 
       await transaction.commit();
-      return { ...subscription, terms: [term] };
+      return { ...subscription, terms: [term], idempotentReplay: false };
     } catch (error) {
       await transaction.rollback();
       const mapped = mapDuplicateSubscription(error);
       if (mapped) {
+        if (
+          mapped.code === "BILLING_SUBSCRIPTION_ADMIN_REQUEST_EXISTS" &&
+          subscriptionAdminRequestKey
+        ) {
+          const existing = await billingSubscriptionRepository.findByCompanyAdminRequestKey(
+            input.companyId,
+            subscriptionAdminRequestKey,
+          );
+          if (existing) {
+            const terms = await billingSubscriptionTermRepository.listBySubscriptionId(existing.id);
+            const matchedTerm = assertExistingSubscriptionCreateMatchesSnapshot(
+              existing,
+              terms,
+              termAdminRequestKey ?? subscriptionAdminRequestKey,
+              createSnapshot,
+            );
+            if (matchedTerm) {
+              return { ...existing, terms: [matchedTerm], idempotentReplay: true };
+            }
+          }
+        }
         throw mapped;
       }
       if (error instanceof AppError) {
@@ -508,7 +704,10 @@ export const billingSubscriptionService = {
     billingPlanPriceId?: string | null;
     effectiveFrom: Date;
     effectiveTo?: Date | null;
-  }): Promise<BillingSubscriptionTerm> {
+    commercialReference?: string | null;
+    createdByUserId?: string | null;
+    adminRequestKey?: string | null;
+  }): Promise<BillingSubscriptionTermResult> {
     const prelim = await billingSubscriptionRepository.findById(input.subscriptionId);
     if (!prelim) {
       throw new AppError(404, "BILLING_SUBSCRIPTION_NOT_FOUND", "Suscripción comercial no encontrada.");
@@ -563,6 +762,23 @@ export const billingSubscriptionService = {
       priceKind,
     });
 
+    const termAdminRequestKey = normalizeAdminRequestKey(input.adminRequestKey);
+    const commercialReference = normalizeCommercialReference(input.commercialReference);
+
+    const termSnapshot: AdminContractualTermSnapshot = {
+      operation: "REGISTER_TERMS",
+      subscriptionId: input.subscriptionId,
+      agreedAmount,
+      currency,
+      billingPeriod,
+      priceKind,
+      seatMin: input.seatMin,
+      seatMax,
+      effectiveFrom: input.effectiveFrom,
+      effectiveTo: input.effectiveTo ?? null,
+      billingPlanPriceId: input.billingPlanPriceId ?? null,
+    };
+
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -595,6 +811,20 @@ export const billingSubscriptionService = {
       const effectiveTo = resolveTermEffectiveTo(subscription, input.effectiveTo);
       validateEffectiveRange(input.effectiveFrom, effectiveTo);
       wrapTermWithinSubscription(subscription, input.effectiveFrom, effectiveTo);
+      termSnapshot.effectiveTo = effectiveTo;
+
+      if (termAdminRequestKey) {
+        const existingTerm = await billingSubscriptionTermRepository.findBySubscriptionAdminRequestKey(
+          input.subscriptionId,
+          termAdminRequestKey,
+          transaction,
+        );
+        if (existingTerm) {
+          assertExistingTermMatchesSnapshot(existingTerm, termSnapshot);
+          await transaction.commit();
+          return { ...existingTerm, idempotentReplay: true };
+        }
+      }
 
       await billingSubscriptionTermRepository.closeTermsBeforeEffectiveInTransaction(transaction, {
         billingSubscriptionId: subscription.id,
@@ -630,14 +860,30 @@ export const billingSubscriptionService = {
         billingPlanPriceId: input.billingPlanPriceId ?? null,
         effectiveFrom: input.effectiveFrom,
         effectiveTo,
+        commercialReference,
+        createdByUserId: input.createdByUserId ?? null,
+        adminRequestKey: termAdminRequestKey,
       });
 
       await transaction.commit();
-      return created;
+      return { ...created, idempotentReplay: false };
     } catch (error) {
       await transaction.rollback();
       const mapped = mapDuplicateSubscription(error);
       if (mapped) {
+        if (
+          mapped.code === "BILLING_SUBSCRIPTION_TERM_ADMIN_REQUEST_EXISTS" &&
+          termAdminRequestKey
+        ) {
+          const existing = await billingSubscriptionTermRepository.findBySubscriptionAdminRequestKey(
+            input.subscriptionId,
+            termAdminRequestKey,
+          );
+          if (existing) {
+            assertExistingTermMatchesSnapshot(existing, termSnapshot);
+            return { ...existing, idempotentReplay: true };
+          }
+        }
         throw mapped;
       }
       if (error instanceof AppError) {

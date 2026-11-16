@@ -38,6 +38,8 @@
     "repair:operational-location-duplicates": "tsx scripts/repair-operational-location-duplicates.ts",
     "seed:historical-operations": "tsx src/scripts/seed-historical-operations.ts",
     "seed:integration-ci": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/seed-integration-ci.ts",
+    "seed:billing-exemptions": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/seed-billing-company-exemptions.ts",
+    "seed:billing-launch-plan": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/seed-billing-launch-plan.ts",
     "cleanup:integration-junk": "tsx src/scripts/cleanup-integration-junk.ts",
     "gcs:pilot:absence-attachments": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/gcs-absence-attachments-pilot.ts",
     "test": "node ./scripts/run-unit-tests.mjs",

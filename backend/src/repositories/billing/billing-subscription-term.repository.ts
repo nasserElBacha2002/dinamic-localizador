@@ -35,6 +35,11 @@ const mapRow = (row: Record<string, unknown>): BillingSubscriptionTerm => ({
   effectiveFrom: toIso(row.effective_from as Date | string),
   effectiveTo: optionalIso(row.effective_to),
   cancelledAt: optionalIso(row.cancelled_at),
+  commercialReference:
+    row.commercial_reference == null ? null : String(row.commercial_reference),
+  createdByUserId:
+    row.created_by_user_id == null ? null : String(row.created_by_user_id),
+  adminRequestKey: row.admin_request_key == null ? null : String(row.admin_request_key),
   createdAt: toIso(row.created_at as Date | string),
 });
 
@@ -185,6 +190,25 @@ export const billingSubscriptionTermRepository = {
     return Number(result.rowsAffected[0] ?? 0);
   },
 
+  async findBySubscriptionAdminRequestKey(
+    billingSubscriptionId: string,
+    adminRequestKey: string,
+    transaction?: sql.Transaction,
+  ): Promise<BillingSubscriptionTerm | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("billingSubscriptionId", sql.UniqueIdentifier, billingSubscriptionId)
+      .input("adminRequestKey", sql.NVarChar(128), adminRequestKey)
+      .query(`
+        SELECT TOP 1 *
+        FROM dbo.billing_subscription_terms
+        WHERE billing_subscription_id = @billingSubscriptionId
+          AND admin_request_key = @adminRequestKey
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
   async insertVersionInTransaction(
     transaction: sql.Transaction,
     input: {
@@ -200,6 +224,9 @@ export const billingSubscriptionTermRepository = {
       billingPlanPriceId?: string | null;
       effectiveFrom: Date;
       effectiveTo?: Date | null;
+      commercialReference?: string | null;
+      createdByUserId?: string | null;
+      adminRequestKey?: string | null;
     },
   ): Promise<BillingSubscriptionTerm> {
     const termId = randomUUID();
@@ -225,6 +252,9 @@ export const billingSubscriptionTermRepository = {
         .input("billingPlanPriceId", sql.UniqueIdentifier, input.billingPlanPriceId ?? null)
         .input("effectiveFrom", sql.DateTime2, input.effectiveFrom)
         .input("effectiveTo", sql.DateTime2, input.effectiveTo ?? null)
+        .input("commercialReference", sql.NVarChar(500), input.commercialReference ?? null)
+        .input("createdByUserId", sql.UniqueIdentifier, input.createdByUserId ?? null)
+        .input("adminRequestKey", sql.NVarChar(128), input.adminRequestKey ?? null)
         .query(`
           DECLARE @inserted TABLE (
             id UNIQUEIDENTIFIER NOT NULL,
@@ -240,6 +270,9 @@ export const billingSubscriptionTermRepository = {
             billing_plan_price_id UNIQUEIDENTIFIER NULL,
             effective_from DATETIME2 NOT NULL,
             effective_to DATETIME2 NULL,
+            commercial_reference NVARCHAR(500) NULL,
+            created_by_user_id UNIQUEIDENTIFIER NULL,
+            admin_request_key NVARCHAR(128) NULL,
             created_at DATETIME2 NOT NULL
           );
 
@@ -256,7 +289,10 @@ export const billingSubscriptionTermRepository = {
             billing_plan_tier_id,
             billing_plan_price_id,
             effective_from,
-            effective_to
+            effective_to,
+            commercial_reference,
+            created_by_user_id,
+            admin_request_key
           )
           OUTPUT
             INSERTED.id,
@@ -272,6 +308,9 @@ export const billingSubscriptionTermRepository = {
             INSERTED.billing_plan_price_id,
             INSERTED.effective_from,
             INSERTED.effective_to,
+            INSERTED.commercial_reference,
+            INSERTED.created_by_user_id,
+            INSERTED.admin_request_key,
             INSERTED.created_at
           INTO @inserted
           VALUES (
@@ -287,7 +326,10 @@ export const billingSubscriptionTermRepository = {
             @billingPlanTierId,
             @billingPlanPriceId,
             @effectiveFrom,
-            @effectiveTo
+            @effectiveTo,
+            @commercialReference,
+            @createdByUserId,
+            @adminRequestKey
           );
 
           SELECT * FROM @inserted;

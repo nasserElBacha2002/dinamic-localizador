@@ -53,6 +53,52 @@ export const repairBillingCompanyExemptionsImmutabilityTrigger = async (
   `);
 };
 
+/** Replaces trigger with migration 169 semantics (full immutability of permanent rows). */
+export const recreateHardenedBillingCompanyExemptionsImmutabilityTrigger = async (
+  pool: ConnectionPool,
+): Promise<void> => {
+  await pool.request().query(`
+    IF OBJECT_ID(N'dbo.TR_billing_company_exemptions_immutable', N'TR') IS NOT NULL
+        DROP TRIGGER dbo.TR_billing_company_exemptions_immutable;
+  `);
+  await pool.request().query(`
+    EXEC(N'
+    CREATE TRIGGER dbo.TR_billing_company_exemptions_immutable
+    ON dbo.billing_company_exemptions
+    AFTER UPDATE, DELETE
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+
+        IF EXISTS (
+            SELECT 1
+            FROM deleted d
+            WHERE d.is_permanent = 1 AND d.expires_at IS NULL
+        )
+        AND (
+            EXISTS (
+                SELECT 1
+                FROM deleted d
+                WHERE d.is_permanent = 1
+                    AND d.expires_at IS NULL
+                    AND NOT EXISTS (SELECT 1 FROM inserted i WHERE i.id = d.id)
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM deleted d
+                INNER JOIN inserted i ON i.id = d.id
+                WHERE d.is_permanent = 1
+                    AND d.expires_at IS NULL
+            )
+        )
+        BEGIN
+            THROW 50163, ''Permanent billing company exemptions cannot be modified or removed through ordinary operations.'', 1;
+        END;
+    END;
+    ');
+  `);
+};
+
 export const assertBillingCompanyExemptionsImmutabilityTriggerEnabled = async (
   pool: ConnectionPool,
 ): Promise<void> => {

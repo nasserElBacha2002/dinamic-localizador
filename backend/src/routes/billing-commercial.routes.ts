@@ -9,6 +9,7 @@ import {
   modifyContractualTermsSchema,
   subscriptionIdParamsSchema,
 } from "../schemas/billing-negotiated-contract.schema";
+import { registerCommercialBenefitSchema } from "../schemas/billing-commercial-benefit.schema";
 
 export const billingCommercialRouter = Router();
 
@@ -32,4 +33,17 @@ billingCommercialRouter.post(
   validate(subscriptionIdParamsSchema, "params"),
   validate(modifyContractualTermsSchema),
   asyncHandler(billingCommercialController.modifyContractualTerms),
+);
+
+billingCommercialRouter.get(
+  "/companies/:companyId/commercial-benefits",
+  validate(companyIdParamsSchema, "params"),
+  asyncHandler(billingCommercialController.listCompanyCommercialBenefits),
+);
+
+billingCommercialRouter.post(
+  "/companies/:companyId/subscriptions/:subscriptionId/commercial-benefits",
+  validate(subscriptionIdParamsSchema, "params"),
+  validate(registerCommercialBenefitSchema),
+  asyncHandler(billingCommercialController.registerCommercialBenefit),
 );

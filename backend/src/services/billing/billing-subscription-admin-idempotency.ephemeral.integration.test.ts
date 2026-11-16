@@ -248,6 +248,67 @@ describeEphemeral("billing subscription admin idempotency ephemeral", () => {
     assert.ok(julyTerms);
   });
 
+  it("replays adminRequestKey after a later contractual version closes the original term", async () => {
+    const companyId = await seedDisposableCompany(`Historical idem ${Date.now()}`);
+    const customPlan = await billingCatalogService.createPlan({
+      planCode: `HIST_IDEM_${Date.now().toString(36)}`,
+      displayName: "Historical idem",
+      planKind: "CUSTOM",
+    });
+    const effectiveFrom = new Date("2027-11-01T00:00:00.000Z");
+    const adminRequestKey = `hist-${randomUUID()}`;
+
+    const first = await billingNegotiatedContractService.createNegotiatedAgreement({
+      companyId,
+      billingPlanId: customPlan.id,
+      effectiveFrom,
+      agreedAmount: "480.000000",
+      currency: "USD",
+      billingPeriod: "MONTHLY",
+      seatMin: 1,
+      seatMax: 120,
+      actorUserId: ACTOR_USER_ID,
+      adminRequestKey,
+    });
+
+    await billingNegotiatedContractService.modifyContractualTerms({
+      subscriptionId: first.id,
+      companyId,
+      agreedAmount: "490.000000",
+      currency: "USD",
+      billingPeriod: "MONTHLY",
+      seatMin: 1,
+      seatMax: 120,
+      effectiveFrom: new Date("2027-12-01T00:00:00.000Z"),
+      actorUserId: ACTOR_USER_ID,
+      adminRequestKey: `hist-next-${randomUUID()}`,
+    });
+
+    const replay = await billingNegotiatedContractService.createNegotiatedAgreement({
+      companyId,
+      billingPlanId: customPlan.id,
+      effectiveFrom,
+      agreedAmount: "480.000000",
+      currency: "USD",
+      billingPeriod: "MONTHLY",
+      seatMin: 1,
+      seatMax: 120,
+      actorUserId: ACTOR_USER_ID,
+      adminRequestKey,
+    });
+
+    assert.equal(replay.id, first.id);
+    const termRows = await getPool()
+      .request()
+      .input("subscriptionId", sql.UniqueIdentifier, first.id)
+      .query(`
+        SELECT COUNT(*) AS c
+        FROM dbo.billing_subscription_terms
+        WHERE billing_subscription_id = @subscriptionId
+      `);
+    assert.equal(Number(termRows.recordset[0].c), 2);
+  });
+
   it("rolls back new term when containment validation fails inside service transaction", async () => {
     const companyId = await seedDisposableCompany(`Rollback ${Date.now()}`);
     const plan = await billingCatalogService.createPlan({

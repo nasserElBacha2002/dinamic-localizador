@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import type { BillingPeriod, BillingPriceKind } from "../constants/billing-catalog";
+import type { CommercialBenefitKind } from "../constants/billing-commercial-benefit";
+import { billingCommercialBenefitService } from "../services/billing/billing-commercial-benefit.service";
 import { billingNegotiatedContractService } from "../services/billing/billing-negotiated-contract.service";
 
 const parseDate = (value: string): Date => new Date(value);
@@ -79,6 +81,54 @@ export const billingCommercialController = {
       effectiveFrom: parseDate(body.effectiveFrom),
       effectiveTo: body.effectiveTo ? parseDate(body.effectiveTo) : null,
       commercialReference: body.commercialReference,
+      actorUserId: req.auth!.userId,
+      adminRequestKey: body.adminRequestKey,
+    });
+
+    res.status(201).json({ data });
+  },
+
+  async listCompanyCommercialBenefits(req: Request, res: Response) {
+    const companyId = String(req.params.companyId);
+    const at = req.query.at ? new Date(String(req.query.at)) : undefined;
+    const data = await billingCommercialBenefitService.listCompanyCommercialBenefits(companyId, at);
+    res.status(200).json({ data });
+  },
+
+  async registerCommercialBenefit(req: Request, res: Response) {
+    const companyId = String(req.params.companyId);
+    const subscriptionId = String(req.params.subscriptionId);
+    const body = req.body as {
+      benefitKind: CommercialBenefitKind;
+      baseAmount?: string | null;
+      discountPercent?: string | null;
+      discountAmount?: string | null;
+      finalAgreedAmount: string;
+      currency: string;
+      billingPeriod: BillingPeriod;
+      seatMin: number;
+      seatMax?: number | null;
+      effectiveFrom: string;
+      effectiveTo?: string | null;
+      reason: string;
+      adminRequestKey?: string | null;
+    };
+
+    const data = await billingCommercialBenefitService.registerCommercialBenefit({
+      companyId,
+      subscriptionId,
+      benefitKind: body.benefitKind,
+      baseAmount: body.baseAmount,
+      discountPercent: body.discountPercent,
+      discountAmount: body.discountAmount,
+      finalAgreedAmount: body.finalAgreedAmount,
+      currency: body.currency,
+      billingPeriod: body.billingPeriod,
+      seatMin: body.seatMin,
+      seatMax: body.seatMax,
+      effectiveFrom: parseDate(body.effectiveFrom),
+      effectiveTo: body.effectiveTo ? parseDate(body.effectiveTo) : null,
+      reason: body.reason,
       actorUserId: req.auth!.userId,
       adminRequestKey: body.adminRequestKey,
     });

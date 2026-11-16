@@ -7,6 +7,7 @@ import {
   type BillingPriceKind,
 } from "../../constants/billing-catalog";
 import { getPool } from "../../database/connection";
+import type { CommercialBenefitKind } from "../../constants/billing-commercial-benefit";
 import type { BillingSubscriptionTerm } from "../../types/billing-subscription";
 import { normalizeDecimalString } from "../../utils/money-decimal";
 import { isDuplicateKeyError } from "../../utils/sql-server-errors";
@@ -37,9 +38,31 @@ const mapRow = (row: Record<string, unknown>): BillingSubscriptionTerm => ({
   cancelledAt: optionalIso(row.cancelled_at),
   commercialReference:
     row.commercial_reference == null ? null : String(row.commercial_reference),
+  commercialBenefitKind:
+    row.commercial_benefit_kind == null
+      ? null
+      : (String(row.commercial_benefit_kind) as CommercialBenefitKind),
+  commercialBenefitBaseAmount:
+    row.commercial_benefit_base_amount == null
+      ? null
+      : normalizeDecimalString(String(row.commercial_benefit_base_amount)),
+  commercialBenefitDiscountPercent:
+    row.commercial_benefit_discount_percent == null
+      ? null
+      : normalizeDecimalString(String(row.commercial_benefit_discount_percent)),
+  commercialBenefitDiscountAmount:
+    row.commercial_benefit_discount_amount == null
+      ? null
+      : normalizeDecimalString(String(row.commercial_benefit_discount_amount)),
+  commercialBenefitReason:
+    row.commercial_benefit_reason == null ? null : String(row.commercial_benefit_reason),
   createdByUserId:
     row.created_by_user_id == null ? null : String(row.created_by_user_id),
   adminRequestKey: row.admin_request_key == null ? null : String(row.admin_request_key),
+  adminRequestIdempotencyDigest:
+    row.admin_request_idempotency_digest == null
+      ? null
+      : String(row.admin_request_idempotency_digest),
   createdAt: toIso(row.created_at as Date | string),
 });
 
@@ -227,6 +250,12 @@ export const billingSubscriptionTermRepository = {
       commercialReference?: string | null;
       createdByUserId?: string | null;
       adminRequestKey?: string | null;
+      adminRequestIdempotencyDigest?: string | null;
+      commercialBenefitKind?: CommercialBenefitKind | null;
+      commercialBenefitBaseAmount?: string | null;
+      commercialBenefitDiscountPercent?: string | null;
+      commercialBenefitDiscountAmount?: string | null;
+      commercialBenefitReason?: string | null;
     },
   ): Promise<BillingSubscriptionTerm> {
     const termId = randomUUID();
@@ -255,6 +284,38 @@ export const billingSubscriptionTermRepository = {
         .input("commercialReference", sql.NVarChar(500), input.commercialReference ?? null)
         .input("createdByUserId", sql.UniqueIdentifier, input.createdByUserId ?? null)
         .input("adminRequestKey", sql.NVarChar(128), input.adminRequestKey ?? null)
+        .input(
+          "adminRequestIdempotencyDigest",
+          sql.Char(64),
+          input.adminRequestIdempotencyDigest ?? null,
+        )
+        .input("commercialBenefitKind", sql.NVarChar(32), input.commercialBenefitKind ?? null)
+        .input(
+          "commercialBenefitBaseAmount",
+          sql.Decimal(18, 6),
+          input.commercialBenefitBaseAmount
+            ? normalizeDecimalString(input.commercialBenefitBaseAmount)
+            : null,
+        )
+        .input(
+          "commercialBenefitDiscountPercent",
+          sql.Decimal(9, 4),
+          input.commercialBenefitDiscountPercent
+            ? normalizeDecimalString(input.commercialBenefitDiscountPercent)
+            : null,
+        )
+        .input(
+          "commercialBenefitDiscountAmount",
+          sql.Decimal(18, 6),
+          input.commercialBenefitDiscountAmount
+            ? normalizeDecimalString(input.commercialBenefitDiscountAmount)
+            : null,
+        )
+        .input(
+          "commercialBenefitReason",
+          sql.NVarChar(500),
+          input.commercialBenefitReason ?? null,
+        )
         .query(`
           DECLARE @inserted TABLE (
             id UNIQUEIDENTIFIER NOT NULL,
@@ -271,8 +332,14 @@ export const billingSubscriptionTermRepository = {
             effective_from DATETIME2 NOT NULL,
             effective_to DATETIME2 NULL,
             commercial_reference NVARCHAR(500) NULL,
+            commercial_benefit_kind NVARCHAR(32) NULL,
+            commercial_benefit_base_amount DECIMAL(18, 6) NULL,
+            commercial_benefit_discount_percent DECIMAL(9, 4) NULL,
+            commercial_benefit_discount_amount DECIMAL(18, 6) NULL,
+            commercial_benefit_reason NVARCHAR(500) NULL,
             created_by_user_id UNIQUEIDENTIFIER NULL,
             admin_request_key NVARCHAR(128) NULL,
+            admin_request_idempotency_digest CHAR(64) NULL,
             created_at DATETIME2 NOT NULL
           );
 
@@ -291,8 +358,14 @@ export const billingSubscriptionTermRepository = {
             effective_from,
             effective_to,
             commercial_reference,
+            commercial_benefit_kind,
+            commercial_benefit_base_amount,
+            commercial_benefit_discount_percent,
+            commercial_benefit_discount_amount,
+            commercial_benefit_reason,
             created_by_user_id,
-            admin_request_key
+            admin_request_key,
+            admin_request_idempotency_digest
           )
           OUTPUT
             INSERTED.id,
@@ -309,8 +382,14 @@ export const billingSubscriptionTermRepository = {
             INSERTED.effective_from,
             INSERTED.effective_to,
             INSERTED.commercial_reference,
+            INSERTED.commercial_benefit_kind,
+            INSERTED.commercial_benefit_base_amount,
+            INSERTED.commercial_benefit_discount_percent,
+            INSERTED.commercial_benefit_discount_amount,
+            INSERTED.commercial_benefit_reason,
             INSERTED.created_by_user_id,
             INSERTED.admin_request_key,
+            INSERTED.admin_request_idempotency_digest,
             INSERTED.created_at
           INTO @inserted
           VALUES (
@@ -328,8 +407,14 @@ export const billingSubscriptionTermRepository = {
             @effectiveFrom,
             @effectiveTo,
             @commercialReference,
+            @commercialBenefitKind,
+            @commercialBenefitBaseAmount,
+            @commercialBenefitDiscountPercent,
+            @commercialBenefitDiscountAmount,
+            @commercialBenefitReason,
             @createdByUserId,
-            @adminRequestKey
+            @adminRequestKey,
+            @adminRequestIdempotencyDigest
           );
 
           SELECT * FROM @inserted;

@@ -228,6 +228,10 @@ export const bootstrapEphemeralBillingSchema = async (
     "163_billing_company_exemptions.sql",
     "164_billing_plan_public_offering.sql",
     "165_billing_subscription_term_commercial_audit.sql",
+    "166_billing_admin_idempotency_digest_exemption_immutability.sql",
+    "167_billing_company_exemptions_immutability_hardening.sql",
+    "168_billing_subscription_term_commercial_benefit.sql",
+    "169_billing_company_exemptions_immutability_complete.sql",
   ] as const;
 
   for (const migrationFile of billingMigrationFiles) {

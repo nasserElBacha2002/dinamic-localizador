@@ -20,15 +20,20 @@ import { billingSubscriptionTermRepository } from "../../repositories/billing/bi
 import { companyRepository } from "../../repositories/companies/company.repository";
 import { assertCompatibleSubscriptionContractTerms } from "./billing-subscription-contract-policy.service";
 import type {
+  BillingCommercialTransactionAudit,
   BillingSubscription,
   BillingSubscriptionTerm,
   BillingSubscriptionTermResult,
   BillingSubscriptionWithTerms,
   BillingSubscriptionWithTermsResult,
 } from "../../types/billing-subscription";
+import { auditService } from "../audit.service";
 import {
   assertExistingSubscriptionCreateMatchesSnapshot,
   assertExistingTermMatchesSnapshot,
+  computeAdminContractualTermDigest,
+  computeAdminSubscriptionCreateDigest,
+  type AdminCommercialBenefitIdentity,
   type AdminContractualTermSnapshot,
   type AdminSubscriptionCreateSnapshot,
 } from "../../utils/billing/billing-admin-request-idempotency";
@@ -366,10 +371,12 @@ export const billingSubscriptionService = {
       effectiveFrom?: Date;
       effectiveTo?: Date | null;
       commercialReference?: string | null;
+      commercialBenefit?: AdminCommercialBenefitIdentity | null;
       createdByUserId?: string | null;
       adminRequestKey?: string | null;
     };
     adminRequestKey?: string | null;
+    transactionAudit?: BillingCommercialTransactionAudit;
   }): Promise<BillingSubscriptionWithTermsResult> {
     const company = await companyRepository.findById(input.companyId);
     if (!company) {
@@ -511,7 +518,12 @@ export const billingSubscriptionService = {
       effectiveFrom: termEffectiveFrom,
       effectiveTo: termEffectiveTo,
       billingPlanPriceId: input.initialTerms.billingPlanPriceId ?? null,
+      commercialReference,
+      commercialBenefit: input.initialTerms.commercialBenefit ?? null,
     };
+    const subscriptionIdempotencyDigest = subscriptionAdminRequestKey
+      ? computeAdminSubscriptionCreateDigest(createSnapshot)
+      : null;
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -602,10 +614,14 @@ export const billingSubscriptionService = {
           effectiveFrom: input.effectiveFrom,
           effectiveTo: input.effectiveTo ?? null,
           adminRequestKey: subscriptionAdminRequestKey,
+          adminRequestIdempotencyDigest: subscriptionIdempotencyDigest,
         });
       }
 
       termSnapshot.subscriptionId = subscription.id;
+      const termIdempotencyDigest = termAdminRequestKey
+        ? computeAdminContractualTermDigest(termSnapshot)
+        : null;
 
       if (termAdminRequestKey) {
         const existingTerm = await billingSubscriptionTermRepository.findBySubscriptionAdminRequestKey(
@@ -652,7 +668,31 @@ export const billingSubscriptionService = {
         commercialReference,
         createdByUserId: input.initialTerms.createdByUserId ?? null,
         adminRequestKey: termAdminRequestKey,
+        adminRequestIdempotencyDigest: termIdempotencyDigest,
+        commercialBenefitKind: input.initialTerms.commercialBenefit?.kind ?? null,
+        commercialBenefitBaseAmount: input.initialTerms.commercialBenefit?.baseAmount ?? null,
+        commercialBenefitDiscountPercent:
+          input.initialTerms.commercialBenefit?.discountPercent ?? null,
+        commercialBenefitDiscountAmount:
+          input.initialTerms.commercialBenefit?.discountAmount ?? null,
+        commercialBenefitReason: input.initialTerms.commercialBenefit?.reason ?? null,
       });
+
+      if (input.transactionAudit) {
+        await auditService.log(
+          input.transactionAudit.companyId,
+          {
+            entityType: input.transactionAudit.entityType,
+            entityId: input.transactionAudit.resolveEntityId({ subscription, term }),
+            action: input.transactionAudit.action,
+            previousData: input.transactionAudit.previousData ?? null,
+            newData: input.transactionAudit.resolveNewData({ subscription, term }),
+            reason: input.transactionAudit.reason ?? null,
+            userId: input.transactionAudit.userId,
+          },
+          transaction,
+        );
+      }
 
       await transaction.commit();
       return { ...subscription, terms: [term], idempotentReplay: false };
@@ -705,8 +745,10 @@ export const billingSubscriptionService = {
     effectiveFrom: Date;
     effectiveTo?: Date | null;
     commercialReference?: string | null;
+    commercialBenefit?: AdminCommercialBenefitIdentity | null;
     createdByUserId?: string | null;
     adminRequestKey?: string | null;
+    transactionAudit?: BillingCommercialTransactionAudit;
   }): Promise<BillingSubscriptionTermResult> {
     const prelim = await billingSubscriptionRepository.findById(input.subscriptionId);
     if (!prelim) {
@@ -777,6 +819,8 @@ export const billingSubscriptionService = {
       effectiveFrom: input.effectiveFrom,
       effectiveTo: input.effectiveTo ?? null,
       billingPlanPriceId: input.billingPlanPriceId ?? null,
+      commercialReference,
+      commercialBenefit: input.commercialBenefit ?? null,
     };
 
     const pool = getPool();
@@ -847,6 +891,10 @@ export const billingSubscriptionService = {
         );
       }
 
+      const termIdempotencyDigest = termAdminRequestKey
+        ? computeAdminContractualTermDigest(termSnapshot)
+        : null;
+
       const created = await billingSubscriptionTermRepository.insertVersionInTransaction(transaction, {
         billingSubscriptionId: subscription.id,
         agreedAmount,
@@ -863,7 +911,29 @@ export const billingSubscriptionService = {
         commercialReference,
         createdByUserId: input.createdByUserId ?? null,
         adminRequestKey: termAdminRequestKey,
+        adminRequestIdempotencyDigest: termIdempotencyDigest,
+        commercialBenefitKind: input.commercialBenefit?.kind ?? null,
+        commercialBenefitBaseAmount: input.commercialBenefit?.baseAmount ?? null,
+        commercialBenefitDiscountPercent: input.commercialBenefit?.discountPercent ?? null,
+        commercialBenefitDiscountAmount: input.commercialBenefit?.discountAmount ?? null,
+        commercialBenefitReason: input.commercialBenefit?.reason ?? null,
       });
+
+      if (input.transactionAudit) {
+        await auditService.log(
+          input.transactionAudit.companyId,
+          {
+            entityType: input.transactionAudit.entityType,
+            entityId: input.transactionAudit.resolveEntityId({ subscription, term: created }),
+            action: input.transactionAudit.action,
+            previousData: input.transactionAudit.previousData ?? null,
+            newData: input.transactionAudit.resolveNewData({ subscription, term: created }),
+            reason: input.transactionAudit.reason ?? null,
+            userId: input.transactionAudit.userId,
+          },
+          transaction,
+        );
+      }
 
       await transaction.commit();
       return { ...created, idempotentReplay: false };

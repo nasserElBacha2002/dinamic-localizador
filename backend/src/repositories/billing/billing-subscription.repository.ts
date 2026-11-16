@@ -27,6 +27,10 @@ const mapRow = (row: Record<string, unknown>): BillingSubscription => ({
   effectiveTo: optionalIso(row.effective_to),
   endedAt: optionalIso(row.ended_at),
   adminRequestKey: row.admin_request_key == null ? null : String(row.admin_request_key),
+  adminRequestIdempotencyDigest:
+    row.admin_request_idempotency_digest == null
+      ? null
+      : String(row.admin_request_idempotency_digest),
   createdAt: toIso(row.created_at as Date | string),
   updatedAt: toIso(row.updated_at as Date | string),
 });
@@ -232,6 +236,7 @@ export const billingSubscriptionRepository = {
       effectiveFrom: Date;
       effectiveTo?: Date | null;
       adminRequestKey?: string | null;
+      adminRequestIdempotencyDigest?: string | null;
     },
   ): Promise<BillingSubscription> {
     const subscriptionId = randomUUID();
@@ -247,6 +252,11 @@ export const billingSubscriptionRepository = {
         .input("effectiveFrom", sql.DateTime2, input.effectiveFrom)
         .input("effectiveTo", sql.DateTime2, input.effectiveTo ?? null)
         .input("adminRequestKey", sql.NVarChar(128), input.adminRequestKey ?? null)
+        .input(
+          "adminRequestIdempotencyDigest",
+          sql.Char(64),
+          input.adminRequestIdempotencyDigest ?? null,
+        )
         .query(`
           DECLARE @inserted TABLE (
             id UNIQUEIDENTIFIER NOT NULL,
@@ -258,6 +268,7 @@ export const billingSubscriptionRepository = {
             effective_to DATETIME2 NULL,
             ended_at DATETIME2 NULL,
             admin_request_key NVARCHAR(128) NULL,
+            admin_request_idempotency_digest CHAR(64) NULL,
             created_at DATETIME2 NOT NULL,
             updated_at DATETIME2 NOT NULL
           );
@@ -270,7 +281,8 @@ export const billingSubscriptionRepository = {
             subscription_status,
             effective_from,
             effective_to,
-            admin_request_key
+            admin_request_key,
+            admin_request_idempotency_digest
           )
           OUTPUT
             INSERTED.id,
@@ -282,6 +294,7 @@ export const billingSubscriptionRepository = {
             INSERTED.effective_to,
             INSERTED.ended_at,
             INSERTED.admin_request_key,
+            INSERTED.admin_request_idempotency_digest,
             INSERTED.created_at,
             INSERTED.updated_at
           INTO @inserted
@@ -293,7 +306,8 @@ export const billingSubscriptionRepository = {
             @subscriptionStatus,
             @effectiveFrom,
             @effectiveTo,
-            @adminRequestKey
+            @adminRequestKey,
+            @adminRequestIdempotencyDigest
           );
 
           SELECT * FROM @inserted;

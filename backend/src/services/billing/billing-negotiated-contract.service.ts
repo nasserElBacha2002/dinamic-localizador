@@ -10,7 +10,7 @@ import type {
 } from "../../types/billing-subscription";
 import { requiresNegotiatedSeatCapacity } from "../../utils/billing/launch-plan-contract";
 import { compareTermToCatalogPrice, type ContractCatalogComparison } from "../../utils/billing/contract-vs-catalog";
-import { auditService } from "../audit.service";
+import type { AdminCommercialBenefitIdentity } from "../../utils/billing/billing-admin-request-idempotency";
 import { billingCommercialAdminService } from "./billing-commercial-admin.service";
 import { billingPolicyService } from "./billing-policy.service";
 import { billingSubscriptionService } from "./billing-subscription.service";
@@ -223,25 +223,23 @@ export const billingNegotiatedContractService = {
         createdByUserId: input.actorUserId,
         adminRequestKey: input.adminRequestKey,
       },
-    });
-
-    if (!created.idempotentReplay) {
-      await auditService.log(input.companyId, {
+      transactionAudit: {
+        companyId: input.companyId,
         entityType: "billing_subscription",
-        entityId: created.id,
         action: "COMMERCIAL_NEGOTIATED_AGREEMENT_CREATED",
-        newData: {
-          subscriptionId: created.id,
+        userId: input.actorUserId,
+        reason: input.commercialReference ?? null,
+        resolveEntityId: ({ subscription }) => subscription.id,
+        resolveNewData: ({ subscription }) => ({
+          subscriptionId: subscription.id,
           planId: input.billingPlanId,
           agreedAmount: input.agreedAmount,
           seatMin: input.seatMin,
           seatMax,
           commercialReference: input.commercialReference ?? null,
-        },
-        reason: input.commercialReference ?? null,
-        userId: input.actorUserId,
-      });
-    }
+        }),
+      },
+    });
 
     const { idempotentReplay: _replay, ...result } = created;
     return result;
@@ -259,6 +257,7 @@ export const billingNegotiatedContractService = {
     effectiveFrom: Date;
     effectiveTo?: Date | null;
     commercialReference?: string | null;
+    commercialBenefit?: AdminCommercialBenefitIdentity | null;
     actorUserId: string;
     adminRequestKey?: string | null;
   }): Promise<BillingSubscriptionTerm> {
@@ -295,15 +294,15 @@ export const billingNegotiatedContractService = {
       effectiveFrom: input.effectiveFrom,
       effectiveTo: input.effectiveTo,
       commercialReference: input.commercialReference,
+      commercialBenefit: input.commercialBenefit ?? null,
       createdByUserId: input.actorUserId,
       adminRequestKey: input.adminRequestKey,
-    });
-
-    if (!created.idempotentReplay) {
-      await auditService.log(input.companyId, {
+      transactionAudit: {
+        companyId: input.companyId,
         entityType: "billing_subscription_term",
-        entityId: created.id,
         action: "COMMERCIAL_CONTRACT_TERMS_MODIFIED",
+        userId: input.actorUserId,
+        reason: input.commercialBenefit?.reason ?? input.commercialReference ?? null,
         previousData: previousTerms
           ? {
               termId: previousTerms.id,
@@ -313,17 +312,16 @@ export const billingNegotiatedContractService = {
               effectiveFrom: previousTerms.effectiveFrom,
             }
           : null,
-        newData: {
-          termId: created.id,
-          agreedAmount: created.agreedAmount,
-          seatMin: created.seatMin,
-          seatMax: created.seatMax,
-          effectiveFrom: created.effectiveFrom,
-        },
-        reason: input.commercialReference ?? null,
-        userId: input.actorUserId,
-      });
-    }
+        resolveEntityId: ({ term }) => term!.id,
+        resolveNewData: ({ term }) => ({
+          termId: term!.id,
+          agreedAmount: term!.agreedAmount,
+          seatMin: term!.seatMin,
+          seatMax: term!.seatMax,
+          effectiveFrom: term!.effectiveFrom,
+        }),
+      },
+    });
 
     const { idempotentReplay: _replay, ...term } = created;
     return term;

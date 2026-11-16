@@ -17,6 +17,13 @@ const MIGRATION_FILE = "160_billing_subscriptions.sql";
 const GUARDS_MIGRATION_FILE = "161_billing_subscriptions_contract_guards.sql";
 const CANCELLATION_MIGRATION_FILE = "162_billing_subscription_term_cancellation.sql";
 const COMMERCIAL_AUDIT_MIGRATION_FILE = "165_billing_subscription_term_commercial_audit.sql";
+const ADMIN_IDEMPOTENCY_MIGRATION_FILE =
+  "166_billing_admin_idempotency_digest_exemption_immutability.sql";
+const EXEMPTION_IMMUTABILITY_MIGRATION_FILE =
+  "167_billing_company_exemptions_immutability_hardening.sql";
+const COMMERCIAL_BENEFIT_MIGRATION_FILE = "168_billing_subscription_term_commercial_benefit.sql";
+const EXEMPTION_IMMUTABILITY_COMPLETE_MIGRATION_FILE =
+  "169_billing_company_exemptions_immutability_complete.sql";
 
 const subscriptionsTableExists = async (): Promise<boolean> => {
   const result = await getPool()
@@ -172,6 +179,80 @@ export const ensureBillingSubscriptionsMigration = async (): Promise<void> => {
         pool,
         await getAppliedMigrations(pool),
       );
+
+      const adminIdempotencyColumnsExist = async (): Promise<boolean> => {
+        const result = await getPool().request().query(`
+          SELECT 1 AS found
+          WHERE COL_LENGTH(N'dbo.billing_subscription_terms', N'admin_request_idempotency_digest') IS NOT NULL
+            AND COL_LENGTH(N'dbo.billing_subscriptions', N'admin_request_idempotency_digest') IS NOT NULL
+        `);
+        return Boolean(result.recordset[0]);
+      };
+
+      await assertMigrationSchemaConsistency(
+        applied,
+        ADMIN_IDEMPOTENCY_MIGRATION_FILE,
+        adminIdempotencyColumnsExist,
+        "billing admin idempotency digest columns",
+      );
+
+      if (!applied.has(ADMIN_IDEMPOTENCY_MIGRATION_FILE)) {
+        const adminIdempotency = readFileSync(
+          join(migrationsDir, ADMIN_IDEMPOTENCY_MIGRATION_FILE),
+          "utf8",
+        );
+        await applySqlScriptInTransaction(pool, adminIdempotency, {
+          registerMigrationName: ADMIN_IDEMPOTENCY_MIGRATION_FILE,
+        });
+        applied.add(ADMIN_IDEMPOTENCY_MIGRATION_FILE);
+      }
+
+      if (!applied.has(EXEMPTION_IMMUTABILITY_MIGRATION_FILE)) {
+        const exemptionImmutability = readFileSync(
+          join(migrationsDir, EXEMPTION_IMMUTABILITY_MIGRATION_FILE),
+          "utf8",
+        );
+        await applySqlScriptInTransaction(pool, exemptionImmutability, {
+          registerMigrationName: EXEMPTION_IMMUTABILITY_MIGRATION_FILE,
+        });
+        applied.add(EXEMPTION_IMMUTABILITY_MIGRATION_FILE);
+      }
+
+      const commercialBenefitColumnsExist = async (): Promise<boolean> => {
+        const result = await getPool().request().query(`
+          SELECT 1 AS found
+          WHERE COL_LENGTH(N'dbo.billing_subscription_terms', N'commercial_benefit_kind') IS NOT NULL
+            AND COL_LENGTH(N'dbo.billing_subscription_terms', N'commercial_benefit_reason') IS NOT NULL
+        `);
+        return Boolean(result.recordset[0]);
+      };
+
+      await assertMigrationSchemaConsistency(
+        applied,
+        COMMERCIAL_BENEFIT_MIGRATION_FILE,
+        commercialBenefitColumnsExist,
+        "billing subscription commercial benefit columns",
+      );
+
+      if (!applied.has(COMMERCIAL_BENEFIT_MIGRATION_FILE)) {
+        const commercialBenefit = readFileSync(
+          join(migrationsDir, COMMERCIAL_BENEFIT_MIGRATION_FILE),
+          "utf8",
+        );
+        await applySqlScriptInTransaction(pool, commercialBenefit, {
+          registerMigrationName: COMMERCIAL_BENEFIT_MIGRATION_FILE,
+        });
+      }
+
+      if (!applied.has(EXEMPTION_IMMUTABILITY_COMPLETE_MIGRATION_FILE)) {
+        const exemptionComplete = readFileSync(
+          join(migrationsDir, EXEMPTION_IMMUTABILITY_COMPLETE_MIGRATION_FILE),
+          "utf8",
+        );
+        await applySqlScriptInTransaction(pool, exemptionComplete, {
+          registerMigrationName: EXEMPTION_IMMUTABILITY_COMPLETE_MIGRATION_FILE,
+        });
+      }
     })();
   }
 

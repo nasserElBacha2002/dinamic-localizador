@@ -2,6 +2,7 @@ import type {
   BillingPeriod,
   BillingPriceKind,
 } from "../constants/billing-catalog";
+import type { CommercialBenefitKind } from "../constants/billing-commercial-benefit";
 import type { BillingSubscriptionStatus } from "../constants/billing-subscription";
 
 export interface BillingSubscription {
@@ -14,6 +15,7 @@ export interface BillingSubscription {
   effectiveTo: string | null;
   endedAt: string | null;
   adminRequestKey: string | null;
+  adminRequestIdempotencyDigest: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,8 +36,14 @@ export interface BillingSubscriptionTerm {
   effectiveTo: string | null;
   cancelledAt: string | null;
   commercialReference: string | null;
+  commercialBenefitKind: CommercialBenefitKind | null;
+  commercialBenefitBaseAmount: string | null;
+  commercialBenefitDiscountPercent: string | null;
+  commercialBenefitDiscountAmount: string | null;
+  commercialBenefitReason: string | null;
   createdByUserId: string | null;
   adminRequestKey: string | null;
+  adminRequestIdempotencyDigest: string | null;
   createdAt: string;
 }
 
@@ -53,3 +61,21 @@ export type BillingSubscriptionWithTermsResult = BillingSubscriptionWithTerms &
 
 export type BillingSubscriptionTermResult = BillingSubscriptionTerm &
   BillingSubscriptionMutationMeta;
+
+/** Audit row written in the same SQL transaction as a contractual mutation (DIN-406 2B). */
+export type BillingCommercialTransactionAudit = {
+  companyId: string;
+  entityType: "billing_subscription" | "billing_subscription_term";
+  action: string;
+  userId: string | null;
+  reason?: string | null;
+  previousData?: Record<string, unknown> | null;
+  resolveEntityId: (ctx: {
+    subscription: BillingSubscription;
+    term?: BillingSubscriptionTerm;
+  }) => string;
+  resolveNewData: (ctx: {
+    subscription: BillingSubscription;
+    term?: BillingSubscriptionTerm;
+  }) => Record<string, unknown>;
+};

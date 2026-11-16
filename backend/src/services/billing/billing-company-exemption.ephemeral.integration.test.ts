@@ -205,6 +205,30 @@ describeEphemeralBilling("billing company exemption ephemeral SQL proofs", () =>
     assert.equal(await countPermanentExemptionsForProtected(), 3);
   });
 
+  it("blocks id mutation on permanent exemptions via immutability trigger", async () => {
+    const pool = getPool();
+    const strategic = PROTECTED_STRATEGIC_COMPANY_EXEMPTIONS[0];
+    const existing = await billingCompanyExemptionRepository.findOpenPermanentByCompanyId(
+      strategic.companyId,
+    );
+    assert.ok(existing);
+    const replacementId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+    await assert.rejects(
+      () =>
+        pool
+          .request()
+          .input("id", sql.UniqueIdentifier, existing.id)
+          .input("replacementId", sql.UniqueIdentifier, replacementId)
+          .query(`
+            UPDATE dbo.billing_company_exemptions
+            SET id = @replacementId
+            WHERE id = @id
+          `),
+      /50163|cannot be modified/i,
+    );
+  });
+
   it("blocks delete and update on permanent exemptions via immutability trigger", async () => {
     const pool = getPool();
     const strategic = PROTECTED_STRATEGIC_COMPANY_EXEMPTIONS[0];
@@ -233,6 +257,43 @@ describeEphemeralBilling("billing company exemption ephemeral SQL proofs", () =>
           `),
       /50163|cannot be modified/i,
     );
+    await assert.rejects(
+      () =>
+        pool
+          .request()
+          .input("id", sql.UniqueIdentifier, existing.id)
+          .query(`
+            UPDATE dbo.billing_company_exemptions
+            SET updated_at = SYSUTCDATETIME()
+            WHERE id = @id
+          `),
+      /50163|cannot be modified/i,
+    );
+  });
+
+  it("rolls back multi-row exemption update when any permanent row is touched", async () => {
+    const pool = getPool();
+    const ids = await pool.request().query(`
+      SELECT id FROM dbo.billing_company_exemptions
+      WHERE is_permanent = 1 AND expires_at IS NULL
+    `);
+    const rows = ids.recordset as { id: string }[];
+    assert.ok(rows.length >= 2);
+    const countBefore = await countPermanentExemptionsForProtected();
+
+    await assert.rejects(
+      () =>
+        pool.request().query(`
+          BEGIN TRANSACTION;
+          UPDATE dbo.billing_company_exemptions
+          SET updated_at = SYSUTCDATETIME()
+          WHERE is_permanent = 1 AND expires_at IS NULL;
+          COMMIT;
+        `),
+      /50163|cannot be modified/i,
+    );
+
+    assert.equal(await countPermanentExemptionsForProtected(), countBefore);
   });
 
   it("rejects schema integrity when immutability trigger is disabled without auto-repair", async () => {

@@ -125,6 +125,7 @@ jobs:
         working-directory: backend
     env:
       RUN_DB_INTEGRATION_TESTS: "true"
+      INTEGRATION_SQL_DDL_ALLOWED: "true"
       NODE_ENV: test
       FRONTEND_URL: http://localhost:5173
       TZ: America/Argentina/Buenos_Aires

@@ -31,7 +31,9 @@ import { billingCatalogService } from "./billing-catalog.service";
 import { billingPolicyService } from "./billing-policy.service";
 import { billingSubscriptionService } from "./billing-subscription.service";
 
-const describeEphemeralBilling = isDatabaseIntegrationEnabled() ? describe : describe.skip;
+const ephemeralEnabled =
+  isDatabaseIntegrationEnabled() && process.env.INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED === "true";
+const describeEphemeralBilling = ephemeralEnabled ? describe : describe.skip;
 
 const countPermanentExemptionsForProtected = async (): Promise<number> => {
   const pool = getPool();
@@ -69,10 +71,7 @@ const countPermanentForCompany = async (companyId: string): Promise<number> => {
 describeEphemeralBilling("billing company exemption ephemeral SQL proofs", () => {
   let ephemeral: EphemeralBillingExemptionHandle;
 
-  before(async (testContext) => {
-    if (process.env.INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED !== "true") {
-      testContext.skip("INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED is not true");
-    }
+  before(async () => {
     ephemeral = await createEphemeralBillingExemptionDatabase();
     await activateEphemeralBillingExemptionDatabase(ephemeral);
     await assertSyntheticStrategicIdentitiesReady(getPool());

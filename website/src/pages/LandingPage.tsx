@@ -1,6 +1,7 @@
 import { MarketingFooter } from "../components/MarketingFooter";
 import { MarketingHeader } from "../components/MarketingHeader";
 import { useLandingDocumentMeta } from "../hooks/useLandingDocumentMeta";
+import { CommercialSection } from "../sections/CommercialSection";
 import { DemoSection } from "../sections/DemoSection";
 import { HeroSection } from "../sections/HeroSection";
 import { OperationsTodaySection } from "../sections/OperationsTodaySection";
@@ -18,6 +19,7 @@ export function LandingPage() {
         <HeroSection />
         <VideoSection />
         <WhatsAppSection />
+        <CommercialSection />
         <SituationsCarousel />
         <OperationsTodaySection />
         <DemoSection />

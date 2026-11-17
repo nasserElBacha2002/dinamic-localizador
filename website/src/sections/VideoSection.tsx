@@ -110,7 +110,7 @@ export function VideoSection() {
           testId="cta-post-video"
           tone="dark"
           title="¿Querés verlo aplicado a tu operación?"
-          description="Te mostramos cómo Dinamic Operations puede adaptarse a tus servicios, equipos y ubicaciones."
+          description="Conocé las herramientas de Dinamic Operations para gestionar tus servicios, equipos y ubicaciones."
           primary={{
             label: "Solicitar una demo",
             href: "#solicitar-demo",

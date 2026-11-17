@@ -265,25 +265,81 @@ describe("LandingPage", () => {
     assert.ok(getAllByRole("link", { name: "Situaciones" }).length >= 1);
   });
 
-  it("coloca operación de hoy inmediatamente antes del formulario demo", () => {
-    const { container } = renderPage(<LandingPage />);
-    const operationsTitle = container.querySelector("#operations-today-title");
-    const demo = container.querySelector("#solicitar-demo");
-    assert.ok(operationsTitle && demo);
-    const position = operationsTitle.compareDocumentPosition(demo);
-    assert.ok(position & Node.DOCUMENT_POSITION_FOLLOWING);
-    const demoParent = demo.parentElement;
-    const opsSection = operationsTitle.closest("section");
-    assert.ok(opsSection && demoParent);
-    let between = false;
-    let node: Element | null = opsSection.nextElementSibling;
-    while (node) {
-      if (node === demo) {
-        between = true;
-        break;
-      }
-      node = node.nextElementSibling;
-    }
-    assert.equal(between, true);
+  it("coloca la sección comercial después de WhatsApp y antes de situaciones reales", () => {
+    const { getByTestId } = renderPage(<LandingPage />);
+    const whatsapp = getByTestId("whatsapp-section");
+    const commercial = getByTestId("commercial-section");
+    const situations = document.getElementById("situaciones");
+    assert.ok(whatsapp && commercial && situations);
+    assert.ok(whatsapp.compareDocumentPosition(commercial) & Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.ok(commercial.compareDocumentPosition(situations) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("expone estado de animación comercial al entrar en viewport", async () => {
+    const { getByTestId } = renderPage(<LandingPage />);
+    const commercial = getByTestId("commercial-section");
+    assert.equal(commercial.getAttribute("data-reduced"), "false");
+    await waitFor(
+      () => {
+        assert.equal(commercial.getAttribute("data-in-view"), "true");
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("expone incorporación, Plan Lanzamiento y condiciones comerciales", () => {
+    const { getByRole, getByTestId, getByText } = renderPage(<LandingPage />);
+    const section = getByTestId("commercial-section");
+    assert.ok(getByRole("heading", { name: /Todo lo que necesitás para empezar/i }));
+    assert.ok(getByText(/Costo inicial de incorporación \+ abono recurrente/i));
+    assert.ok(getByText(/Etapa de lanzamiento/i));
+    assert.ok(getByRole("heading", { name: "Plan Lanzamiento", level: 3 }));
+    assert.ok(getByText("Precio a consultar"));
+    assert.ok(getByText(/Plataforma SaaS estándar/i));
+    assert.equal(/Hasta 100 colaboradores/i.test(section.textContent ?? ""), false);
+    assert.match(section.textContent ?? "", /Fichaje con ubicación desde WhatsApp/);
+  });
+
+  it("no expone importes de catálogo ni decoración de precio en la sección comercial", () => {
+    const { getByTestId, queryByTestId } = renderPage(<LandingPage />);
+    const section = getByTestId("commercial-section");
+    const text = section.textContent ?? "";
+    assert.equal(/\bUSD\b/i.test(text), false);
+    assert.equal(/\$\s*\d/.test(text), false);
+    assert.equal(/\b300\b/.test(text), false);
+    assert.equal(queryByTestId("commercial-price-decor"), null);
+  });
+
+  it("CTA comerciales apuntan a demo y video existentes", () => {
+    const { getByTestId } = renderPage(<LandingPage />);
+    const card = getByTestId("launch-plan-card");
+    const links = card.querySelectorAll("a");
+    assert.equal(links.length, 2);
+    assert.ok(
+      Array.from(links).some(
+        (link) =>
+          link.textContent === "Solicitar propuesta comercial" && link.getAttribute("href") === "#solicitar-demo",
+      ),
+    );
+    assert.ok(
+      Array.from(links).some(
+        (link) =>
+          link.textContent === "Conocé aún más" &&
+          link.getAttribute("href") ===
+            "https://drive.google.com/file/d/1b5oVGShKFr-CoK-hPKYzPJlfWhRg2fVv/view?usp=sharing" &&
+          link.getAttribute("target") === "_blank" &&
+          link.getAttribute("rel") === "noopener noreferrer",
+      ),
+    );
+  });
+
+  it("corrige el CTA post-video sin mensaje de personalización", () => {
+    const { getByTestId, queryByText } = renderPage(<LandingPage />);
+    const postVideo = getByTestId("cta-post-video");
+    assert.match(
+      postVideo.textContent ?? "",
+      /herramientas de Dinamic Operations para gestionar tus servicios/i,
+    );
+    assert.equal(queryByText(/puede adaptarse a tus servicios/i), null);
   });
 });

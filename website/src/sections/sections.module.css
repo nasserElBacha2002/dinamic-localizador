@@ -1567,6 +1567,369 @@
   box-shadow: none;
 }
 
+.commercialSection {
+  background: linear-gradient(
+    180deg,
+    #eef5f1 0%,
+    #e8eef4 12%,
+    #eceff4 28%,
+    #f0f3f7 50%,
+    #f3f5f8 72%,
+    #f6f8fa 100%
+  );
+  color: var(--m-ink);
+  padding-block: clamp(2rem, 5vw, 3.25rem);
+}
+
+.commercialIntro {
+  max-width: 42rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.commercialLead {
+  color: var(--m-ink-muted);
+}
+
+.commercialSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  margin: clamp(1.5rem, 4vw, 2rem) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .commercialSteps {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+  }
+}
+
+.commercialStep {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding-inline: clamp(0.35rem, 1.5vw, 1rem);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(0.85rem);
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialStep {
+  animation: commercialStepIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialStep:nth-child(1) {
+  animation-delay: 0.06s;
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialStep:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialStep:nth-child(3) {
+  animation-delay: 0.26s;
+}
+
+.commercialStepIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 999px;
+  background: var(--m-brand-soft);
+  color: var(--m-brand);
+}
+
+.commercialStepBody {
+  min-width: 0;
+}
+
+.commercialStepTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--m-ink);
+}
+
+.commercialStepDescription {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--m-ink-muted);
+}
+
+.commercialStepDivider {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .commercialStepDivider {
+    display: block;
+    position: absolute;
+    top: 1rem;
+    right: -0.05rem;
+    width: 1px;
+    height: 2rem;
+    background: linear-gradient(180deg, transparent, rgba(8, 36, 51, 0.14) 20%, rgba(8, 36, 51, 0.14) 80%, transparent);
+  }
+}
+
+.commercialPlanReveal {
+  margin: clamp(1.5rem, 3.5vw, 2rem) auto 0;
+  width: min(100%, 56rem);
+}
+
+.commercialPlanCard {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  border-radius: var(--m-radius-md);
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(8, 36, 51, 0.05);
+  opacity: 0;
+  transform: translateY(1.35rem) scale(0.985);
+}
+
+.commercialPlanCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  box-shadow: inset 0 0 0 0 rgba(255, 90, 0, 0);
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialPlanCard {
+  animation: commercialPlanEnter 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.22s forwards;
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialPlanCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -130%;
+  width: 72%;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 90, 0, 0.16) 48%,
+    transparent 100%
+  );
+  animation: commercialPlanShine 1.05s ease 0.55s 1 forwards;
+}
+
+.commercialSection[data-in-view="true"]:not([data-reduced="true"]) .commercialPlanCard::after {
+  animation: commercialPlanBorderPulse 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.28s 1 forwards;
+}
+
+@keyframes commercialStepIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes commercialPlanEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(1.35rem) scale(0.985);
+    box-shadow: 0 6px 20px rgba(8, 36, 51, 0.05);
+  }
+
+  55% {
+    box-shadow:
+      0 0 0 1px rgba(255, 90, 0, 0.34),
+      0 18px 42px rgba(255, 90, 0, 0.2);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow:
+      0 0 0 1px rgba(255, 90, 0, 0.14),
+      0 14px 36px rgba(255, 90, 0, 0.12);
+  }
+}
+
+@keyframes commercialPlanShine {
+  to {
+    left: 130%;
+  }
+}
+
+@keyframes commercialPlanBorderPulse {
+  0% {
+    opacity: 0;
+    box-shadow: inset 0 0 0 0 rgba(255, 90, 0, 0);
+  }
+
+  40% {
+    opacity: 1;
+    box-shadow: inset 0 0 0 2px rgba(255, 90, 0, 0.38);
+  }
+
+  100% {
+    opacity: 1;
+    box-shadow: inset 0 0 0 1px rgba(255, 90, 0, 0.12);
+  }
+}
+
+.commercialPlanGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .commercialPlanGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: clamp(1.25rem, 3vw, 2rem);
+    align-items: start;
+  }
+}
+
+.commercialPlanLeft {
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .commercialPlanLeft {
+    text-align: left;
+    padding-right: clamp(0.75rem, 2vw, 1.5rem);
+  }
+
+  .commercialPlanRight {
+    padding-left: clamp(0.75rem, 2vw, 1.5rem);
+    border-left: 1px solid rgba(8, 36, 51, 0.06);
+  }
+}
+
+.commercialPlanRight {
+  min-width: 0;
+}
+
+.commercialLaunchBadge {
+  display: inline-block;
+  margin: 0 0 0.55rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: var(--m-brand-soft);
+  color: var(--m-brand);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.commercialPlanName {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.5vw, 1.45rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--m-ink);
+}
+
+.commercialPriceVisible {
+  margin: 0.55rem 0 0;
+  font-size: clamp(1.15rem, 2.8vw, 1.35rem);
+  font-weight: 700;
+  color: var(--m-ink);
+}
+
+.commercialBillingNote {
+  margin: 0.45rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--m-ink-muted);
+}
+
+.commercialFeatureList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.925rem;
+  color: var(--m-ink);
+}
+
+.commercialFeatureList li::before {
+  content: "✓";
+  margin-right: 0.45rem;
+  color: var(--m-brand);
+  font-weight: 700;
+}
+
+.commercialDisclaimer {
+  margin: 0.85rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--m-ink-muted);
+}
+
+.commercialPlanActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  margin-top: 1.15rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid rgba(8, 36, 51, 0.08);
+}
+
+@media (min-width: 520px) {
+  .commercialPlanActions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+  }
+}
+
+.commercialSection[data-reduced="true"] .commercialStep,
+.commercialSection[data-reduced="true"] .commercialPlanCard {
+  opacity: 1;
+  transform: none;
+  animation: none !important;
+}
+
+.commercialSection[data-reduced="true"] .commercialPlanCard::before,
+.commercialSection[data-reduced="true"] .commercialPlanCard::after {
+  animation: none !important;
+  content: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commercialStep,
+  .commercialPlanCard {
+    opacity: 1;
+    transform: none;
+    animation: none !important;
+  }
+
+  .commercialPlanCard::before,
+  .commercialPlanCard::after {
+    animation: none !important;
+    content: none;
+  }
+}
+
 .operationsToday {
   background:
     radial-gradient(circle at 88% 0%, rgba(255, 106, 0, 0.12), transparent 42%),

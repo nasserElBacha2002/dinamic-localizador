@@ -55,3 +55,47 @@ export const AUDIENCE_ITEMS = [
   "Servicios tercerizados",
   "Múltiples clientes y ubicaciones",
 ] as const;
+
+/** DIN-452 — copy comercial alineado al catálogo LANZAMIENTO (sin importar montos del backend). */
+export const COMMERCIAL_SECTION = {
+  eyebrow: "Comenzá con Dinamic Operations",
+  title: "Todo lo que necesitás para empezar",
+  lead:
+    "Dinamic Operations es una plataforma lista para usar. Te introducimos a sus herramientas y te guiamos en el proceso inicial para que puedas comenzar a gestionar tu operación.",
+  steps: [
+    {
+      id: "intro",
+      title: "Introducción",
+      description: "Conocé la plataforma y sus herramientas.",
+      icon: "platform" as const,
+    },
+    {
+      id: "orientation",
+      title: "Orientación inicial",
+      description: "Aprendé a usar las funciones principales.",
+      icon: "guide" as const,
+    },
+    {
+      id: "go-live",
+      title: "Puesta en marcha",
+      description: "Empezá a gestionar tu operación desde el sistema.",
+      icon: "launch" as const,
+    },
+  ],
+  plan: {
+    launchStageLabel: "Etapa de lanzamiento",
+    name: "Plan Lanzamiento",
+    priceLabel: "Precio a consultar",
+    billingNote: "Costo inicial de incorporación + abono recurrente.",
+    disclaimer: "Plataforma SaaS estándar. No incluye desarrollos ni integraciones a medida.",
+    learnMoreLabel: "Conocé aún más",
+    learnMoreUrl:
+      "https://drive.google.com/file/d/1b5oVGShKFr-CoK-hPKYzPJlfWhRg2fVv/view?usp=sharing",
+    /** Características verificables en producto (landing / funcionalidades mostradas). */
+    features: [
+      "Planificación de servicios, equipos y horarios",
+      "Fichaje con ubicación desde WhatsApp",
+      "Vista operativa con alertas e incidencias",
+    ],
+  },
+} as const;

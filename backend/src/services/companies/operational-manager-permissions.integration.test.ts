@@ -36,6 +36,7 @@ describeDatabaseIntegration("OPERATIONAL_MANAGER permissions integration", () =>
   let otherCompanyId = "";
   let operationId = "";
   let workerEmployeeId = "";
+  let encargadoEmployeeId = "";
   let omUserId = "";
   let omEmail = "";
   let omTokenVersion = 0;
@@ -156,7 +157,7 @@ describeDatabaseIntegration("OPERATIONAL_MANAGER permissions integration", () =>
         VALUES (@companyId, N'Encargado OM', @phone, 'fijo', 1);
         SELECT id FROM @inserted;
       `);
-    const encargadoEmployeeId = String(encargadoInsert.recordset[0].id);
+    encargadoEmployeeId = String(encargadoInsert.recordset[0].id);
     fixtures.trackEmployee(companyId, encargadoEmployeeId);
 
     const workerInsert = await pool
@@ -360,5 +361,75 @@ describeDatabaseIntegration("OPERATIONAL_MANAGER permissions integration", () =>
       token: omToken(),
     });
     assert.equal(listResponse.status, 200);
+  });
+
+  const eligiblePaths = () => [
+    `/api/companies/${companyId}/operations`,
+    "/api/operations",
+  ];
+
+  const assertEligiblePaths = async (expectedStatus: number, expectedCode?: string) => {
+    for (const path of eligiblePaths()) {
+      const response = await apiRequest(baseUrl, path, { token: omToken() });
+      assert.equal(response.status, expectedStatus, `${path}: expected ${expectedStatus}, got ${response.status}`);
+      if (expectedCode) {
+        assert.equal(
+          (response.body.error as { code?: string } | undefined)?.code,
+          expectedCode,
+          `${path}: unexpected error code`,
+        );
+      }
+    }
+  };
+
+  it("DIN-421: revoking Encargado category denies existing token on both API route families", async () => {
+    await assertEligiblePaths(200);
+    const pool = getPool();
+    const current = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, encargadoEmployeeId)
+      .query(`
+        SELECT category_id FROM employees
+        WHERE company_id = @companyId AND id = @employeeId
+      `);
+    const categoryId = current.recordset[0]?.category_id as string | undefined;
+    assert.ok(categoryId, "Fixture must have active Encargado category");
+
+    try {
+      await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("employeeId", sql.UniqueIdentifier, encargadoEmployeeId)
+        .query(`
+          UPDATE employees SET category_id = NULL, updated_at = SYSUTCDATETIME()
+          WHERE company_id = @companyId AND id = @employeeId
+        `);
+      await assertEligiblePaths(403, "OPERATIONAL_MANAGER_INELIGIBLE");
+    } finally {
+      await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("employeeId", sql.UniqueIdentifier, encargadoEmployeeId)
+        .input("categoryId", sql.UniqueIdentifier, categoryId)
+        .query(`
+          UPDATE employees SET category_id = @categoryId, updated_at = SYSUTCDATETIME()
+          WHERE company_id = @companyId AND id = @employeeId
+        `);
+    }
+    await assertEligiblePaths(200);
+  });
+
+  it("DIN-421: revoking employee link denies existing token on both API route families", async () => {
+    await assertEligiblePaths(200);
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("userId", sql.UniqueIdentifier, omUserId)
+      .query(`
+        DELETE FROM company_user_employee_links
+        WHERE company_id = @companyId AND user_id = @userId
+      `);
+    await assertEligiblePaths(403, "OPERATIONAL_MANAGER_LINK_REQUIRED");
   });
 });

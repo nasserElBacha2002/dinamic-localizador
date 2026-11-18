@@ -222,6 +222,7 @@ apiRouter.use("/companies/:companyId", authenticate, companyScopedOperationalRou
 
 const operationalRouter = Router();
 operationalRouter.use(resolveCompanyContext);
+operationalRouter.use(asyncHandler(enforceOperationalManagerEligibility));
 operationalRouter.use(asyncHandler(loadCompanyModuleStates));
 operationalRouter.use("/lookups", lookupRouter);
 operationalRouter.use("/imports", importRouter);

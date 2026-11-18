@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "market": "Argentina",
+  "countryOrRegion": "AR",
+  "rateCardCurrency": "USD",
+  "effectiveFrom": "2026-10-01T00:00:00.000Z",
+  "officialSource": {
+    "title": "Meta WhatsApp Business Platform pricing (USD list rates)",
+    "documentationUrl": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing",
+    "rateCardArtifact": "USD list rates CSV linked from official pricing page, row Argentina, effective 2026-10-01",
+    "verifiedAt": "2026-11-18",
+    "verifiedBy": "DIN-419: SHA-256 of repository CSV extract; must match Meta USD list rates row Argentina (2026-10-01)",
+    "csvExtractPath": "meta-usd-list-rates-ar-extract-2026-10.csv",
+    "csvSha256": "04a57fd4544ba02f88c2446beee97d5dd40d2ec9a577da0587d6d44c5709d45d"
+  },
+  "rates": [
+    { "category": "META_MARKETING", "metaBillingCategory": "MARKETING", "amount": "0.061800", "currency": "USD" },
+    { "category": "META_UTILITY", "metaBillingCategory": "UTILITY", "amount": "0.026000", "currency": "USD" },
+    { "category": "META_AUTHENTICATION", "metaBillingCategory": "AUTHENTICATION", "amount": "0.026000", "currency": "USD" },
+    { "category": "META_SERVICE", "metaBillingCategory": "SERVICE", "amount": "0.026000", "currency": "USD" }
+  ]
+}

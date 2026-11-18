@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
+import { whatsappMessageCostMetaPricingService } from "./whatsapp-message-cost-meta-pricing.service";
 import { whatsappMessageCostSyncService } from "./whatsapp-message-cost-sync.service";
 
 const baseRow = {
@@ -22,6 +23,17 @@ const baseRow = {
   pricingCategory: null,
   priceAmount: null,
   currency: null,
+  senderPhoneMasked: "+1000******00",
+  destinationCountryCode: "AR",
+  metaBillingCategory: "UTILITY",
+  metaPriceAmount: null,
+  metaCurrency: null,
+  metaCostQuality: null,
+  metaCostSource: null,
+  metaTariffId: null,
+  serviceMonthRank: null,
+  metaCostNote: null,
+  metaBillable: null,
   costQuality: "PENDING" as const,
   costSource: "NONE" as const,
   tariffId: null,
@@ -41,13 +53,19 @@ describe("whatsappMessageCostSyncService", () => {
     mock.restoreAll();
   });
 
+  const mockMetaRefresh = () => {
+    mock.method(whatsappMessageCostMetaPricingService, "refreshAfterChannelSync", async () => undefined);
+  };
+
   it("marks CONFIRMED when Twilio Message.price is available", async () => {
+    mockMetaRefresh();
     let claims = 0;
     mock.method(whatsappMessageCostLedgerRepository, "claimNextPending", async () => {
       claims += 1;
       return claims === 1 ? { ...baseRow } : null;
     });
     mock.method(whatsappMessageCostLedgerRepository, "recordHeartbeat", async () => undefined);
+    mock.method(whatsappMessageCostLedgerRepository, "getById", async () => null);
     const confirmed = mock.method(
       whatsappMessageCostLedgerRepository,
       "markConfirmed",
@@ -69,12 +87,14 @@ describe("whatsappMessageCostSyncService", () => {
   });
 
   it("accepts zero price as CONFIRMED", async () => {
+    mockMetaRefresh();
     let claims = 0;
     mock.method(whatsappMessageCostLedgerRepository, "claimNextPending", async () => {
       claims += 1;
       return claims === 1 ? { ...baseRow } : null;
     });
     mock.method(whatsappMessageCostLedgerRepository, "recordHeartbeat", async () => undefined);
+    mock.method(whatsappMessageCostLedgerRepository, "getById", async () => null);
     const confirmed = mock.method(
       whatsappMessageCostLedgerRepository,
       "markConfirmed",
@@ -128,11 +148,36 @@ describe("whatsappMessageCostSyncService", () => {
     assert.equal(pending.mock.callCount(), 1);
   });
 
-  it("marks UNAVAILABLE after max attempts without inventing a global estimate", async () => {
+  it("marks ESTIMATED with reference channel fee when price missing after max attempts and country known", async () => {
+    mockMetaRefresh();
     let claims = 0;
     mock.method(whatsappMessageCostLedgerRepository, "claimNextPending", async () => {
       claims += 1;
       return claims === 1 ? { ...baseRow, syncAttemptCount: 99 } : null;
+    });
+    mock.method(whatsappMessageCostLedgerRepository, "recordHeartbeat", async () => undefined);
+    mock.method(whatsappMessageCostLedgerRepository, "getById", async () => null);
+    mock.method(whatsappMessageCostLedgerRepository, "findActiveTariff", async () => null);
+    const estimated = mock.method(
+      whatsappMessageCostLedgerRepository,
+      "markEstimated",
+      async () => true,
+    );
+
+    const result = await whatsappMessageCostSyncService.processPendingBatch(5, {
+      fetchPrice: async () => ({ price: null, priceUnit: null, status: "delivered" }),
+    });
+    assert.equal(result.estimated, 1);
+    assert.equal(estimated.mock.callCount(), 1);
+  });
+
+  it("marks UNAVAILABLE after max attempts when destination country is unknown", async () => {
+    let claims = 0;
+    mock.method(whatsappMessageCostLedgerRepository, "claimNextPending", async () => {
+      claims += 1;
+      return claims === 1
+        ? { ...baseRow, syncAttemptCount: 99, destinationCountryCode: null }
+        : null;
     });
     mock.method(whatsappMessageCostLedgerRepository, "recordHeartbeat", async () => undefined);
     const unavailable = mock.method(

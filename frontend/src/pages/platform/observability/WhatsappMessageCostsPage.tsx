@@ -226,6 +226,11 @@ export function WhatsappMessageCostsPage() {
         getValue: (row) => formatDateTime(row.sentAt),
       },
       {
+        key: "direction",
+        header: "Dirección",
+        getValue: (row) => (row.direction === "INBOUND" ? "Entrante" : "Saliente"),
+      },
+      {
         key: "recipientPhoneMasked",
         header: "Destinatario",
         getValue: (row) => row.recipientPhoneMasked ?? "—",
@@ -242,15 +247,38 @@ export function WhatsappMessageCostsPage() {
       },
       {
         key: "costQuality",
-        header: "Calidad",
+        header: "Calidad Twilio",
         render: (row) => (
           <StatusBadge label={qualityLabel[row.costQuality]} tone={qualityTone(row.costQuality)} />
         ),
       },
       {
         key: "priceAmount",
-        header: "Importe",
+        header: "Twilio",
         getValue: (row) => formatMoney(row.priceAmount, row.currency),
+      },
+      {
+        key: "metaCostQuality",
+        header: "Calidad Meta",
+        render: (row) =>
+          row.metaCostQuality ? (
+            <StatusBadge
+              label={qualityLabel[row.metaCostQuality]}
+              tone={qualityTone(row.metaCostQuality)}
+            />
+          ) : (
+            "—"
+          ),
+      },
+      {
+        key: "metaPriceAmount",
+        header: "Meta",
+        getValue: (row) => formatMoney(row.metaPriceAmount, row.metaCurrency),
+      },
+      {
+        key: "metaBillingCategory",
+        header: "Cat. Meta",
+        getValue: (row) => row.metaBillingCategory ?? "—",
       },
       {
         key: "costSource",
@@ -280,7 +308,7 @@ export function WhatsappMessageCostsPage() {
     <Stack gap="md">
       <PageHeader
         title="Costos de mensajería"
-        description="Costos de canal Twilio (Message.price). No incluye tarifas Meta de plantilla."
+        description="Twilio (canal) + Meta (estimado/confirmado por componente). El total no reemplaza la factura."
         action={
           <Group gap="xs">
             <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
@@ -447,8 +475,10 @@ export function WhatsappMessageCostsPage() {
                 {summary.totals.messageCount}
               </Text>
               <Text size="sm" c="dimmed">
-                Entregados: {summary.totals.deliveredCount} · Leídos: {summary.totals.readCount} ·
-                Fallidos: {summary.totals.failedCount}
+                Entrantes: {summary.totals.inboundCount} · Salientes: {summary.totals.outboundCount}
+              </Text>
+              <Text size="sm" c="dimmed">
+                Entregados: {summary.totals.deliveredCount} · Fallidos: {summary.totals.failedCount}
               </Text>
             </SectionCard>
             <SectionCard title="Pendientes">
@@ -467,26 +497,89 @@ export function WhatsappMessageCostsPage() {
                 Sin costo recuperable
               </Text>
             </SectionCard>
-            <SectionCard title="Confirmados / estimados">
+            <SectionCard title="SERVICE gratis (mes)">
               <Text fw={700} size="xl">
-                {summary.totals.confirmedCount} / {summary.totals.estimatedCount}
+                {summary.totals.serviceFreeTierUsedCount}
               </Text>
               <Text size="sm" c="dimmed">
-                Conteos globales (importes por moneda abajo)
+                Mensajes SERVICE en cupo 1.000 (oct 2026+)
               </Text>
             </SectionCard>
           </SimpleGrid>
 
-          {summary.byCurrency.length === 0 ? (
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+            <SectionCard title="Twilio confirmado / estimado">
+              <Text fw={700} size="lg">
+                {summary.totals.twilioSummaryCurrency ? (
+                  <>
+                    {formatMoney(summary.totals.twilioConfirmedTotal, summary.totals.twilioSummaryCurrency)}{" "}
+                    / {formatMoney(summary.totals.twilioEstimatedTotal, summary.totals.twilioSummaryCurrency)}
+                  </>
+                ) : (
+                  "Varias monedas Twilio — ver desglose"
+                )}
+              </Text>
+            </SectionCard>
+            <SectionCard title="Meta confirmado / estimado">
+              <Text fw={700} size="lg">
+                {summary.totals.metaSummaryCurrency ? (
+                  <>
+                    {formatMoney(summary.totals.metaConfirmedTotal, summary.totals.metaSummaryCurrency)} /{" "}
+                    {formatMoney(summary.totals.metaEstimatedTotal, summary.totals.metaSummaryCurrency)}
+                  </>
+                ) : (
+                  "Varias monedas Meta — ver desglose"
+                )}
+              </Text>
+            </SectionCard>
+            <SectionCard title="Total combinado">
+              <Text fw={700} size="lg" c="dimmed">
+                No sumado — Twilio y Meta usan monedas y calidades distintas
+              </Text>
+              {summary.hasUnknownCostComponents ? (
+                <Text size="sm" c="orange">
+                  Período incompleto: hay costos pendientes o no disponibles
+                </Text>
+              ) : null}
+            </SectionCard>
+          </SimpleGrid>
+
+          {summary.byTwilioCurrency.length === 0 && summary.byMetaCurrency.length === 0 ? (
             <Alert color="gray" title="Sin resultados">
               No hay mensajes de costo para el período y filtros seleccionados.
             </Alert>
           ) : null}
 
-          {summary.byCurrency.map((currencyRow) => (
+          {summary.byTwilioCurrency.map((currencyRow) => (
             <SectionCard
-              key={currencyRow.currency ?? "UNK"}
-              title={`Importes · ${currencyRow.currency ?? "sin moneda"}`}
+              key={`twilio-${currencyRow.currency ?? "UNK"}`}
+              title={`Twilio · ${currencyRow.currency ?? "sin moneda"}`}
+            >
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                <div>
+                  <Text size="sm" c="dimmed">
+                    Confirmado ({currencyRow.confirmedCount} msgs)
+                  </Text>
+                  <Text fw={700} size="lg">
+                    {formatMoney(currencyRow.confirmedTotal, currencyRow.currency)}
+                  </Text>
+                </div>
+                <div>
+                  <Text size="sm" c="dimmed">
+                    Estimado ({currencyRow.estimatedCount} msgs)
+                  </Text>
+                  <Text fw={700} size="lg">
+                    {formatMoney(currencyRow.estimatedTotal, currencyRow.currency)}
+                  </Text>
+                </div>
+              </SimpleGrid>
+            </SectionCard>
+          ))}
+
+          {summary.byMetaCurrency.map((currencyRow) => (
+            <SectionCard
+              key={`meta-${currencyRow.currency ?? "UNK"}`}
+              title={`Meta · ${currencyRow.currency ?? "sin moneda"}`}
             >
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                 <div>

@@ -3,6 +3,7 @@ import type {
   MessageCostKind,
   MessageCostQuality,
   MessageCostSource,
+  MetaBillingCategory,
 } from "../../constants/whatsapp-message-cost";
 import { normalizeDecimalString } from "../../utils/money-decimal";
 
@@ -16,6 +17,8 @@ export interface WhatsappMessageCostLedgerRow {
   direction: "INBOUND" | "OUTBOUND";
   sentAt: Date;
   recipientPhoneMasked: string | null;
+  senderPhoneMasked: string | null;
+  destinationCountryCode: string | null;
   messageKind: MessageCostKind;
   templateSid: string | null;
   templateName: string | null;
@@ -25,6 +28,18 @@ export interface WhatsappMessageCostLedgerRow {
   pricingCategory: string | null;
   priceAmount: string | null;
   currency: string | null;
+  metaBillingCategory: MetaBillingCategory | null;
+  metaPriceAmount: string | null;
+  metaCurrency: string | null;
+  metaCostQuality: MessageCostQuality | null;
+  metaCostSource: MessageCostSource | null;
+  metaTariffId: string | null;
+  serviceMonthRank: number | null;
+  metaCostNote: string | null;
+  metaBillable: boolean | null;
+  senderBillingKey: string | null;
+  metaCswOpen: boolean | null;
+  metaPricingLocked: boolean;
   costQuality: MessageCostQuality;
   costSource: MessageCostSource;
   tariffId: string | null;
@@ -47,6 +62,14 @@ export interface InsertCostLedgerInput {
   direction: "INBOUND" | "OUTBOUND";
   sentAt: Date;
   recipientPhoneMasked: string | null;
+  senderPhoneMasked?: string | null;
+  destinationCountryCode?: string | null;
+  metaBillingCategory?: MetaBillingCategory | null;
+  metaCostQuality?: MessageCostQuality | null;
+  metaCostSource?: MessageCostSource | null;
+  customerServiceWindowOpen?: boolean | null;
+  senderBillingKey?: string | null;
+  metaCswOpen?: boolean | null;
   messageKind: MessageCostKind;
   templateSid?: string | null;
   templateName?: string | null;
@@ -66,6 +89,7 @@ export interface CostLedgerFilters {
   templateSid?: string;
   providerStatus?: string;
   costQuality?: MessageCostQuality;
+  direction?: "INBOUND" | "OUTBOUND";
   monthStartUtc: Date;
   nextMonthStartUtc: Date;
 }
@@ -74,6 +98,15 @@ export interface CurrencyTotalRow {
   currency: string;
   confirmedTotal: string;
   estimatedTotal: string;
+  twilioConfirmedTotal: string;
+  twilioEstimatedTotal: string;
+  metaConfirmedTotal: string;
+  metaEstimatedTotal: string;
+  combinedConfirmedTotal: string;
+  combinedEstimatedTotal: string;
+  inboundCount: number;
+  outboundCount: number;
+  serviceFreeTierUsedCount: number;
   messageCount: number;
   confirmedCount: number;
   estimatedCount: number;
@@ -148,6 +181,10 @@ export const mapLedgerRow = (row: Record<string, unknown>): WhatsappMessageCostL
   direction: String(row.direction) as "INBOUND" | "OUTBOUND",
   sentAt: toDate(row.sent_at),
   recipientPhoneMasked: row.recipient_phone_masked ? String(row.recipient_phone_masked) : null,
+  senderPhoneMasked: row.sender_phone_masked ? String(row.sender_phone_masked) : null,
+  destinationCountryCode: row.destination_country_code
+    ? String(row.destination_country_code)
+    : null,
   messageKind: String(row.message_kind) as MessageCostKind,
   templateSid: row.template_sid ? String(row.template_sid) : null,
   templateName: row.template_name ? String(row.template_name) : null,
@@ -157,6 +194,30 @@ export const mapLedgerRow = (row: Record<string, unknown>): WhatsappMessageCostL
   pricingCategory: row.pricing_category ? String(row.pricing_category) : null,
   priceAmount: decimalFromRow(row.price_amount),
   currency: row.currency ? String(row.currency) : null,
+  metaBillingCategory: row.meta_billing_category
+    ? (String(row.meta_billing_category) as MetaBillingCategory)
+    : null,
+  metaPriceAmount: decimalFromRow(row.meta_price_amount),
+  metaCurrency: row.meta_currency ? String(row.meta_currency) : null,
+  metaCostQuality: row.meta_cost_quality
+    ? (String(row.meta_cost_quality) as MessageCostQuality)
+    : null,
+  metaCostSource: row.meta_cost_source
+    ? (String(row.meta_cost_source) as MessageCostSource)
+    : null,
+  metaTariffId: row.meta_tariff_id ? String(row.meta_tariff_id) : null,
+  serviceMonthRank: row.service_month_rank !== null ? Number(row.service_month_rank) : null,
+  metaCostNote: row.meta_cost_note ? String(row.meta_cost_note) : null,
+  metaBillable:
+    row.meta_billable === null || row.meta_billable === undefined
+      ? null
+      : Boolean(row.meta_billable),
+  senderBillingKey: row.sender_billing_key ? String(row.sender_billing_key) : null,
+  metaCswOpen:
+    row.meta_csw_open === null || row.meta_csw_open === undefined
+      ? null
+      : Boolean(row.meta_csw_open),
+  metaPricingLocked: Boolean(row.meta_pricing_locked),
   costQuality: String(row.cost_quality) as MessageCostQuality,
   costSource: String(row.cost_source) as MessageCostSource,
   tariffId: row.tariff_id ? String(row.tariff_id) : null,

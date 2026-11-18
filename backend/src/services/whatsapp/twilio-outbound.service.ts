@@ -10,6 +10,8 @@ export interface WhatsAppCostContext {
   messageKind: MessageCostKind;
   flowLabel?: MessageCostFlowLabel | string | null;
   templateName?: string | null;
+  /** Proactive REST sends are outside the 24h customer service window unless explicitly true. */
+  customerServiceWindowOpen?: boolean | null;
 }
 
 export interface WhatsAppTemplateSendInput {
@@ -71,6 +73,7 @@ const recordCostAfterAccept = async (input: {
     templateName: ctx?.templateName ?? null,
     flowLabel: ctx?.flowLabel ?? null,
     providerStatus: "SEND_ACCEPTED",
+    customerServiceWindowOpen: ctx?.customerServiceWindowOpen ?? false,
   });
 };
 

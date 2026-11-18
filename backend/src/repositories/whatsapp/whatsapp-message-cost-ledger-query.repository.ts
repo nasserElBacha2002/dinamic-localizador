@@ -19,8 +19,11 @@ const applyFilters = (request: sql.Request, filters: CostLedgerFilters, alias = 
   const clauses: string[] = [
     `${alias}.sent_at >= @monthStartUtc`,
     `${alias}.sent_at < @nextMonthStartUtc`,
-    `${alias}.direction = N'OUTBOUND'`,
   ];
+  if (filters.direction) {
+    request.input("direction", sql.NVarChar(10), filters.direction);
+    clauses.push(`${alias}.direction = @direction`);
+  }
   request.input("monthStartUtc", sql.DateTime2, filters.monthStartUtc);
   request.input("nextMonthStartUtc", sql.DateTime2, filters.nextMonthStartUtc);
 
@@ -48,6 +51,160 @@ const applyFilters = (request: sql.Request, filters: CostLedgerFilters, alias = 
 };
 
 export const whatsappMessageCostLedgerQueryRepository = {
+  async summarizeTwilioByCurrency(filters: CostLedgerFilters): Promise<CurrencyTotalRow[]> {
+    const pool = getPool();
+    const request = pool.request();
+    const where = applyFilters(request, filters);
+    const result = await request.query(`
+      SELECT
+        COALESCE(currency, N'UNK') AS currency,
+        COUNT(*) AS message_count,
+        SUM(CASE WHEN cost_quality = N'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_count,
+        SUM(CASE WHEN cost_quality = N'ESTIMATED' THEN 1 ELSE 0 END) AS estimated_count,
+        SUM(CASE WHEN cost_quality = N'PENDING' THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN cost_quality = N'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_count,
+        SUM(CASE
+              WHEN cost_quality = N'PENDING' AND currency IS NULL THEN 1
+              ELSE 0
+            END) AS pending_without_currency_count,
+        COALESCE(SUM(CASE WHEN cost_quality = N'CONFIRMED' THEN ABS(price_amount) ELSE 0 END), 0) AS twilio_confirmed_total,
+        COALESCE(SUM(CASE WHEN cost_quality = N'ESTIMATED' THEN ABS(price_amount) ELSE 0 END), 0) AS twilio_estimated_total
+      FROM dbo.whatsapp_message_cost_ledger l
+      WHERE ${where}
+      GROUP BY COALESCE(currency, N'UNK')
+      ORDER BY currency ASC;
+    `);
+    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
+      currency: String(row.currency),
+      confirmedTotal: normalizeDecimalString(String(row.twilio_confirmed_total)) ?? "0",
+      estimatedTotal: normalizeDecimalString(String(row.twilio_estimated_total)) ?? "0",
+      twilioConfirmedTotal: normalizeDecimalString(String(row.twilio_confirmed_total)) ?? "0",
+      twilioEstimatedTotal: normalizeDecimalString(String(row.twilio_estimated_total)) ?? "0",
+      metaConfirmedTotal: "0",
+      metaEstimatedTotal: "0",
+      combinedConfirmedTotal: normalizeDecimalString(String(row.twilio_confirmed_total)) ?? "0",
+      combinedEstimatedTotal: normalizeDecimalString(String(row.twilio_estimated_total)) ?? "0",
+      inboundCount: 0,
+      outboundCount: 0,
+      serviceFreeTierUsedCount: 0,
+      messageCount: Number(row.message_count ?? 0),
+      confirmedCount: Number(row.confirmed_count ?? 0),
+      estimatedCount: Number(row.estimated_count ?? 0),
+      pendingCount: Number(row.pending_count ?? 0),
+      unavailableCount: Number(row.unavailable_count ?? 0),
+      pendingWithoutCurrencyCount: Number(row.pending_without_currency_count ?? 0),
+      sentCount: 0,
+      deliveredCount: 0,
+      readCount: 0,
+      failedCount: 0,
+    }));
+  },
+
+  async summarizeMetaByCurrency(filters: CostLedgerFilters): Promise<CurrencyTotalRow[]> {
+    const pool = getPool();
+    const request = pool.request();
+    const where = applyFilters(request, filters);
+    const result = await request.query(`
+      SELECT
+        COALESCE(meta_currency, N'UNK_META') AS currency,
+        COUNT(*) AS message_count,
+        SUM(CASE WHEN meta_cost_quality = N'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_count,
+        SUM(CASE WHEN meta_cost_quality = N'ESTIMATED' THEN 1 ELSE 0 END) AS estimated_count,
+        SUM(CASE WHEN meta_cost_quality = N'PENDING' THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN meta_cost_quality = N'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_count,
+        COALESCE(SUM(CASE WHEN meta_cost_quality = N'CONFIRMED' THEN ABS(meta_price_amount) ELSE 0 END), 0) AS meta_confirmed_total,
+        COALESCE(SUM(CASE WHEN meta_cost_quality = N'ESTIMATED' THEN ABS(meta_price_amount) ELSE 0 END), 0) AS meta_estimated_total,
+        COALESCE(SUM(CASE
+              WHEN meta_billing_category = N'SERVICE'
+               AND meta_cost_note = N'SERVICE_FREE_TIER' THEN 1
+              ELSE 0
+            END), 0) AS service_free_tier_used_count
+      FROM dbo.whatsapp_message_cost_ledger l
+      WHERE ${where}
+      GROUP BY COALESCE(meta_currency, N'UNK_META')
+      ORDER BY currency ASC;
+    `);
+    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
+      currency: String(row.currency),
+      confirmedTotal: normalizeDecimalString(String(row.meta_confirmed_total)) ?? "0",
+      estimatedTotal: normalizeDecimalString(String(row.meta_estimated_total)) ?? "0",
+      twilioConfirmedTotal: "0",
+      twilioEstimatedTotal: "0",
+      metaConfirmedTotal: normalizeDecimalString(String(row.meta_confirmed_total)) ?? "0",
+      metaEstimatedTotal: normalizeDecimalString(String(row.meta_estimated_total)) ?? "0",
+      combinedConfirmedTotal: normalizeDecimalString(String(row.meta_confirmed_total)) ?? "0",
+      combinedEstimatedTotal: normalizeDecimalString(String(row.meta_estimated_total)) ?? "0",
+      inboundCount: 0,
+      outboundCount: 0,
+      serviceFreeTierUsedCount: Number(row.service_free_tier_used_count ?? 0),
+      messageCount: Number(row.message_count ?? 0),
+      confirmedCount: Number(row.confirmed_count ?? 0),
+      estimatedCount: Number(row.estimated_count ?? 0),
+      pendingCount: Number(row.pending_count ?? 0),
+      unavailableCount: Number(row.unavailable_count ?? 0),
+      pendingWithoutCurrencyCount: 0,
+      sentCount: 0,
+      deliveredCount: 0,
+      readCount: 0,
+      failedCount: 0,
+    }));
+  },
+
+  async summarizeAggregateCounts(filters: CostLedgerFilters): Promise<{
+    messageCount: number;
+    pendingCount: number;
+    unavailableCount: number;
+    metaPendingCount: number;
+    metaUnavailableCount: number;
+    twilioPendingCount: number;
+    inboundCount: number;
+    outboundCount: number;
+    sentCount: number;
+    deliveredCount: number;
+    readCount: number;
+    failedCount: number;
+  }> {
+    const pool = getPool();
+    const request = pool.request();
+    const where = applyFilters(request, filters);
+    const result = await request.query(`
+      SELECT
+        COUNT(*) AS message_count,
+        SUM(CASE WHEN cost_quality = N'PENDING' THEN 1 ELSE 0 END) AS twilio_pending_count,
+        SUM(CASE WHEN cost_quality = N'UNAVAILABLE' THEN 1 ELSE 0 END) AS twilio_unavailable_count,
+        SUM(CASE WHEN meta_cost_quality = N'PENDING' THEN 1 ELSE 0 END) AS meta_pending_count,
+        SUM(CASE WHEN meta_cost_quality = N'UNAVAILABLE' THEN 1 ELSE 0 END) AS meta_unavailable_count,
+        SUM(CASE WHEN direction = N'INBOUND' THEN 1 ELSE 0 END) AS inbound_count,
+        SUM(CASE WHEN direction = N'OUTBOUND' THEN 1 ELSE 0 END) AS outbound_count,
+        SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) IN (N'sent', N'send_accepted', N'accepted') THEN 1 ELSE 0 END) AS sent_count,
+        SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) = N'delivered' THEN 1 ELSE 0 END) AS delivered_count,
+        SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) = N'read' THEN 1 ELSE 0 END) AS read_count,
+        SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) IN (N'failed', N'undelivered') THEN 1 ELSE 0 END) AS failed_count
+      FROM dbo.whatsapp_message_cost_ledger l
+      WHERE ${where};
+    `);
+    const row = result.recordset[0] as Record<string, unknown>;
+    const twilioPending = Number(row.twilio_pending_count ?? 0);
+    const metaPending = Number(row.meta_pending_count ?? 0);
+    const twilioUnavailable = Number(row.twilio_unavailable_count ?? 0);
+    const metaUnavailable = Number(row.meta_unavailable_count ?? 0);
+    return {
+      messageCount: Number(row.message_count ?? 0),
+      pendingCount: twilioPending + metaPending,
+      unavailableCount: twilioUnavailable + metaUnavailable,
+      metaPendingCount: metaPending,
+      metaUnavailableCount: metaUnavailable,
+      twilioPendingCount: twilioPending,
+      inboundCount: Number(row.inbound_count ?? 0),
+      outboundCount: Number(row.outbound_count ?? 0),
+      sentCount: Number(row.sent_count ?? 0),
+      deliveredCount: Number(row.delivered_count ?? 0),
+      readCount: Number(row.read_count ?? 0),
+      failedCount: Number(row.failed_count ?? 0),
+    };
+  },
+
+  /** @deprecated Prefer summarizeTwilioByCurrency + summarizeMetaByCurrency */
   async summarizeByCurrency(filters: CostLedgerFilters): Promise<CurrencyTotalRow[]> {
     const pool = getPool();
     const request = pool.request();
@@ -68,18 +225,45 @@ export const whatsappMessageCostLedgerQueryRepository = {
         SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) = N'delivered' THEN 1 ELSE 0 END) AS delivered_count,
         SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) = N'read' THEN 1 ELSE 0 END) AS read_count,
         SUM(CASE WHEN LOWER(COALESCE(provider_status, N'')) IN (N'failed', N'undelivered') THEN 1 ELSE 0 END) AS failed_count,
+        COALESCE(SUM(CASE WHEN cost_quality = N'CONFIRMED' THEN ABS(price_amount) ELSE 0 END), 0) AS twilio_confirmed_total,
+        COALESCE(SUM(CASE WHEN cost_quality = N'ESTIMATED' THEN ABS(price_amount) ELSE 0 END), 0) AS twilio_estimated_total,
+        COALESCE(SUM(CASE WHEN meta_cost_quality = N'CONFIRMED' THEN ABS(meta_price_amount) ELSE 0 END), 0) AS meta_confirmed_total,
+        COALESCE(SUM(CASE WHEN meta_cost_quality = N'ESTIMATED' THEN ABS(meta_price_amount) ELSE 0 END), 0) AS meta_estimated_total,
+        COALESCE(SUM(CASE WHEN direction = N'INBOUND' THEN 1 ELSE 0 END), 0) AS inbound_count,
+        COALESCE(SUM(CASE WHEN direction = N'OUTBOUND' THEN 1 ELSE 0 END), 0) AS outbound_count,
+        COALESCE(SUM(CASE
+              WHEN meta_billing_category = N'SERVICE'
+               AND meta_cost_note = N'SERVICE_FREE_TIER' THEN 1
+              ELSE 0
+            END), 0) AS service_free_tier_used_count,
         COALESCE(SUM(CASE WHEN cost_quality = N'CONFIRMED' THEN ABS(price_amount) ELSE 0 END), 0) AS confirmed_total,
-        COALESCE(SUM(CASE WHEN cost_quality = N'ESTIMATED' THEN ABS(price_amount) ELSE 0 END), 0) AS estimated_total
+        COALESCE(SUM(CASE WHEN cost_quality = N'ESTIMATED' THEN ABS(price_amount) ELSE 0 END), 0) AS estimated_total,
+        COALESCE(SUM(CASE WHEN cost_quality = N'CONFIRMED' THEN ABS(price_amount) ELSE 0 END), 0)
+          + COALESCE(SUM(CASE WHEN meta_cost_quality = N'CONFIRMED' THEN ABS(meta_price_amount) ELSE 0 END), 0) AS combined_confirmed_total,
+        COALESCE(SUM(CASE WHEN cost_quality = N'ESTIMATED' THEN ABS(price_amount) ELSE 0 END), 0)
+          + COALESCE(SUM(CASE WHEN meta_cost_quality = N'ESTIMATED' THEN ABS(meta_price_amount) ELSE 0 END), 0) AS combined_estimated_total
       FROM dbo.whatsapp_message_cost_ledger l
       WHERE ${where}
       GROUP BY COALESCE(currency, N'UNK')
       ORDER BY currency ASC;
     `);
 
-    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
+    return (result.recordset as Array<Record<string, unknown>>).map((row) => {
+      return {
       currency: String(row.currency),
       confirmedTotal: normalizeDecimalString(String(row.confirmed_total)) ?? "0",
       estimatedTotal: normalizeDecimalString(String(row.estimated_total)) ?? "0",
+      twilioConfirmedTotal: normalizeDecimalString(String(row.twilio_confirmed_total)) ?? "0",
+      twilioEstimatedTotal: normalizeDecimalString(String(row.twilio_estimated_total)) ?? "0",
+      metaConfirmedTotal: normalizeDecimalString(String(row.meta_confirmed_total)) ?? "0",
+      metaEstimatedTotal: normalizeDecimalString(String(row.meta_estimated_total)) ?? "0",
+      combinedConfirmedTotal:
+        normalizeDecimalString(String(row.combined_confirmed_total)) ?? "0",
+      combinedEstimatedTotal:
+        normalizeDecimalString(String(row.combined_estimated_total)) ?? "0",
+      inboundCount: Number(row.inbound_count ?? 0),
+      outboundCount: Number(row.outbound_count ?? 0),
+      serviceFreeTierUsedCount: Number(row.service_free_tier_used_count ?? 0),
       messageCount: Number(row.message_count ?? 0),
       confirmedCount: Number(row.confirmed_count ?? 0),
       estimatedCount: Number(row.estimated_count ?? 0),
@@ -90,7 +274,8 @@ export const whatsappMessageCostLedgerQueryRepository = {
       deliveredCount: Number(row.delivered_count ?? 0),
       readCount: Number(row.read_count ?? 0),
       failedCount: Number(row.failed_count ?? 0),
-    }));
+    };
+    });
   },
 
   async breakdownByCompany(filters: CostLedgerFilters): Promise<CompanyBreakdownRow[]> {

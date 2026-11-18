@@ -157,6 +157,12 @@ export const billingPlanPriceLockResource = (
 export const billingSubscriptionCompanyLockResource = (companyId: string): string =>
   `billing-subscription:${companyId}`.toLowerCase();
 
+/** Serializes SERVICE month rank + repricing for one sender billing key and calendar month. */
+export const whatsappServiceMonthLockResource = (
+  senderBillingKey: string,
+  monthStartUtcIso: string,
+): string => `wmcl-service-month:${senderBillingKey}:${monthStartUtcIso}`.toLowerCase();
+
 /**
  * Stable charge-assignment lock order (deadlock-safe across assign / end / cancel / revoke / link flows):
  * 1. companyUserEmployeeLinkLockResource

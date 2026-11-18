@@ -13,6 +13,7 @@ import type {
 import { auditService } from "../audit.service";
 import { buildCsv } from "../../utils/csv";
 import { getMonthUtcBounds } from "../../utils/month-utc-bounds";
+import { sumDecimalStrings } from "../../utils/money-decimal";
 
 const WORKER_STALE_MS = 15 * 60 * 1000;
 
@@ -33,9 +34,12 @@ const mapDetailRow = (row: WhatsappMessageCostLedgerRow) => ({
   id: row.id,
   companyId: row.companyId,
   companyNameSnapshot: row.companyNameSnapshot,
+  direction: row.direction,
   providerMessageSid: row.providerMessageSid,
   sentAt: row.sentAt.toISOString(),
   recipientPhoneMasked: row.recipientPhoneMasked,
+  senderPhoneMasked: row.senderPhoneMasked,
+  destinationCountryCode: row.destinationCountryCode,
   messageKind: row.messageKind,
   templateSid: row.templateSid,
   templateName: row.templateName,
@@ -45,6 +49,13 @@ const mapDetailRow = (row: WhatsappMessageCostLedgerRow) => ({
   pricingCategory: row.pricingCategory,
   priceAmount: row.priceAmount,
   currency: row.currency,
+  metaBillingCategory: row.metaBillingCategory,
+  metaPriceAmount: row.metaPriceAmount,
+  metaCurrency: row.metaCurrency,
+  metaCostQuality: row.metaCostQuality,
+  metaCostSource: row.metaCostSource,
+  serviceMonthRank: row.serviceMonthRank,
+  metaCostNote: row.metaCostNote,
   costQuality: row.costQuality,
   costSource: row.costSource,
   lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
@@ -55,37 +66,81 @@ const mapDetailRow = (row: WhatsappMessageCostLedgerRow) => ({
 export const whatsappMessageCostQueryService = {
   async getMonthlySummary(query: MessageCostMonthQuery) {
     const filters = buildFilters(query);
-    const byCurrency = await whatsappMessageCostLedgerRepository.summarizeByCurrency(filters);
+    const [twilioByCurrency, metaByCurrency, aggregateCounts] = await Promise.all([
+      whatsappMessageCostLedgerRepository.summarizeTwilioByCurrency(filters),
+      whatsappMessageCostLedgerRepository.summarizeMetaByCurrency(filters),
+      whatsappMessageCostLedgerRepository.summarizeAggregateCounts(filters),
+    ]);
     const lastSyncedAt = await whatsappMessageCostLedgerRepository.getLastSyncedAt(filters);
     const heartbeat = await whatsappMessageCostLedgerRepository.getHeartbeat();
 
-    const totals = byCurrency.reduce(
-      (acc, row) => {
-        acc.messageCount += row.messageCount;
-        acc.pendingCount += row.pendingCount;
-        acc.unavailableCount += row.unavailableCount;
-        acc.confirmedCount += row.confirmedCount;
-        acc.estimatedCount += row.estimatedCount;
-        acc.pendingWithoutCurrencyCount += row.pendingWithoutCurrencyCount;
-        acc.sentCount += row.sentCount;
-        acc.deliveredCount += row.deliveredCount;
-        acc.readCount += row.readCount;
-        acc.failedCount += row.failedCount;
-        return acc;
-      },
-      {
-        messageCount: 0,
-        pendingCount: 0,
-        unavailableCount: 0,
-        confirmedCount: 0,
-        estimatedCount: 0,
-        pendingWithoutCurrencyCount: 0,
-        sentCount: 0,
-        deliveredCount: 0,
-        readCount: 0,
-        failedCount: 0,
-      },
+    const twilioConfirmedCount = twilioByCurrency.reduce((acc, row) => acc + row.confirmedCount, 0);
+    const twilioEstimatedCount = twilioByCurrency.reduce((acc, row) => acc + row.estimatedCount, 0);
+    const metaConfirmedCount = metaByCurrency.reduce((acc, row) => acc + row.confirmedCount, 0);
+    const metaEstimatedCount = metaByCurrency.reduce((acc, row) => acc + row.estimatedCount, 0);
+    const serviceFreeTierUsedCount = metaByCurrency.reduce(
+      (acc, row) => acc + row.serviceFreeTierUsedCount,
+      0,
     );
+    const pendingWithoutCurrencyCount = twilioByCurrency.reduce(
+      (acc, row) => acc + row.pendingWithoutCurrencyCount,
+      0,
+    );
+
+    const twilioCurrencies = twilioByCurrency.filter((r) => r.currency !== "UNK");
+    const metaCurrencies = metaByCurrency.filter((r) => r.currency !== "UNK_META");
+    const twilioSummaryCurrency =
+      twilioCurrencies.length === 1 ? twilioCurrencies[0]?.currency ?? null : null;
+    const metaSummaryCurrency =
+      metaCurrencies.length === 1 ? metaCurrencies[0]?.currency ?? null : null;
+
+    const monetaryTotals = {
+      twilioConfirmedTotal:
+        twilioSummaryCurrency && twilioByCurrency.length > 0
+          ? sumDecimalStrings(twilioByCurrency.map((row) => row.twilioConfirmedTotal))
+          : null,
+      twilioEstimatedTotal:
+        twilioSummaryCurrency && twilioByCurrency.length > 0
+          ? sumDecimalStrings(twilioByCurrency.map((row) => row.twilioEstimatedTotal))
+          : null,
+      metaConfirmedTotal:
+        metaSummaryCurrency && metaByCurrency.length > 0
+          ? sumDecimalStrings(metaByCurrency.map((row) => row.metaConfirmedTotal))
+          : null,
+      metaEstimatedTotal:
+        metaSummaryCurrency && metaByCurrency.length > 0
+          ? sumDecimalStrings(metaByCurrency.map((row) => row.metaEstimatedTotal))
+          : null,
+      combinedConfirmedTotal: null,
+      combinedEstimatedTotal: null,
+      twilioSummaryCurrency,
+      metaSummaryCurrency,
+      summaryCurrency: null,
+    };
+
+    const hasUnknownCostComponents =
+      aggregateCounts.twilioPendingCount > 0 ||
+      aggregateCounts.metaPendingCount > 0 ||
+      aggregateCounts.unavailableCount > 0;
+
+    const totals = {
+      messageCount: aggregateCounts.messageCount,
+      pendingCount: aggregateCounts.pendingCount,
+      unavailableCount: aggregateCounts.unavailableCount,
+      confirmedCount: twilioConfirmedCount + metaConfirmedCount,
+      estimatedCount: twilioEstimatedCount + metaEstimatedCount,
+      pendingWithoutCurrencyCount,
+      sentCount: aggregateCounts.sentCount,
+      deliveredCount: aggregateCounts.deliveredCount,
+      readCount: aggregateCounts.readCount,
+      failedCount: aggregateCounts.failedCount,
+      inboundCount: aggregateCounts.inboundCount,
+      outboundCount: aggregateCounts.outboundCount,
+      serviceFreeTierUsedCount,
+      twilioPendingCount: aggregateCounts.twilioPendingCount,
+      metaPendingCount: aggregateCounts.metaPendingCount,
+      ...monetaryTotals,
+    };
 
     const providerConfigured = Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN);
     const syncWorkerEnabled = env.WHATSAPP_MESSAGE_COST_SYNC_WORKER_ENABLED;
@@ -118,8 +173,10 @@ export const whatsappMessageCostQueryService = {
       accountingBasis: "SERVER_SENT_AT_IN_BOT_OPERATION_TIMEZONE",
       billingScope: MESSAGE_COST_BILLING_SCOPE,
       billingScopeNote:
-        "Los importes confirmados provienen de Twilio Message.price (tarifa de canal). " +
-        "No incluyen tarifas de plantilla/conversación de Meta facturadas por Usage.",
+        "Twilio (canal): importes CONFIRMED desde Message.price cuando está disponible; " +
+        "ESTIMATED desde tarifario o referencia USD 0,005 sin sustituir importes reales. " +
+        "Meta: ESTIMATED/CONFIRMED por tarifario versionado y política SERVICE (1.000 gratis/mes " +
+        "por remitente desde 2026-10-01). El total combinado no equivale a factura hasta conciliación.",
       providerConfigured,
       syncWorkerEnabled,
       workerOperationalStatus,
@@ -130,22 +187,52 @@ export const whatsappMessageCostQueryService = {
         : null,
       partiallySynced: totals.pendingCount > 0,
       hasUnavailable: totals.unavailableCount > 0,
-      periodComplete:
-        totals.pendingCount === 0 &&
-        totals.unavailableCount === 0 &&
-        totals.messageCount > 0,
+      hasUnknownCostComponents,
+      periodComplete: !hasUnknownCostComponents && totals.messageCount > 0,
       lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
       totals,
-      byCurrency: byCurrency.map((row) => ({
+      byTwilioCurrency: twilioByCurrency.map((row) => ({
         currency: row.currency === "UNK" ? null : row.currency,
-        confirmedTotal: row.confirmedTotal,
-        estimatedTotal: row.estimatedTotal,
+        confirmedTotal: row.twilioConfirmedTotal,
+        estimatedTotal: row.twilioEstimatedTotal,
         messageCount: row.messageCount,
         confirmedCount: row.confirmedCount,
         estimatedCount: row.estimatedCount,
         pendingCount: row.pendingCount,
         unavailableCount: row.unavailableCount,
         pendingWithoutCurrencyCount: row.pendingWithoutCurrencyCount,
+      })),
+      byMetaCurrency: metaByCurrency.map((row) => ({
+        currency: row.currency === "UNK_META" ? null : row.currency,
+        confirmedTotal: row.metaConfirmedTotal,
+        estimatedTotal: row.metaEstimatedTotal,
+        messageCount: row.messageCount,
+        confirmedCount: row.confirmedCount,
+        estimatedCount: row.estimatedCount,
+        pendingCount: row.pendingCount,
+        unavailableCount: row.unavailableCount,
+        serviceFreeTierUsedCount: row.serviceFreeTierUsedCount,
+      })),
+      /** @deprecated use byTwilioCurrency / byMetaCurrency */
+      byCurrency: twilioByCurrency.map((row) => ({
+        currency: row.currency === "UNK" ? null : row.currency,
+        confirmedTotal: row.confirmedTotal,
+        estimatedTotal: row.estimatedTotal,
+        twilioConfirmedTotal: row.twilioConfirmedTotal,
+        twilioEstimatedTotal: row.twilioEstimatedTotal,
+        metaConfirmedTotal: "0",
+        metaEstimatedTotal: "0",
+        combinedConfirmedTotal: row.twilioConfirmedTotal,
+        combinedEstimatedTotal: row.twilioEstimatedTotal,
+        messageCount: row.messageCount,
+        confirmedCount: row.confirmedCount,
+        estimatedCount: row.estimatedCount,
+        pendingCount: row.pendingCount,
+        unavailableCount: row.unavailableCount,
+        pendingWithoutCurrencyCount: row.pendingWithoutCurrencyCount,
+        inboundCount: 0,
+        outboundCount: 0,
+        serviceFreeTierUsedCount: 0,
       })),
     };
   },

@@ -27,14 +27,16 @@ describe("phase3-4 sql performance source guards", () => {
     assert.match(source, /DATEADD\(MINUTE, -@touchMinutes, SYSUTCDATETIME\(\)\)/);
   });
 
-  it("cost reconcile uses sargable SID anti-join branches", () => {
+  it("cost reconcile uses separate anti-join branches per message shape", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/services/whatsapp/whatsapp-message-cost-reconcile.service.ts"),
       "utf8",
     );
-    assert.match(source, /l\.provider_message_sid = m\.provider_message_sid/);
+    assert.match(source, /m\.direction = N'OUTBOUND'/);
+    assert.match(source, /m\.direction = N'INBOUND'/);
     assert.match(source, /l\.provider_message_sid = m\.message_sid/);
-    assert.doesNotMatch(
+    assert.match(source, /l\.whatsapp_message_id = m\.id/);
+    assert.match(
       source,
       /l\.provider_message_sid = COALESCE\(m\.provider_message_sid, m\.message_sid\)/,
     );

@@ -18,6 +18,11 @@ export type {
 
 export const whatsappMessageCostLedgerRepository = {
   insertIgnoreDuplicate: whatsappMessageCostLedgerWriteRepository.insertIgnoreDuplicate,
+  assignServiceMonthRank: whatsappMessageCostLedgerWriteRepository.assignServiceMonthRank,
+  recomputeServiceMonthRanksForSenderMonth:
+    whatsappMessageCostLedgerWriteRepository.recomputeServiceMonthRanksForSenderMonth,
+  updateMetaPricing: whatsappMessageCostLedgerWriteRepository.updateMetaPricing,
+  getById: whatsappMessageCostLedgerWriteRepository.getById,
   markConfirmed: whatsappMessageCostLedgerWriteRepository.markConfirmed,
   markEstimated: whatsappMessageCostLedgerWriteRepository.markEstimated,
   markPendingRetry: whatsappMessageCostLedgerWriteRepository.markPendingRetry,
@@ -33,6 +38,9 @@ export const whatsappMessageCostLedgerRepository = {
   claimNextPending: whatsappMessageCostLedgerClaimRepository.claimNextPending,
   requestResync: whatsappMessageCostLedgerClaimRepository.requestResync,
   summarizeByCurrency: whatsappMessageCostLedgerQueryRepository.summarizeByCurrency,
+  summarizeTwilioByCurrency: whatsappMessageCostLedgerQueryRepository.summarizeTwilioByCurrency,
+  summarizeMetaByCurrency: whatsappMessageCostLedgerQueryRepository.summarizeMetaByCurrency,
+  summarizeAggregateCounts: whatsappMessageCostLedgerQueryRepository.summarizeAggregateCounts,
   breakdownByCompany: whatsappMessageCostLedgerQueryRepository.breakdownByCompany,
   breakdownByTemplate: whatsappMessageCostLedgerQueryRepository.breakdownByTemplate,
   listDetail: whatsappMessageCostLedgerQueryRepository.listDetail,

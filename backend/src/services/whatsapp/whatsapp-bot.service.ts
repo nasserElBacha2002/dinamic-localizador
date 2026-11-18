@@ -9,6 +9,7 @@ import {
 } from "../../repositories/whatsapp/whatsapp-webhook-event.repository";
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import { botSessionService } from "../bot/bot-session.service";
+import { whatsappMessageCostRecordService } from "./whatsapp-message-cost-record.service";
 import type { WhatsAppInboundContext } from "../../types/whatsapp-company-context";
 import { isWithinOperationWindow } from "../../utils/attendance/attendance-validation";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../../utils/phone";
@@ -243,6 +244,16 @@ export const whatsappBotService = {
           rawPayload: twilioWebhookPayloadToStringRecord(payload),
         });
         inboundMessageId = inboundMessage?.id ?? null;
+        if (inboundMessage?.id) {
+          void whatsappMessageCostRecordService.recordInboundMessage({
+            companyId,
+            providerMessageSid: payload.MessageSid,
+            fromPhoneNumber: phoneFrom,
+            toPhoneNumber: phoneTo,
+            messageKind: getMessageType(payload) === "LOCATION" ? "OTHER" : "TEXT",
+            whatsappMessageId: inboundMessage.id,
+          });
+        }
       } else {
         appendSimulatorMessage({
           id: payload.MessageSid,

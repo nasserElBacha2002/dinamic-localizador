@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
 import { whatsappMessageCostRecordService } from "./whatsapp-message-cost-record.service";
+import { whatsappMessageCostMetaClassificationService } from "./whatsapp-message-cost-meta-classification.service";
+import { whatsappMessageCostMetaPricingService } from "./whatsapp-message-cost-meta-pricing.service";
 
 describe("whatsappMessageCostRecordService", () => {
   afterEach(() => {
@@ -9,11 +11,14 @@ describe("whatsappMessageCostRecordService", () => {
   });
 
   it("records PENDING ledger row after outbound accept with SID", async () => {
+    mock.method(whatsappMessageCostMetaClassificationService, "classify", async () => "UTILITY");
+    mock.method(whatsappMessageCostMetaPricingService, "applyForLedgerRow", async () => true);
     const insert = mock.method(
       whatsappMessageCostLedgerRepository,
       "insertIgnoreDuplicate",
       async () => "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     );
+    mock.method(whatsappMessageCostLedgerRepository, "getById", async () => null);
 
     await whatsappMessageCostRecordService.recordOutboundAccepted({
       companyId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
@@ -51,11 +56,14 @@ describe("whatsappMessageCostRecordService", () => {
   });
 
   it("records UNAVAILABLE when SID is missing", async () => {
+    mock.method(whatsappMessageCostMetaClassificationService, "classify", async () => "SERVICE");
+    mock.method(whatsappMessageCostMetaPricingService, "applyForLedgerRow", async () => true);
     const insert = mock.method(
       whatsappMessageCostLedgerRepository,
       "insertIgnoreDuplicate",
       async () => "cccccccc-cccc-cccc-cccc-cccccccccccc",
     );
+    mock.method(whatsappMessageCostLedgerRepository, "getById", async () => null);
 
     await whatsappMessageCostRecordService.recordOutboundAccepted({
       companyId: null,

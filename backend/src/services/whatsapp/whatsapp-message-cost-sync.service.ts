@@ -1,7 +1,9 @@
 import twilio from "twilio";
 import { randomUUID } from "node:crypto";
 import { env } from "../../config/env";
+import { TWILIO_WHATSAPP_CHANNEL_REFERENCE_USD } from "../../constants/whatsapp-message-cost";
 import { whatsappMessageCostLedgerRepository } from "../../repositories/whatsapp/whatsapp-message-cost-ledger.repository";
+import { whatsappMessageCostMetaPricingService } from "./whatsapp-message-cost-meta-pricing.service";
 import { absDecimalString, normalizeDecimalString } from "../../utils/money-decimal";
 
 export interface CostSyncBatchResult {
@@ -66,6 +68,37 @@ const isNotFoundError = (error: unknown): boolean => {
 
 const isValidCurrency = (value: string | null): value is string =>
   Boolean(value && /^[A-Z]{3}$/.test(value));
+
+const refreshMetaPricingAfterChannelSync = async (ledgerId: string): Promise<void> => {
+  await whatsappMessageCostMetaPricingService.refreshAfterChannelSync(ledgerId);
+};
+
+const estimateTwilioChannelFromTariff = async (
+  claimed: { id: string; sentAt: Date; destinationCountryCode: string | null },
+  leaseOwner: string,
+  providerStatus: string | null,
+): Promise<boolean> => {
+  const country = claimed.destinationCountryCode;
+  if (!country) {
+    return false;
+  }
+  const tariff = await whatsappMessageCostLedgerRepository.findActiveTariff({
+    category: "TWILIO_WHATSAPP_CHANNEL",
+    countryOrRegion: country,
+    currency: "USD",
+    at: claimed.sentAt,
+  });
+  const amount = tariff?.amount ?? TWILIO_WHATSAPP_CHANNEL_REFERENCE_USD;
+  const currency = tariff?.currency ?? "USD";
+  return whatsappMessageCostLedgerRepository.markEstimated({
+    id: claimed.id,
+    leaseOwner,
+    priceAmount: amount,
+    currency,
+    tariffId: tariff?.id ?? null,
+    providerStatus,
+  });
+};
 
 /**
  * Fetches Twilio Message Resource price/price_unit.
@@ -154,6 +187,7 @@ export const whatsappMessageCostSyncService = {
           });
           if (ok) {
             result.confirmed += 1;
+            await refreshMetaPricingAfterChannelSync(claimed.id);
           } else {
             result.leaseLost += 1;
             console.info("[whatsapp-message-cost-sync] lease lost on markConfirmed", {
@@ -184,19 +218,28 @@ export const whatsappMessageCostSyncService = {
 
         const exhausted = claimed.syncAttemptCount >= maxAttempts;
         if (exhausted) {
-          // Without destination region we refuse global tariff guesses.
-          const ok = await whatsappMessageCostLedgerRepository.markUnavailable({
-            id: claimed.id,
-            leaseOwner: workerId,
-            errorCode: "PRICE_NOT_AVAILABLE",
-            errorMessage:
-              "Twilio Message.price empty after max attempts; ESTIMATED requires region-matched tariff",
+          const estimated = await estimateTwilioChannelFromTariff(
+            claimed,
+            workerId,
             providerStatus,
-          });
-          if (ok) {
-            result.unavailable += 1;
+          );
+          if (estimated) {
+            result.estimated += 1;
+            await refreshMetaPricingAfterChannelSync(claimed.id);
           } else {
-            result.leaseLost += 1;
+            const ok = await whatsappMessageCostLedgerRepository.markUnavailable({
+              id: claimed.id,
+              leaseOwner: workerId,
+              errorCode: "PRICE_NOT_AVAILABLE",
+              errorMessage:
+                "Twilio Message.price empty after max attempts and destination country unknown",
+              providerStatus,
+            });
+            if (ok) {
+              result.unavailable += 1;
+            } else {
+              result.leaseLost += 1;
+            }
           }
           continue;
         }

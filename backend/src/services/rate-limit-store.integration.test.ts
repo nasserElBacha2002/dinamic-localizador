@@ -108,7 +108,7 @@ describeDatabaseIntegration("SQL rate-limit store (multi-replica)", () => {
     assert.equal(allowed.length, 1);
     assert.equal(denied.length, 11);
     assert.equal(allowed[0]?.count, 1);
-    assert.equal(denied[0]?.count, 1);
+    assert.ok(denied.every((item) => item.count > 1));
   });
 
   it("cleanup deletes expired buckets and preserves active ones", async () => {

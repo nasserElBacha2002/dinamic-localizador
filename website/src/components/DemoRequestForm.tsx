@@ -28,7 +28,7 @@ type SubmitState = "idle" | "loading" | "success" | "error";
 
 export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps) {
   const startedRef = useRef(false);
-  const honeypotTouchedRef = useRef(false);
+  const [honeypotTouched, setHoneypotTouched] = useState(false);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const statusId = useId();
@@ -70,14 +70,11 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
         serviceLocations: values.serviceLocations?.trim()
           ? values.serviceLocations.trim()
           : undefined,
-        companyWebsite: marketingDemoHoneypotValue(
-          values.companyWebsite,
-          honeypotTouchedRef.current,
-        ),
+        companyWebsite: marketingDemoHoneypotValue(values.companyWebsite, honeypotTouched),
       });
       trackMarketingEvent("demo_form_submitted", { delivered: true });
       setSubmitState("success");
-      honeypotTouchedRef.current = false;
+      setHoneypotTouched(false);
       reset({
         fullName: "",
         company: "",
@@ -123,7 +120,7 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
               data-lpignore="true"
               {...register("companyWebsite", {
                 onChange: () => {
-                  honeypotTouchedRef.current = true;
+                  setHoneypotTouched(true);
                 },
               })}
             />

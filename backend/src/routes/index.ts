@@ -37,6 +37,7 @@ import { companyRouter } from "./company.routes";
 import { companyUserRouter } from "./company-user.routes";
 import { importRouter } from "./import.routes";
 import { lookupRouter } from "./lookup.routes";
+import { billingCommercialRouter } from "./billing-commercial.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
 import { platformServerStatusRouter } from "./platform-server-status.routes";
 import { whatsappObservabilityRouter } from "./whatsapp-observability.routes";
@@ -52,16 +53,19 @@ import {
   requireCompanyModule,
 } from "../middleware/require-company-module";
 import { clientRouter } from "./client.routes";
+import { marketingDemoRouter } from "./marketing-demo.routes";
 
 export const apiRouter = Router();
 
 apiRouter.use("/", healthRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/invitations", publicInvitationRouter);
+apiRouter.use("/marketing", marketingDemoRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
 apiRouter.use("/platform", authenticate, platformCompanyRouter);
+apiRouter.use("/platform/billing", authenticate, billingCommercialRouter);
 apiRouter.use("/platform/servers", authenticate, platformServerStatusRouter);
 apiRouter.use(
   "/platform/observability/whatsapp",

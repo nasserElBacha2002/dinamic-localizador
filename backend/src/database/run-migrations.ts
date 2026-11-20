@@ -6,11 +6,15 @@ import { migrationEnv as env } from "../config/env-migrations";
 const migrationDir =
   process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");
 
-export const splitBatches = (script: string): string[] =>
-  script
+const stripTrailingGoDelimiter = (batch: string): string => batch.replace(/\r?\nGO\s*$/i, "").trim();
+
+export const splitBatches = (script: string): string[] => {
+  const withoutTerminalGo = script.replace(/\r?\nGO\s*$/i, "");
+  return withoutTerminalGo
     .split(/\r?\nGO\r?\n/gi)
-    .map((part) => part.trim())
+    .map((part) => stripTrailingGoDelimiter(part))
     .filter((part) => part.length > 0);
+};
 
 /** Migrations may contain legacy `USE <database>` statements; the pool already targets env.DB_NAME. */
 export const stripLegacyDatabaseUse = (batch: string): string =>
@@ -38,7 +42,7 @@ const connectPool = async (): Promise<sql.ConnectionPool> =>
     },
   });
 
-const getAppliedMigrations = async (pool: sql.ConnectionPool): Promise<Set<string>> => {
+export const getAppliedMigrations = async (pool: sql.ConnectionPool): Promise<Set<string>> => {
   const tableExists = await pool.request().query(`
     SELECT 1 AS found
     FROM INFORMATION_SCHEMA.TABLES

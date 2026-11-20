@@ -13,6 +13,8 @@ import { setRoutingResult } from "../../utils/whatsapp/whatsapp-routing-result";
 import { getQuotaTurnScope } from "../../utils/whatsapp/whatsapp-quota-turn-scope";
 import { whatsappUsageQuotaService } from "../whatsapp/whatsapp-usage-quota.service";
 import { whatsappFlowTraceService } from "../whatsapp/whatsapp-flow-trace.service";
+import { whatsappMessageCostRecordService } from "../whatsapp/whatsapp-message-cost-record.service";
+import { whatsappMetaCswEvidenceService } from "../whatsapp/whatsapp-meta-csw-evidence.service";
 
 export const buildTwiml = (message: string): string => {
   const response = new twilio.twiml.MessagingResponse();
@@ -59,6 +61,23 @@ export const saveOutboundMessage = async (
     status: "SENT",
     rawPayload: null,
   });
+
+  if (outbound?.id) {
+    const sentAt = new Date();
+    const customerServiceWindowOpen = await whatsappMetaCswEvidenceService.resolveForOutboundSafe({
+      companyId,
+      customerPhone: input.phoneTo,
+      at: sentAt,
+    });
+    void whatsappMessageCostRecordService.recordTwimlOutbound({
+      companyId,
+      whatsappMessageId: outbound.id,
+      toPhoneNumber: input.phoneTo,
+      fromPhoneNumber: input.phoneFrom,
+      sentAt,
+      customerServiceWindowOpen,
+    });
+  }
 
   const trace = getObservabilityTrace();
   if (trace && outbound?.id) {

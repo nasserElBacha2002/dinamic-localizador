@@ -10,6 +10,7 @@ export interface IntegrationFixtureTracker {
   trackOperation: (companyId: string, operationId: string) => void;
   trackEmployee: (companyId: string, employeeId: string) => void;
   trackCompany: (companyId: string) => void;
+  untrackCompany: (companyId: string) => void;
   cleanup: () => Promise<void>;
 }
 
@@ -28,6 +29,12 @@ export const createIntegrationFixtureTracker = (): IntegrationFixtureTracker => 
     },
     trackCompany: (companyId) => {
       companies.push(companyId);
+    },
+    untrackCompany: (companyId) => {
+      const index = companies.lastIndexOf(companyId);
+      if (index >= 0) {
+        companies.splice(index, 1);
+      }
     },
     cleanup: async () => {
       for (const { companyId, operationId } of [...operations].reverse()) {

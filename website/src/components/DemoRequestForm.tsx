@@ -1,10 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef } from "react";
+import { useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { trackMarketingEvent } from "../analytics/marketing-events";
-import { isDemoSubmitEnabled } from "../api/demo-request.api";
+import { isDemoSubmitEnabled, submitDemoRequest } from "../api/demo-request.api";
 import { EMPLOYEE_COUNT_RANGES } from "../content/landing-content";
+import { marketingDemoHoneypotValue } from "./demo-request-honeypot";
 import classes from "./demo-request-form.module.css";
 
 const demoSchema = z.object({
@@ -14,6 +15,7 @@ const demoSchema = z.object({
   employeeRange: z.string().min(1, "Seleccioná un rango"),
   phone: z.string().trim().optional(),
   serviceLocations: z.string().trim().optional(),
+  companyWebsite: z.string().optional(),
 });
 
 type DemoRequestFormValues = z.infer<typeof demoSchema>;
@@ -22,11 +24,20 @@ type DemoRequestFormProps = {
   id?: string;
 };
 
+type SubmitState = "idle" | "loading" | "success" | "error";
+
 export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps) {
   const startedRef = useRef(false);
+  const [honeypotTouched, setHoneypotTouched] = useState(false);
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const statusId = useId();
+  const submitEnabled = isDemoSubmitEnabled();
 
   const {
     register,
+    handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<DemoRequestFormValues>({
     resolver: zodResolver(demoSchema),
@@ -37,7 +48,50 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
       employeeRange: "",
       phone: "",
       serviceLocations: "",
+      companyWebsite: "",
     },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    if (!submitEnabled || submitState === "loading") {
+      return;
+    }
+
+    setSubmitState("loading");
+    setSubmitError(null);
+
+    try {
+      await submitDemoRequest({
+        fullName: values.fullName,
+        company: values.company,
+        email: values.email,
+        employeeRange: values.employeeRange,
+        phone: values.phone?.trim() ? values.phone.trim() : undefined,
+        serviceLocations: values.serviceLocations?.trim()
+          ? values.serviceLocations.trim()
+          : undefined,
+        companyWebsite: marketingDemoHoneypotValue(values.companyWebsite, honeypotTouched),
+      });
+      trackMarketingEvent("demo_form_submitted", { delivered: true });
+      setSubmitState("success");
+      setHoneypotTouched(false);
+      reset({
+        fullName: "",
+        company: "",
+        email: "",
+        employeeRange: "",
+        phone: "",
+        serviceLocations: "",
+        companyWebsite: "",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No pudimos enviar tu solicitud. Probá de nuevo en unos minutos.";
+      setSubmitState("error");
+      setSubmitError(message);
+    }
   });
 
   return (
@@ -45,7 +99,9 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
       <form
         id={id}
         noValidate
-        onSubmit={(event) => event.preventDefault()}
+        onSubmit={(event) => {
+          void onSubmit(event);
+        }}
         onFocusCapture={() => {
           if (startedRef.current) {
             return;
@@ -54,25 +110,79 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
           trackMarketingEvent("demo_form_start");
         }}
       >
+        <div className={classes.hpField} aria-hidden="true">
+          <label htmlFor={`${id}-companyWebsite`}>
+            <input
+              id={`${id}-companyWebsite`}
+              tabIndex={-1}
+              autoComplete="off"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              {...register("companyWebsite", {
+                onChange: () => {
+                  setHoneypotTouched(true);
+                },
+              })}
+            />
+          </label>
+        </div>
+
         <div className={classes.grid}>
           <label className={classes.field}>
             <span>Nombre y apellido *</span>
-            <input autoComplete="name" {...register("fullName")} />
-            {errors.fullName ? <span className={classes.error}>{errors.fullName.message}</span> : null}
+            <input
+              autoComplete="name"
+              aria-invalid={errors.fullName ? true : undefined}
+              aria-describedby={errors.fullName ? `${id}-fullName-error` : undefined}
+              disabled={submitState === "loading" || !submitEnabled}
+              {...register("fullName")}
+            />
+            {errors.fullName ? (
+              <span id={`${id}-fullName-error`} className={classes.error} role="alert">
+                {errors.fullName.message}
+              </span>
+            ) : null}
           </label>
           <label className={classes.field}>
             <span>Empresa *</span>
-            <input autoComplete="organization" {...register("company")} />
-            {errors.company ? <span className={classes.error}>{errors.company.message}</span> : null}
+            <input
+              autoComplete="organization"
+              aria-invalid={errors.company ? true : undefined}
+              aria-describedby={errors.company ? `${id}-company-error` : undefined}
+              disabled={submitState === "loading" || !submitEnabled}
+              {...register("company")}
+            />
+            {errors.company ? (
+              <span id={`${id}-company-error`} className={classes.error} role="alert">
+                {errors.company.message}
+              </span>
+            ) : null}
           </label>
           <label className={classes.field}>
             <span>Email laboral *</span>
-            <input type="email" autoComplete="email" {...register("email")} />
-            {errors.email ? <span className={classes.error}>{errors.email.message}</span> : null}
+            <input
+              type="email"
+              autoComplete="email"
+              aria-invalid={errors.email ? true : undefined}
+              aria-describedby={errors.email ? `${id}-email-error` : undefined}
+              disabled={submitState === "loading" || !submitEnabled}
+              {...register("email")}
+            />
+            {errors.email ? (
+              <span id={`${id}-email-error`} className={classes.error} role="alert">
+                {errors.email.message}
+              </span>
+            ) : null}
           </label>
           <label className={classes.field}>
             <span>Cantidad de empleados *</span>
-            <select {...register("employeeRange")} defaultValue="">
+            <select
+              aria-invalid={errors.employeeRange ? true : undefined}
+              aria-describedby={errors.employeeRange ? `${id}-employeeRange-error` : undefined}
+              disabled={submitState === "loading" || !submitEnabled}
+              {...register("employeeRange")}
+              defaultValue=""
+            >
               <option value="" disabled>
                 Seleccioná un rango
               </option>
@@ -83,23 +193,54 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
               ))}
             </select>
             {errors.employeeRange ? (
-              <span className={classes.error}>{errors.employeeRange.message}</span>
+              <span id={`${id}-employeeRange-error`} className={classes.error} role="alert">
+                {errors.employeeRange.message}
+              </span>
             ) : null}
           </label>
           <label className={classes.field}>
             <span>Teléfono / WhatsApp</span>
-            <input type="tel" autoComplete="tel" {...register("phone")} />
+            <input
+              type="tel"
+              autoComplete="tel"
+              disabled={submitState === "loading" || !submitEnabled}
+              {...register("phone")}
+            />
           </label>
           <label className={classes.field}>
             <span>Servicios / ubicaciones (aprox.)</span>
-            <input {...register("serviceLocations")} />
+            <input
+              disabled={submitState === "loading" || !submitEnabled}
+              {...register("serviceLocations")}
+            />
           </label>
         </div>
-        <p className={classes.pendingNote}>Solicitudes online próximamente.</p>
-        <button type="submit" className={classes.submit} disabled={!isDemoSubmitEnabled}>
-          Solicitar una demo
+
+        <div id={statusId} className={classes.statusRegion} aria-live="polite" aria-atomic="true">
+          {submitState === "success" ? (
+            <p className={classes.success}>Recibimos tu solicitud. Te contactaremos a la brevedad.</p>
+          ) : null}
+          {submitState === "error" && submitError ? (
+            <p className={classes.error} role="alert">
+              {submitError}
+            </p>
+          ) : null}
+          {!submitEnabled ? (
+            <p className={classes.pendingNote}>
+              El envío online se habilita cuando la landing está vinculada al API.
+            </p>
+          ) : null}
+        </div>
+
+        <button
+          type="submit"
+          className={classes.submit}
+          disabled={!submitEnabled || submitState === "loading" || submitState === "success"}
+          aria-busy={submitState === "loading"}
+          aria-describedby={statusId}
+        >
+          {submitState === "loading" ? "Enviando…" : "Solicitar una demo"}
         </button>
-        <p className={classes.note}>Disponible próximamente.</p>
       </form>
     </div>
   );

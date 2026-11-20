@@ -15,4 +15,12 @@ describe("run-migrations helpers", () => {
     const cleaned = stripLegacyDatabaseUse("USE dinamic_attendance;\nSELECT 1;");
     assert.equal(cleaned, "SELECT 1;");
   });
+
+  it("splitBatches ignores a terminal GO without a following newline", () => {
+    const batches = splitBatches("SELECT 1;\nGO\nSELECT 2;\nGO");
+    assert.deepEqual(
+      batches.map((b) => b.replace(/\s+/g, " ").trim()),
+      ["SELECT 1;", "SELECT 2;"],
+    );
+  });
 });

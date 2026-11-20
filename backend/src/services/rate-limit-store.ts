@@ -9,6 +9,11 @@ export type RateLimitHitResult = {
 
 export type RateLimitStore = {
   hit(key: string, windowMs: number, max: number): Promise<RateLimitHitResult>;
+  /**
+   * Removes an active bucket (e.g. rollback a provisional dedup slot after delivery failure).
+   * Best-effort; safe when the row/key is already absent.
+   */
+  release?(key: string): Promise<void>;
   /** Delete expired buckets in a bounded batch. Returns rows deleted. */
   deleteExpiredBatch?(batchSize: number): Promise<number>;
 };
@@ -34,6 +39,9 @@ export function createMemoryRateLimitStore(
         count: existing.count,
         resetAt: existing.resetAt,
       };
+    },
+    async release(key) {
+      buckets.delete(key);
     },
     async deleteExpiredBatch(batchSize) {
       const now = Date.now();
@@ -150,6 +158,14 @@ export function createSqlRateLimitStore(): RateLimitStore {
         }
         throw error;
       }
+    },
+
+    async release(key) {
+      const pool = getPool();
+      await pool
+        .request()
+        .input("key", sql.NVarChar(300), key)
+        .query(`DELETE FROM dbo.rate_limit_buckets WHERE bucket_key = @key`);
     },
 
     async deleteExpiredBatch(batchSize) {

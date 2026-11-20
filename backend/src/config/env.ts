@@ -87,6 +87,13 @@ const envSchema = z
     SMTP_FROM: z.string().optional(),
     SMTP_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     SMTP_SOCKET_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+    /** Inbox for landing demo/commercial leads (server-side only; not accepted from clients). */
+    MARKETING_DEMO_LEAD_TO: z.string().email().optional(),
+    MARKETING_DEMO_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+    MARKETING_DEMO_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(12),
+    MARKETING_DEMO_RATE_LIMIT_MAX_PER_EMAIL: z.coerce.number().int().positive().default(3),
+    /** Window to reject duplicate lead fingerprints (same person/company payload). */
+    MARKETING_DEMO_DEDUP_WINDOW_MINUTES: z.coerce.number().int().positive().default(30),
     /** Google Cloud Storage — absence attachments (optional until feature enabled). */
     GCS_PROJECT_ID: z.string().min(1).optional(),
     GCS_BUCKET_NAME: z.string().min(1).optional(),

@@ -15,7 +15,7 @@ const demoSchema = z.object({
   employeeRange: z.string().min(1, "Seleccioná un rango"),
   phone: z.string().trim().optional(),
   serviceLocations: z.string().trim().optional(),
-  companyWebsite: z.string().optional(),
+  leadHpToken: z.string().optional(),
 });
 
 type DemoRequestFormValues = z.infer<typeof demoSchema>;
@@ -48,7 +48,7 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
       employeeRange: "",
       phone: "",
       serviceLocations: "",
-      companyWebsite: "",
+      leadHpToken: "",
     },
   });
 
@@ -61,7 +61,7 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
     setSubmitError(null);
 
     try {
-      await submitDemoRequest({
+      const result = await submitDemoRequest({
         fullName: values.fullName,
         company: values.company,
         email: values.email,
@@ -70,9 +70,9 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
         serviceLocations: values.serviceLocations?.trim()
           ? values.serviceLocations.trim()
           : undefined,
-        companyWebsite: marketingDemoHoneypotValue(values.companyWebsite, honeypotTouched),
+        companyWebsite: marketingDemoHoneypotValue(values.leadHpToken, honeypotTouched),
       });
-      trackMarketingEvent("demo_form_submitted", { delivered: true });
+      trackMarketingEvent("demo_form_submitted", { delivered: result.delivered });
       setSubmitState("success");
       setHoneypotTouched(false);
       reset({
@@ -82,7 +82,7 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
         employeeRange: "",
         phone: "",
         serviceLocations: "",
-        companyWebsite: "",
+        leadHpToken: "",
       });
     } catch (error) {
       const message =
@@ -111,18 +111,21 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
         }}
       >
         <div className={classes.hpField} aria-hidden="true">
-          <label htmlFor={`${id}-companyWebsite`}>
+          <label htmlFor={`${id}-leadHpToken`}>
             <input
-              id={`${id}-companyWebsite`}
+              id={`${id}-leadHpToken`}
               tabIndex={-1}
               autoComplete="off"
+              readOnly
               data-1p-ignore="true"
               data-lpignore="true"
-              {...register("companyWebsite", {
-                onChange: () => {
-                  setHoneypotTouched(true);
-                },
-              })}
+              {...register("leadHpToken")}
+              onKeyDown={() => {
+                setHoneypotTouched(true);
+              }}
+              onPointerDown={() => {
+                setHoneypotTouched(true);
+              }}
             />
           </label>
         </div>

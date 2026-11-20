@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { trackMarketingEvent } from "../analytics/marketing-events";
 import { SectionGuideCurve } from "../components/SectionGuideCurve";
-import { LANDING_SEO } from "../content/landing-content";
+import { HERO_CONTENT } from "../content/landing-content";
 import shared from "../styles/landing-shared.module.css";
 import { ProblemChaosRoadmap } from "./problem/ProblemChaosRoadmap";
 import classes from "./sections.module.css";
@@ -22,13 +22,29 @@ export function HeroSection() {
             <div className={classes.heroCopy}>
               <p className={shared.eyebrow}>Control operativo para empresas de servicios</p>
               <h1 id="hero-title" className={shared.title}>
-                Tu operación, bajo control.
+                {HERO_CONTENT.title}
               </h1>
-              <p className={shared.visuallyHidden}>{LANDING_SEO.seoHeadline}</p>
               <p className={`${shared.lead} ${classes.heroLeadShort} ${classes.heroLeadAlign}`}>
-                Coordiná servicios, equipos y alertas desde un solo lugar, incluso cuando la operación
-                cambia.
+                {HERO_CONTENT.lead}
               </p>
+              <div className={classes.heroActions}>
+                <a
+                  className={shared.btnPrimary}
+                  href={HERO_CONTENT.ctaPrimary.href}
+                  onClick={() => trackMarketingEvent("cta_demo_click", { location: "hero" })}
+                >
+                  {HERO_CONTENT.ctaPrimary.label}
+                </a>
+                <a
+                  className={shared.btnGhost}
+                  href={HERO_CONTENT.ctaSecondary.href}
+                  onClick={() =>
+                    trackMarketingEvent("cta_how_it_works_click", { location: "hero" })
+                  }
+                >
+                  {HERO_CONTENT.ctaSecondary.label}
+                </a>
+              </div>
             </div>
             <div className={classes.heroChaos}>
               <ProblemChaosRoadmap showMicrocopy={false} className={classes.chaosRoadmapHero} />

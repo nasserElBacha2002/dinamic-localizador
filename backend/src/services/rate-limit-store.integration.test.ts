@@ -91,6 +91,26 @@ describeDatabaseIntegration("SQL rate-limit store (multi-replica)", () => {
     assert.equal(after.allowed, true);
   });
 
+  it("marketing dedup bucket max=1 allows only one winner across independent stores", async () => {
+    const key = `marketing-demo-dedup:itest:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+    const storeA = createSqlRateLimitStore();
+    const storeB = createSqlRateLimitStore();
+    const windowMs = 60_000;
+
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        (index % 2 === 0 ? storeA : storeB).hit(key, windowMs, 1),
+      ),
+    );
+
+    const allowed = results.filter((item) => item.allowed);
+    const denied = results.filter((item) => !item.allowed);
+    assert.equal(allowed.length, 1);
+    assert.equal(denied.length, 11);
+    assert.equal(allowed[0]?.count, 1);
+    assert.equal(denied[0]?.count, 1);
+  });
+
   it("cleanup deletes expired buckets and preserves active ones", async () => {
     const { getPool } = await import("../database/connection");
     const store = createSqlRateLimitStore();

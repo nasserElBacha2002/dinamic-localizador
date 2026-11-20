@@ -11,6 +11,7 @@ import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
 import { installMobileMatchMedia } from "../test/match-media-mobile";
+import { HERO_CONTENT, LANDING_SEO } from "../content/landing-content";
 
 let renderPage: typeof import("../test/render-page").renderPage;
 let LandingPage: React.ComponentType;
@@ -26,24 +27,43 @@ afterEach(() => {
 
 describe("LandingPage", () => {
   it("renderiza hero, CTA de demo y secciones clave", () => {
-    const { getByRole, getAllByRole } = renderPage(<LandingPage />);
+    const { getByRole, getAllByRole, container } = renderPage(<LandingPage />);
 
-    assert.ok(getByRole("heading", { level: 1, name: /Tu operación, bajo control/i }));
+    assert.ok(getByRole("heading", { level: 1, name: HERO_CONTENT.title }));
+    assert.equal(container.querySelectorAll("h1").length, 1);
     assert.ok(getAllByRole("link", { name: /Solicitar/i }).length >= 1);
     assert.ok(getByRole("heading", { level: 2, name: /PLANIFICÁ\s+DETECTÁ\s+RESOLVÉ/i }));
   });
 
-  it("hero usa copy operativo sin pilares repetidos ni CTAs duplicados", () => {
-    const { getByRole, getByText, queryByText, queryByRole } = renderPage(<LandingPage />);
-    const heroTitle = getByRole("heading", { level: 1, name: /Tu operación, bajo control/i });
+  it("hero expone H1, subtítulo y CTAs hacia demo y video", () => {
+    const { getByRole, getByText, queryByText, container } = renderPage(<LandingPage />);
+    const heroTitle = getByRole("heading", { level: 1, name: HERO_CONTENT.title });
     const heroCopy = heroTitle.parentElement;
     assert.ok(heroCopy);
-    assert.ok(getByText(/Coordiná servicios, equipos y alertas desde un solo lugar/i));
+    assert.ok(getByText(HERO_CONTENT.lead));
     assert.equal(queryByText(/Mirá Dinamic en acción/i), null);
     const copyText = heroCopy.textContent ?? "";
     assert.equal(/PLANIFICÁ\s*·\s*DETECTÁ\s*·\s*RESOLVÉ/i.test(copyText), false);
-    assert.equal(queryByRole("button", { name: "Ver cómo funciona" }), null);
-    assert.equal(heroCopy.querySelector('a[href="#solicitar-demo"]'), null);
+
+    const demoCta = heroCopy.querySelector('a[href="#solicitar-demo"]');
+    assert.ok(demoCta);
+    assert.equal(demoCta?.textContent, HERO_CONTENT.ctaPrimary.label);
+
+    const videoCta = heroCopy.querySelector('a[href="#como-funciona"]');
+    assert.ok(videoCta);
+    assert.equal(videoCta?.textContent, HERO_CONTENT.ctaSecondary.label);
+
+    assert.equal(container.querySelector("#como-funciona")?.tagName.toLowerCase(), "section");
+  });
+
+  it("aplica SEO title y meta description de home en runtime", async () => {
+    renderPage(<LandingPage />);
+    await waitFor(() => {
+      assert.equal(document.title, LANDING_SEO.title);
+      const description = document.querySelector('meta[name="description"]');
+      assert.ok(description);
+      assert.equal(description.getAttribute("content"), LANDING_SEO.description);
+    });
   });
 
   it("enlaza Ingresar hacia /login (mismo dominio)", () => {
@@ -141,11 +161,11 @@ describe("LandingPage", () => {
     assert.ok(getByRole("button", { name: /Activar sonido del video/i }));
   });
 
-  it("no muestra éxito falso en el formulario demo", () => {
+  it("no muestra éxito falso en el formulario demo sin API configurada", () => {
     const { getByRole, getByText, queryByText } = renderPage(<LandingPage />);
     const submit = getByRole("button", { name: "Solicitar una demo" });
     assert.equal(submit.hasAttribute("disabled"), true);
-    assert.ok(getByText(/Solicitudes online próximamente/i));
+    assert.ok(getByText(/vinculada al API/i));
     assert.equal(queryByText(/backend/i), null);
     assert.equal(queryByText(/endpoint/i), null);
     assert.equal(queryByText(/Recibimos tu solicitud/i), null);

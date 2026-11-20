@@ -53,12 +53,14 @@ import {
   requireCompanyModule,
 } from "../middleware/require-company-module";
 import { clientRouter } from "./client.routes";
+import { marketingDemoRouter } from "./marketing-demo.routes";
 
 export const apiRouter = Router();
 
 apiRouter.use("/", healthRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/invitations", publicInvitationRouter);
+apiRouter.use("/marketing", marketingDemoRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);

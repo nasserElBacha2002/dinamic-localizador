@@ -53,10 +53,31 @@
   font-size: 0.8125rem;
 }
 
-.pendingNote {
+.hpField {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.statusRegion {
   margin: 1.25rem 0 0.75rem;
+  min-height: 1.25rem;
+}
+
+.pendingNote {
+  margin: 0;
   font-size: 0.8125rem;
   color: var(--m-ink-muted);
+}
+
+.success {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--m-ink);
+  font-weight: 600;
 }
 
 .submit {
@@ -87,9 +108,3 @@
   cursor: not-allowed;
 }
 
-.note {
-  margin: 0.65rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--m-ink-muted);
-  text-align: center;
-}

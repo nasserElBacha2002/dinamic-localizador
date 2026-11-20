@@ -7,13 +7,18 @@ export const PRODUCT_VIDEO = {
 } as const;
 
 export const LANDING_SEO = {
-  title: "Dinamic Operations | Planificá y mantené cubiertos tus servicios",
+  title: "Software de gestión de personal y servicios | Dinamic Operations",
   description:
-    "Organizá equipos, detectá problemas y resolvé cambios e imprevistos en servicios con personal distribuido. Conocé Dinamic Operations.",
+    "Planificá servicios, asigná personal y controlá asistencias en tiempo real. Detectá ausencias y puestos sin cubrir con Dinamic Operations.",
   canonicalUrl: "https://dinamicoperations.com/",
-  /** Intención SEO del brief; no duplicar como H1 visible. */
-  seoHeadline:
-    "Mantené cada servicio cubierto, incluso cuando la operación cambia.",
+} as const;
+
+export const HERO_CONTENT = {
+  title: "Software para gestionar personal y servicios en distintas ubicaciones",
+  lead:
+    "Planificá quién cubre cada servicio, controlá la asistencia en tiempo real y detectá ausencias, llegadas tarde o puestos sin cubrir para actuar a tiempo.",
+  ctaPrimary: { label: "Pedí una demo", href: "#solicitar-demo" as const },
+  ctaSecondary: { label: "Ver cómo funciona", href: "#como-funciona" as const },
 } as const;
 
 export const EMPLOYEE_COUNT_RANGES = [

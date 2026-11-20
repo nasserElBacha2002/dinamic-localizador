@@ -81,6 +81,7 @@ jobs:
             ${{ steps.image.outputs.image_name }}:develop-latest
           build-args: |
             VITE_OPERATIONS_APP_URL=${{ vars.VITE_OPERATIONS_APP_URL }}
+            VITE_API_URL=${{ vars.VITE_API_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

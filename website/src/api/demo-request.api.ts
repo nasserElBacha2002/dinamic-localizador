@@ -5,6 +5,18 @@ export type DemoRequestSubmitResult = {
   delivered: boolean;
 };
 
+const DEMO_REQUEST_SUCCESS_PREFIX = "Recibimos tu solicitud";
+
+function isAcceptedDemoResponse(data: DemoRequestSubmitResult | undefined): data is DemoRequestSubmitResult {
+  if (!data?.message) {
+    return false;
+  }
+  if (data.delivered === true) {
+    return true;
+  }
+  return data.delivered === false && data.message.startsWith(DEMO_REQUEST_SUCCESS_PREFIX);
+}
+
 export type DemoRequestApiError = {
   code?: string;
   message: string;
@@ -54,7 +66,7 @@ export async function submitDemoRequest(
     throw error;
   }
 
-  if (!payload?.data?.delivered) {
+  if (!isAcceptedDemoResponse(payload?.data)) {
     throw new Error("No pudimos confirmar el envío de tu solicitud.");
   }
 

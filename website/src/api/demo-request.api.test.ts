@@ -19,7 +19,7 @@ describe("demo-request.api", () => {
     assert.equal(isDemoSubmitEnabled(), true);
   });
 
-  it("rejects success when delivered is false", async () => {
+  it("rejects 200 when delivery is not confirmed and message is not the public success copy", async () => {
     globalThis.fetch = mock.fn(async () => ({
       ok: true,
       status: 200,
@@ -37,6 +37,28 @@ describe("demo-request.api", () => {
         }),
       /No pudimos confirmar/,
     );
+  });
+
+  it("accepts honeypot-style success when delivered is false but message matches", async () => {
+    globalThis.fetch = mock.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: {
+          delivered: false,
+          message: "Recibimos tu solicitud. Te contactaremos a la brevedad.",
+        },
+      }),
+    })) as typeof fetch;
+
+    const result = await submitDemoRequest({
+      fullName: "Ana",
+      company: "Acme",
+      email: "ana@acme.com",
+      employeeRange: "1-25",
+      companyWebsite: "",
+    });
+    assert.equal(result.delivered, false);
   });
 
   it("returns data when SMTP delivery is confirmed", async () => {

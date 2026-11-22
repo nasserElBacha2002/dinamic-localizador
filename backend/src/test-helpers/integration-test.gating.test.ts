@@ -2,89 +2,136 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ConnectionPool } from "mssql";
 import {
-  assertSafeIntegrationDatabaseConnectedTarget,
   assertSafeIntegrationDatabaseTarget,
-  INTEGRATION_DATABASE_NAME,
   isDatabaseIntegrationEnabled,
 } from "./integration-test";
+import { assertIntegrationDatabaseNameIsEphemeral } from "./test-sql-server-guard";
+import { assertSafeIntegrationDatabaseConnectedTarget } from "./integration-test-sql-guard";
+import { generateEphemeralIntegrationDatabaseName } from "./ephemeral-database-names";
+import { assertTestSqlDisposableEnvironmentConfigured } from "./test-sql-disposable-env";
 
-describe("database integration gating", () => {
+describe("database integration gating (DIN-462)", () => {
   const originalFlag = process.env.RUN_DB_INTEGRATION_TESTS;
 
-  it("is disabled unless RUN_DB_INTEGRATION_TESTS=true", () => {
+  it("is disabled unless ephemeral session is provisioned", () => {
     delete process.env.RUN_DB_INTEGRATION_TESTS;
+    delete process.env.DINAMIC_TEST_SQL_ACTIVE;
     assert.equal(isDatabaseIntegrationEnabled(), false);
 
     process.env.RUN_DB_INTEGRATION_TESTS = "true";
+    process.env.DINAMIC_TEST_SQL_ACTIVE = "true";
+    process.env.TEST_DB_HOST = "localhost";
+    process.env.TEST_DB_PORT = "1433";
+    process.env.TEST_DB_USER = "sa";
+    process.env.TEST_DB_PASSWORD = "test-password";
+    process.env.TEST_SQL_DISPOSABLE_ACKNOWLEDGED = "true";
+    process.env.TEST_SQL_ALLOW_SYSTEM_ADMIN = "true";
+    process.env.TEST_SQL_ALLOWED_SERVER_NAME = "ci-disposable-sql";
+    process.env.JWT_SECRET = "test-jwt-secret-min-16";
+    process.env.FRONTEND_URL = "http://localhost:5173";
+    process.env.TZ = "America/Argentina/Buenos_Aires";
+    process.env.DINAMIC_INTEGRATION_DATABASE_NAME = generateEphemeralIntegrationDatabaseName();
     assert.equal(isDatabaseIntegrationEnabled(), true);
   });
 
-  it("rejects integration DDL without explicit INTEGRATION_SQL_DDL_ALLOWED", () => {
-    const envBackup = {
-      RUN_DB_INTEGRATION_TESTS: process.env.RUN_DB_INTEGRATION_TESTS,
-      INTEGRATION_SQL_DDL_ALLOWED: process.env.INTEGRATION_SQL_DDL_ALLOWED,
-      NODE_ENV: process.env.NODE_ENV,
-      DB_NAME: process.env.DB_NAME,
-      DB_HOST: process.env.DB_HOST,
-    };
+  it("rejects protected persistent database names", () => {
+    assert.throws(() => assertIntegrationDatabaseNameIsEphemeral("dinamic_attendance"), /protected/);
+    assert.throws(
+      () => assertIntegrationDatabaseNameIsEphemeral("production_attendance"),
+      /din_test_<uuid>/,
+    );
+    assert.doesNotThrow(() =>
+      assertIntegrationDatabaseNameIsEphemeral(generateEphemeralIntegrationDatabaseName()),
+    );
+  });
+
+  it("requires disposable acknowledgement and allowed server identity", () => {
+    delete process.env.TEST_SQL_DISPOSABLE_ACKNOWLEDGED;
+    delete process.env.TEST_SQL_ALLOWED_SERVER_NAME;
+    assert.throws(() => assertTestSqlDisposableEnvironmentConfigured(), /TEST_SQL_DISPOSABLE_ACKNOWLEDGED/);
+
+    process.env.TEST_SQL_DISPOSABLE_ACKNOWLEDGED = "true";
+    assert.throws(() => assertTestSqlDisposableEnvironmentConfigured(), /TEST_SQL_ALLOWED_SERVER_NAME/);
+  });
+
+  it("rejects integration DDL without ephemeral session and explicit flags", () => {
+    const keys = [
+      "RUN_DB_INTEGRATION_TESTS",
+      "INTEGRATION_SQL_DDL_ALLOWED",
+      "DINAMIC_TEST_SQL_ACTIVE",
+      "NODE_ENV",
+      "DB_NAME",
+      "DINAMIC_INTEGRATION_DATABASE_NAME",
+    ] as const;
+    const envBackup = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 
     process.env.RUN_DB_INTEGRATION_TESTS = "true";
     process.env.NODE_ENV = "test";
-    process.env.DB_NAME = INTEGRATION_DATABASE_NAME;
-    process.env.DB_HOST = "localhost";
+    process.env.DB_NAME = generateEphemeralIntegrationDatabaseName();
+    process.env.DINAMIC_INTEGRATION_DATABASE_NAME = process.env.DB_NAME;
 
     delete process.env.INTEGRATION_SQL_DDL_ALLOWED;
-    assert.throws(
-      () => assertSafeIntegrationDatabaseTarget(),
-      /INTEGRATION_SQL_DDL_ALLOWED/,
-      "localhost dinamic_attendance without explicit DDL authorization",
-    );
+    delete process.env.DINAMIC_TEST_SQL_ACTIVE;
+    assert.throws(() => assertSafeIntegrationDatabaseTarget(), /DINAMIC_TEST_SQL_ACTIVE|INTEGRATION_SQL_DDL_ALLOWED/);
 
     process.env.INTEGRATION_SQL_DDL_ALLOWED = "true";
+    process.env.DINAMIC_TEST_SQL_ACTIVE = "true";
     assert.doesNotThrow(() => assertSafeIntegrationDatabaseTarget());
 
-    process.env.DB_HOST = "sql.remote.example";
-    delete process.env.INTEGRATION_SQL_DDL_ALLOWED;
-    assert.throws(
-      () => assertSafeIntegrationDatabaseTarget(),
-      /INTEGRATION_SQL_DDL_ALLOWED/,
-      "remote host still requires explicit authorization",
-    );
+    process.env.DB_NAME = "dinamic_attendance";
+    process.env.DINAMIC_INTEGRATION_DATABASE_NAME = "dinamic_attendance";
+    assert.throws(() => assertSafeIntegrationDatabaseTarget(), /protected|din_test_/);
 
-    process.env.INTEGRATION_SQL_DDL_ALLOWED = "true";
-    assert.doesNotThrow(
-      () => assertSafeIntegrationDatabaseTarget(),
-      "remote host permitted when DDL explicitly authorized and DB_NAME matches",
-    );
-
-    process.env.DB_NAME = "production_attendance";
-    assert.throws(() => assertSafeIntegrationDatabaseTarget(), /DB_NAME=/);
-
-    process.env.RUN_DB_INTEGRATION_TESTS = envBackup.RUN_DB_INTEGRATION_TESTS;
-    process.env.INTEGRATION_SQL_DDL_ALLOWED = envBackup.INTEGRATION_SQL_DDL_ALLOWED;
-    process.env.NODE_ENV = envBackup.NODE_ENV;
-    process.env.DB_NAME = envBackup.DB_NAME;
-    process.env.DB_HOST = envBackup.DB_HOST;
+    for (const key of keys) {
+      if (envBackup[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = envBackup[key];
+      }
+    }
   });
 
   it("rejects connected SQL when DB_NAME() does not match configured target", async () => {
-    const envBackup = {
-      RUN_DB_INTEGRATION_TESTS: process.env.RUN_DB_INTEGRATION_TESTS,
-      INTEGRATION_SQL_DDL_ALLOWED: process.env.INTEGRATION_SQL_DDL_ALLOWED,
-      NODE_ENV: process.env.NODE_ENV,
-      DB_NAME: process.env.DB_NAME,
-    };
+    const keys = [
+      "RUN_DB_INTEGRATION_TESTS",
+      "INTEGRATION_SQL_DDL_ALLOWED",
+      "DINAMIC_TEST_SQL_ACTIVE",
+      "NODE_ENV",
+      "DB_NAME",
+      "DINAMIC_INTEGRATION_DATABASE_NAME",
+      "TEST_DB_HOST",
+      "TEST_DB_PORT",
+      "TEST_DB_USER",
+      "TEST_DB_PASSWORD",
+      "TEST_SQL_DISPOSABLE_ACKNOWLEDGED",
+      "TEST_SQL_ALLOWED_SERVER_NAME",
+    ] as const;
+    const envBackup = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    const ephemeralName = generateEphemeralIntegrationDatabaseName();
 
     process.env.RUN_DB_INTEGRATION_TESTS = "true";
     process.env.INTEGRATION_SQL_DDL_ALLOWED = "true";
+    process.env.DINAMIC_TEST_SQL_ACTIVE = "true";
     process.env.NODE_ENV = "test";
-    process.env.DB_NAME = INTEGRATION_DATABASE_NAME;
+    process.env.DB_NAME = ephemeralName;
+    process.env.DINAMIC_INTEGRATION_DATABASE_NAME = ephemeralName;
+    process.env.TEST_DB_HOST = "localhost";
+    process.env.TEST_DB_PORT = "1433";
+    process.env.TEST_DB_USER = "sa";
+    process.env.TEST_DB_PASSWORD = "test-password";
+    process.env.TEST_SQL_DISPOSABLE_ACKNOWLEDGED = "true";
+    process.env.TEST_SQL_ALLOWED_SERVER_NAME = "ci-disposable-sql";
 
-    const pool = {
+    const mismatchedPool = {
       request: () => ({
         query: async (sqlText: string) => {
           if (sqlText.includes("DB_NAME()")) {
-            return { recordset: [{ connected_db_name: "other_database" }] };
+            return { recordset: [{ connected_database: "other_database" }] };
+          }
+          if (sqlText.includes("@@SERVERNAME")) {
+            return {
+              recordset: [{ server_name: "ci-disposable-sql", server_fqdn: "ci-disposable-sql", connected_database: "other_database" }],
+            };
           }
           return { recordset: [{ found: 1 }] };
         },
@@ -92,27 +139,17 @@ describe("database integration gating", () => {
     } as unknown as ConnectionPool;
 
     await assert.rejects(
-      () => assertSafeIntegrationDatabaseConnectedTarget(pool),
-      /connected DB_NAME\(\)/,
+      () => assertSafeIntegrationDatabaseConnectedTarget(mismatchedPool),
+      /DB_NAME\(\)|server identity/,
     );
 
-    const alignedPool = {
-      request: () => ({
-        query: async (sqlText: string) => {
-          if (sqlText.includes("DB_NAME()")) {
-            return { recordset: [{ connected_db_name: INTEGRATION_DATABASE_NAME }] };
-          }
-          return { recordset: [{ found: 1 }] };
-        },
-      }),
-    } as unknown as ConnectionPool;
-
-    await assert.doesNotReject(() => assertSafeIntegrationDatabaseConnectedTarget(alignedPool));
-
-    process.env.RUN_DB_INTEGRATION_TESTS = envBackup.RUN_DB_INTEGRATION_TESTS;
-    process.env.INTEGRATION_SQL_DDL_ALLOWED = envBackup.INTEGRATION_SQL_DDL_ALLOWED;
-    process.env.NODE_ENV = envBackup.NODE_ENV;
-    process.env.DB_NAME = envBackup.DB_NAME;
+    for (const key of keys) {
+      if (envBackup[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = envBackup[key];
+      }
+    }
   });
 
   it("restores RUN_DB_INTEGRATION_TESTS", () => {
@@ -120,7 +157,6 @@ describe("database integration gating", () => {
       delete process.env.RUN_DB_INTEGRATION_TESTS;
       return;
     }
-
     process.env.RUN_DB_INTEGRATION_TESTS = originalFlag;
   });
 });

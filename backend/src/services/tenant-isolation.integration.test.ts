@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../errors/app-error";
@@ -186,7 +187,7 @@ describeDatabaseIntegration("tenant isolation hardening", () => {
       return;
     }
 
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     if (!platformAdmin?.isPlatformAdmin) {
       return;
     }
@@ -257,7 +258,7 @@ describeDatabaseIntegration("tenant isolation hardening", () => {
   });
 
   it("allows company-scoped route for platform admin without membership", async () => {
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     if (!platformAdmin?.isPlatformAdmin) {
       return;
     }

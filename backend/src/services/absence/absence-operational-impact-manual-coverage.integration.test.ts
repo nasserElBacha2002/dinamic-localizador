@@ -96,7 +96,10 @@ describeDatabaseIntegration("absence operational impact manual coverage", () => 
     const serviceId = String(service.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
+    // Midday on the target local day so scheduled_start overlaps FULL_DAY absence UTC bounds
+    // (findAffectedAssignments); a wall-clock offset alone can fall after the absence window.
     const start = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    start.setHours(12, 0, 0, 0);
     const op = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)

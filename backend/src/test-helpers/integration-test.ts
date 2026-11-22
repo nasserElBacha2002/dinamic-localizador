@@ -1,84 +1,51 @@
 import { describe } from "node:test";
-import { config } from "dotenv";
 import type { ConnectionPool } from "mssql";
-
-config();
+import { isEphemeralIntegrationDatabaseName } from "./ephemeral-database-names";
+import {
+  assertIntegrationDdlAllowed,
+  assertSafeIntegrationDatabaseConnectedTarget,
+  assertTestSqlConnectionAllowed,
+} from "./integration-test-sql-guard";
+import { assertIntegrationDatabaseNameIsEphemeral } from "./test-sql-server-guard";
 
 const REQUIRED_INTEGRATION_ENV = [
   "FRONTEND_URL",
   "TZ",
-  "DB_HOST",
-  "DB_NAME",
-  "DB_USER",
-  "DB_PASSWORD",
+  "TEST_DB_HOST",
+  "TEST_DB_PORT",
+  "TEST_DB_USER",
+  "TEST_DB_PASSWORD",
   "JWT_SECRET",
+  "DINAMIC_INTEGRATION_DATABASE_NAME",
+  "DINAMIC_TEST_SQL_ACTIVE",
 ] as const;
 
-/** CI and local Docker SQL use this database name (see quality-gate.yml). */
+/** @deprecated Persistent shared integration DB — use ephemeral `din_test_<uuid>` only. */
 export const INTEGRATION_DATABASE_NAME = "dinamic_attendance";
 
-/**
- * Guards test-only DDL/repair helpers. Test opt-in (RUN_DB_INTEGRATION_TESTS) is separate from
- * explicit schema DDL authorization (INTEGRATION_SQL_DDL_ALLOWED). CI sets the latter on disposable SQL.
- */
 export const assertSafeIntegrationDatabaseTarget = (): void => {
+  assertIntegrationDdlAllowed();
+  const dbName =
+    process.env.DINAMIC_INTEGRATION_DATABASE_NAME?.trim() || process.env.DB_NAME?.trim() || "";
+  assertIntegrationDatabaseNameIsEphemeral(dbName);
+};
+
+export { assertSafeIntegrationDatabaseConnectedTarget };
+
+/** Requires explicit opt-in and a provisioned ephemeral session. */
+export const isDatabaseIntegrationEnabled = (): boolean => {
   if (process.env.RUN_DB_INTEGRATION_TESTS !== "true") {
-    throw new Error("Refusing integration SQL DDL: RUN_DB_INTEGRATION_TESTS is not true.");
+    return false;
   }
-  if (process.env.INTEGRATION_SQL_DDL_ALLOWED !== "true") {
-    throw new Error(
-      "Refusing integration SQL DDL: INTEGRATION_SQL_DDL_ALLOWED is not true (explicit disposable-target authorization required).",
-    );
+  if (process.env.DINAMIC_TEST_SQL_ACTIVE !== "true") {
+    return false;
   }
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing integration SQL DDL when NODE_ENV=production.");
+  if (!REQUIRED_INTEGRATION_ENV.every((key) => Boolean(process.env[key]))) {
+    return false;
   }
-
-  const dbName = process.env.DB_NAME?.trim() ?? "";
-  if (dbName !== INTEGRATION_DATABASE_NAME) {
-    throw new Error(
-      `Refusing integration SQL DDL on DB_NAME=${dbName || "(empty)"}; expected ${INTEGRATION_DATABASE_NAME}.`,
-    );
-  }
+  const dbName = process.env.DINAMIC_INTEGRATION_DATABASE_NAME?.trim() ?? "";
+  return isEphemeralIntegrationDatabaseName(dbName);
 };
-
-/**
- * Confirms the live SQL connection matches the configured disposable integration target.
- * Call after connectDatabase() and before applying test-only DDL.
- */
-export const assertSafeIntegrationDatabaseConnectedTarget = async (
-  pool: ConnectionPool,
-): Promise<void> => {
-  assertSafeIntegrationDatabaseTarget();
-
-  const result = await pool.request().query(`
-    SELECT DB_NAME() AS connected_db_name
-  `);
-
-  const connectedDbName = String(result.recordset[0]?.connected_db_name ?? "");
-  const expectedDbName = process.env.DB_NAME?.trim() ?? "";
-  if (connectedDbName !== expectedDbName) {
-    throw new Error(
-      `Refusing integration SQL DDL: connected DB_NAME()=${connectedDbName} but DB_NAME env=${expectedDbName}.`,
-    );
-  }
-
-  const migrationTable = await pool.request().query(`
-    SELECT 1 AS found
-    FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'system_migrations'
-  `);
-  if (!migrationTable.recordset[0]) {
-    throw new Error(
-      "Refusing integration SQL DDL: system_migrations is missing (target is not a migrated integration database).",
-    );
-  }
-};
-
-/** Requires explicit opt-in so CI/unit runs do not attempt localhost SQL connections. */
-export const isDatabaseIntegrationEnabled = (): boolean =>
-  process.env.RUN_DB_INTEGRATION_TESTS === "true" &&
-  REQUIRED_INTEGRATION_ENV.every((key) => Boolean(process.env[key]));
 
 /** Use instead of `describe` for suites that require a live SQL Server database. */
 export const describeDatabaseIntegration = isDatabaseIntegrationEnabled()
@@ -93,6 +60,10 @@ export const setupDatabaseIntegration = async () => {
 export const teardownDatabaseIntegration = async () => {
   const { closeDatabase } = await import("../database/connection");
   await closeDatabase();
+};
+
+export const assertLiveIntegrationPoolTarget = async (pool: ConnectionPool): Promise<void> => {
+  await assertTestSqlConnectionAllowed(pool);
 };
 
 /**

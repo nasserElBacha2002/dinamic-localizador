@@ -3,6 +3,7 @@
  * Enable: RUN_DB_INTEGRATION_TESTS=true
  */
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
@@ -49,7 +50,7 @@ describeDatabaseIntegration("employee operational access integration", () => {
   });
 
   const resolvePlatformActorUserId = async (): Promise<string> => {
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin?.isPlatformAdmin);
     return admin.id;
   };

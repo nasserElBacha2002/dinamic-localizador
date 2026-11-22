@@ -4,6 +4,7 @@
  * Requires migration 086 (attendance review unique).
  */
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../test-helpers/integration-platform-admin";
 import { randomUUID } from "node:crypto";
 import { after, before, it } from "node:test";
 import sql from "mssql";
@@ -66,7 +67,7 @@ describeDatabaseIntegration("database integrity phase0a H1 H2", () => {
 
   const seedAbsenceCompany = async () => {
     const { userRepository } = await import("../repositories/identity/user.repository");
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin);
     actorUserId = admin.id;
 
@@ -232,7 +233,7 @@ describeDatabaseIntegration("database integrity phase0a H1 H2", () => {
   it("H2: concurrent reviews → 1 success / 1 conflict and exactly one review row", async () => {
     const pool = getPool();
     const { userRepository } = await import("../repositories/identity/user.repository");
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin);
     actorUserId = admin.id;
 

@@ -3,7 +3,7 @@
  * Enable: RUN_DB_INTEGRATION_TESTS=true
  */
 import assert from "node:assert/strict";
-import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
+import { resolveIntegrationPlatformAdminEmail } from "../test-helpers/integration-platform-admin";
 import { randomUUID } from "node:crypto";
 import { after, afterEach, before, it, mock } from "node:test";
 import sql from "mssql";

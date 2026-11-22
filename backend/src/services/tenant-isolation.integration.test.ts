@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
+import { resolveIntegrationPlatformAdminEmail } from "../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../errors/app-error";

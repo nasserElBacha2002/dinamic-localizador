@@ -4,7 +4,7 @@
  * Keep --test-concurrency=1 while using the global audit insert hook.
  */
 import assert from "node:assert/strict";
-import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
+import { resolveIntegrationPlatformAdminEmail } from "../test-helpers/integration-platform-admin";
 import { randomUUID } from "node:crypto";
 import { after, before, it } from "node:test";
 import sql from "mssql";

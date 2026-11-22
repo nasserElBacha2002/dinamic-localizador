@@ -32,6 +32,13 @@ describe("din-462-closure-gate", () => {
     assert.equal(evaluateTapStrict(parseTapSummaryLine(tap)).ok, true);
   });
 
+  it("uses the last TAP summary in a combined log", () => {
+    const tap = `# tests 2\n# pass 2\n# fail 0\n# skipped 0\n\n# tests 843\n# pass 839\n# fail 0\n# skipped 4\n`;
+    const summary = parseTapSummaryLine(tap);
+    assert.equal(summary?.tests, 843);
+    assert.equal(summary?.skipped, 4);
+  });
+
   it("detects new ephemeral database names", () => {
     const leaked = diffNewDatabaseNames(["din_test_a"], ["din_test_a", "din_test_b"]);
     assert.deepEqual(leaked, ["din_test_b"]);

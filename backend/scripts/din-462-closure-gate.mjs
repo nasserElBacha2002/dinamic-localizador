@@ -23,19 +23,32 @@ export function evaluateExitCode(exitCode, expectZero = true) {
  * @returns {{ tests?: number; pass?: number; fail?: number; skipped?: number } | null}
  */
 export function parseTapSummaryLine(text) {
-  const chunks = text.match(/# tests (\d+)\s*\n# pass (\d+)\s*\n# fail (\d+)(?:\s*\n# skipped (\d+))?/);
-  if (chunks) {
-    return {
-      tests: Number(chunks[1]),
-      pass: Number(chunks[2]),
-      fail: Number(chunks[3]),
-      skipped: chunks[4] !== undefined ? Number(chunks[4]) : undefined,
-    };
+  const chunks = text.match(/# tests (\d+)\s*\n# pass (\d+)\s*\n# fail (\d+)(?:\s*\n# skipped (\d+))?/g);
+  if (chunks && chunks.length > 0) {
+    const last = chunks[chunks.length - 1];
+    const m = last.match(/# tests (\d+)\s*\n# pass (\d+)\s*\n# fail (\d+)(?:\s*\n# skipped (\d+))?/);
+    if (m) {
+      return {
+        tests: Number(m[1]),
+        pass: Number(m[2]),
+        fail: Number(m[3]),
+        skipped: m[4] !== undefined ? Number(m[4]) : undefined,
+      };
+    }
   }
-  const tests = text.match(/^# tests (\d+)/m);
-  const pass = text.match(/^# pass (\d+)/m);
-  const fail = text.match(/^# fail (\d+)/m);
-  const skipped = text.match(/^# skipped (\d+)/m);
+  const findLast = (re) => {
+    const flags = re.flags.includes("g") ? re : new RegExp(re.source, `${re.flags}g`);
+    let match;
+    let last = null;
+    for (const hit of text.matchAll(flags)) {
+      last = hit;
+    }
+    return last;
+  };
+  const tests = findLast(/^# tests (\d+)/m);
+  const pass = findLast(/^# pass (\d+)/m);
+  const fail = findLast(/^# fail (\d+)/m);
+  const skipped = findLast(/^# skipped (\d+)/m);
   if (!tests || !pass || !fail) {
     return null;
   }

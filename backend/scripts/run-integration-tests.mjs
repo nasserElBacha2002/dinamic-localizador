@@ -7,6 +7,7 @@ import { join, relative } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { parseTapSummaryLine } from "./din-462-closure-gate.mjs";
 
 const backendRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const srcRoot = join(backendRoot, "src");
@@ -388,16 +389,15 @@ child.on("close", (status, signal) => {
     let cancelledCount = 0;
     try {
       const combined = readFileSync(logPath, "utf8");
-      const failMatch = combined.match(/^# fail (\d+)\s*$/m);
-      const skipMatch = combined.match(/^# skipped (\d+)\s*$/m);
-      const passMatch = combined.match(/^# pass (\d+)\s*$/m);
-      const testsMatch = combined.match(/^# tests (\d+)\s*$/m);
-      const suitesMatch = combined.match(/^# suites (\d+)\s*$/m);
-      const cancelledMatch = combined.match(/^# cancelled (\d+)\s*$/m);
-      failCount = failMatch ? Number(failMatch[1]) : 0;
-      skipCount = skipMatch ? Number(skipMatch[1]) : 0;
-      passCount = passMatch ? Number(passMatch[1]) : 0;
-      testCount = testsMatch ? Number(testsMatch[1]) : 0;
+      const summary = parseTapSummaryLine(combined);
+      if (summary) {
+        failCount = summary.fail ?? 0;
+        skipCount = summary.skipped ?? 0;
+        passCount = summary.pass ?? 0;
+        testCount = summary.tests ?? 0;
+      }
+      const suitesMatch = [...combined.matchAll(/^# suites (\d+)\s*$/gm)].at(-1);
+      const cancelledMatch = [...combined.matchAll(/^# cancelled (\d+)\s*$/gm)].at(-1);
       suiteCount = suitesMatch ? Number(suitesMatch[1]) : 0;
       cancelledCount = cancelledMatch ? Number(cancelledMatch[1]) : 0;
       unlinkSync(logPath);

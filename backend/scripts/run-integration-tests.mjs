@@ -56,9 +56,10 @@ const mapTestSqlCredentialsToRuntimeDb = (env, databaseName) => {
   env.DB_PASSWORD = env.TEST_DB_PASSWORD;
   env.DB_ENCRYPT = env.TEST_DB_ENCRYPT ?? "false";
   env.DB_TRUST_SERVER_CERTIFICATE = env.TEST_DB_TRUST_SERVER_CERTIFICATE ?? "true";
-  if (databaseName) {
-    env.DB_NAME = databaseName;
-    env.DINAMIC_INTEGRATION_DATABASE_NAME = databaseName;
+  const resolvedName = databaseName?.trim() || env.DINAMIC_INTEGRATION_DATABASE_NAME?.trim() || "master";
+  env.DB_NAME = resolvedName;
+  if (databaseName?.trim()) {
+    env.DINAMIC_INTEGRATION_DATABASE_NAME = databaseName.trim();
   }
 };
 
@@ -75,6 +76,13 @@ const integrationEnv = {
   ADMIN_NAME: process.env.ADMIN_NAME ?? "CI Platform Admin",
   DINAMIC_INTEGRATION_ORCHESTRATOR_PID: String(orchestratorPid),
 };
+
+try {
+  mapTestSqlCredentialsToRuntimeDb(integrationEnv);
+} catch (error) {
+  console.error(error);
+  process.exit(1);
+}
 
 const sessionFile = join(tmpdir(), `dinamic-integration-db-${orchestratorPid}.json`);
 let sessionPayload = null;

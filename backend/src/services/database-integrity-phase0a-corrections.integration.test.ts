@@ -3,6 +3,7 @@
  * Enable: RUN_DB_INTEGRATION_TESTS=true
  */
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { randomUUID } from "node:crypto";
 import { after, afterEach, before, it, mock } from "node:test";
 import sql from "mssql";
@@ -107,7 +108,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
 
   const seedAbsenceCompany = async (options?: { requireAttachment?: boolean }) => {
     const { userRepository } = await import("../repositories/identity/user.repository");
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin);
     actorUserId = admin.id;
 
@@ -465,7 +466,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
   const seedCheckoutFixture = async (simulationSessionId: string) => {
     const pool = getPool();
     const { userRepository } = await import("../repositories/identity/user.repository");
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin);
 
     const companyResult = await pool.request().query(`

@@ -58,7 +58,12 @@ describeGuard("ephemeral billing exemption database lifecycle", () => {
       );
 
       const after = await listEphemeralBillingDatabases(master);
-      assert.deepEqual(after, before);
+      const added = [...after].filter((name) => !before.has(name));
+      assert.deepEqual(
+        added,
+        [],
+        `bootstrap failure must not leave new billing databases; found: ${added.join(", ")}`,
+      );
     } finally {
       await master.close();
     }

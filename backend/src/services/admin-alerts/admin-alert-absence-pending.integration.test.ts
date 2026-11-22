@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { randomUUID } from "node:crypto";
 import { after, before, it, mock } from "node:test";
 import sql from "mssql";
@@ -42,7 +43,7 @@ describeDatabaseIntegration("admin alert absence created integration", () => {
   before(async () => {
     setupUnitTestEnv();
     await setupDatabaseIntegration();
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin?.id);
     actorUserId = admin.id;
   });

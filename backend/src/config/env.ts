@@ -6,6 +6,39 @@ import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentia
 import { DEFAULT_SYSTEM_LOGS_INFO_EVENT_ALLOWLIST_CSV } from "../constants/system-logs";
 
 config();
+
+/** DIN-462: dotenv must not rebind habitual DB_* during ephemeral integration runs. */
+const reinstallEphemeralDbEnvFromTestCredentials = (): void => {
+  if (process.env.RUN_DB_INTEGRATION_TESTS !== "true") {
+    return;
+  }
+  if (process.env.DINAMIC_TEST_SQL_ACTIVE !== "true") {
+    return;
+  }
+  const host = process.env.TEST_DB_HOST?.trim();
+  const port = process.env.TEST_DB_PORT?.trim();
+  const user = process.env.TEST_DB_USER?.trim();
+  const password = process.env.TEST_DB_PASSWORD?.trim();
+  if (!host || !port || !user || !password) {
+    return;
+  }
+  process.env.DB_HOST = host;
+  process.env.DB_PORT = port;
+  process.env.DB_USER = user;
+  process.env.DB_PASSWORD = password;
+  const databaseName = process.env.DINAMIC_INTEGRATION_DATABASE_NAME?.trim();
+  if (databaseName) {
+    process.env.DB_NAME = databaseName;
+  }
+  if (process.env.TEST_DB_ENCRYPT !== undefined) {
+    process.env.DB_ENCRYPT = process.env.TEST_DB_ENCRYPT;
+  }
+  if (process.env.TEST_DB_TRUST_SERVER_CERTIFICATE !== undefined) {
+    process.env.DB_TRUST_SERVER_CERTIFICATE = process.env.TEST_DB_TRUST_SERVER_CERTIFICATE;
+  }
+};
+reinstallEphemeralDbEnvFromTestCredentials();
+
 resolveGoogleApplicationCredentialsPath();
 
 const envSchema = z

@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-11-22T21:08:48.225Z",
+  "database": "din462_control_persistent",
+  "tableCount": 1,
+  "isolationLevel": "REPEATABLE_READ",
+  "fingerprints": {
+    "dbo.din462_control_marker": "c615bcc0949276d39f6cc44790eec88bc60bab08377c74e33c17edecbd266226"
+  },
+  "rowCounts": {
+    "dbo.din462_control_marker": 1
+  }
+}

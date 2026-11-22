@@ -1,0 +1,21 @@
+DIN-462 integration evidence summary (2026-11-22, post F-09–F-15)
+================================================================
+
+Root causes (from archived logs, removed from repo — see audit/.gitignore):
+- F-09: seed used ADMIN_EMAIL from backend/.env; fixtures/tests硬编码 admin@dinamicsystems.com → seed/platform admin lookup mismatch.
+- F-10 (run-1): integration-strip-db-env deleted DB_* then dotenv reloaded habitual SQL (port 1433, @@SERVERNAME 3ed0af100483) while TEST_SQL_ALLOWED_SERVER_NAME targeted disposable container (b850378301c4). Fixed via reinstall TEST_DB_* after dotenv; auto-overriding ALLOWED_SERVER_NAME removed (fail-closed mismatch check).
+
+Partial full-suite runs (SIGTERM / aborted — NOT success):
+- run-1 pre-dotenv-fix: TAP pass=126 fail=4 skipped=1 (identity mismatch dominant).
+- run-2/3 post-fix: provisioning+migrations OK; aborted mid-suite; teardown OK on ephemeral DB.
+
+Validated locally (disposable Docker SQL, localhost:14333):
+- npm run build → exit 0
+- npm test → 2368+ pass (unit, includes gating)
+- provision + teardown → exit 0
+- din-462 lifecycle (incl. stamp-failure cleanup) → see DIN-462-lifecycle-evidence.log (re-run after F-13 adds 5th test)
+
+Not validated here:
+- Full ~180 integration files TAP totals end-to-end
+- GitHub Actions backend-integration job
+- PERSISTENT_DB_INTEGRITY against habitual DB (read-only; intentionally not run)

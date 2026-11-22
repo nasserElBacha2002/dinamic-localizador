@@ -4,6 +4,7 @@
  * Requires migration 139 applied (suite re-applies / rolls back / re-applies).
  */
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -65,7 +66,7 @@ describeDatabaseIntegration("manual attendance review corrections SQL", () => {
     await setupDatabaseIntegration();
     await apply139Forward();
 
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin);
     actorUserId = admin.id;
 

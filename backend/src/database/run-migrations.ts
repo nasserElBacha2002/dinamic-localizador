@@ -114,25 +114,29 @@ export const applySqlScriptInTransaction = async (
   }
 };
 
+export const runMigrationsOnPool = async (pool: sql.ConnectionPool): Promise<void> => {
+  const files = listMigrationFiles();
+  const applied = await getAppliedMigrations(pool);
+
+  for (const file of files) {
+    if (applied.has(file)) {
+      console.log(`Migration skipped (already applied): ${file}`);
+      continue;
+    }
+
+    const script = readFileSync(join(migrationDir, file), "utf8");
+    await applySqlScriptInTransaction(pool, script, { registerMigrationName: file });
+    console.log(`Migration applied: ${file}`);
+  }
+
+  console.log("Migrations completed.");
+};
+
 export const runMigrations = async (): Promise<void> => {
   const pool = await connectPool();
 
   try {
-    const files = listMigrationFiles();
-    const applied = await getAppliedMigrations(pool);
-
-    for (const file of files) {
-      if (applied.has(file)) {
-        console.log(`Migration skipped (already applied): ${file}`);
-        continue;
-      }
-
-      const script = readFileSync(join(migrationDir, file), "utf8");
-      await applySqlScriptInTransaction(pool, script, { registerMigrationName: file });
-      console.log(`Migration applied: ${file}`);
-    }
-
-    console.log("Migrations completed.");
+    await runMigrationsOnPool(pool);
   } finally {
     await pool.close();
   }

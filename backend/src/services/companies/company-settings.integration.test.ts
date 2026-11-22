@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import { resolvePermissionsForRole } from "../../constants/company-permissions";
@@ -84,7 +85,7 @@ describeDatabaseIntegration("company settings API integration", () => {
       `);
     }
 
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;

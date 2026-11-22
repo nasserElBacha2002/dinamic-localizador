@@ -83,39 +83,34 @@ describeDatabaseIntegration("bot session absence kind migrations (database)", ()
     await teardownDatabaseIntegration();
   });
 
-  it("CK_bot_sessions_intent_state exists and allows WAITING_ABSENCE_% with ABSENCE intent", async (t) => {
+  it("CK_bot_sessions_intent_state exists and allows WAITING_ABSENCE_% with ABSENCE intent", async () => {
     const definition = await readBotSessionsCheckDefinition("CK_bot_sessions_intent_state");
-    if (!definition) {
-      t.skip("migration 112 intent/state pairing constraint not present on this database");
-      return;
-    }
+    assert.ok(
+      definition,
+      "migration 112 intent/state pairing constraint must be present on integration database",
+    );
     assert.match(definition, /WAITING_ABSENCE_%/i);
     assert.match(definition, /ABSENCE/i);
   });
 
-  it("CK_bot_sessions_state exists and includes WAITING_ABSENCE_KIND_SELECTION after migration 152", async (t) => {
+  it("CK_bot_sessions_state exists and includes WAITING_ABSENCE_KIND_SELECTION after migration 152", async () => {
     const definition = await readBotSessionsCheckDefinition("CK_bot_sessions_state");
-    if (!definition) {
-      t.skip("CK_bot_sessions_state missing on this database");
-      return;
-    }
-    if (!definition.includes(NEW_ABSENCE_KIND_STATE)) {
-      t.skip("migration 152 not applied on this database");
-      return;
-    }
-    assert.match(definition, /WAITING_ABSENCE_KIND_SELECTION/);
+    assert.ok(definition, "CK_bot_sessions_state must exist on integration database");
+    assert.match(
+      definition,
+      /WAITING_ABSENCE_KIND_SELECTION/,
+      "migration 152 must be applied on integration database",
+    );
   });
 
-  it("CK_bot_sessions_state includes absence edit states after migration 154", async (t) => {
+  it("CK_bot_sessions_state includes absence edit states after migration 154", async () => {
     const definition = await readBotSessionsCheckDefinition("CK_bot_sessions_state");
-    if (!definition) {
-      t.skip("CK_bot_sessions_state missing on this database");
-      return;
-    }
-    if (!definition.includes("WAITING_ABSENCE_EDIT_FIELD_MENU")) {
-      t.skip("migration 154 not applied on this database");
-      return;
-    }
+    assert.ok(definition, "CK_bot_sessions_state must exist on integration database");
+    assert.match(
+      definition,
+      /WAITING_ABSENCE_EDIT_FIELD_MENU/,
+      "migration 154 must be applied on integration database",
+    );
     for (const state of ABSENCE_EDIT_STATES) {
       assert.match(definition, new RegExp(state));
     }

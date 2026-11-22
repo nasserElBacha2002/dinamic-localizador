@@ -39,10 +39,12 @@ const listEphemeralBillingDatabases = async (
 };
 
 describeGuard("ephemeral billing exemption database lifecycle", () => {
-  it("drops the ephemeral database when bootstrap fails after CREATE DATABASE", async (testContext) => {
-    if (process.env.INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED !== "true") {
-      testContext.skip("INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED is not true");
-    }
+  it("drops the ephemeral database when bootstrap fails after CREATE DATABASE", async () => {
+    assert.equal(
+      process.env.INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED,
+      "true",
+      "INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED=true required for this suite",
+    );
 
     const master = new sql.ConnectionPool(sqlConfigMaster());
     await master.connect();

@@ -14,6 +14,7 @@ import {
   teardownDatabaseIntegration,
   requireDinamicCompanyId,
 } from "../../test-helpers/integration-test";
+import { isWhatsappMessageCostMigration171Ready } from "../../test-helpers/whatsapp-message-cost-migration-171";
 
 describeDatabaseIntegration("whatsapp SERVICE month rank (SQL Server)", () => {
   let companyId = "";
@@ -24,10 +25,11 @@ describeDatabaseIntegration("whatsapp SERVICE month rank (SQL Server)", () => {
     await setupDatabaseIntegration();
     companyId = await requireDinamicCompanyId();
     const pool = getPool();
-    const col = await pool.request().query(`
-      SELECT COL_LENGTH(OBJECT_ID(N'dbo.whatsapp_message_cost_ledger'), N'sender_billing_key') AS sender_billing_key
-    `);
-    migrationReady = col.recordset[0]?.sender_billing_key !== null;
+    migrationReady = await isWhatsappMessageCostMigration171Ready(pool);
+    assert.ok(
+      migrationReady,
+      "migration 171 columns must be present on ephemeral integration database",
+    );
   });
 
   after(async () => {
@@ -41,12 +43,7 @@ describeDatabaseIntegration("whatsapp SERVICE month rank (SQL Server)", () => {
     await teardownDatabaseIntegration();
   });
 
-  it("assigns unique deterministic ranks under concurrent recompute", async (t) => {
-    if (!migrationReady) {
-      t.skip("migration 171 columns not present");
-      return;
-    }
-
+  it("assigns unique deterministic ranks under concurrent recompute", async () => {
     const senderE164 = "whatsapp:+14155552671";
     const senderBillingKey = buildSenderBillingKey(senderE164);
     assert.ok(senderBillingKey);
@@ -100,12 +97,7 @@ describeDatabaseIntegration("whatsapp SERVICE month rank (SQL Server)", () => {
     }
   });
 
-  it("late insert before former rank 1001 shifts quota pricing", async (t) => {
-    if (!migrationReady) {
-      t.skip("migration 171 columns not present");
-      return;
-    }
-
+  it("late insert before former rank 1001 shifts quota pricing", async () => {
     const senderBillingKey = buildSenderBillingKey("whatsapp:+14155552777");
     assert.ok(senderBillingKey);
     const bounds = getMonthUtcBounds(2026, 10, env.BOT_OPERATION_TIMEZONE);

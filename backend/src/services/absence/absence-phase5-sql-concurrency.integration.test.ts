@@ -1,43 +1,100 @@
 /**
  * Phase 5 closure — SQL concurrency / worker lease evidence.
- * Enabled with: RUN_DB_INTEGRATION_TESTS=true
- *
- * Requires an existing APPROVED absence request in the company (seeded env):
- * - TEST_COMPANY_ID
- * - TEST_ABSENCE_REQUEST_ID
+ * Enable: RUN_DB_INTEGRATION_TESTS=true (ephemeral database).
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
-import { getPool, initializeDatabase } from "../../database/connection";
+import { getPool } from "../../database/connection";
+import { absenceRequestRepository } from "../../repositories/absence/absence-request.repository";
 import { absenceWorkdaySyncJobRepository } from "../../repositories/absence/absence-workday-sync-job.repository";
+import {
+  createIntegrationFixtureTracker,
+  describeDatabaseIntegration,
+  requireDinamicCompanyId,
+  setupDatabaseIntegration,
+  teardownDatabaseIntegration,
+} from "../../test-helpers/integration-test";
 
-const canRun =
-  process.env.RUN_DB_INTEGRATION_TESTS === "true" &&
-  Boolean(process.env.TEST_COMPANY_ID) &&
-  Boolean(process.env.TEST_ABSENCE_REQUEST_ID);
+const uniquePhone = (): string => `+54911${Date.now().toString().slice(-7)}9`;
 
-describe("phase5 closure sql concurrency / worker lease", { skip: !canRun }, () => {
-  const companyId = String(process.env.TEST_COMPANY_ID);
-  const absenceRequestId = String(process.env.TEST_ABSENCE_REQUEST_ID);
+describeDatabaseIntegration("phase5 closure sql concurrency / worker lease", () => {
+  const fixtures = createIntegrationFixtureTracker();
+  let companyId = "";
+  let absenceRequestId = "";
   const createdJobIds: string[] = [];
 
   before(async () => {
-    await initializeDatabase();
+    await setupDatabaseIntegration();
+    companyId = await requireDinamicCompanyId();
+    const pool = getPool();
+
+    const emp = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("phone", sql.NVarChar(20), uniquePhone())
+      .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+        INSERT INTO employees (company_id, name, phone_number, employee_type, active)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Phase5 lease emp', @phone, N'fijo', 1);
+        SELECT id FROM @inserted;
+      `);
+    const employeeId = String(emp.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
+
+    const typeRow = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT TOP 1 id FROM absence_types
+        WHERE company_id = @companyId AND is_active = 1
+      `);
+    const absenceTypeId = String(typeRow.recordset[0]?.id ?? "");
+    assert.ok(absenceTypeId);
+
+    const workDate = new Date().toISOString().slice(0, 10);
+
+    const created = await absenceRequestRepository.create(companyId, {
+      employeeId,
+      absenceTypeId,
+      startDate: workDate,
+      endDate: workDate,
+      startPeriod: "FULL_DAY",
+      endPeriod: "FULL_DAY",
+      totalDays: 1,
+      reason: "phase5 worker lease integration",
+      requestedVia: "ADMIN",
+    });
+
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, created.id)
+      .query(`
+        UPDATE absence_requests
+        SET status = N'APPROVED',
+            operational_impact_version = 1,
+            reviewed_at = SYSUTCDATETIME(),
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+      `);
+
+    absenceRequestId = created.id;
   });
 
   after(async () => {
-    if (!createdJobIds.length) {
-      return;
+    if (createdJobIds.length) {
+      const pool = getPool();
+      for (const jobId of createdJobIds) {
+        await pool
+          .request()
+          .input("id", sql.UniqueIdentifier, jobId)
+          .query(`DELETE FROM absence_workday_sync_jobs WHERE id = @id`);
+      }
     }
-    const pool = getPool();
-    for (const jobId of createdJobIds) {
-      await pool
-        .request()
-        .input("id", sql.UniqueIdentifier, jobId)
-        .query(`DELETE FROM absence_workday_sync_jobs WHERE id = @id`);
-    }
+    await fixtures.cleanup();
+    await teardownDatabaseIntegration();
   });
 
   it("two concurrent claims never return the same job id", async () => {
@@ -65,6 +122,18 @@ describe("phase5 closure sql concurrency / worker lease", { skip: !canRun }, () 
       assert.notEqual(first.id, second.id);
     } else {
       assert.ok(first || second);
+    }
+
+    const pool = getPool();
+    for (const claimed of [first, second].filter(Boolean)) {
+      await pool.request().input("id", sql.UniqueIdentifier, claimed!.id).query(`
+        UPDATE absence_workday_sync_jobs
+        SET status = N'COMPLETED',
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+      `);
     }
   });
 
@@ -94,6 +163,9 @@ describe("phase5 closure sql concurrency / worker lease", { skip: !canRun }, () 
         SET lease_expires_at = DATEADD(SECOND, -5, SYSUTCDATETIME())
         WHERE id = @id
       `);
+
+    const resetToPending = await absenceWorkdaySyncJobRepository.recoverExpiredLeases(50, 5);
+    assert.ok(resetToPending >= 1);
 
     const recovered = await absenceWorkdaySyncJobRepository.claimNextPending(5, {
       leaseOwner: `recovery-${randomUUID()}`,

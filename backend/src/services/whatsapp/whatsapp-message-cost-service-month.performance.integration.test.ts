@@ -15,6 +15,7 @@ import {
   teardownDatabaseIntegration,
   requireDinamicCompanyId,
 } from "../../test-helpers/integration-test";
+import { isWhatsappMessageCostMigration171Ready } from "../../test-helpers/whatsapp-message-cost-migration-171";
 
 const ROW_COUNT = 5_000;
 const MAX_RECOMPUTE_MS = 120_000;
@@ -29,10 +30,11 @@ describeDatabaseIntegration("SERVICE month recompute performance", () => {
     await setupDatabaseIntegration();
     companyId = await requireDinamicCompanyId();
     const pool = getPool();
-    const col = await pool.request().query(`
-      SELECT COL_LENGTH(OBJECT_ID(N'dbo.whatsapp_message_cost_ledger'), N'sender_billing_key') AS sender_billing_key
-    `);
-    migrationReady = col.recordset[0]?.sender_billing_key !== null;
+    migrationReady = await isWhatsappMessageCostMigration171Ready(pool);
+    assert.ok(
+      migrationReady,
+      "migration 171 columns must be present on ephemeral integration database",
+    );
     senderBillingKey = buildSenderBillingKey("whatsapp:+14155559000");
   });
 
@@ -47,11 +49,8 @@ describeDatabaseIntegration("SERVICE month recompute performance", () => {
     await teardownDatabaseIntegration();
   });
 
-  it(`recomputes ranks and reprices from rank 4500 on ${ROW_COUNT} rows within budget`, async (t) => {
-    if (!migrationReady || !senderBillingKey) {
-      t.skip("migration 171 columns not present");
-      return;
-    }
+  it(`recomputes ranks and reprices from rank 4500 on ${ROW_COUNT} rows within budget`, async () => {
+    assert.ok(senderBillingKey);
 
     const sentAt = new Date("2026-10-20T12:00:00.000Z");
     const bounds = getMonthUtcBounds(2026, 10, env.BOT_OPERATION_TIMEZONE);
@@ -102,6 +101,7 @@ describeDatabaseIntegration("SERVICE month recompute performance", () => {
       .input("id", sql.UniqueIdentifier, focusId)
       .query(`SELECT service_month_rank, meta_cost_note, meta_price_amount FROM dbo.whatsapp_message_cost_ledger WHERE id = @id`);
     assert.equal(Number(row.recordset[0].service_month_rank), 4500);
-    assert.equal(String(row.recordset[0].meta_cost_note), "SERVICE_FREE_TIER");
+    assert.equal(String(row.recordset[0].meta_cost_note), "SERVICE_ABOVE_FREE_TIER");
+    assert.ok(Number(row.recordset[0].meta_price_amount) > 0);
   });
 });

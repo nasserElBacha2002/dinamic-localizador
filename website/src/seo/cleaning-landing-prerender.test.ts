@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -51,7 +52,6 @@ describe("cleaning landing prerender modules", () => {
 
 function execCheckIgnore(path: string): string | null {
   try {
-    const { execSync } = require("node:child_process") as typeof import("node:child_process");
     return execSync(`git check-ignore -v ${JSON.stringify(path)}`, {
       cwd: repoRoot,
       encoding: "utf8",

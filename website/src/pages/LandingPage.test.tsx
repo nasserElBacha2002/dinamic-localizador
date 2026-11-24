@@ -194,7 +194,9 @@ describe("LandingPage", () => {
     const { getByRole, getByText } = renderPage(<LandingPage />);
     assert.ok(getByRole("heading", { name: /Menos tiempo coordinando/i }));
     assert.ok(getByText(/Hecho para operaciones que no pasan en una sola oficina/i));
-    assert.ok(getByText(/^Limpieza$/i));
+    const limpiezaLink = getByText(/^Limpieza$/i).closest("a");
+    assert.ok(limpiezaLink);
+    assert.equal(limpiezaLink?.getAttribute("href"), "/software-empresas-limpieza/");
     assert.ok(getByText(/^Facility$/i));
     assert.ok(getByText(/Servicios tercerizados/i));
   });

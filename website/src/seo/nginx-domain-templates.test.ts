@@ -18,6 +18,8 @@ describe("nginx domain separation templates", () => {
     const template = readDeploy(legacyHttps);
     assert.doesNotMatch(template, /\$\{APP_PUBLIC_ORIGIN\}/);
     assert.match(template, /location = \/ \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{WEBSITE_HOST_PORT\}/);
+    assert.match(template, /location = \/software-empresas-limpieza/);
+    assert.match(template, /location \^~ \/software-empresas-limpieza\//);
     assert.match(
       template,
       /location \/ \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{FRONTEND_HOST_PORT\}/,
@@ -29,6 +31,8 @@ describe("nginx domain separation templates", () => {
     const template = readDeploy(separatedHttps);
     assert.match(template, /return 301 \$\{APP_PUBLIC_ORIGIN\}\/login\$is_args\$args/);
     assert.match(template, /location = \/ \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{WEBSITE_HOST_PORT\}/);
+    assert.match(template, /location = \/software-empresas-limpieza/);
+    assert.match(template, /location \^~ \/software-empresas-limpieza\//);
     assert.doesNotMatch(
       template,
       /location \/ \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{FRONTEND_HOST_PORT\}/,

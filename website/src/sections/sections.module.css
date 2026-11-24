@@ -1521,6 +1521,22 @@
   color: var(--m-ink-muted);
 }
 
+.demoIndustryTagLink {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.demoIndustryTagLink:hover {
+  color: var(--m-ink);
+}
+
+.demoIndustryTagLink:focus-visible {
+  outline: 2px solid var(--m-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .demoValueList {
   margin: 1.5rem 0 0;
   padding: 0;

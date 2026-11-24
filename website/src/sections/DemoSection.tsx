@@ -1,12 +1,13 @@
 import { DemoRequestForm } from "../components/DemoRequestForm";
+import { CLEANING_LANDING_SEO } from "../content/cleaning-landing-content";
 import shared from "../styles/landing-shared.module.css";
 import classes from "./sections.module.css";
 
 const INDUSTRY_TAGS = [
-  "Limpieza",
-  "Facility",
-  "Servicios tercerizados",
-  "Equipos distribuidos",
+  { id: "limpieza", label: "Limpieza", href: CLEANING_LANDING_SEO.pathname },
+  { id: "facility", label: "Facility" },
+  { id: "servicios", label: "Servicios tercerizados" },
+  { id: "equipos", label: "Equipos distribuidos" },
 ] as const;
 
 const VALUE_POINTS = [
@@ -32,7 +33,15 @@ export function DemoSection() {
             </p>
             <ul className={classes.demoIndustryTags}>
               {INDUSTRY_TAGS.map((tag) => (
-                <li key={tag}>{tag}</li>
+                <li key={tag.id}>
+                  {"href" in tag && tag.href ? (
+                    <a className={classes.demoIndustryTagLink} href={tag.href}>
+                      {tag.label}
+                    </a>
+                  ) : (
+                    tag.label
+                  )}
+                </li>
               ))}
             </ul>
             <ul className={classes.demoValueList}>

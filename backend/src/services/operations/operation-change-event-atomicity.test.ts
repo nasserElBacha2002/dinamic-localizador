@@ -196,6 +196,27 @@ describe("operationAssignmentService coverage validation", () => {
         "../../repositories/workdays/employee-workday.repository"
       );
       const { operationAssignmentService } = await import("./operation-assignment.service");
+      const { employeeWorkdayCoverageService } = await import(
+        "../absence/employee-workday-coverage.service"
+      );
+      mock.method(
+        employeeWorkdayCoverageService,
+        "coverEmployeeWorkday",
+        async (coverageCompanyId, _userId, input) => {
+          const replaced = await operationEmployeeRepository.findById(
+            coverageCompanyId,
+            input.replacedAssignmentId,
+          );
+          if (!replaced || replaced.operationId !== input.operationId) {
+            throw new AppError(
+              404,
+              "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
+              "La asignación a cubrir no existe en esta operación",
+            );
+          }
+          throw new Error("COVERAGE_UNEXPECTED_SUCCESS");
+        },
+      );
 
       const companyId = "00000000-0000-4000-8000-000000000001";
       const operationId = "00000000-0000-4000-8000-000000000002";

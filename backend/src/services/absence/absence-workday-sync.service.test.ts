@@ -13,6 +13,10 @@ describe("absenceWorkdaySyncService", () => {
     const { absenceOperationalReconciliationService } = await import(
       "./absence-operational-reconciliation.service"
     );
+    const { absenceReplacementBridgeService } = await import("./absence-replacement-bridge.service");
+    const { absenceWorkdaySyncJobRepository } = await import(
+      "../../repositories/absence/absence-workday-sync-job.repository"
+    );
     mock.method(
       absenceOperationalReconciliationService,
       "applyApprovedOperationalSideEffects",
@@ -23,6 +27,12 @@ describe("absenceWorkdaySyncService", () => {
       "revertOperationalSideEffects",
       async () => undefined,
     );
+    mock.method(absenceReplacementBridgeService, "syncReplacementsForApprovedAbsence", async () => ({
+      attempted: 0,
+      skipped: 0,
+      failedWorkdayIds: [],
+    }));
+    mock.method(absenceWorkdaySyncJobRepository, "findActiveByRequest", async () => null);
     const { absenceWorkdaySyncService } = await import("./absence-workday-sync.service");
 
     const result = await absenceWorkdaySyncService.runAfterAbsenceMutation(

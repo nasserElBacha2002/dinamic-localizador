@@ -1036,6 +1036,13 @@ export const operationAssignmentService = {
       }),
     );
 
+    if (cancelled?.assignmentOrigin === "COVERAGE") {
+      await employeeWorkdayCoverageService.syncReplacementVacancyAfterCoverageSupersede(
+        companyId,
+        cancelled.id,
+      );
+    }
+
     if ((operation.operationKind ?? "ONE_TIME") === "RECURRING" && cancelled) {
       try {
         await recurringWorkdaySyncService.runOperationSync(

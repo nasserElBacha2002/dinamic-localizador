@@ -163,6 +163,18 @@ export const whatsappServiceMonthLockResource = (
   monthStartUtcIso: string,
 ): string => `wmcl-service-month:${senderBillingKey}:${monthStartUtcIso}`.toLowerCase();
 
+/** Serializes WhatsApp quick-reply and web manual coverage for one absent workday vacancy. */
+export const replacementVacancyLockResource = (
+  companyId: string,
+  employeeWorkdayId: string,
+): string => `replacement-vacancy:${companyId}:${employeeWorkdayId}`.toLowerCase();
+
+/** Serializes replacement selection for one candidate employee in a company. */
+export const replacementCandidateLockResource = (
+  companyId: string,
+  employeeId: string,
+): string => `replacement-candidate:${companyId}:${employeeId}`.toLowerCase();
+
 /**
  * Stable charge-assignment lock order (deadlock-safe across assign / end / cancel / revoke / link flows):
  * 1. companyUserEmployeeLinkLockResource

@@ -1,22 +1,30 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import sql from "mssql";
-import { env } from "../config/env";
 import { applySqlScriptInTransaction } from "../database/run-migrations";
 import { closeDatabase, setTestPool } from "../database/connection";
 import { insertSyntheticStrategicCompanies } from "./disposable-strategic-company-identities";
+import { assertIntegrationDdlAllowed } from "./integration-test-sql-guard";
 import {
-  assertSafeIntegrationDatabaseTarget,
-  INTEGRATION_DATABASE_NAME,
-} from "./integration-test";
+  assertEphemeralBillingDatabaseName,
+  EPHEMERAL_BILLING_DB_PREFIX,
+  generateEphemeralBillingDatabaseName,
+} from "./ephemeral-database-names";
+import { destroyVerifiedEphemeralDatabase } from "./ephemeral-integration-database";
+import { assertTestSqlServerEndpointAllowed } from "./test-sql-server-guard";
+import { randomUUID } from "node:crypto";
+import { resolveTestSqlProvisionCredentials } from "./test-sql-credentials";
+import { stampEphemeralDatabaseOwnership } from "./ephemeral-database-ownership";
+import { destroyProvisionedEphemeralDatabaseWithoutOwnershipStamp } from "./ephemeral-provision-cleanup";
 
 const migrationsDir =
   process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");
 
-export const EPHEMERAL_DB_PREFIX = "din406_bce_";
+export const EPHEMERAL_DB_PREFIX = EPHEMERAL_BILLING_DB_PREFIX;
 
 export type EphemeralBillingExemptionEvidence = {
   databaseName: string;
+  ownershipToken: string;
   createdAtIso: string;
   destroyedAtIso?: string;
   destroyed: boolean;
@@ -33,30 +41,23 @@ export type CreateEphemeralBillingExemptionDatabaseOptions = {
   injectBootstrapFailure?: boolean;
 };
 
-const sqlConfig = (database: string): sql.config => ({
-  server: env.DB_HOST,
-  port: env.DB_PORT,
-  database,
-  user: env.DB_USER,
-  password: env.DB_PASSWORD,
-  options: {
-    encrypt: env.DB_ENCRYPT,
-    trustServerCertificate: env.DB_TRUST_SERVER_CERTIFICATE,
-  },
-});
-
-const normalizeServerIdentity = (value: string): string =>
-  value.trim().toLowerCase().replace(/\\/g, ",").split(",")[0] ?? "";
+const sqlConfig = (database: string): sql.config => {
+  const credentials = resolveTestSqlProvisionCredentials();
+  return {
+    server: credentials.host,
+    port: credentials.port,
+    database,
+    user: credentials.user,
+    password: credentials.password,
+    options: {
+      encrypt: credentials.encrypt,
+      trustServerCertificate: credentials.trustServerCertificate,
+    },
+  };
+};
 
 export const assertEphemeralDatabaseName = (databaseName: string): void => {
-  if (!new RegExp(`^${EPHEMERAL_DB_PREFIX}\\d+$`).test(databaseName)) {
-    throw new Error(`Refusing ephemeral billing tests: invalid database name ${databaseName}.`);
-  }
-  if (databaseName === INTEGRATION_DATABASE_NAME) {
-    throw new Error(
-      `Refusing ephemeral billing tests on shared integration database ${INTEGRATION_DATABASE_NAME}.`,
-    );
-  }
+  assertEphemeralBillingDatabaseName(databaseName);
 };
 
 /**
@@ -66,7 +67,7 @@ export const assertEphemeralDatabaseName = (databaseName: string): void => {
 export const assertEphemeralBillingExemptionTestsAllowed = async (
   masterPool: sql.ConnectionPool,
 ): Promise<void> => {
-  assertSafeIntegrationDatabaseTarget();
+  assertIntegrationDdlAllowed();
 
   if (process.env.INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED !== "true") {
     throw new Error(
@@ -74,62 +75,8 @@ export const assertEphemeralBillingExemptionTestsAllowed = async (
     );
   }
 
-  const endpoint = await masterPool.request().query(`
-    SELECT
-      CAST(@@SERVERNAME AS NVARCHAR(256)) AS server_name,
-      CAST(SERVERPROPERTY('ServerName') AS NVARCHAR(256)) AS server_fqdn,
-      DB_NAME() AS connected_database
-  `);
-  const row = endpoint.recordset[0] as {
-    server_name: string;
-    server_fqdn: string | null;
-    connected_database: string;
-  };
-
-  const connectedDatabase = String(row.connected_database ?? "");
-  if (connectedDatabase.toLowerCase() !== "master") {
-    throw new Error(
-      `Refusing ephemeral billing DDL: expected master connection, got DB_NAME()=${connectedDatabase}.`,
-    );
-  }
-
-  const configuredHost = normalizeServerIdentity(env.DB_HOST);
-  const reportedNames = [row.server_name, row.server_fqdn ?? ""]
-    .map((name) => normalizeServerIdentity(String(name)))
-    .filter(Boolean);
-
-  const explicitExpected = process.env.INTEGRATION_SQL_EXPECTED_SERVER_NAME?.trim();
-  if (explicitExpected) {
-    const expectedNormalized = normalizeServerIdentity(explicitExpected);
-    const explicitMatches = reportedNames.some(
-      (reported) => reported === expectedNormalized || reported.startsWith(`${expectedNormalized},`),
-    );
-    if (!explicitMatches) {
-      throw new Error(
-        `Refusing ephemeral billing DDL: SQL Server identity [${reportedNames.join(", ")}] does not match INTEGRATION_SQL_EXPECTED_SERVER_NAME=${explicitExpected}.`,
-      );
-    }
-    return;
-  }
-
-  const hostMatches = reportedNames.some(
-    (reported) =>
-      reported === configuredHost ||
-      reported.startsWith(`${configuredHost},`) ||
-      configuredHost.startsWith(`${reported},`),
-  );
-
-  const loopbackConfigured =
-    configuredHost === "localhost" ||
-    configuredHost === "127.0.0.1" ||
-    configuredHost === "." ||
-    configuredHost === "(local)";
-
-  if (!hostMatches && !loopbackConfigured) {
-    throw new Error(
-      `Refusing ephemeral billing DDL: SQL Server identity [${reportedNames.join(", ")}] does not match configured DB_HOST=${env.DB_HOST}. Set INTEGRATION_SQL_EXPECTED_SERVER_NAME when using a non-loopback disposable target.`,
-    );
-  }
+  const credentials = resolveTestSqlProvisionCredentials();
+  await assertTestSqlServerEndpointAllowed(masterPool, credentials, { requireMasterConnection: true });
 };
 
 export const assertEphemeralDatabaseAbsent = async (
@@ -149,15 +96,14 @@ export const assertEphemeralDatabaseAbsent = async (
 export const destroyEphemeralBillingDatabaseOnly = async (
   masterPool: sql.ConnectionPool,
   databaseName: string,
+  authorization: { ownershipToken: string },
 ): Promise<void> => {
   assertEphemeralDatabaseName(databaseName);
-  await masterPool.request().query(`
-    IF DB_ID(N'${databaseName}') IS NOT NULL
-    BEGIN
-      ALTER DATABASE [${databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-      DROP DATABASE [${databaseName}];
-    END;
-  `);
+  const credentials = resolveTestSqlProvisionCredentials();
+  await destroyVerifiedEphemeralDatabase(masterPool, databaseName, credentials, {
+    ownershipToken: authorization.ownershipToken,
+    allowForeignSessions: true,
+  });
   await assertEphemeralDatabaseAbsent(masterPool, databaseName);
 };
 
@@ -257,7 +203,8 @@ const destroyWithCleanupReporting = async (
   masterPool: sql.ConnectionPool | null,
   databaseName: string,
   originalError: unknown,
-  pool?: sql.ConnectionPool | null,
+  pool: sql.ConnectionPool | null | undefined,
+  ownershipToken: string,
 ): Promise<never> => {
   const originalMessage =
     originalError instanceof Error ? originalError.message : String(originalError);
@@ -267,7 +214,7 @@ const destroyWithCleanupReporting = async (
 
   if (masterPool) {
     try {
-      await destroyEphemeralBillingDatabaseOnly(masterPool, databaseName);
+      await destroyEphemeralBillingDatabaseOnly(masterPool, databaseName, { ownershipToken });
     } catch (error) {
       cleanupError = error instanceof Error ? error : new Error(String(error));
     }
@@ -293,15 +240,19 @@ const destroyWithCleanupReporting = async (
 export const createEphemeralBillingExemptionDatabase = async (
   options?: CreateEphemeralBillingExemptionDatabaseOptions,
 ): Promise<EphemeralBillingExemptionHandle> => {
-  const databaseName = `${EPHEMERAL_DB_PREFIX}${Date.now()}`;
+  const databaseName = generateEphemeralBillingDatabaseName();
   assertEphemeralDatabaseName(databaseName);
 
   let masterPool: sql.ConnectionPool | null = null;
   let pool: sql.ConnectionPool | null = null;
   let databaseCreated = false;
+  let ownershipStamped = false;
 
+  const ownershipToken = randomUUID();
+  const orchestratorPid = Number(process.env.DINAMIC_INTEGRATION_ORCHESTRATOR_PID ?? process.pid);
   const evidence: EphemeralBillingExemptionEvidence = {
     databaseName,
+    ownershipToken,
     createdAtIso: new Date().toISOString(),
     destroyed: false,
   };
@@ -313,6 +264,7 @@ export const createEphemeralBillingExemptionDatabase = async (
 
     await masterPool.request().query(`CREATE DATABASE [${databaseName}]`);
     databaseCreated = true;
+    evidence.createdAtIso = new Date().toISOString();
 
     pool = new sql.ConnectionPool(sqlConfig(databaseName));
     await pool.connect();
@@ -320,6 +272,8 @@ export const createEphemeralBillingExemptionDatabase = async (
     await bootstrapEphemeralBillingSchema(pool, {
       injectBootstrapFailure: options?.injectBootstrapFailure,
     });
+    await stampEphemeralDatabaseOwnership(pool, ownershipToken);
+    ownershipStamped = true;
 
     const connectedDb = String(
       (await pool.request().query(`SELECT DB_NAME() AS name`)).recordset[0]?.name ?? "",
@@ -337,7 +291,35 @@ export const createEphemeralBillingExemptionDatabase = async (
     return { pool, evidence, masterPool };
   } catch (error) {
     if (databaseCreated && masterPool) {
-      return destroyWithCleanupReporting(masterPool, databaseName, error, pool);
+      await closePoolQuietly(pool);
+      pool = null;
+      if (ownershipStamped) {
+        return destroyWithCleanupReporting(masterPool, databaseName, error, pool, ownershipToken);
+      }
+      try {
+        const credentials = resolveTestSqlProvisionCredentials();
+        await destroyProvisionedEphemeralDatabaseWithoutOwnershipStamp(
+          masterPool,
+          databaseName,
+          credentials,
+          {
+            databaseName,
+            orchestratorPid,
+            createdAtIso: evidence.createdAtIso,
+          },
+        );
+      } catch (cleanupError) {
+        const originalMessage = error instanceof Error ? error.message : String(error);
+        const cleanupMessage =
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        throw new Error(
+          `Ephemeral billing preparation failed (${originalMessage}); unstamped compensatory cleanup failed (${cleanupMessage}).`,
+          { cause: error },
+        );
+      }
+      throw error instanceof Error
+        ? error
+        : new Error(`Ephemeral billing preparation failed: ${String(error)}`);
     }
     await closePoolQuietly(pool);
     await closePoolQuietly(masterPool);
@@ -365,7 +347,9 @@ export const destroyEphemeralBillingExemptionDatabase = async (
   await closePoolQuietly(handle.pool);
 
   try {
-    await destroyEphemeralBillingDatabaseOnly(handle.masterPool, databaseName);
+    await destroyEphemeralBillingDatabaseOnly(handle.masterPool, databaseName, {
+      ownershipToken: handle.evidence.ownershipToken,
+    });
     handle.evidence.destroyed = true;
     handle.evidence.destroyedAtIso = new Date().toISOString();
     console.log(

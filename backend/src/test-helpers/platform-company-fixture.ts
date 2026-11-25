@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { userRepository } from "../repositories/identity/user.repository";
+import { findIntegrationPlatformAdmin } from "./integration-platform-admin";
 import { platformCompanyService } from "../services/companies/platform-company.service";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
 
@@ -13,7 +13,7 @@ export async function createPlatformCompanyFixture(
 ): Promise<Awaited<ReturnType<typeof platformCompanyService.createCompany>>> {
   let actorId = actorUserId;
   if (!actorId) {
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await findIntegrationPlatformAdmin();
     assert.ok(admin?.isPlatformAdmin, "platform superadmin must exist for company fixtures");
     actorId = admin.id;
   }

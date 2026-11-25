@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import {
   describeDatabaseIntegration,
@@ -33,7 +34,7 @@ describeDatabaseIntegration("platform company creation integration", () => {
     setupUnitTestEnv();
     await setupDatabaseIntegration();
 
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(platformAdmin?.isPlatformAdmin, "platform superadmin must exist");
     platformAdminId = platformAdmin.id;
   });
@@ -208,7 +209,7 @@ describeDatabaseIntegration("platform company routes authorization", () => {
     baseUrl = server.baseUrl;
     closeServer = server.close;
 
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;

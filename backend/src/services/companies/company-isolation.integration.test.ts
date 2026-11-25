@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../../errors/app-error";
@@ -96,7 +97,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   it("seeds admin memberships for Dinamic Systems", async () => {
     // Prefer the CI/migration-seeded platform admin. Later suites create other ADMIN
     // users (company owners) without Dinamic membership; TOP 1 by role is non-deterministic.
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin?.active, "requires seeded admin@dinamicsystems.com");
 
     const membership = await userCompanyMembershipRepository.findActiveMembership(
@@ -108,7 +109,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   it("allows platform admin to access any active company without membership", async () => {
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     if (!platformAdmin?.isPlatformAdmin) {
       return;
     }
@@ -153,7 +154,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   it("lists all active companies for platform admin", async () => {
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     if (!platformAdmin?.isPlatformAdmin) {
       return;
     }

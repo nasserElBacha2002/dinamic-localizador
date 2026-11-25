@@ -43,8 +43,11 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
+      # Blocking audit targets runtime/production deps (matches deployed attack surface).
+      # Dev-only highs without a patched npm release (e.g. picomatch GHSA-fc5q-39xc-vjpf via ESLint)
+      # remain visible in the audit-artifacts job npm audit capture.
+      - name: npm audit (high+, production)
+        run: npm audit --audit-level=high --omit=dev
 
   frontend-quality:
     name: frontend-quality
@@ -76,8 +79,8 @@ jobs:
           # happy-dom page suites are memory-heavy; unbound parallel file runs OOM in CI.
           NODE_OPTIONS: --max-old-space-size=6144
 
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
+      - name: npm audit (high+, production)
+        run: npm audit --audit-level=high --omit=dev
 
   website-quality:
     name: website-quality
@@ -106,8 +109,8 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
+      - name: npm audit (high+, production)
+        run: npm audit --audit-level=high --omit=dev
 
   backend-integration:
     name: backend-integration
@@ -129,11 +132,14 @@ jobs:
       NODE_ENV: test
       FRONTEND_URL: http://localhost:5173
       TZ: America/Argentina/Buenos_Aires
-      DB_HOST: localhost
-      DB_PORT: 1433
-      DB_NAME: dinamic_attendance
-      DB_USER: sa
-      DB_PASSWORD: TestPassword123!
+      TEST_DB_HOST: localhost
+      TEST_DB_PORT: "1433"
+      TEST_DB_USER: sa
+      TEST_DB_PASSWORD: TestPassword123!
+      TEST_DB_ENCRYPT: "false"
+      TEST_DB_TRUST_SERVER_CERTIFICATE: "true"
+      TEST_SQL_DISPOSABLE_ACKNOWLEDGED: "true"
+      TEST_SQL_ALLOW_SYSTEM_ADMIN: "true"
       DB_ENCRYPT: "false"
       DB_TRUST_SERVER_CERTIFICATE: "true"
       JWT_SECRET: ci-jwt-secret-min-16-chars
@@ -172,7 +178,7 @@ jobs:
           for i in $(seq 1 30); do
             if docker run --rm --network host mcr.microsoft.com/mssql-tools \
               /opt/mssql-tools/bin/sqlcmd \
-              -S localhost -U sa -P "$DB_PASSWORD" \
+              -S localhost -U sa -P "$TEST_DB_PASSWORD" \
               -Q "SELECT 1" -C >/dev/null 2>&1; then
               echo "SQL Server is ready"
               exit 0
@@ -183,28 +189,25 @@ jobs:
           echo "SQL Server did not become ready in time"
           exit 1
 
-      - name: Create database
+      - name: Resolve disposable SQL Server identity
         run: |
-          docker run --rm --network host mcr.microsoft.com/mssql-tools \
+          IDENTITY=$(docker run --rm --network host mcr.microsoft.com/mssql-tools \
             /opt/mssql-tools/bin/sqlcmd \
-            -S localhost -U sa -P "$DB_PASSWORD" \
-            -Q "IF DB_ID('$DB_NAME') IS NULL CREATE DATABASE [$DB_NAME]" -C
+            -S localhost -U sa -P "$TEST_DB_PASSWORD" -C -h -1 \
+            -Q "SET NOCOUNT ON; SELECT CAST(@@SERVERNAME AS NVARCHAR(256))")
+          IDENTITY=$(echo "$IDENTITY" | tr -d '[:space:]')
+          echo "TEST_SQL_ALLOWED_SERVER_NAME=$IDENTITY" >> "$GITHUB_ENV"
+          echo "Resolved TEST_SQL_ALLOWED_SERVER_NAME=$IDENTITY"
 
-      - name: Run migrations
-        run: npm run migrate
-
-      - name: Seed CI integration fixtures
-        env:
-          ADMIN_NAME: CI Platform Admin
-          ADMIN_EMAIL: admin@dinamicsystems.com
-          ADMIN_PASSWORD: ci-test-password-123
-        run: npm run seed:integration-ci
-
-      - name: Integration tests
+      - name: Integration tests (ephemeral database)
         run: npm run test:integration
         env:
           EMAIL_TRANSPORT: console
           NODE_ENV: test
+          ADMIN_NAME: CI Platform Admin
+          ADMIN_EMAIL: admin@dinamicsystems.com
+          ADMIN_PASSWORD: ci-test-password-123
+          INTEGRATION_EPHEMERAL_BILLING_DDL_ALLOWED: "true"
 
   audit-artifacts:
     name: audit-artifacts

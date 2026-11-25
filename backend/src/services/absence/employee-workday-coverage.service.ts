@@ -27,6 +27,11 @@ import { operationAssignmentCore } from "../operations/operation-assignment-core
 import { operationWorkDateService } from "../operations/operation-work-date.service";
 import { absenceWorkdayCoverageReconciliationService } from "./absence-workday-coverage-reconciliation.service";
 import { replacementRequestService } from "../replacement-request.service";
+import {
+  acquireTransactionAppLock,
+  replacementCandidateLockResource,
+  replacementVacancyLockResource,
+} from "../../utils/sql-app-lock";
 
 export type CoverEmployeeWorkdayInput = {
   operationId: string;
@@ -280,6 +285,25 @@ const executeCoverEmployeeWorkdayInTransaction = async (
       "coverageCommandId es obligatorio para cubrir la jornada",
     );
   }
+
+  await acquireTransactionAppLock(transaction, {
+    resource: replacementVacancyLockResource(companyId, input.employeeWorkdayId),
+    lockTimeoutMs: 10000,
+    timeoutError: new AppError(
+      409,
+      "REPLACEMENT_VACANCY_LOCK_FAILED",
+      "No se pudo bloquear la vacante de reemplazo",
+    ),
+  });
+  await acquireTransactionAppLock(transaction, {
+    resource: replacementCandidateLockResource(companyId, input.replacementEmployeeId),
+    lockTimeoutMs: 10000,
+    timeoutError: new AppError(
+      409,
+      "REPLACEMENT_CANDIDATE_LOCK_FAILED",
+      "No se pudo bloquear al candidato de reemplazo",
+    ),
+  });
 
   const workday = await loadWorkdayContext(companyId, input.employeeWorkdayId);
   await validateCoverContext(companyId, input, workday);
@@ -537,6 +561,36 @@ export const employeeWorkdayCoverageService = {
       await safeRollback(transaction);
       throw error;
     }
+  },
+
+  async syncReplacementVacancyAfterCoverageSupersede(
+    companyId: string,
+    replacementAssignmentId: string,
+  ): Promise<void> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("replacementAssignmentId", sql.UniqueIdentifier, replacementAssignmentId)
+      .query(`
+        SELECT TOP 1
+          oce.absent_employee_workday_id,
+          oce.replaced_employee_id
+        FROM operation_coverage_events oce
+        WHERE oce.company_id = @companyId
+          AND oce.replacement_assignment_id = @replacementAssignmentId
+          AND oce.superseded_at IS NOT NULL
+        ORDER BY oce.superseded_at DESC
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    if (!row?.absent_employee_workday_id) {
+      return;
+    }
+    await replacementRequestService.ensureVacancyNotificationsForWorkday({
+      companyId,
+      employeeWorkdayId: String(row.absent_employee_workday_id),
+      employeeId: String(row.replaced_employee_id),
+      trigger: "UNAVAILABILITY",
+    });
   },
 
   async supersedeCoverageForReplacementAssignment(

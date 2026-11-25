@@ -155,3 +155,5 @@ backend/secrets/
 backend/reports.tar.gz
 __pycache__/
 *.py[cod]
+# DIN-506 local docker nginx snippets
+website/.din506-http/

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { CLEANING_LANDING_SEO } from "../content/cleaning-landing-content";
 import { LANDING_SEO } from "../content/landing-content";
 
 const websiteRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -15,9 +16,12 @@ describe("marketing sitemap", () => {
 
     assert.match(sitemap, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
     assert.equal(sitemap.includes(`<loc>${LANDING_SEO.canonicalUrl}</loc>`), true);
+    assert.equal(sitemap.includes(`<loc>${CLEANING_LANDING_SEO.canonicalUrl}</loc>`), true);
     assert.equal(sitemap.includes("#"), false);
     assert.match(robots, /^Sitemap: https:\/\/dinamicoperations\.com\/sitemap\.xml$/m);
     assert.match(robots, /^Allow: \/\$/m);
+    assert.match(robots, /^Allow: \/software-empresas-limpieza\$/m);
+    assert.match(robots, /^Allow: \/software-empresas-limpieza\/\$/m);
     assert.match(robots, /^Disallow: \/$/m);
   });
 

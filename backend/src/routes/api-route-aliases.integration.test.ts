@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
@@ -41,7 +42,7 @@ describeDatabaseIntegration("API canonical routes integration", () => {
     assert.ok(dinamic);
     dinamicCompanyId = dinamic.id;
 
-    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const platformAdmin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;

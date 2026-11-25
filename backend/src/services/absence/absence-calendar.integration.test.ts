@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { resolveIntegrationPlatformAdminEmail } from "../../test-helpers/integration-platform-admin";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
@@ -80,7 +81,7 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
 
   const seedCompany = async () => {
     const { userRepository } = await import("../../repositories/identity/user.repository");
-    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    const admin = await userRepository.findByEmail(resolveIntegrationPlatformAdminEmail());
     assert.ok(admin);
     actorUserId = admin.id;
 

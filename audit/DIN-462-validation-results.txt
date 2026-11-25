@@ -1,0 +1,36 @@
+=== DIN-462 closure validation 2026-11-22T21:08:46Z ===
+PASS: explicit disposable SQL env
+PASS: verify @@SERVERNAME matches TEST_SQL_ALLOWED_SERVER_NAME (exit=0)
+PASS: ephemeral inventory (before) (exit=0)
+PASS: persistent capture (before) (exit=0)
+PASS: npm run build (exit=0)
+PASS: npm test (exit=0)
+PASS: npm test TAP
+PASS: lifecycle integration tests (exit=0)
+PASS: lifecycle integration tests TAP
+PASS: lifecycle teardown (exit=0)
+PASS: billing ephemeral integration test (exit=0)
+PASS: billing ephemeral integration test TAP
+PASS: billing test teardown (exit=0)
+PASS: ephemeral inventory (before concurrent) (exit=0)
+PASS: concurrent provision #1 (exit=0)
+PASS: concurrent provision #2 (exit=0)
+PASS: concurrent teardown pid=880001 (exit=0)
+PASS: concurrent teardown pid=880002 (exit=0)
+PASS: ephemeral inventory (after concurrent) (exit=0)
+PASS: concurrent provision ephemeral inventory
+PASS: provision without disposable ack (expect reject) (exit=1)
+PASS: teardown wrong orchestrator (expect reject) (exit=1)
+PASS: teardown wrong-orchestrator cleanup (exit=0)
+PASS: orphan recovery dry-run (exit=0)
+PASS: ephemeral inventory (before full integration) (exit=0)
+FAIL: npm run test:integration — expected exit 0, got 1
+FAIL: npm run test:integration TAP — TAP reports fail=4
+PASS: persistent compare (after) (exit=0)
+PASS: ephemeral inventory (after) (exit=0)
+new_from_this_run=(none)
+historical_at_start=din406_bce_1795376248738,din406_bce_1795379607990,din406_bce_1795379843964,din406_bce_1795379852037,din_test_357bbf46-6ad9-4324-a047-4aa8795b6cbc,din_test_39d90cc1-905e-4826-86a5-f3cc4f7feb8a,din_test_3a534b81-4226-485a-9fca-83c7e4858cf8,din_test_42a5a63c-fa2a-43e6-9ff6-764365575b67,din_test_4879a4db-ed46-43ce-8d97-ca4c22fa48a9,din_test_5e6204b9-ed95-41b8-93e7-f616ac097f32,din_test_6175772d-aca3-4a8f-a363-f2c31c7813b0,din_test_8076cbf5-022b-4237-8f86-282c76cb715a,din_test_8aa23b2b-f443-48dd-9f47-fd4c40eb1518,din_test_a38ccbf8-859c-4412-8ead-eacb78f58a4d,din_test_b6ccedd4-07ff-4015-9ec2-5bf88d60f001,din_test_ea9a2cb4-a7d9-478a-9e5a-25a42799a0c7,din_test_f7b5673c-f4c6-41d0-8b10-9a9d5ec1e146
+INV_PASS
+PASS: no new ephemeral DBs leaked by this validation run
+=== closure gate failures=2 exit=1 ===
+FINAL: FAIL (2 mandatory checks failed)

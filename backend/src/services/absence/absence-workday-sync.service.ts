@@ -63,6 +63,21 @@ export const absenceWorkdaySyncService = {
           companyId,
           absenceRequestId,
         );
+        const { absenceReplacementBridgeService } = await import("./absence-replacement-bridge.service");
+        await absenceReplacementBridgeService.syncReplacementsForApprovedAbsence(
+          companyId,
+          absenceRequestId,
+        );
+      } else if (context === "auto-approve-on-create") {
+        await absenceOperationalReconciliationService.applyApprovedOperationalSideEffects(
+          companyId,
+          absenceRequestId,
+        );
+        const { absenceReplacementBridgeService } = await import("./absence-replacement-bridge.service");
+        await absenceReplacementBridgeService.syncReplacementsForApprovedAbsence(
+          companyId,
+          absenceRequestId,
+        );
       } else if (context === "reject" || context === "cancel") {
         await absenceOperationalReconciliationService.revertOperationalSideEffects(
           companyId,

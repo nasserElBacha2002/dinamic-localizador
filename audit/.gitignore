@@ -1,0 +1,7 @@
+DIN-462-integration-run*.log
+*-integration-run-*.log
+DIN-462-full-integration-tap.log
+DIN-462-closure-run.log
+DIN-462-closure-tap.txt
+DIN-462-f09-f13-evidence.log
+DIN-462-lifecycle-evidence.log

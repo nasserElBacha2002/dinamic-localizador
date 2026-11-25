@@ -8,6 +8,9 @@ export const resolveAdminAlertContentSid = (
   if (alertType === "REPLACEMENT_REQUEST") {
     return env.TWILIO_ADMIN_REPLACEMENT_REQUEST_CONTENT_SID?.trim() || null;
   }
+  if (alertType === "REPLACEMENT_MANUAL_LINK") {
+    return env.TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID?.trim() || null;
+  }
   switch (category) {
     case "OPERATIONAL":
     case "SECURITY":

@@ -465,10 +465,8 @@ describeDatabaseIntegration("phase3-4 db security roles (corrections)", () => {
     assert.ok(configs.recordset.length >= 1);
   });
 
-  it(
-    "optional real-login smoke (ops cutover)",
-    { skip: !privilegeTestsEnabled },
-    async () => {
+  if (privilegeTestsEnabled) {
+    it("optional real-login smoke (ops cutover)", async () => {
       const user = process.env.DB_PRIVILEGE_TEST_USER!;
       const password = process.env.DB_PRIVILEGE_TEST_PASSWORD!;
       const { env } = await import("../config/env");
@@ -495,6 +493,6 @@ describeDatabaseIntegration("phase3-4 db security roles (corrections)", () => {
       } finally {
         await pool.close();
       }
-    },
-  );
+    });
+  }
 });

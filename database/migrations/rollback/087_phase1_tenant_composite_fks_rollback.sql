@@ -233,6 +233,11 @@ BEGIN
 END;
 GO
 
+/* Later migrations (e.g. 172 replacement_requests) may reference these composite parent UQs. */
+IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_replacement_requests_absence_request')
+    ALTER TABLE dbo.replacement_requests DROP CONSTRAINT FK_replacement_requests_absence_request;
+GO
+
 /* Drop parent UQs added by 087 (only if no remaining dependents — already dropped composites above) */
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UQ_attendance_records_company_id' AND object_id = OBJECT_ID(N'dbo.attendance_records'))
     DROP INDEX UQ_attendance_records_company_id ON dbo.attendance_records;

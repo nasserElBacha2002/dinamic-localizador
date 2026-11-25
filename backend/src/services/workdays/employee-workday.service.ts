@@ -5,7 +5,7 @@ import { employeeWorkdayRepository } from "../../repositories/workdays/employee-
 import { employeeRepository } from "../../repositories/employees/employee.repository";
 import { adminAlertContextRepository } from "../../repositories/admin-alerts/admin-alert-context.repository";
 import type { EmployeeAssignedOperation } from "../../types/employee-assignment-query";
-import { buildUnavailableDedupKey, buildUnavailableWorkdayDedupKey } from "../../utils/admin-alert/dedup-keys";
+import { buildUnavailableDedupKey } from "../../utils/admin-alert/dedup-keys";
 import { emitAdminAlertSafely } from "../admin-alerts/admin-alert-emit.helpers";
 import type { OperationSelectionOption } from "../../types/twilio.types";
 import { getBotNow } from "../../utils/bot/bot-runtime-context";
@@ -337,26 +337,9 @@ export const employeeWorkdayService = {
       if (marked) {
         const employee = await employeeRepository.findById(companyId, employeeId);
         if (employee) {
-          await emitAdminAlertSafely(
-            {
-              companyId,
-              type: "EMPLOYEE_UNAVAILABLE",
-              employeeId,
-              operationId,
-              deduplicationKey: buildUnavailableWorkdayDedupKey(assignment.employeeWorkdayId),
-              occurredAt: new Date(),
-              payload: {
-                employeeName: employee.name,
-                serviceName: assignment.serviceName,
-                serviceAddress: assignment.serviceAddress,
-                serviceLocality: assignment.serviceLocality,
-                scheduledStart: assignment.scheduledStart,
-                scheduledEnd: assignment.scheduledEnd,
-              },
-            },
-            "employee-workday-unavailable",
+          const { attendanceThresholdAlertService } = await import(
+            "../admin-alerts/attendance-threshold-alert.service"
           );
-          const { attendanceThresholdAlertService } = await import("../admin-alerts/attendance-threshold-alert.service");
           await attendanceThresholdAlertService.markEmployeeDirty(companyId, employeeId);
         }
       }
@@ -414,25 +397,6 @@ export const employeeWorkdayService = {
       )) ?? 1;
     const employee = await employeeRepository.findById(companyId, employeeId);
     if (employee) {
-      await emitAdminAlertSafely(
-        {
-          companyId,
-          type: "EMPLOYEE_UNAVAILABLE",
-          employeeId,
-          operationId,
-          deduplicationKey: buildUnavailableDedupKey(assignment.assignmentId, scheduleVersion),
-          occurredAt: new Date(),
-          payload: {
-            employeeName: employee.name,
-            serviceName: assignment.serviceName,
-            serviceAddress: assignment.serviceAddress,
-            serviceLocality: assignment.serviceLocality,
-            scheduledStart: assignment.scheduledStart,
-            scheduledEnd: assignment.scheduledEnd,
-          },
-        },
-        "employee-workday-unavailable",
-      );
       const { attendanceThresholdAlertService } = await import(
         "../admin-alerts/attendance-threshold-alert.service"
       );
@@ -446,6 +410,26 @@ export const employeeWorkdayService = {
           employeeWorkdayId: assignment.employeeWorkdayId,
           employeeId,
         });
+      } else {
+        await emitAdminAlertSafely(
+          {
+            companyId,
+            type: "EMPLOYEE_UNAVAILABLE",
+            employeeId,
+            operationId,
+            deduplicationKey: buildUnavailableDedupKey(assignment.assignmentId, scheduleVersion),
+            occurredAt: new Date(),
+            payload: {
+              employeeName: employee.name,
+              serviceName: assignment.serviceName,
+              serviceAddress: assignment.serviceAddress,
+              serviceLocality: assignment.serviceLocality,
+              scheduledStart: assignment.scheduledStart,
+              scheduledEnd: assignment.scheduledEnd,
+            },
+          },
+          "employee-workday-unavailable",
+        );
       }
     }
 

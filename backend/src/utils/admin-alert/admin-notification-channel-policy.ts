@@ -15,6 +15,7 @@ export const ADMIN_WHATSAPP_URGENT_ALERT_TYPES = [
   "EMPLOYEE_UNAVAILABLE",
   "ATTENDANCE_THRESHOLD_CROSSED",
   "REPLACEMENT_REQUEST",
+  "REPLACEMENT_MANUAL_LINK",
   /** Pending absence requests require immediate admin action (not daily-report only). */
   "ABSENCE_REQUEST_PENDING",
 ] as const satisfies readonly AdminAlertType[];

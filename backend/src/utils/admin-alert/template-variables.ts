@@ -107,6 +107,16 @@ const alertCopyByType: Record<
     detail: () => "Se requiere cubrir una jornada.",
     context: formatOperationContext,
   },
+  REPLACEMENT_MANUAL_LINK: {
+    title: "Asignar manualmente",
+    detail: (payload) =>
+      payload.forwardedLocationDetail?.trim() ||
+      "¿Ninguna de las opciones te sirve? Asignar manualmente:",
+    context: (payload) => {
+      const url = payload.absenceDetailUrl?.trim();
+      return url && url.length > 0 ? url : EMPTY_CONTEXT;
+    },
+  },
   MISSING_CHECKIN_AFTER_OPERATION: {
     title: "Sin registro de llegada",
     detail: () => "No existe registro de llegada al finalizar la jornada.",

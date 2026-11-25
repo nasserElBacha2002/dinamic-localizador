@@ -312,6 +312,7 @@ export const employeeService = {
               ? {
                   effectiveMode: commercialSeatPrepared.effectiveMode,
                   lockAcquired: commercialSeatPrepared.lockAcquired,
+                  prepErrorCode: commercialSeatPrepared.prepErrorCode,
                 }
               : undefined,
         });

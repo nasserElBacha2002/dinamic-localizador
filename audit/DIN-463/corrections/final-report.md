@@ -1,34 +1,46 @@
-# DIN-463 — Round 4 final report
+# DIN-463 — Final technical closure
 
-**Status:** `IMPLEMENTED_VALIDATED`
+**Status:** `IMPLEMENTED_VALIDATED`  
+**Branch:** `DIN-463` (base commit `147c6974` + uncommitted `prepErrorCode` pass-through)  
+**Date:** 2026-11-25
 
-## Delivered in working tree (on top of commit `aa02ce29`)
+## Summary
 
-- Commercial seat admission: transactional policy reads, lock order, post-commit/rollback ledger flush, ENFORCE/OBSERVE semantics, import batch operations.
-- `sql-transaction-state.ts` + unit tests (`XACT_STATE` committable guard).
-- Migration `175_commercial_seat_quota.sql` (canonical; 176 removed).
-- Removed `seed-employees` bypass.
-- Integration runner: explicit `PROVISION_FAILED` when session file missing.
-- Test helper: company fixture cascade deletes quota events and billing subscriptions before company row.
+- Resolved disposable SQL integration: `din_integration` on Docker `sqlserver:1433`, not blocked `sa`.
+- Minimal fix: `prepErrorCode` from `prepareCommercialSeatAdmission` preserved through `lockPrepared` into evaluation ledger `reason_code` (no blanket `APP_LOCK_NOT_ACQUIRED` when a specific prep code exists).
+- Full backend integration suite on ephemeral DB: **884/884 pass**; unit **2342/2342 pass**; build pass.
+- `COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE` left **DISABLED** for default runtime; ENFORCE only in isolated tests.
 
-## Validation
+## Review items addressed
 
-- `npm run build` — pass
-- Unit: mode resolver (2), transaction state (3) — pass
-- SQL: DIN-463 integration files — **6/6** pass on ephemeral DB
-- Earlier round-4 full integration suite — **884/884** pass (same disposable instance)
+1. **SQL environment** — `TEST_DB_*` mechanism; login `din_integration`; `TEST_SQL_ALLOWED_SERVER_NAME=c60449e5dbda`.
+2. **prepErrorCode** — wired in quota service + employee reactivation path.
+3. **Transaction state** — `assertTransactionActiveForMutation` requires `XACT_STATE()===1`; unit tests pass.
+4. **Integration matrix** — full runner executed (concurrency, policy, billing, employees, HTTP, WhatsApp regressions in suite).
+5. **Migration 175** — applied during ephemeral bootstrap; no `176_*` in tree.
 
-## Evidence files
+## Files changed (this validation pass)
 
-- `din-463-final-diff.txt` / `diffstat` / `status` — vs `HEAD` (`aa02ce29`)
-- `din-463-final-tests.txt`
-- `sql-integration-validation.md`, `findings-resolution-matrix.md`, `final-status.txt`
-- Review: `review/din-463-round4-final-*` (gitignored)
+| Path | Reason |
+|------|--------|
+| `backend/src/services/billing/commercial-seat-quota.service.ts` | `lockPrepared.prepErrorCode` → `reasonCode` |
+| `backend/src/services/employees/employee.service.ts` | forward `prepErrorCode` in `lockPrepared` |
+| `audit/DIN-463/corrections/*` | evidence + reports (logs gitignored / local) |
 
-## Operator note
+## Tests
 
-Use `TEST_DB_*` on port **1433** for the disposable `sqlserver` container; do not assume `DB_*` from `.env` (may point at 1435).
+| Command | Result |
+|---------|--------|
+| `npm run build` | pass (0) |
+| `npm test` | 2342 pass |
+| `npm run lint` | fail 41 (pre-existing; DIN-463 files clean) |
+| `npm run test:integration` | 884 pass |
+| `npx tsx --test src/utils/sql-transaction-state.test.ts` | 3 pass |
 
-## ENFORCE
+## Operator action (one-time local)
 
-Default `DISABLED`; no production deploy in this workstream.
+Add `TEST_DB_*` block to `backend/.env` per `.env.example` (password for `din_integration` on disposable container). Do not use habitual `DB_*` port **1435** for integration.
+
+## ENFORCE / production
+
+No ENFORCE activation outside test env; no commit, push, or deploy in this workstream.

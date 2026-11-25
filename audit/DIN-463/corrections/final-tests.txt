@@ -1,0 +1,32 @@
+# DIN-463 — final validation tests (2026-11-25)
+
+## SQL environment
+
+- Container: `sqlserver` → `localhost:1433`, `@@SERVERNAME=c60449e5dbda`
+- Login: `TEST_DB_USER=din_integration` (role `dbcreator`; not `sa`)
+- `TEST_SQL_DISPOSABLE_ACKNOWLEDGED=true`, `TEST_SQL_ALLOWED_SERVER_NAME=c60449e5dbda`
+- Prior blocker resolved: `backend/.env` had no `TEST_DB_*`; `din_integration` password re-aligned for disposable runs (operator: set `TEST_DB_PASSWORD` in `backend/.env`, do not commit)
+
+## Commands
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `cd backend && npm run build` | 0 | OK |
+| `cd backend && npx tsx --test src/utils/sql-transaction-state.test.ts src/utils/billing/resolve-effective-commercial-seat-mode.test.ts` | 0 | 5 pass (3 transaction-state + 2 mode matrix) |
+| `cd backend && npm test` | 0 | 2342 pass / 0 fail |
+| `cd backend && npm run lint` | 1 | 41 pre-existing errors (none in DIN-463 touch files; `commercial-seat-quota.service.ts` / `employee.service.ts` clean) |
+| `cd backend && npm run test:integration` (with `TEST_DB_*` exports) | 0 | **884 pass / 0 fail / 0 skipped** — 158 files, suites 186 |
+| Ephemeral DB | — | `din_test_cb6c1502-d750-42bc-9ac3-76dabc8950ef` created, migrated (incl. `175_commercial_seat_quota.sql`), destroyed |
+
+## DIN-463 integration highlights (within full suite)
+
+| Suite | Tests | Outcome |
+|-------|-------|---------|
+| `commercial seat quota concurrency` | 1 | pass |
+| `commercial seat quota policy integration` | 5 | pass |
+
+## Logs (local evidence, not versioned)
+
+- `audit/DIN-463/corrections/integration-run.log`
+- `audit/DIN-463/corrections/unit-run.log`
+- `audit/DIN-463/corrections/lint-run.log`

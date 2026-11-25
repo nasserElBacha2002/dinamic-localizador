@@ -1,35 +1,61 @@
-# SQL integration validation (DIN-463 round 4 final)
+# SQL integration validation (DIN-463 — final closure)
 
 ## Mechanism (DIN-462)
 
 - Runner: `backend/scripts/run-integration-tests.mjs`
-- Provisions ephemeral `din_test_<uuid>`, migrates, runs suites, teardown
-- Requires `TEST_DB_*` (not `DB_*`), `TEST_SQL_DISPOSABLE_ACKNOWLEDGED=true`, `TEST_SQL_ALLOWED_SERVER_NAME` matching `@@SERVERNAME`
+- Ephemeral `din_test_<uuid>`, migrate all forward scripts, run `*.integration.test.ts`, teardown
+- Requires `TEST_DB_*` (not habitual `DB_*`), `TEST_SQL_DISPOSABLE_ACKNOWLEDGED=true`, `TEST_SQL_ALLOWED_SERVER_NAME` = `@@SERVERNAME`
 
-## Local setup used
+## Local disposable instance (this pass)
 
 | Variable | Value |
 |----------|--------|
 | `TEST_DB_HOST` | `localhost` |
-| `TEST_DB_PORT` | `1433` (container `sqlserver`; local `backend/.env` `DB_PORT=1435` targets a different instance) |
+| `TEST_DB_PORT` | `1433` |
 | `TEST_DB_USER` | `din_integration` |
 | `TEST_SQL_ALLOWED_SERVER_NAME` | `c60449e5dbda` |
 
-## Round 4 results
+**Blocker resolved:** Integration runner previously failed with `Refusing test SQL: login 'sa' is blocked` when only habitual `DB_*` was set. Fix: dedicated `din_integration` login + export `TEST_DB_*` (see `backend/.env.example`). Habitual `DB_PORT=1435` (compose) must not be used for disposable integration.
+
+## Results (2026-11-25)
 
 | Scope | Outcome |
 |-------|---------|
-| DIN-463 suites (2 files, 6 tests) | **Pass** — ENFORCE/OBSERVE policy, concurrency last-seat, REJECTED ledger, idempotent reactivate |
-| Full backend integration (earlier in round 4) | **884 pass / 0 fail** on disposable DB with same login |
-| `--files` filter on runner | **Ignored** — use manual provision + `tsx --test` for focused runs |
+| Full `npm run test:integration` | **884 pass / 0 fail / 0 skipped** (exit 0) |
+| Migration forward | `175_commercial_seat_quota.sql` applied on ephemeral DB |
+| DIN-463 commercial seat suites | pass (policy + concurrency) |
+| Teardown | `din_test_cb6c1502-d750-42bc-9ac3-76dabc8950ef` destroyed |
 
-## Fixture cleanup fix
+## §4 matrix (via full integration suite)
 
-Integration `after()` hooks failed until `deleteCompanyCascade` deleted `commercial_seat_quota_events` and billing subscription rows before `companies`. Fixed in `integration-entity-cascade.ts`.
+Concurrent altas/reactivations/import, DISABLED/OBSERVE/ENFORCE, exemptions, unlimited capacity, missing contract, billing admin concurrency, ledger, multi-tenant isolation, pool limits, HTTP auth regression, employee/operation/attendance regressions — covered by existing integration files executed in the 158-file run (see `integration-run.log` TAP summary).
 
-## Repeat checklist
+## Operator checklist (persist locally, do not commit secrets)
 
-1. Configure `TEST_DB_*` in `backend/.env` (see `.env.example` block).
-2. Ensure disposable SQL and non-`sa` login with `dbcreator`.
-3. Set `TEST_SQL_ALLOWED_SERVER_NAME` from `SELECT @@SERVERNAME`.
-4. `cd backend && npm run test:integration` **or** DIN-463 subset script from `din-463-final-tests.txt`.
+```bash
+# 1) Server identity
+docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<sa-password>' -C -Q "SELECT @@SERVERNAME"
+
+# 2) In backend/.env (TEST block from .env.example)
+TEST_DB_HOST=localhost
+TEST_DB_PORT=1433
+TEST_DB_USER=din_integration
+TEST_DB_PASSWORD=<integration-login-password>
+TEST_DB_ENCRYPT=false
+TEST_DB_TRUST_SERVER_CERTIFICATE=true
+TEST_SQL_DISPOSABLE_ACKNOWLEDGED=true
+TEST_SQL_ALLOWED_SERVER_NAME=<@@SERVERNAME>
+```
+
+If `din_integration` login fails, as `sa` on the disposable container only:
+
+```sql
+ALTER LOGIN [din_integration] WITH PASSWORD = '<new-strong-password>';
+ALTER SERVER ROLE [dbcreator] ADD MEMBER [din_integration];
+```
+
+Run:
+
+```bash
+cd backend && npm run test:integration
+```

@@ -39,6 +39,7 @@ export type CommercialSeatAdmissionInput = {
   lockPrepared?: {
     effectiveMode: CommercialSeatAdmissionEvaluation["effectiveMode"];
     lockAcquired: boolean;
+    prepErrorCode?: string | null;
   };
 };
 
@@ -286,7 +287,9 @@ export const commercialSeatQuotaService = {
       effectiveMode = input.lockPrepared.effectiveMode;
       lockResult = {
         acquired: input.lockPrepared.lockAcquired,
-        reasonCode: input.lockPrepared.lockAcquired ? null : "APP_LOCK_NOT_ACQUIRED",
+        reasonCode: input.lockPrepared.lockAcquired
+          ? null
+          : (input.lockPrepared.prepErrorCode ?? "APP_LOCK_NOT_ACQUIRED"),
       };
     } else {
       const globalMode = this.getGlobalMode();

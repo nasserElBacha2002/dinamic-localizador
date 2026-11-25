@@ -1,9 +1,12 @@
-DIN-463_STATUS=IMPLEMENTED_VALIDATED
-ROUND=4_FINAL
-SQL_INTEGRATION=DIN463_SUBSET_PASS_6_of_6
-FULL_SUITE_INTEGRATION=PASS_884_ROUND4_EARLIER
-SEED_EMPLOYEES=REMOVED
-MIGRATION_176=REMOVED_CONSOLIDATED_IN_175
-COMMIT=NO
-ENFORCE_OUTSIDE_ISOLATED_TESTS=NO
-DEFAULT_MODE=DISABLED
+ A audit/DIN-463/corrections/din-463-final-diff.txt
+ M audit/DIN-463/corrections/final-status.txt
+ M audit/DIN-463/corrections/implementation-corrections-tests.txt
+ A audit/DIN-463/corrections/integration-run.log
+ A audit/DIN-463/corrections/lint-run.log
+ A audit/DIN-463/corrections/unit-run.log
+ A audit/DIN-463/implementation/implementation-diffstat.txt
+ A audit/DIN-463/implementation/implementation-status.txt
+ M backend/src/services/billing/commercial-seat-quota.service.ts
+ M backend/src/services/employees/employee.service.ts
+?? audit/DIN-463/corrections/final-diff.txt
+?? audit/DIN-463/corrections/final-diffstat.txt

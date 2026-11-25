@@ -125,6 +125,17 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     const mode = String(row.whatsapp_quota_mode ?? "OFF");
     return mode === "SHADOW" || mode === "ENFORCE" ? mode : "OFF";
   })(),
+  commercialSeatQuotaMode: (() => {
+    const raw = row.commercial_seat_quota_mode;
+    if (raw == null) {
+      return null;
+    }
+    const mode = String(raw).trim().toUpperCase();
+    if (mode === "OBSERVE" || mode === "ENFORCE" || mode === "DISABLED") {
+      return mode;
+    }
+    return "DISABLED" as const;
+  })(),
   whatsappQuotaDailyTurns: Number(row.whatsapp_quota_daily_turns ?? 20),
   whatsappQuotaWeeklyTurns: Number(row.whatsapp_quota_weekly_turns ?? 60),
   whatsappQuotaBurstTurns: Number(row.whatsapp_quota_burst_turns ?? 5),
@@ -160,10 +171,12 @@ export const companySettingsRepository = {
   async findByCompanyIdInTransaction(
     companyId: string,
     transaction: sql.Transaction,
+    options?: { admissionLock?: boolean },
   ): Promise<CompanySettings | null> {
+    const lockSql = options?.admissionLock ? " WITH (UPDLOCK, ROWLOCK)" : "";
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .query("SELECT * FROM company_settings WHERE company_id = @companyId");
+      .query(`SELECT * FROM company_settings${lockSql} WHERE company_id = @companyId`);
 
     if (!result.recordset[0]) {
       return null;
@@ -597,6 +610,45 @@ export const companySettingsRepository = {
   /**
    * Update only WhatsApp quota columns with optional optimistic concurrency on updated_at.
    */
+  async updateCommercialSeatQuotaMode(
+    companyId: string,
+    mode: "DISABLED" | "OBSERVE" | "ENFORCE" | null,
+  ): Promise<CompanySettings | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("mode", sql.NVarChar(20), mode)
+      .query(`
+        UPDATE company_settings
+        SET commercial_seat_quota_mode = @mode,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapSettingsRow(row) : null;
+  },
+
+  async updateCommercialSeatQuotaModeInTransaction(
+    transaction: sql.Transaction,
+    companyId: string,
+    mode: "DISABLED" | "OBSERVE" | "ENFORCE" | null,
+  ): Promise<CompanySettings | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("mode", sql.NVarChar(20), mode)
+      .query(`
+        UPDATE company_settings WITH (UPDLOCK, ROWLOCK)
+        SET commercial_seat_quota_mode = @mode,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapSettingsRow(row) : null;
+  },
+
   async updateWhatsAppQuotaSettings(
     companyId: string,
     input: {

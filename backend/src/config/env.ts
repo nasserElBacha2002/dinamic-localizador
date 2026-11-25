@@ -268,6 +268,12 @@ const envSchema = z
      * Effective mode = OFF if global or company is OFF; ENFORCE only if both ENFORCE; else SHADOW.
      */
     WHATSAPP_QUOTA_GLOBAL_MODE: z.enum(["OFF", "SHADOW", "ENFORCE"]).default("OFF"),
+    /**
+     * DIN-463 global commercial seat quota mode. Default DISABLED — never ENFORCE from deploy alone.
+     */
+    COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE: z
+      .enum(["DISABLED", "OBSERVE", "ENFORCE"])
+      .default("DISABLED"),
     /** Platform Admin technical system logs (stdout JSON + SQL sink). */
     SYSTEM_LOGS_ENABLED: z.stringbool().default(true),
     SYSTEM_LOGS_UI_ENABLED: z.stringbool().default(true),

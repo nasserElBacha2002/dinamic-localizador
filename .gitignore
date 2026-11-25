@@ -131,6 +131,21 @@ audit/latest-diff.txt
 audit/latest-diffstat.txt
 audit/latest-status.txt
 audit/tenant-isolation-audit.txt
+# DIN-463 generated diff evidence (keep markdown reports; exclude nested historical diffs)
+audit/DIN-463/**/implementation-diff.txt
+audit/DIN-463/**/implementation-corrections-diff.txt
+audit/DIN-463/**/latest-diff.txt
+audit/DIN-463/**/latest-diffstat.txt
+audit/DIN-463/**/latest-status.txt
+audit/DIN-463/**/implementation-*-diffstat.txt
+audit/DIN-463/**/implementation-*-status.txt
+audit/DIN-463/**/implementation-*-name-status.txt
+audit/DIN-463/corrections/din-463-final-diff.txt
+audit/DIN-463/corrections/din-463-final-diff-accumulated.txt
+audit/DIN-463/corrections/din-463-final-diff-incremental.txt
+audit/DIN-463/corrections/implementation-corrections-diffstat.txt
+audit/DIN-463/corrections/implementation-corrections-status.txt
+audit/DIN-463/corrections/implementation-corrections-tests.txt
 *.zip
 
 # Keep directory placeholders

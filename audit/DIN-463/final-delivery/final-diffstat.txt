@@ -1,0 +1,3 @@
+ backend/src/services/billing/commercial-seat-quota.service.ts | 5 ++++-
+ backend/src/services/employees/employee.service.ts            | 1 +
+ 2 files changed, 5 insertions(+), 1 deletion(-)

@@ -129,6 +129,8 @@ export interface CompanySettings {
   dailyAttendanceReportTime: string;
   /** Phase 2 WhatsApp usage quotas (default OFF). */
   whatsappQuotaMode: "OFF" | "SHADOW" | "ENFORCE";
+  /** DIN-463 commercial seat quota; null = sin configuración (inherit matrix). */
+  commercialSeatQuotaMode: "DISABLED" | "OBSERVE" | "ENFORCE" | null;
   whatsappQuotaDailyTurns: number;
   whatsappQuotaWeeklyTurns: number;
   whatsappQuotaBurstTurns: number;

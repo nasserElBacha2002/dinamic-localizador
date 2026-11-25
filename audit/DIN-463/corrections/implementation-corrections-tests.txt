@@ -1,0 +1,18 @@
+# DIN-463 corrections — test execution log
+
+Date: 2025-11-25 (session)
+
+## Commands
+
+| Command | CWD | Exit | Summary |
+|---------|-----|------|---------|
+| `npm run build` | backend | 0 | TypeScript compile OK |
+| `npx tsx --test src/utils/billing/resolve-effective-commercial-seat-mode.test.ts` | backend | 0 | 2 pass, 0 fail |
+| `RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test src/services/billing/commercial-seat-quota.integration.test.ts` | backend | 0 | suite skipped (no ephemeral SQL) |
+| `RUN_DB_INTEGRATION_TESTS=true ... commercial-seat-quota.concurrency.integration.test.ts` | backend | not run | same precondition |
+| `npm run test:integration` | backend | not run | requires TEST_DB_* disposable orchestrator |
+| `npm run lint` | backend | not run | timeboxed corrections pass |
+
+## Skipped integration precondition
+
+Missing: `DINAMIC_TEST_SQL_ACTIVE=true`, `TEST_DB_HOST`, `TEST_DB_USER`, `TEST_DB_PASSWORD`, `DINAMIC_INTEGRATION_DATABASE_NAME=din_test_<uuid>`, `TEST_SQL_DISPOSABLE_ACKNOWLEDGED=true`, migration 175 on test DB.

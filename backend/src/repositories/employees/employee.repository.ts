@@ -673,4 +673,15 @@ export const employeeRepository = {
 
     return Boolean(result.recordset[0]);
   },
+
+  async countActiveInTransaction(companyId: string, transaction: sql.Transaction): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT COUNT_BIG(*) AS active_count
+        FROM dbo.employees WITH (UPDLOCK, HOLDLOCK)
+        WHERE company_id = @companyId AND active = 1
+      `);
+    return Number(result.recordset[0]?.active_count ?? 0);
+  },
 };

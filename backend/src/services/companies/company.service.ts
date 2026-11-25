@@ -74,6 +74,7 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   whatsappQuotaWeeklyOutbounds: settings.whatsappQuotaWeeklyOutbounds,
   whatsappQuotaCompanyDailyOutbounds: settings.whatsappQuotaCompanyDailyOutbounds,
   whatsappQuotaLimitNoticeEnabled: settings.whatsappQuotaLimitNoticeEnabled,
+  commercialSeatQuotaMode: settings.commercialSeatQuotaMode,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

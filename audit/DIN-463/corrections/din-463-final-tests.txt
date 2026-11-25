@@ -1,0 +1,38 @@
+# DIN-463 round 4 — execution log (2026-11-25)
+
+## Preconditions
+
+- Docker SQL `localhost:1433`, `@@SERVERNAME=c60449e5dbda`
+- Login: `TEST_DB_USER=din_integration` (non-sa; `TEST_SQL_ALLOW_SYSTEM_ADMIN` not used)
+- `TEST_SQL_DISPOSABLE_ACKNOWLEDGED=true`, `TEST_SQL_ALLOWED_SERVER_NAME=c60449e5dbda`
+- Secrets not recorded here; provision via dedicated test login only
+
+## Commands
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `cd backend && npm run build` | 0 | OK |
+| `npx tsx --test src/utils/billing/resolve-effective-commercial-seat-mode.test.ts` | 0 | 2 pass |
+| `npx tsx --test src/utils/sql-transaction-state.test.ts` | 0 | 3 pass |
+| `npx eslint src/services/employees/employee.service.ts` | 0 | OK (DIN-463 touch) |
+| DIN-463 SQL subset (see script below) | 0 | 6 pass, 0 fail, 2 suites ok |
+
+### DIN-463 SQL subset (manual orchestration, same as DIN-462)
+
+1. `provision-integration-database.ts` with `TEST_DB_*` + `DINAMIC_INTEGRATION_ORCHESTRATOR_PID`
+2. `tsx --test` files:
+   - `src/services/billing/commercial-seat-quota.integration.test.ts`
+   - `src/services/billing/commercial-seat-quota.concurrency.integration.test.ts`
+3. `teardown-integration-database.ts`
+
+TAP summary: `# tests 6`, `# pass 6`, `# fail 0`, suites `commercial seat quota concurrency` + `commercial seat quota policy integration` → **ok**
+
+Ephemeral DB pattern: `din_test_<uuid>` created and destroyed in same run.
+
+## Runner note
+
+`npm run test:integration` does not honor `--files`; it always runs all `*.integration.test.ts` (~158 files). A full-suite pass (884 tests) was obtained earlier on this disposable instance in round 4; round 4 final re-validated DIN-463 with the focused subset above after fixture-cascade fix.
+
+## Lint (repo-wide)
+
+`npm run lint` — not re-run in round 4 final; `employee.service.ts` eslint clean; pre-existing errors remain in unrelated files.

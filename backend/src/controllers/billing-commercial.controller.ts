@@ -3,6 +3,7 @@ import type { BillingPeriod, BillingPriceKind } from "../constants/billing-catal
 import type { CommercialBenefitKind } from "../constants/billing-commercial-benefit";
 import { billingCommercialBenefitService } from "../services/billing/billing-commercial-benefit.service";
 import { billingNegotiatedContractService } from "../services/billing/billing-negotiated-contract.service";
+import { commercialSeatQuotaSettingsService } from "../services/billing/commercial-seat-quota-settings.service";
 
 const parseDate = (value: string): Date => new Date(value);
 
@@ -134,5 +135,21 @@ export const billingCommercialController = {
     });
 
     res.status(201).json({ data });
+  },
+
+  async getCommercialSeatQuotaSettings(req: Request, res: Response) {
+    const companyId = String(req.params.companyId);
+    const data = await commercialSeatQuotaSettingsService.getSettings(companyId);
+    res.status(200).json({ data });
+  },
+
+  async updateCommercialSeatQuotaSettings(req: Request, res: Response) {
+    const companyId = String(req.params.companyId);
+    const data = await commercialSeatQuotaSettingsService.updateSettings(
+      companyId,
+      req.auth!.userId,
+      req.body,
+    );
+    res.status(200).json({ data });
   },
 };

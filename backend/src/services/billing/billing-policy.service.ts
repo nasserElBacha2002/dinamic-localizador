@@ -1,3 +1,4 @@
+import sql from "mssql";
 import { billingCompanyExemptionRepository } from "../../repositories/billing/billing-company-exemption.repository";
 import type { CompanyBillingPolicy } from "../../types/billing-company-exemption";
 import {
@@ -35,6 +36,29 @@ export const billingPolicyService = {
     const normalizedId = normalizeCompanyId(companyId);
     const strategic = findProtectedStrategicExemptionByCompanyId(normalizedId);
     const persisted = await billingCompanyExemptionRepository.findOpenPermanentByCompanyId(
+      normalizedId,
+    );
+
+    if (strategic) {
+      const exemptionReason = persisted?.exemptionReason ?? strategic.exemptionReason;
+      return exemptCommercialPolicy(normalizedId, exemptionReason);
+    }
+
+    if (persisted) {
+      return exemptCommercialPolicy(normalizedId, persisted.exemptionReason);
+    }
+
+    return defaultCommercialPolicy(normalizedId);
+  },
+
+  async getCompanyBillingPolicyInTransaction(
+    transaction: sql.Transaction,
+    companyId: string,
+  ): Promise<CompanyBillingPolicy> {
+    const normalizedId = normalizeCompanyId(companyId);
+    const strategic = findProtectedStrategicExemptionByCompanyId(normalizedId);
+    const persisted = await billingCompanyExemptionRepository.findOpenPermanentByCompanyIdInTransaction(
+      transaction,
       normalizedId,
     );
 

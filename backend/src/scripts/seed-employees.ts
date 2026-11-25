@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "dotenv";
-import sql from "mssql";
 import { connectDatabase, closeDatabase } from "../database/connection";
+import { employeeRepository } from "../repositories/employees/employee.repository";
+import { employeeService } from "../services/employees/employee.service";
 import { normalizePhoneNumber } from "../utils/phone";
 
 config();
@@ -51,38 +52,19 @@ function parseSeedFile(content: string): EmployeeRow[] {
   return employees;
 }
 
-async function upsertEmployee(
-  pool: sql.ConnectionPool,
-  employee: EmployeeRow,
-): Promise<"inserted" | "updated"> {
-  const result = await pool
-    .request()
-    .input("name", sql.NVarChar(150), employee.name)
-    .input("phoneNumber", sql.NVarChar(30), employee.phoneNumber)
-    .query(`
-      MERGE employees AS target
-      USING (
-        SELECT
-          @name AS name,
-          @phoneNumber AS phone_number
-      ) AS source
-      ON target.phone_number = source.phone_number
-      WHEN MATCHED THEN
-        UPDATE SET
-          name = source.name,
-          active = 1,
-          updated_at = SYSUTCDATETIME()
-      WHEN NOT MATCHED THEN
-        INSERT (name, phone_number, document_number, active)
-        VALUES (source.name, source.phone_number, NULL, 1)
-      OUTPUT $action AS action;
-    `);
-
-  const action = String(result.recordset[0]?.action ?? "");
-  return action === "UPDATE" ? "updated" : "inserted";
+function resolveSeedCompanyId(): string {
+  const companyId = process.env.SEED_COMPANY_ID?.trim();
+  if (!companyId) {
+    throw new Error(
+      "seed-employees requires SEED_COMPANY_ID (target company UUID). " +
+        "Employees are created/updated via employeeService with commercial seat quota invariants.",
+    );
+  }
+  return companyId;
 }
 
 const main = async (): Promise<void> => {
+  const companyId = resolveSeedCompanyId();
   const content = readFileSync(SEED_FILE, "utf8");
   const employees = parseSeedFile(content);
 
@@ -90,16 +72,37 @@ const main = async (): Promise<void> => {
     throw new Error(`No employees parsed from ${SEED_FILE}`);
   }
 
-  const pool = await connectDatabase();
+  await connectDatabase();
   let inserted = 0;
   let updated = 0;
+  let reactivated = 0;
 
   try {
     for (const employee of employees) {
-      const action = await upsertEmployee(pool, employee);
-      if (action === "inserted") {
+      const existing = await employeeRepository.findByPhone(companyId, employee.phoneNumber);
+      if (!existing) {
+        await employeeService.create(companyId, {
+          name: employee.name,
+          phoneNumber: employee.phoneNumber,
+          employeeType: "fijo",
+        });
         inserted += 1;
-      } else {
+        continue;
+      }
+
+      if (!existing.active) {
+        await employeeService.update(companyId, existing.id, {
+          name: employee.name,
+          active: true,
+        });
+        reactivated += 1;
+        continue;
+      }
+
+      if (existing.name !== employee.name) {
+        await employeeService.update(companyId, existing.id, {
+          name: employee.name,
+        });
         updated += 1;
       }
     }
@@ -107,10 +110,20 @@ const main = async (): Promise<void> => {
     await closeDatabase();
   }
 
-  console.log(`Employees seed completed: ${inserted} inserted, ${updated} updated (${employees.length} total).`);
+  // eslint-disable-next-line no-console -- CLI script output
+  console.log(
+    JSON.stringify({
+      companyId,
+      inserted,
+      updated,
+      reactivated,
+      total: employees.length,
+    }),
+  );
 };
 
-void main().catch((error) => {
-  console.error("Failed to seed employees:", error);
+main().catch((error: unknown) => {
+  // eslint-disable-next-line no-console -- CLI script output
+  console.error(error);
   process.exit(1);
 });

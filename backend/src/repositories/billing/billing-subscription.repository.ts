@@ -84,14 +84,22 @@ export const billingSubscriptionRepository = {
    * Prefers ACTIVE when both match.
    */
   async findVigentByCompanyId(companyId: string, at: Date): Promise<BillingSubscription | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    return this.findVigentByCompanyIdInTransaction(null, companyId, at);
+  },
+
+  async findVigentByCompanyIdInTransaction(
+    transaction: sql.Transaction | null,
+    companyId: string,
+    at: Date,
+  ): Promise<BillingSubscription | null> {
+    const lockSql = transaction ? " WITH (UPDLOCK, HOLDLOCK)" : "";
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("at", sql.DateTime2, at)
       .query(`
         SELECT TOP 1 *
-        FROM dbo.billing_subscriptions
+        FROM dbo.billing_subscriptions${lockSql}
         WHERE company_id = @companyId
           AND subscription_status IN (N'ACTIVE', N'SCHEDULED')
           AND effective_from <= @at

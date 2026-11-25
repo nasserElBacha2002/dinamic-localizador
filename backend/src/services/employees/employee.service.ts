@@ -23,6 +23,8 @@ import {
   acquireTransactionAppLock,
   companyUserEmployeeLinkLockResource,
 } from "../../utils/sql-app-lock";
+import { commercialSeatQuotaService } from "../billing/commercial-seat-quota.service";
+import type { CommercialSeatAdmissionEvaluation } from "../../types/commercial-seat-quota";
 
 /**
  * Explicit creation policy:
@@ -39,6 +41,16 @@ export type CreateEmployeeOptions = {
 
 export type CreateEmployeeForImportInput = CreateEmployeeInput & {
   clientIds?: string[];
+};
+
+const flushCommercialSeatAdmission = async (
+  evaluation: CommercialSeatAdmissionEvaluation | null,
+  mutationPersisted: boolean,
+): Promise<void> => {
+  if (!evaluation) {
+    return;
+  }
+  await commercialSeatQuotaService.flushAdmissionEvaluation(evaluation, mutationPersisted);
 };
 
 const runPostCommitEffects = async (
@@ -77,7 +89,16 @@ export const employeeService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let admissionEvaluation: CommercialSeatAdmissionEvaluation | null = null;
     try {
+      admissionEvaluation = await commercialSeatQuotaService.assertActiveHeadcountAdmissionInTransaction({
+        companyId,
+        transaction,
+        delta: 1,
+        operation: creationMode === "import" ? "EMPLOYEE_IMPORT_ROW" : "EMPLOYEE_CREATE",
+        actorUserId: options?.createdByUserId ?? null,
+      });
+
       const employee = await employeeRepository.create(
         companyId,
         {
@@ -109,10 +130,12 @@ export const employeeService = {
       }
 
       await transaction.commit();
+      await flushCommercialSeatAdmission(admissionEvaluation, true);
       await runPostCommitEffects(companyId, employee, creationMode);
       return employee;
     } catch (error) {
       await transaction.rollback();
+      await flushCommercialSeatAdmission(admissionEvaluation, false);
       const classified = classifyEmployeeUniqueViolation(error);
       if (classified) {
         throw new AppError(409, classified.code, classified.message);
@@ -141,7 +164,16 @@ export const employeeService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let admissionEvaluation: CommercialSeatAdmissionEvaluation | null = null;
     try {
+      admissionEvaluation = await commercialSeatQuotaService.assertActiveHeadcountAdmissionInTransaction({
+        companyId,
+        transaction,
+        delta: inputs.length,
+        operation: "EMPLOYEE_IMPORT_BATCH",
+        actorUserId: createdByUserId,
+      });
+
       const created = await employeeRepository.createMany(
         companyId,
         inputs.map((input) => ({
@@ -175,9 +207,11 @@ export const employeeService = {
       }
 
       await transaction.commit();
+      await flushCommercialSeatAdmission(admissionEvaluation, true);
       return created;
     } catch (error) {
       await transaction.rollback();
+      await flushCommercialSeatAdmission(admissionEvaluation, false);
       throw error;
     }
   },
@@ -224,6 +258,8 @@ export const employeeService = {
       ? await companyUserEmployeeLinkRepository.findByEmployeeId(companyId, id)
       : null;
 
+    const mayReactivate = !existing.active && updatePayload.active === true;
+
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -231,8 +267,13 @@ export const employeeService = {
     let transactionClosed = false;
     let updated: Employee | null = null;
     let revokedAssignmentIds: string[] = [];
+    let admissionEvaluation: CommercialSeatAdmissionEvaluation | null = null;
 
     try {
+      const commercialSeatPrepared = mayReactivate
+        ? await commercialSeatQuotaService.prepareCommercialSeatAdmission(transaction, companyId)
+        : null;
+
       if (chargeHolderPanelLink) {
         await acquireTransactionAppLock(transaction, {
           resource: companyUserEmployeeLinkLockResource(companyId, chargeHolderPanelLink.userId),
@@ -250,6 +291,24 @@ export const employeeService = {
       }
 
       const wasChargeHolder = await isEmployeeRecordOperationalChargeHolder(companyId, beforeUpdate);
+
+      const reactivationDelta = !beforeUpdate.active && updatePayload.active === true ? 1 : 0;
+      if (reactivationDelta > 0) {
+        admissionEvaluation = await commercialSeatQuotaService.assertActiveHeadcountAdmissionInTransaction({
+          companyId,
+          transaction,
+          delta: reactivationDelta,
+          operation: "EMPLOYEE_REACTIVATE",
+          actorUserId: actorUserId ?? null,
+          lockPrepared:
+            commercialSeatPrepared && commercialSeatPrepared.effectiveMode !== "DISABLED"
+              ? {
+                  effectiveMode: commercialSeatPrepared.effectiveMode,
+                  lockAcquired: commercialSeatPrepared.lockAcquired,
+                }
+              : undefined,
+        });
+      }
 
       updated = await employeeRepository.update(companyId, id, updatePayload, transaction);
       if (!updated) {
@@ -291,10 +350,12 @@ export const employeeService = {
 
       await transaction.commit();
       transactionClosed = true;
+      await flushCommercialSeatAdmission(admissionEvaluation, true);
     } catch (error) {
       if (!transactionClosed) {
         await safeRollback(transaction);
       }
+      await flushCommercialSeatAdmission(admissionEvaluation, false);
       const classified = classifyEmployeeUniqueViolation(error);
       if (classified) {
         throw new AppError(409, classified.code, classified.message);

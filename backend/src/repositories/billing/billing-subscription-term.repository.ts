@@ -110,14 +110,22 @@ export const billingSubscriptionTermRepository = {
     billingSubscriptionId: string,
     at: Date,
   ): Promise<BillingSubscriptionTerm | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    return this.findActiveAtInTransaction(null, billingSubscriptionId, at);
+  },
+
+  async findActiveAtInTransaction(
+    transaction: sql.Transaction | null,
+    billingSubscriptionId: string,
+    at: Date,
+  ): Promise<BillingSubscriptionTerm | null> {
+    const lockSql = transaction ? " WITH (UPDLOCK, HOLDLOCK)" : "";
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("billingSubscriptionId", sql.UniqueIdentifier, billingSubscriptionId)
       .input("at", sql.DateTime2, at)
       .query(`
         SELECT TOP 1 *
-        FROM dbo.billing_subscription_terms
+        FROM dbo.billing_subscription_terms${lockSql}
         WHERE billing_subscription_id = @billingSubscriptionId
           AND cancelled_at IS NULL
           AND effective_from <= @at

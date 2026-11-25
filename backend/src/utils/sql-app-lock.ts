@@ -157,6 +157,10 @@ export const billingPlanPriceLockResource = (
 export const billingSubscriptionCompanyLockResource = (companyId: string): string =>
   `billing-subscription:${companyId}`.toLowerCase();
 
+/** Serializes commercial seat quota admission for one company (DIN-463). */
+export const commercialSeatCompanyLockResource = (companyId: string): string =>
+  `commercial-seat:${companyId}`.toLowerCase();
+
 /** Serializes SERVICE month rank + repricing for one sender billing key and calendar month. */
 export const whatsappServiceMonthLockResource = (
   senderBillingKey: string,

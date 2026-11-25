@@ -354,7 +354,7 @@ describe("employeeWorkdayService", () => {
     assert.equal(startedResult.message, PAST_ASSIGNMENT_MESSAGE);
   });
 
-  it("emits distinct unavailable-workday dedup keys for distinct recurring occurrences", async () => {
+  it("enqueues replacement coverage per materialized workday for distinct recurring occurrences", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
       "../../repositories/employees/employee-assignment-query.repository"
@@ -362,16 +362,10 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayRepository } = await import("../../repositories/workdays/employee-workday.repository");
     const { employeeRepository } = await import("../../repositories/employees/employee.repository");
     const { replacementRequestService } = await import("../replacement-request.service");
-    const { adminAlertService } = await import("../admin-alerts/admin-alert.service");
     const { attendanceThresholdAlertService } = await import("../admin-alerts/attendance-threshold-alert.service");
     const { employeeWorkdayService } = await import("./employee-workday.service");
-    const { buildUnavailableWorkdayDedupKey } = await import("../../utils/admin-alert/dedup-keys");
 
-    const dedupKeys: string[] = [];
-    mock.method(adminAlertService, "emit", async (input: { deduplicationKey: string }) => {
-      dedupKeys.push(input.deduplicationKey);
-      return { enqueued: 1, dedupSkipped: 0, recipientSkipped: 0 };
-    });
+    const replacementWorkdayIds: string[] = [];
     mock.method(attendanceThresholdAlertService, "markEmployeeDirty", async () => undefined);
     mock.method(employeeWorkdayRepository, "markUnavailable", async () => true);
     mock.method(employeeRepository, "findById", async () => ({
@@ -384,7 +378,9 @@ describe("employeeWorkdayService", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
-    mock.method(replacementRequestService, "createForUnavailable", async () => undefined);
+    mock.method(replacementRequestService, "createForUnavailable", async ({ employeeWorkdayId }) => {
+      replacementWorkdayIds.push(employeeWorkdayId);
+    });
 
     for (const workdayId of ["workday-A", "workday-B"] as const) {
       mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
@@ -406,13 +402,9 @@ describe("employeeWorkdayService", () => {
       assert.equal(result.kind, "ok");
     }
 
-    assert.deepEqual(dedupKeys, [
-      buildUnavailableWorkdayDedupKey("workday-A"),
-      buildUnavailableWorkdayDedupKey("workday-B"),
-    ]);
-    assert.notEqual(dedupKeys[0], dedupKeys[1]);
+    assert.deepEqual(replacementWorkdayIds, ["workday-A", "workday-B"]);
 
-    // Retry same occurrence: markUnavailable returns false → no second alert key.
+    // Retry same occurrence: workday already unavailable, but vacancy sync remains idempotent at service layer.
     mock.method(employeeWorkdayRepository, "markUnavailable", async () => false);
     mock.method(employeeAssignmentQueryRepository, "listUnavailabilityForEmployee", async () => [
       assignment({
@@ -431,7 +423,8 @@ describe("employeeWorkdayService", () => {
       ),
     );
     assert.equal(retry.kind, "ok");
-    assert.equal(dedupKeys.length, 2);
+    assert.equal(replacementWorkdayIds.length, 3);
+    assert.equal(replacementWorkdayIds[2], "workday-A");
   });
 
   it("allows unavailability for a habitual assignment on a future workday", async () => {

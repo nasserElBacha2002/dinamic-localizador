@@ -6,11 +6,13 @@ import type {
   CommercialSeatQuotaMode,
   CommercialSeatQuotaOperation,
 } from "../../constants/commercial-seat-quota";
+import type { CommercialSeatCapacityKind } from "../../types/commercial-seat-quota";
 
 export type CommercialSeatQuotaEventInput = {
   companyId: string;
   operation: CommercialSeatQuotaOperation;
   effectiveMode: CommercialSeatQuotaMode;
+  capacityKind: CommercialSeatCapacityKind;
   decision: CommercialSeatQuotaDecision;
   reasonCode: string;
   activeCountBefore: number | null;
@@ -19,8 +21,8 @@ export type CommercialSeatQuotaEventInput = {
   seatMax: number | null;
   billingSubscriptionId: string | null;
   billingSubscriptionTermId: string | null;
-  isExempt: boolean;
-  enforceSeatLimit: boolean;
+  isExempt: boolean | null;
+  enforceSeatLimit: boolean | null;
   mutationPersisted: boolean;
   correlationId?: string | null;
   actorUserId?: string | null;
@@ -38,6 +40,7 @@ export const commercialSeatQuotaEventRepository = {
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("operation", sql.NVarChar(40), input.operation)
       .input("effectiveMode", sql.NVarChar(20), input.effectiveMode)
+      .input("capacityKind", sql.NVarChar(30), input.capacityKind)
       .input("decision", sql.NVarChar(30), input.decision)
       .input("reasonCode", sql.NVarChar(60), input.reasonCode)
       .input("activeCountBefore", sql.Int, input.activeCountBefore)
@@ -46,8 +49,8 @@ export const commercialSeatQuotaEventRepository = {
       .input("seatMax", sql.Int, input.seatMax)
       .input("billingSubscriptionId", sql.UniqueIdentifier, input.billingSubscriptionId)
       .input("billingSubscriptionTermId", sql.UniqueIdentifier, input.billingSubscriptionTermId)
-      .input("isExempt", sql.Bit, input.isExempt ? 1 : 0)
-      .input("enforceSeatLimit", sql.Bit, input.enforceSeatLimit ? 1 : 0)
+      .input("isExempt", sql.Bit, input.isExempt == null ? null : input.isExempt ? 1 : 0)
+      .input("enforceSeatLimit", sql.Bit, input.enforceSeatLimit == null ? null : input.enforceSeatLimit ? 1 : 0)
       .input("mutationPersisted", sql.Bit, input.mutationPersisted ? 1 : 0)
       .input("correlationId", sql.NVarChar(64), input.correlationId ?? null)
       .input("actorUserId", sql.UniqueIdentifier, input.actorUserId ?? null)
@@ -57,6 +60,7 @@ export const commercialSeatQuotaEventRepository = {
           company_id,
           operation,
           effective_mode,
+          capacity_kind,
           decision,
           reason_code,
           active_count_before,
@@ -76,6 +80,7 @@ export const commercialSeatQuotaEventRepository = {
           @companyId,
           @operation,
           @effectiveMode,
+          @capacityKind,
           @decision,
           @reasonCode,
           @activeCountBefore,

@@ -1,32 +1,34 @@
-# DIN-463 — Adversarial corrections final report
+# DIN-463 — Round 4 final report
 
-**Final status:** `IMPLEMENTED_PENDING_VALIDATION`
+**Status:** `IMPLEMENTED_VALIDATED`
 
-## Summary
+## Delivered in working tree (on top of commit `aa02ce29`)
 
-- Transactional contractual reads and in-tx headcount during admission.
-- Lock hierarchy fixed for reactivation (`prepareCommercialSeatAdmission` before employee row lock).
-- OBSERVE non-blocking on recoverable control failures; ENFORCE blocks technical uncertainty.
-- Event ledger tied to real evaluations via post-tx flush; removed synthetic `recordPersistedAdmission`.
-- Settings update transactional with ENFORCE global guard.
-- `seed-employees.ts` migrated to `employeeService` + mandatory `SEED_COMPANY_ID`.
-- Migration 175: nullable ledger counts + filtered active employee index.
+- Commercial seat admission: transactional policy reads, lock order, post-commit/rollback ledger flush, ENFORCE/OBSERVE semantics, import batch operations.
+- `sql-transaction-state.ts` + unit tests (`XACT_STATE` committable guard).
+- Migration `175_commercial_seat_quota.sql` (canonical; 176 removed).
+- Removed `seed-employees` bypass.
+- Integration runner: explicit `PROVISION_FAILED` when session file missing.
+- Test helper: company fixture cascade deletes quota events and billing subscriptions before company row.
 
-## Not validated in this pass
+## Validation
 
-Full SQL integration matrix, concurrency suite, migration apply on disposable DB, HTTP auth regression, pool-limit stress.
+- `npm run build` — pass
+- Unit: mode resolver (2), transaction state (3) — pass
+- SQL: DIN-463 integration files — **6/6** pass on ephemeral DB
+- Earlier round-4 full integration suite — **884/884** pass (same disposable instance)
 
-## Effective ENFORCE
+## Evidence files
 
-Global default remains **DISABLED**; ENFORCE only for isolated test runs mutating `env.COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE` with ephemeral SQL.
+- `din-463-final-diff.txt` / `diffstat` / `status` — vs `HEAD` (`aa02ce29`)
+- `din-463-final-tests.txt`
+- `sql-integration-validation.md`, `findings-resolution-matrix.md`, `final-status.txt`
+- Review: `review/din-463-round4-final-*` (gitignored)
 
-## Files touched (high level)
+## Operator note
 
-See `implementation-corrections-diffstat.txt`.
+Use `TEST_DB_*` on port **1433** for the disposable `sqlserver` container; do not assume `DB_*` from `.env` (may point at 1435).
 
-## Next steps for `IMPLEMENTED_VALIDATED`
+## ENFORCE
 
-1. `npm run test:integration` with disposable SQL + migration 175.
-2. Execute commercial seat integration + concurrency suites.
-3. Optional HTTP tests for platform-admin-only settings.
-4. Adversarial re-review of ledger rows under OBSERVE/ENFORCE partial import.
+Default `DISABLED`; no production deploy in this workstream.

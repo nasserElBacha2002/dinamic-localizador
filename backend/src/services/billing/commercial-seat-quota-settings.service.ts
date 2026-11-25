@@ -63,6 +63,7 @@ export const commercialSeatQuotaSettingsService = {
       const existing = await companySettingsRepository.findByCompanyIdInTransaction(
         companyId,
         transaction,
+        { admissionLock: true },
       );
       if (!existing) {
         throw new AppError(404, "COMPANY_SETTINGS_NOT_FOUND", "Configuración de empresa no encontrada.");

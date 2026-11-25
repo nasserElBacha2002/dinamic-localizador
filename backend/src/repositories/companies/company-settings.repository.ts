@@ -171,10 +171,12 @@ export const companySettingsRepository = {
   async findByCompanyIdInTransaction(
     companyId: string,
     transaction: sql.Transaction,
+    options?: { admissionLock?: boolean },
   ): Promise<CompanySettings | null> {
+    const lockSql = options?.admissionLock ? " WITH (UPDLOCK, ROWLOCK)" : "";
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .query("SELECT * FROM company_settings WHERE company_id = @companyId");
+      .query(`SELECT * FROM company_settings${lockSql} WHERE company_id = @companyId`);
 
     if (!result.recordset[0]) {
       return null;

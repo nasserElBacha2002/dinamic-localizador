@@ -130,5 +130,115 @@ describeDatabaseIntegration("commercial seat quota policy integration", () => {
       (error: unknown) =>
         error instanceof AppError && error.code === "COMMERCIAL_SEAT_LIMIT_EXCEEDED",
     );
+
+    const activeCount = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT COUNT_BIG(*) AS n FROM dbo.employees WHERE company_id = @companyId AND active = 1
+      `);
+    assert.equal(Number(activeCount.recordset[0]?.n), 1);
+
+    const rejectedEvents = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT decision, mutation_persisted, reason_code
+        FROM dbo.commercial_seat_quota_events
+        WHERE company_id = @companyId
+          AND decision = N'REJECTED'
+          AND reason_code = N'SEAT_LIMIT_EXCEEDED'
+      `);
+    assert.equal(rejectedEvents.recordset.length, 1);
+    assert.equal(rejectedEvents.recordset[0]?.mutation_persisted, false);
+  });
+
+  it("allows idempotent reactivate active=true under ENFORCE when seat_max=1", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const fixture = await createPlatformCompanyFixture({
+      name: `Idempotent ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `idem-${suffix}@test.local` },
+    });
+    const companyId = fixture.data.company.id;
+    fixtures.trackCompany(companyId);
+    await companySettingsRepository.updateCommercialSeatQuotaMode(companyId, "ENFORCE");
+
+    const plan = await billingCatalogService.createPlan({
+      planCode: `IDEM_${suffix}`,
+      displayName: "Idem",
+      planKind: "CUSTOM",
+    });
+    await billingSubscriptionService.createAdminSubscription({
+      companyId,
+      billingPlanId: plan.id,
+      subscriptionStatus: "ACTIVE",
+      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      initialTerms: {
+        agreedAmount: "50",
+        currency: "USD",
+        billingPeriod: "MONTHLY",
+        seatMin: 1,
+        seatMax: 1,
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+
+    const created = await employeeService.create(companyId, {
+      name: "Solo",
+      phoneNumber: phone(),
+      employeeType: "fijo",
+    });
+
+    await employeeService.update(companyId, created.id, { active: true, name: "Solo" });
+
+    const activeCount = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT COUNT_BIG(*) AS n FROM dbo.employees WHERE company_id = @companyId AND active = 1
+      `);
+    assert.equal(Number(activeCount.recordset[0]?.n), 1);
+  });
+
+  it("allows idempotent reactivate under OBSERVE when seat_max=1", async () => {
+    env.COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE = "OBSERVE";
+    const suffix = randomUUID().slice(0, 8);
+    const fixture = await createPlatformCompanyFixture({
+      name: `Obs idem ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `obsidem-${suffix}@test.local` },
+    });
+    const companyId = fixture.data.company.id;
+    fixtures.trackCompany(companyId);
+
+    const plan = await billingCatalogService.createPlan({
+      planCode: `OBSID_${suffix}`,
+      displayName: "Obs",
+      planKind: "CUSTOM",
+    });
+    await billingSubscriptionService.createAdminSubscription({
+      companyId,
+      billingPlanId: plan.id,
+      subscriptionStatus: "ACTIVE",
+      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      initialTerms: {
+        agreedAmount: "50",
+        currency: "USD",
+        billingPeriod: "MONTHLY",
+        seatMin: 1,
+        seatMax: 1,
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+
+    const created = await employeeService.create(companyId, {
+      name: "Obs Solo",
+      phoneNumber: phone(),
+      employeeType: "fijo",
+    });
+
+    await employeeService.update(companyId, created.id, { active: true, name: "Obs Solo" });
+    env.COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE = "ENFORCE";
   });
 });

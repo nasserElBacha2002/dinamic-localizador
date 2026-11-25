@@ -5,6 +5,16 @@
 USE dinamic_attendance;
 GO
 
+IF EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_employees_company_active_quota'
+      AND object_id = OBJECT_ID(N'dbo.employees')
+)
+BEGIN
+    DROP INDEX IX_employees_company_active_quota ON dbo.employees;
+END;
+GO
+
 IF OBJECT_ID(N'dbo.commercial_seat_quota_events', N'U') IS NOT NULL
 BEGIN
     DROP TABLE dbo.commercial_seat_quota_events;

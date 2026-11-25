@@ -58,8 +58,6 @@ const runPostCommitEffects = async (
   _employee: Employee,
   creationMode: EmployeeCreationMode,
 ): Promise<void> => {
-  // Interactive create currently has no WhatsApp / invitation / credential side effects.
-  // Import mode explicitly skips any future interactive-only post-commit hooks.
   if (creationMode === "import") {
     return;
   }
@@ -80,8 +78,6 @@ export const employeeService = {
 
     const categoryId = input.categoryId === undefined ? null : input.categoryId;
     const locationZoneId = input.locationZoneId === undefined ? null : input.locationZoneId;
-    // Assignability (active + same company; create forbids inactive) is enforced atomically
-    // inside employeeRepository.create with UPDLOCK — no divergent pre-check.
 
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
@@ -90,16 +86,20 @@ export const employeeService = {
     await transaction.begin();
 
     let admissionEvaluation: CommercialSeatAdmissionEvaluation | null = null;
+    let committed = false;
+    let employee: Employee;
+
     try {
-      admissionEvaluation = await commercialSeatQuotaService.assertActiveHeadcountAdmissionInTransaction({
+      admissionEvaluation = await commercialSeatQuotaService.evaluateActiveHeadcountAdmissionInTransaction({
         companyId,
         transaction,
         delta: 1,
         operation: creationMode === "import" ? "EMPLOYEE_IMPORT_ROW" : "EMPLOYEE_CREATE",
         actorUserId: options?.createdByUserId ?? null,
       });
+      commercialSeatQuotaService.throwIfAdmissionBlocked(admissionEvaluation);
 
-      const employee = await employeeRepository.create(
+      employee = await employeeRepository.create(
         companyId,
         {
           name: input.name.trim(),
@@ -130,11 +130,11 @@ export const employeeService = {
       }
 
       await transaction.commit();
-      await flushCommercialSeatAdmission(admissionEvaluation, true);
-      await runPostCommitEffects(companyId, employee, creationMode);
-      return employee;
+      committed = true;
     } catch (error) {
-      await transaction.rollback();
+      if (!committed) {
+        await safeRollback(transaction);
+      }
       await flushCommercialSeatAdmission(admissionEvaluation, false);
       const classified = classifyEmployeeUniqueViolation(error);
       if (classified) {
@@ -142,13 +142,12 @@ export const employeeService = {
       }
       throw error;
     }
+
+    await flushCommercialSeatAdmission(admissionEvaluation, true);
+    await runPostCommitEffects(companyId, employee!, creationMode);
+    return employee!;
   },
 
-  /**
-   * Real multi-row create for imports. Atomic per chunk transaction.
-   * Does not run interactive post-commit side effects.
-   * Location zones are always NULL until an explicit bulk-zone import phase.
-   */
   async createManyForImport(
     companyId: string,
     inputs: CreateEmployeeForImportInput[],
@@ -165,16 +164,20 @@ export const employeeService = {
     await transaction.begin();
 
     let admissionEvaluation: CommercialSeatAdmissionEvaluation | null = null;
+    let committed = false;
+    let created!: Employee[];
+
     try {
-      admissionEvaluation = await commercialSeatQuotaService.assertActiveHeadcountAdmissionInTransaction({
+      admissionEvaluation = await commercialSeatQuotaService.evaluateActiveHeadcountAdmissionInTransaction({
         companyId,
         transaction,
         delta: inputs.length,
         operation: "EMPLOYEE_IMPORT_BATCH",
         actorUserId: createdByUserId,
       });
+      commercialSeatQuotaService.throwIfAdmissionBlocked(admissionEvaluation);
 
-      const created = await employeeRepository.createMany(
+      created = await employeeRepository.createMany(
         companyId,
         inputs.map((input) => ({
           name: input.name.trim(),
@@ -207,13 +210,17 @@ export const employeeService = {
       }
 
       await transaction.commit();
-      await flushCommercialSeatAdmission(admissionEvaluation, true);
-      return created;
+      committed = true;
     } catch (error) {
-      await transaction.rollback();
+      if (!committed) {
+        await safeRollback(transaction);
+      }
       await flushCommercialSeatAdmission(admissionEvaluation, false);
       throw error;
     }
+
+    await flushCommercialSeatAdmission(admissionEvaluation, true);
+    return created;
   },
 
   async list(companyId: string, query: ListEmployeesQuery) {
@@ -258,19 +265,18 @@ export const employeeService = {
       ? await companyUserEmployeeLinkRepository.findByEmployeeId(companyId, id)
       : null;
 
-    const mayReactivate = !existing.active && updatePayload.active === true;
+    const intendsReactivation = updatePayload.active === true;
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     let transactionClosed = false;
-    let updated: Employee | null = null;
-    let revokedAssignmentIds: string[] = [];
+    let updated!: Employee;
     let admissionEvaluation: CommercialSeatAdmissionEvaluation | null = null;
 
     try {
-      const commercialSeatPrepared = mayReactivate
+      const commercialSeatPrepared = intendsReactivation
         ? await commercialSeatQuotaService.prepareCommercialSeatAdmission(transaction, companyId)
         : null;
 
@@ -292,9 +298,10 @@ export const employeeService = {
 
       const wasChargeHolder = await isEmployeeRecordOperationalChargeHolder(companyId, beforeUpdate);
 
-      const reactivationDelta = !beforeUpdate.active && updatePayload.active === true ? 1 : 0;
+      const reactivationDelta =
+        intendsReactivation && !beforeUpdate.active ? 1 : 0;
       if (reactivationDelta > 0) {
-        admissionEvaluation = await commercialSeatQuotaService.assertActiveHeadcountAdmissionInTransaction({
+        admissionEvaluation = await commercialSeatQuotaService.evaluateActiveHeadcountAdmissionInTransaction({
           companyId,
           transaction,
           delta: reactivationDelta,
@@ -308,16 +315,18 @@ export const employeeService = {
                 }
               : undefined,
         });
+        commercialSeatQuotaService.throwIfAdmissionBlocked(admissionEvaluation);
       }
 
-      updated = await employeeRepository.update(companyId, id, updatePayload, transaction);
-      if (!updated) {
+      const updateResult = await employeeRepository.update(companyId, id, updatePayload, transaction);
+      if (!updateResult) {
         throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
       }
+      updated = updateResult;
 
       const isChargeHolder = await isEmployeeRecordOperationalChargeHolder(companyId, updated);
       if (wasChargeHolder && !isChargeHolder) {
-        revokedAssignmentIds = await operationChargeRevocationService.revokeForEmployeeCollaboratorInTransaction(
+        const revokedAssignmentIds = await operationChargeRevocationService.revokeForEmployeeCollaboratorInTransaction(
           companyId,
           transaction,
           {
@@ -350,7 +359,6 @@ export const employeeService = {
 
       await transaction.commit();
       transactionClosed = true;
-      await flushCommercialSeatAdmission(admissionEvaluation, true);
     } catch (error) {
       if (!transactionClosed) {
         await safeRollback(transaction);
@@ -363,6 +371,7 @@ export const employeeService = {
       throw error;
     }
 
+    await flushCommercialSeatAdmission(admissionEvaluation, true);
     return updated!;
   },
 };

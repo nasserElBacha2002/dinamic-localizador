@@ -52,7 +52,7 @@
 
 ## OD-8 — Scripts (CERRADA)
 
-- `seed-employees.ts` usa `employeeService` y requiere `SEED_COMPANY_ID` (sin MERGE directo).
+- Seed TSV de colaboradores: usar importación/API (`employeeService`); el script `seed-employees` fue retirado (bypass de política en proceso independiente).
 - Escrituras SQL directas fuera de servicios **no** tienen garantía universal (documentado en implementación).
 
 ## OD-9 — Autorización configuración (CERRADA)

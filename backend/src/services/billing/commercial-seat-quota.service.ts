@@ -23,6 +23,7 @@ import {
 } from "../../utils/billing/resolve-effective-commercial-seat-mode";
 import { normalizeCompanyId } from "../../utils/billing/protected-company-exemption";
 import { systemLogger } from "../../utils/system-logs/logger";
+import { assertTransactionActiveForMutation } from "../../utils/sql-transaction-state";
 import type {
   CommercialSeatAdmissionEvaluation,
   CommercialSeatCapacityKind,
@@ -63,6 +64,7 @@ const buildEventInput = (
   companyId: evaluation.companyId,
   operation: evaluation.operation,
   effectiveMode: evaluation.effectiveMode,
+  capacityKind: evaluation.capacityKind,
   decision: evaluation.decision,
   reasonCode: evaluation.reasonCode,
   activeCountBefore: evaluation.activeCountBefore,
@@ -71,8 +73,8 @@ const buildEventInput = (
   seatMax: evaluation.seatMax,
   billingSubscriptionId: evaluation.billingSubscriptionId,
   billingSubscriptionTermId: evaluation.billingSubscriptionTermId,
-  isExempt: evaluation.isExempt ?? false,
-  enforceSeatLimit: evaluation.enforceSeatLimit ?? true,
+  isExempt: evaluation.isExempt,
+  enforceSeatLimit: evaluation.enforceSeatLimit,
   mutationPersisted,
   correlationId: evaluation.correlationId ?? evaluation.evaluationId,
   actorUserId: evaluation.actorUserId,
@@ -170,6 +172,7 @@ const tryAcquireCommercialSeatLock = async (
         error.code === "APP_LOCK_DEADLOCK" ||
         error.code === "APP_LOCK_CANCELLED")
     ) {
+      await assertTransactionActiveForMutation(transaction);
       return { acquired: false, reasonCode: error.code };
     }
     throw error;
@@ -220,25 +223,51 @@ export const commercialSeatQuotaService = {
   ): Promise<{
     effectiveMode: CommercialSeatAdmissionEvaluation["effectiveMode"];
     lockAcquired: boolean;
+    prepErrorCode: string | null;
   }> {
     const normalized = normalizeCompanyId(companyId);
     const globalMode = this.getGlobalMode();
     if (globalMode === "DISABLED") {
-      return { effectiveMode: "DISABLED", lockAcquired: false };
+      return { effectiveMode: "DISABLED", lockAcquired: false, prepErrorCode: null };
     }
 
-    const settings = await companySettingsRepository.findByCompanyIdInTransaction(
-      normalized,
-      transaction,
-    );
-    const companyMode = parseCommercialSeatQuotaMode(settings?.commercialSeatQuotaMode ?? null);
-    const effectiveMode = resolveEffectiveCommercialSeatMode(globalMode, companyMode);
-    if (effectiveMode === "DISABLED") {
-      return { effectiveMode: "DISABLED", lockAcquired: false };
-    }
+    try {
+      const settings = await companySettingsRepository.findByCompanyIdInTransaction(
+        normalized,
+        transaction,
+        { admissionLock: true },
+      );
+      const companyMode = parseCommercialSeatQuotaMode(settings?.commercialSeatQuotaMode ?? null);
+      const effectiveMode = resolveEffectiveCommercialSeatMode(globalMode, companyMode);
+      if (effectiveMode === "DISABLED") {
+        return { effectiveMode: "DISABLED", lockAcquired: false, prepErrorCode: null };
+      }
 
-    const lockResult = await tryAcquireCommercialSeatLock(transaction, normalized, effectiveMode);
-    return { effectiveMode, lockAcquired: lockResult.acquired };
+      const lockResult = await tryAcquireCommercialSeatLock(transaction, normalized, effectiveMode);
+      await assertTransactionActiveForMutation(transaction);
+      return { effectiveMode, lockAcquired: lockResult.acquired, prepErrorCode: null };
+    } catch (error) {
+      if (error instanceof AppError && error.code === "SQL_TRANSACTION_UNUSABLE") {
+        throw error;
+      }
+      const reasonCode =
+        error instanceof AppError ? error.code : "COMMERCIAL_SEAT_PREPARE_FAILED";
+      try {
+        await assertTransactionActiveForMutation(transaction);
+      } catch {
+        if (error instanceof AppError) {
+          throw error;
+        }
+        throw new AppError(409, "SQL_TRANSACTION_UNUSABLE", "La transacción quedó inválida.");
+      }
+      const fallbackMode =
+        globalMode === "ENFORCE" ? "ENFORCE" : globalMode === "OBSERVE" ? "OBSERVE" : "DISABLED";
+      return {
+        effectiveMode: fallbackMode,
+        lockAcquired: false,
+        prepErrorCode: reasonCode,
+      };
+    }
   },
 
   async evaluateActiveHeadcountAdmissionInTransaction(
@@ -265,17 +294,34 @@ export const commercialSeatQuotaService = {
         return null;
       }
 
-      const settings = await companySettingsRepository.findByCompanyIdInTransaction(
-        companyId,
-        input.transaction,
-      );
-      const companyMode = parseCommercialSeatQuotaMode(settings?.commercialSeatQuotaMode ?? null);
-      effectiveMode = resolveEffectiveCommercialSeatMode(globalMode, companyMode);
+      try {
+        const settings = await companySettingsRepository.findByCompanyIdInTransaction(
+          companyId,
+          input.transaction,
+          { admissionLock: true },
+        );
+        const companyMode = parseCommercialSeatQuotaMode(settings?.commercialSeatQuotaMode ?? null);
+        effectiveMode = resolveEffectiveCommercialSeatMode(globalMode, companyMode);
+      } catch {
+        await assertTransactionActiveForMutation(input.transaction);
+        const fallbackMode = globalMode === "OBSERVE" ? "OBSERVE" : "ENFORCE";
+        const evaluation = skippedEvaluation(
+          companyId,
+          input.operation,
+          fallbackMode,
+          "EVALUATION_ERROR",
+          "SETTINGS_READ_FAILED",
+          delta,
+          input,
+        );
+        evaluation.shouldBlockMutation = fallbackMode === "ENFORCE";
+        return evaluation;
+      }
       if (effectiveMode === "DISABLED") {
         return null;
       }
 
-      lockResult = await tryAcquireCommercialSeatLock(input.transaction, companyId, effectiveMode);
+      lockResult = await tryAcquireCommercialSeatLock(input.transaction, companyId, effectiveMode!);
     }
 
     if (!effectiveMode || effectiveMode === "DISABLED") {
@@ -289,6 +335,7 @@ export const commercialSeatQuotaService = {
         companyId,
       );
     } catch {
+      await assertTransactionActiveForMutation(input.transaction);
       const evaluation = skippedEvaluation(
         companyId,
         input.operation,
@@ -320,6 +367,7 @@ export const commercialSeatQuotaService = {
     }
 
     if (!lockResult.acquired && effectiveMode === "OBSERVE") {
+      await assertTransactionActiveForMutation(input.transaction);
       return skippedEvaluation(
         companyId,
         input.operation,
@@ -346,16 +394,35 @@ export const commercialSeatQuotaService = {
       return evaluation;
     }
 
-    const activeCountBefore = await employeeRepository.countActiveInTransaction(
-      companyId,
-      input.transaction,
-    );
-    const projectedCount = activeCountBefore + delta;
+    let activeCountBefore: number | null = null;
+    let projectedCount: number | null = null;
+    try {
+      activeCountBefore = await employeeRepository.countActiveInTransaction(
+        companyId,
+        input.transaction,
+      );
+      projectedCount = activeCountBefore + delta;
+    } catch {
+      await assertTransactionActiveForMutation(input.transaction);
+      const evaluation = skippedEvaluation(
+        companyId,
+        input.operation,
+        effectiveMode,
+        "EVALUATION_ERROR",
+        "ACTIVE_COUNT_FAILED",
+        delta,
+        input,
+        { capacityKind: "NOT_EVALUATED" },
+      );
+      evaluation.shouldBlockMutation = effectiveMode === "ENFORCE";
+      return evaluation;
+    }
 
     let capacity: CapacityResolution;
     try {
       capacity = await resolveCapacityInTransaction(input.transaction, companyId, new Date());
     } catch {
+      await assertTransactionActiveForMutation(input.transaction);
       const evaluation = skippedEvaluation(
         companyId,
         input.operation,
@@ -368,8 +435,8 @@ export const commercialSeatQuotaService = {
           capacityKind: "NOT_EVALUATED",
           activeCountBefore,
           projectedCount,
-          isExempt: false,
-          enforceSeatLimit: true,
+          isExempt: null,
+          enforceSeatLimit: null,
         },
       );
       evaluation.shouldBlockMutation = effectiveMode === "ENFORCE";
@@ -395,8 +462,8 @@ export const commercialSeatQuotaService = {
       seatMax: extra.seatMax ?? null,
       billingSubscriptionId: extra.billingSubscriptionId ?? null,
       billingSubscriptionTermId: extra.billingSubscriptionTermId ?? null,
-      isExempt: false,
-      enforceSeatLimit: true,
+      isExempt: extra.isExempt ?? null,
+      enforceSeatLimit: extra.enforceSeatLimit ?? null,
       correlationId: input.correlationId ?? null,
       actorUserId: input.actorUserId ?? null,
       shouldBlockMutation: extra.shouldBlockMutation ?? false,
@@ -406,6 +473,8 @@ export const commercialSeatQuotaService = {
       return base("INCONSISTENCY", "INCONSISTENCY", capacity.reasonCode, {
         billingSubscriptionId: capacity.subscriptionId,
         billingSubscriptionTermId: capacity.termId,
+        isExempt: false,
+        enforceSeatLimit: true,
       });
     }
 
@@ -414,6 +483,8 @@ export const commercialSeatQuotaService = {
         seatMax: null,
         billingSubscriptionId: capacity.subscriptionId,
         billingSubscriptionTermId: capacity.termId,
+        isExempt: false,
+        enforceSeatLimit: true,
       });
     }
 
@@ -424,6 +495,8 @@ export const commercialSeatQuotaService = {
           seatMax,
           billingSubscriptionId: capacity.subscriptionId,
           billingSubscriptionTermId: capacity.termId,
+          isExempt: false,
+          enforceSeatLimit: true,
           shouldBlockMutation: true,
         });
       }
@@ -431,6 +504,8 @@ export const commercialSeatQuotaService = {
         seatMax,
         billingSubscriptionId: capacity.subscriptionId,
         billingSubscriptionTermId: capacity.termId,
+        isExempt: false,
+        enforceSeatLimit: true,
       });
     }
 
@@ -438,15 +513,14 @@ export const commercialSeatQuotaService = {
       seatMax,
       billingSubscriptionId: capacity.subscriptionId,
       billingSubscriptionTermId: capacity.termId,
+      isExempt: false,
+      enforceSeatLimit: true,
     });
   },
 
-  async assertActiveHeadcountAdmissionInTransaction(
-    input: CommercialSeatAdmissionInput,
-  ): Promise<CommercialSeatAdmissionEvaluation | null> {
-    const evaluation = await this.evaluateActiveHeadcountAdmissionInTransaction(input);
+  throwIfAdmissionBlocked(evaluation: CommercialSeatAdmissionEvaluation | null): void {
     if (!evaluation?.shouldBlockMutation) {
-      return evaluation;
+      return;
     }
     if (evaluation.reasonCode === "SEAT_LIMIT_EXCEEDED") {
       throw new AppError(
@@ -462,6 +536,10 @@ export const commercialSeatQuotaService = {
     );
   },
 
+  /**
+   * Events are written on a separate pool connection (autonomous insert). A crash between commit and
+   * insert can drop one ledger row; insert failures are logged and do not fail the employee mutation.
+   */
   async flushAdmissionEvaluation(
     evaluation: CommercialSeatAdmissionEvaluation,
     mutationPersisted: boolean,
@@ -474,7 +552,10 @@ export const commercialSeatQuotaService = {
       evaluation.decision === "REJECTED" ||
       evaluation.decision === "EVALUATION_ERROR" ||
       evaluation.decision === "INCONSISTENCY" ||
-      evaluation.decision === "WOULD_EXCEED";
+      evaluation.decision === "WOULD_EXCEED" ||
+      (evaluation.effectiveMode === "ENFORCE" &&
+        mutationPersisted &&
+        (evaluation.decision === "ALLOWED" || evaluation.decision === "SKIPPED" || evaluation.decision === "INCONSISTENCY"));
     if (!shouldRecord) {
       return;
     }

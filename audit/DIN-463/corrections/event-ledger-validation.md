@@ -1,16 +1,15 @@
-# Event ledger validation (DIN-463 corrections)
+# Event ledger — round 2
 
-## Changes
+## Fixes
 
-- Removed `recordPersistedAdmission` synthetic replay.
-- `CommercialSeatAdmissionEvaluation` carried through employee mutations; flushed post-commit/rollback.
-- `mutationPersisted` column set from flush argument.
-- Nullable `active_count_before` / `projected_count` when not evaluated.
-- Recording: OBSERVE mode (all decisions), ENFORCE failures (`REJECTED`, `EVALUATION_ERROR`, `INCONSISTENCY`, `WOULD_EXCEED`).
+- Rejection evaluations preserved: evaluate before `throwIfAdmissionBlocked`, flush with `mutationPersisted=false` after rollback.
+- ENFORCE success: `ALLOWED` / `SKIPPED` / `INCONSISTENCY` recorded when `mutationPersisted=true`.
+- `capacity_kind` persisted; `is_exempt` / `enforce_seat_limit` nullable (unknown vs explicit).
+- Autonomous insert durability gap documented on `flushAdmissionEvaluation`.
 
-## Automated verification
+## Tests
 
-| Command | Result |
-|---------|--------|
-| `npm run build` | pass |
-| Ledger row assertions in integration tests | **skipped** (no SQL session) |
+| Scenario | Command | Result |
+|----------|---------|--------|
+| Unit mode matrix | `npx tsx --test resolve-effective-commercial-seat-mode.test.ts` | pass |
+| REJECTED + active count + single event | `commercial-seat-quota.integration.test.ts` | **not run** (integration provision failed) |

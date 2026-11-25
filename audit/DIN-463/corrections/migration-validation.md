@@ -1,21 +1,14 @@
-# Migration validation (DIN-463 corrections)
+# Migration validation — round 3
 
-## File
+## Decision
 
-`database/migrations/175_commercial_seat_quota.sql`
+- **175** consolidated final schema: `capacity_kind`, nullable `is_exempt` / `enforce_seat_limit`, filtered index `IX_employees_company_active_quota`, symmetric rollback index drop.
+- **176 removed** (redundant with consolidated 175; never required if 175 not applied in persistence).
 
-## Corrections in this pass
+## SQL integration
 
-- Nullable ledger count columns + relaxed CHECK.
-- Filtered index `IX_employees_company_active_quota` on `employees (company_id, active) WHERE active = 1`.
+Migration apply on ephemeral DB **not executed** in this pass (provision blocked).
 
-## Execution
+## Operational rollback
 
-| Step | Result |
-|------|--------|
-| Apply on local SQL via `npm run migrate` | **not executed** in this session (no ephemeral integration provisioning; production DB must not be targeted) |
-| Rollback script | present at `rollback/175_commercial_seat_quota_rollback.sql` |
-
-## Operational rollback policy
-
-Recommended production de-risk: set `COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE=DISABLED`; do not delete historical ledger rows as routine rollback.
+Disable via `COMMERCIAL_SEAT_QUOTA_GLOBAL_MODE=DISABLED`; do not delete ledger history routinely.

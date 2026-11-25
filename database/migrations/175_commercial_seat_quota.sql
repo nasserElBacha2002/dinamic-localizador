@@ -52,6 +52,7 @@ BEGIN
             CONSTRAINT DF_commercial_seat_quota_events_occurred_at DEFAULT SYSUTCDATETIME(),
         operation NVARCHAR(40) NOT NULL,
         effective_mode NVARCHAR(20) NOT NULL,
+        capacity_kind NVARCHAR(30) NOT NULL,
         decision NVARCHAR(30) NOT NULL,
         reason_code NVARCHAR(60) NOT NULL,
         active_count_before INT NULL,
@@ -60,8 +61,8 @@ BEGIN
         seat_max INT NULL,
         billing_subscription_id UNIQUEIDENTIFIER NULL,
         billing_subscription_term_id UNIQUEIDENTIFIER NULL,
-        is_exempt BIT NOT NULL CONSTRAINT DF_csqe_is_exempt DEFAULT 0,
-        enforce_seat_limit BIT NOT NULL CONSTRAINT DF_csqe_enforce_seat_limit DEFAULT 1,
+        is_exempt BIT NULL,
+        enforce_seat_limit BIT NULL,
         mutation_persisted BIT NOT NULL CONSTRAINT DF_csqe_mutation_persisted DEFAULT 0,
         correlation_id NVARCHAR(64) NULL,
         actor_user_id UNIQUEIDENTIFIER NULL,
@@ -69,6 +70,11 @@ BEGIN
             FOREIGN KEY (company_id) REFERENCES dbo.companies (id),
         CONSTRAINT CK_csqe_effective_mode CHECK (
             effective_mode IN (N'DISABLED', N'OBSERVE', N'ENFORCE')
+        ),
+        CONSTRAINT CK_csqe_capacity_kind CHECK (
+            capacity_kind IN (
+                N'NOT_EVALUATED', N'EXEMPT', N'FINITE', N'UNLIMITED', N'INCONSISTENCY'
+            )
         ),
         CONSTRAINT CK_csqe_decision CHECK (
             decision IN (N'SKIPPED', N'ALLOWED', N'WOULD_EXCEED', N'REJECTED', N'INCONSISTENCY', N'EVALUATION_ERROR')

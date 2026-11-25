@@ -21,6 +21,7 @@ import { userCompanyMembershipRepository } from "../../repositories/companies/us
 import { companyUserEmployeeLinkService } from "./company-user-employee-link.service";
 import { employeeCategoryRepository } from "../../repositories/employees/employee-category.repository";
 import { OPERATIONAL_CHARGE_HOLDER_CATEGORY_NORMALIZED_NAME } from "../../constants/operational-charge-holder";
+import { resolveWorkDateFromScheduledStart } from "../../utils/workdays/work-date";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const uniquePhone = (seed: number): string =>
@@ -129,7 +130,8 @@ describeDatabaseIntegration("OPERATIONAL_MANAGER permissions integration", () =>
     const serviceId = String(location.recordset[0].id);
 
     const futureStart = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-    operationValidFrom = futureStart.toISOString().slice(0, 10);
+    const operationTimezone = "America/Argentina/Buenos_Aires";
+    operationValidFrom = resolveWorkDateFromScheduledStart(futureStart, operationTimezone);
     const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)

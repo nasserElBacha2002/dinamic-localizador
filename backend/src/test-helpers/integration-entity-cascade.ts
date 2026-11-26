@@ -389,6 +389,22 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
   await deleteCompanyIdentityAndConfigSetBased(companyId);
   // Fixture cleanup also drops pending-storage rows and the company row.
   await getPool().request().input("companyId", sql.UniqueIdentifier, companyId).query(`
+    DELETE FROM commercial_seat_quota_events WHERE company_id = @companyId;
+
+    IF OBJECT_ID(N'dbo.billing_subscription_terms', N'U') IS NOT NULL
+    BEGIN
+      DELETE FROM billing_subscription_terms
+      WHERE billing_subscription_id IN (
+        SELECT id FROM billing_subscriptions WHERE company_id = @companyId
+      );
+    END;
+
+    IF OBJECT_ID(N'dbo.billing_subscriptions', N'U') IS NOT NULL
+      DELETE FROM billing_subscriptions WHERE company_id = @companyId;
+
+    IF OBJECT_ID(N'dbo.billing_company_exemptions', N'U') IS NOT NULL
+      DELETE FROM billing_company_exemptions WHERE company_id = @companyId;
+
     DELETE FROM company_pending_storage_deletions WHERE company_id = @companyId;
     DELETE FROM company_deletion_records WHERE company_id = @companyId;
     DELETE FROM companies WHERE id = @companyId

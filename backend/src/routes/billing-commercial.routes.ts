@@ -10,6 +10,7 @@ import {
   subscriptionIdParamsSchema,
 } from "../schemas/billing-negotiated-contract.schema";
 import { registerCommercialBenefitSchema } from "../schemas/billing-commercial-benefit.schema";
+import { updateCommercialSeatQuotaSettingsSchema } from "../schemas/commercial-seat-quota-settings.schema";
 
 export const billingCommercialRouter = Router();
 
@@ -46,4 +47,17 @@ billingCommercialRouter.post(
   validate(subscriptionIdParamsSchema, "params"),
   validate(registerCommercialBenefitSchema),
   asyncHandler(billingCommercialController.registerCommercialBenefit),
+);
+
+billingCommercialRouter.get(
+  "/companies/:companyId/commercial-seat-quota-settings",
+  validate(companyIdParamsSchema, "params"),
+  asyncHandler(billingCommercialController.getCommercialSeatQuotaSettings),
+);
+
+billingCommercialRouter.patch(
+  "/companies/:companyId/commercial-seat-quota-settings",
+  validate(companyIdParamsSchema, "params"),
+  validate(updateCommercialSeatQuotaSettingsSchema),
+  asyncHandler(billingCommercialController.updateCommercialSeatQuotaSettings),
 );

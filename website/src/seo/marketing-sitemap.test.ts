@@ -22,6 +22,8 @@ describe("marketing sitemap", () => {
     assert.match(robots, /^Allow: \/\$/m);
     assert.match(robots, /^Allow: \/software-empresas-limpieza\$/m);
     assert.match(robots, /^Allow: \/software-empresas-limpieza\/\$/m);
+    assert.match(robots, /^Allow: \/video\/$/m);
+    assert.match(robots, /cada landing o recurso público nuevo tiene que sumarse aquí/);
     assert.match(robots, /^Disallow: \/$/m);
   });
 

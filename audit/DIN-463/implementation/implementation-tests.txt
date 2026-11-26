@@ -1,0 +1,21 @@
+# DIN-463 test execution log (2025-11-25)
+
+## Executed
+
+| Command | Result |
+|---------|--------|
+| `npm run build` (backend) | PASS |
+| `node --import tsx --test src/utils/billing/resolve-effective-commercial-seat-mode.test.ts` | PASS (2 tests) |
+
+## Skipped (environment)
+
+| Command | Result |
+|---------|--------|
+| `commercial-seat-quota.integration.test.ts` | SKIP — `describeDatabaseIntegration` (RUN_DB_INTEGRATION_TESTS / ephemeral SQL not active) |
+| `commercial-seat-quota.concurrency.integration.test.ts` | SKIP — same |
+
+## Required before merge (operator)
+
+1. Apply migration `175_commercial_seat_quota.sql` on integration SQL Server.
+2. Run integration tests with `RUN_DB_INTEGRATION_TESTS=true` and ephemeral DB session.
+3. Verify concurrent last-seat scenario passes in ENFORCE.

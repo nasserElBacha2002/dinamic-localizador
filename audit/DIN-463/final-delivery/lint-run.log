@@ -1,0 +1,79 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+
+> dinamic-attendance-backend@0.1.0 lint
+> eslint .
+
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/scripts/load-whatsapp-meta-tariffs.ts
+  10:28  error  'join' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/controllers/company-membership.contract.test.ts
+   2:10  error  'after' is defined but never used. Allowed unused vars must match /^_/u                            @typescript-eslint/no-unused-vars
+   2:17  error  'before' is defined but never used. Allowed unused vars must match /^_/u                           @typescript-eslint/no-unused-vars
+   3:8   error  'sql' is defined but never used. Allowed unused vars must match /^_/u                              @typescript-eslint/no-unused-vars
+   6:3   error  'describeDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+   7:3   error  'setupDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+   8:3   error  'teardownDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  10:10  error  'apiRequest' is defined but never used. Allowed unused vars must match /^_/u                       @typescript-eslint/no-unused-vars
+  10:22  error  'signTestToken' is defined but never used. Allowed unused vars must match /^_/u                    @typescript-eslint/no-unused-vars
+  10:37  error  'startTestServer' is defined but never used. Allowed unused vars must match /^_/u                  @typescript-eslint/no-unused-vars
+  11:10  error  'setupUnitTestEnv' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+  12:10  error  'getPool' is defined but never used. Allowed unused vars must match /^_/u                          @typescript-eslint/no-unused-vars
+  13:10  error  'companyRepository' is defined but never used. Allowed unused vars must match /^_/u                @typescript-eslint/no-unused-vars
+  14:10  error  'userCompanyMembershipRepository' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  15:10  error  'userRepository' is defined but never used. Allowed unused vars must match /^_/u                   @typescript-eslint/no-unused-vars
+  16:10  error  'hashPassword' is defined but never used. Allowed unused vars must match /^_/u                     @typescript-eslint/no-unused-vars
+  18:7   error  'TEST_OWNER_EMAIL' is assigned a value but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+  19:7   error  'TEST_READ_ONLY_EMAIL' is assigned a value but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  20:7   error  'TEST_OUTSIDER_EMAIL' is assigned a value but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/database/bot-session-absence-kind-migration.test.ts
+   4:10  error  'after' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+   4:17  error  'before' is defined but never used. Allowed unused vars must match /^_/u                                   @typescript-eslint/no-unused-vars
+   8:3   error  'describeDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+   9:3   error  'setupDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+  10:3   error  'teardownDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+  39:7   error  'readBotSessionsCheckDefinition' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/routes/marketing-demo.routes.ts
+  5:29  error  'defaultRateLimitKey' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/scripts/recover-orphan-test-databases.ts
+  5:23  error  'existsSync' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/services/absence/absence-request.stabilization.test.ts
+  2:10  error  'after' is defined but never used. Allowed unused vars must match /^_/u                        @typescript-eslint/no-unused-vars
+  2:17  error  'before' is defined but never used. Allowed unused vars must match /^_/u                       @typescript-eslint/no-unused-vars
+  4:3   error  'describeDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  5:3   error  'requireDinamicCompanyId' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  6:3   error  'setupDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+  7:3   error  'teardownDatabaseIntegration' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/services/billing/billing-commercial-benefit.service.ts
+  9:15  error  'BillingSubscription' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/services/whatsapp/whatsapp-message-cost-meta-pricing.service.ts
+  84:9  error  'serviceMonthRank' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/services/whatsapp/whatsapp-message-cost-reconcile.service.ts
+  3:10  error  'maskPhoneNumberForLog' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/test-helpers/din-462-ephemeral-database.lifecycle.integration.test.ts
+  2:25  error  'describe' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/test-helpers/ephemeral-billing-exemption-database.ts
+  317:20  error  The symptom error is being thrown with an incorrect `cause`  preserve-caught-error
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/test-helpers/ephemeral-integration-database.ts
+  199:20  error  The symptom error is being thrown with an incorrect `cause`  preserve-caught-error
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/test-helpers/ephemeral-provision-cleanup.ts
+  4:3  error  'assertEphemeralIntegrationDatabaseName' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/nasserelbacha/Documents/Dinamic sistems/dinamic-localizador/backend/src/test-helpers/integration-database-lifecycle.ts
+  13:3  error  'resolveTestSqlRuntimeCredentials' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 41 problems (41 errors, 0 warnings)
+  1 error and 0 warnings potentially fixable with the `--fix` option.
+
+LINT_EXIT=1

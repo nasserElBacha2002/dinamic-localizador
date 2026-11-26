@@ -281,7 +281,17 @@ if (provisionResult.error) {
   process.exit(1);
 }
 if (provisionResult.status !== 0) {
+  console.error(
+    `[run-integration-tests] PROVISION_FAILED status=${provisionResult.status ?? "null"}`,
+  );
   process.exit(provisionResult.status ?? 1);
+}
+
+if (!existsSync(sessionFile)) {
+  console.error(
+    `[run-integration-tests] PROVISION_FAILED missing session file at ${sessionFile}`,
+  );
+  process.exit(1);
 }
 
 if (existsSync(sessionFile)) {

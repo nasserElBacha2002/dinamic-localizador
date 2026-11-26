@@ -1,0 +1,19 @@
+ M audit/DIN-463/audit-status.txt
+ A audit/DIN-463/corrections/din-463-final-diff.txt
+ M audit/DIN-463/corrections/final-report.md
+ M audit/DIN-463/corrections/final-status.txt
+ M audit/DIN-463/corrections/findings-resolution-matrix.md
+ M audit/DIN-463/corrections/implementation-corrections-tests.txt
+ A audit/DIN-463/corrections/integration-run.log
+ A audit/DIN-463/corrections/lint-run.log
+ M audit/DIN-463/corrections/migration-validation.md
+ M audit/DIN-463/corrections/sql-integration-validation.md
+ A audit/DIN-463/corrections/unit-run.log
+ A audit/DIN-463/implementation/implementation-diffstat.txt
+ A audit/DIN-463/implementation/implementation-status.txt
+ M backend/src/services/billing/commercial-seat-quota.service.ts
+ M backend/src/services/employees/employee.service.ts
+?? audit/DIN-463/corrections/final-diff.txt
+?? audit/DIN-463/corrections/final-diffstat.txt
+?? audit/DIN-463/corrections/final-tests.txt
+?? audit/DIN-463/final-delivery/

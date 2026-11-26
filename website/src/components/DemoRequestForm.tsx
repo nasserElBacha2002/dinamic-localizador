@@ -5,6 +5,7 @@ import { z } from "zod";
 import { trackMarketingEvent } from "../analytics/marketing-events";
 import { isDemoSubmitEnabled, submitDemoRequest } from "../api/demo-request.api";
 import { EMPLOYEE_COUNT_RANGES } from "../content/landing-content";
+import { PRIVACY_POLICY_SEO } from "../content/privacy-policy-content";
 import { marketingDemoHoneypotValue } from "./demo-request-honeypot";
 import classes from "./demo-request-form.module.css";
 
@@ -244,6 +245,10 @@ export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps)
         >
           {submitState === "loading" ? "Enviando…" : "Solicitar una demo"}
         </button>
+        <p className={classes.privacyNote}>
+          Al enviar el formulario aceptás que usemos tus datos para contactarte por la demo. Más info en nuestra{" "}
+          <a href={PRIVACY_POLICY_SEO.pathname}>Política de privacidad</a>.
+        </p>
       </form>
     </div>
   );

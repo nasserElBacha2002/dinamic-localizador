@@ -25,13 +25,19 @@ describe("nginx domain separation templates", () => {
       /location \/ \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{FRONTEND_HOST_PORT\}/,
     );
     assert.doesNotMatch(template, /return 301 \$\{APP_PUBLIC_ORIGIN\}\/login/);
+    assert.doesNotMatch(template, /location = \/index\.html/);
   });
 
   it("separated apex sends / to website and redirects /login to app origin", () => {
     const template = readDeploy(separatedHttps);
     assert.match(template, /return 301 \$\{APP_PUBLIC_ORIGIN\}\/login\$is_args\$args/);
+    assert.match(template, /location = \/index\.html \{\s*\n\s*return 301 https:\/\/dinamicoperations\.com\/\$is_args\$args;/);
     assert.match(template, /location = \/ \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{WEBSITE_HOST_PORT\}/);
     assert.match(template, /location = \/software-empresas-limpieza/);
+    assert.match(
+      template,
+      /location = \/software-empresas-limpieza \{\s*\n\s*return 301 https:\/\/dinamicoperations\.com\/software-empresas-limpieza\/\$is_args\$args;/,
+    );
     assert.match(template, /location \^~ \/software-empresas-limpieza\//);
     assert.doesNotMatch(
       template,
@@ -43,11 +49,16 @@ describe("nginx domain separation templates", () => {
     const template = readDeploy("deploy/nginx.bootstrap.dinamicoperations.com.legacy-unified.conf.template");
     assert.doesNotMatch(template, /\$\{APP_PUBLIC_ORIGIN\}/);
     assert.match(template, /proxy_pass http:\/\/127\.0\.0\.1:\$\{FRONTEND_HOST_PORT\}/);
+    assert.doesNotMatch(template, /location = \/index\.html/);
   });
 
   it("separated bootstrap uses APP_PUBLIC_ORIGIN redirects, not frontend proxy", () => {
     const template = readDeploy("deploy/nginx.bootstrap.dinamicoperations.com.conf.template");
     assert.match(template, /\$\{APP_PUBLIC_ORIGIN\}\/login\$is_args\$args/);
+    assert.match(
+      template,
+      /location = \/index\.html \{\s*\n\s*return 301 \$scheme:\/\/\$host\/\$is_args\$args;/,
+    );
     assert.doesNotMatch(template, /proxy_pass http:\/\/127\.0\.0\.1:\$\{FRONTEND_HOST_PORT\}/);
   });
 });

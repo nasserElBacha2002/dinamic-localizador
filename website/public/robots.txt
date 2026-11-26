@@ -7,6 +7,8 @@ User-agent: *
 Allow: /$
 Allow: /software-empresas-limpieza$
 Allow: /software-empresas-limpieza/$
+Allow: /privacidad$
+Allow: /privacidad/$
 Allow: /sitemap.xml
 Allow: /robots.txt
 Allow: /brand/

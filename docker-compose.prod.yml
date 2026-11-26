@@ -38,6 +38,11 @@ services:
     build:
       target: production
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       NODE_ENV: ${NODE_ENV:?NODE_ENV is required}
       PORT: ${BACKEND_INTERNAL_PORT:?BACKEND_INTERNAL_PORT is required}

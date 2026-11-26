@@ -276,6 +276,28 @@ describe("LandingPage", () => {
     assert.ok(homeLink.querySelector('img[src="/brand/dinamic-operations-isotipo.png"]'));
   });
 
+  it("enlaza la política de privacidad en el footer y bajo el envío de la demo", () => {
+    const { getAllByRole, container } = renderPage(<LandingPage />);
+    const links = getAllByRole("link", { name: "Política de privacidad" });
+    assert.ok(links.length >= 2);
+    assert.ok(links.every((link) => link.getAttribute("href") === "/privacidad/"));
+
+    const form = container.querySelector("form#solicitar-demo");
+    assert.ok(form);
+    const submit = form.querySelector('button[type="submit"]');
+    const noteLink = form.querySelector('a[href="/privacidad/"]');
+    assert.ok(submit);
+    assert.ok(noteLink);
+    assert.ok(submit.compareDocumentPosition(noteLink) & Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal(
+      form.textContent?.includes(
+        "Al enviar el formulario aceptás que usemos tus datos para contactarte por la demo. Más info en nuestra Política de privacidad.",
+      ),
+      true,
+    );
+    assert.equal(form.querySelector('input[type="checkbox"]'), null);
+  });
+
   it("navbar y footer mantienen Ingresar y solicitar demo", () => {
     const { getAllByRole } = renderPage(<LandingPage />);
     const logins = getAllByRole("link", { name: "Ingresar" });

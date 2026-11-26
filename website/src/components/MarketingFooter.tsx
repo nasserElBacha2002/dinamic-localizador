@@ -1,5 +1,6 @@
 import { trackMarketingEvent } from "../analytics/marketing-events";
 import { getOperationsLoginUrl } from "../config/operations-app-url";
+import { PRIVACY_POLICY_SEO } from "../content/privacy-policy-content";
 import classes from "../sections/sections.module.css";
 
 type MarketingFooterProps = {
@@ -25,6 +26,7 @@ export function MarketingFooter({ marketingRoot = "", demoHref = "#solicitar-dem
           >
             Solicitar una demo
           </a>
+          <a href={PRIVACY_POLICY_SEO.pathname}>Política de privacidad</a>
         </nav>
       </div>
     </footer>

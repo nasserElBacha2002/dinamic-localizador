@@ -1,4 +1,8 @@
-# dinamicoperations.com — landing en / y app autenticada en el resto de rutas.
+# dinamicoperations.com — sitio de marketing (apex).
+# Allowlist: cada landing o recurso público nuevo tiene que sumarse aquí
+# con un Allow más específico que "Disallow: /".
+# Si el sitio pasa a muchas páginas públicas, conviene invertir el modelo
+# y hacer Disallow solo de las rutas privadas.
 User-agent: *
 Allow: /$
 Allow: /software-empresas-limpieza$
@@ -8,6 +12,7 @@ Allow: /robots.txt
 Allow: /brand/
 Allow: /marketing/
 Allow: /marketing-assets/
+Allow: /video/
 Disallow: /
 
 Sitemap: https://dinamicoperations.com/sitemap.xml

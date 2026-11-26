@@ -90,6 +90,30 @@ server {
         return 404;
     }
 
+    location = /privacidad {
+        proxy_pass http://127.0.0.1:${WEBSITE_HOST_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Referrer-Policy "no-referrer" always;
+    }
+
+    location ^~ /privacidad/ {
+        proxy_pass http://127.0.0.1:${WEBSITE_HOST_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Referrer-Policy "no-referrer" always;
+    }
+
+    location ~ ^/privacidad[^/]+$ {
+        return 404;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:${FRONTEND_HOST_PORT};
         proxy_http_version 1.1;

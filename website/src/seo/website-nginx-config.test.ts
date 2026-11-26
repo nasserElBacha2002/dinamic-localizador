@@ -20,6 +20,9 @@ describe("website nginx.conf", () => {
     assert.match(conf, /location ~ \^\/software-empresas-limpieza\/\.\+/);
     assert.doesNotMatch(conf, /location \^~ \/software-empresas-limpieza {/);
     assert.doesNotMatch(conf, /try_files \$uri \$uri\/ \/index\.html;/);
+    assert.match(conf, /location = \/privacidad \{\s*\n\s*return 301 \/privacidad\/\$is_args\$args;/);
+    assert.match(conf, /try_files \/privacidad\/index\.html =404;/);
+    assert.match(conf, /location ~ \^\/privacidad\/\.\+/);
   });
 
   it("redirige /index.html a / y responde 404 real en rutas no publicadas", () => {
@@ -71,6 +74,11 @@ describe("apex nginx templates", () => {
           ),
         );
       }
+      assert.match(
+        template,
+        /location = \/privacidad \{\s*\n\s*proxy_pass http:\/\/127\.0\.0\.1:\$\{WEBSITE_HOST_PORT\}/,
+      );
+      assert.match(template, /location \^~ \/privacidad\/ \{/);
     });
   }
 });

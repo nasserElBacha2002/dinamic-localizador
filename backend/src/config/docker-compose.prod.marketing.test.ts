@@ -13,4 +13,10 @@ describe("docker-compose.prod marketing env preflight", () => {
     assert.match(prodCompose, /MARKETING_DEMO_LEAD_TO: \$\{MARKETING_DEMO_LEAD_TO:-\}/);
     assert.doesNotMatch(prodCompose, /MARKETING_DEMO_LEAD_TO:\?\?/);
   });
+
+  it("rota los logs json-file del backend a 10m por 3 archivos", () => {
+    assert.match(prodCompose, /driver: json-file/);
+    assert.match(prodCompose, /max-size: "10m"/);
+    assert.match(prodCompose, /max-file: "3"/);
+  });
 });

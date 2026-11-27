@@ -11,6 +11,7 @@ import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
 import { installMobileMatchMedia } from "../test/match-media-mobile";
+import { LANDING_FAQ } from "../content/landing-editorial";
 import { HERO_CONTENT, LANDING_SEO } from "../content/landing-content";
 
 let renderPage: typeof import("../test/render-page").renderPage;
@@ -33,6 +34,8 @@ describe("LandingPage", () => {
     assert.equal(container.querySelectorAll("h1").length, 1);
     assert.ok(getAllByRole("link", { name: /Solicitar/i }).length >= 1);
     assert.ok(getByRole("heading", { level: 2, name: /PLANIFICÁ\s+DETECTÁ\s+RESOLVÉ/i }));
+    assert.ok(getByRole("heading", { level: 2, name: LANDING_FAQ.sectionTitle }));
+    assert.ok(container.querySelector("#preguntas-frecuentes"));
   });
 
   it("hero expone H1, subtítulo y CTAs hacia demo y video", () => {
@@ -191,14 +194,15 @@ describe("LandingPage", () => {
   });
 
   it("incorpora textos de audiencia y CTA final en la sección de demo", () => {
-    const { getByRole, getByText } = renderPage(<LandingPage />);
+    const { getByRole, getByText, container } = renderPage(<LandingPage />);
     assert.ok(getByRole("heading", { name: /Menos tiempo coordinando/i }));
     assert.ok(getByText(/Hecho para operaciones que no pasan en una sola oficina/i));
-    const limpiezaLink = getByText(/^Limpieza$/i).closest("a");
+    const demoSection = container.querySelector("#solicitar-demo");
+    assert.ok(demoSection);
+    const limpiezaLink = demoSection.querySelector('a[href="/software-empresas-limpieza/"]');
     assert.ok(limpiezaLink);
-    assert.equal(limpiezaLink?.getAttribute("href"), "/software-empresas-limpieza/");
-    assert.ok(getByText(/^Facility$/i));
-    assert.ok(getByText(/Servicios tercerizados/i));
+    assert.match(demoSection.textContent ?? "", /Facility/i);
+    assert.match(demoSection.textContent ?? "", /Servicios tercerizados/i);
   });
 
   it("muestra resumen ejecutivo de operación con métricas demo", () => {
@@ -282,7 +286,7 @@ describe("LandingPage", () => {
     assert.ok(links.length >= 2);
     assert.ok(links.every((link) => link.getAttribute("href") === "/privacidad/"));
 
-    const form = container.querySelector("form#solicitar-demo");
+    const form = container.querySelector("form#solicitar-demo-form");
     assert.ok(form);
     const submit = form.querySelector('button[type="submit"]');
     const noteLink = form.querySelector('a[href="/privacidad/"]');
@@ -296,6 +300,15 @@ describe("LandingPage", () => {
       true,
     );
     assert.equal(form.querySelector('input[type="checkbox"]'), null);
+  });
+
+  it("no duplica ids de anclas de navegación tras el montaje", () => {
+    const anchorIds = ["como-funciona", "situaciones", "solicitar-demo", "preguntas-frecuentes"];
+    renderPage(<LandingPage />);
+    for (const id of anchorIds) {
+      assert.equal(document.querySelectorAll(`#${id}`).length, 1, `id duplicado: ${id}`);
+    }
+    assert.equal(document.getElementById("home-seo-prerender"), null);
   });
 
   it("navbar y footer mantienen Ingresar y solicitar demo", () => {

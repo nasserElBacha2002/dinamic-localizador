@@ -4,6 +4,8 @@ export type DocumentSeo = {
   readonly title: string;
   readonly description: string;
   readonly canonicalUrl: string;
+  readonly ogImage?: string;
+  readonly ogImageAlt?: string;
 };
 
 function upsertMeta(name: string, content: string, property = false) {
@@ -26,6 +28,12 @@ export function useDocumentMeta(seo: DocumentSeo) {
     upsertMeta("og:description", seo.description, true);
     upsertMeta("og:type", "website", true);
     upsertMeta("og:url", seo.canonicalUrl, true);
+    if (seo.ogImage) {
+      upsertMeta("og:image", seo.ogImage, true);
+    }
+    if (seo.ogImageAlt) {
+      upsertMeta("og:image:alt", seo.ogImageAlt, true);
+    }
     let canonical = document.querySelector('link[rel="canonical"]');
     if (!canonical) {
       canonical = document.createElement("link");
@@ -37,5 +45,5 @@ export function useDocumentMeta(seo: DocumentSeo) {
     return () => {
       document.title = previousTitle;
     };
-  }, [seo.title, seo.description, seo.canonicalUrl]);
+  }, [seo.title, seo.description, seo.canonicalUrl, seo.ogImage, seo.ogImageAlt]);
 }

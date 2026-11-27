@@ -1,10 +1,5 @@
-import {
-  COMMERCIAL_SECTION,
-  HERO_CONTENT,
-  LANDING_SEO,
-  SITUATIONS,
-  SITUATIONS_SUPPORTING_TEXT,
-} from "../content/landing-content";
+import { HERO_CONTENT } from "../content/landing-content";
+import { buildHomeEditorialPlainText } from "./home-landing-editorial-text";
 import { CLEANING_LANDING_INTERNAL_LINKS } from "../content/cleaning-landing-content";
 import {
   CLEANING_LANDING_FAQ,
@@ -158,17 +153,7 @@ export function assertNotHomeHeroDuplicate(editorial: string): void {
 }
 
 export function buildHomeMainEditorialPlainText(): string {
-  const chunks = [
-    HERO_CONTENT.title,
-    HERO_CONTENT.lead,
-    LANDING_SEO.description,
-    SITUATIONS_SUPPORTING_TEXT,
-    ...SITUATIONS.flatMap((s) => [s.title, s.line]),
-    COMMERCIAL_SECTION.title,
-    COMMERCIAL_SECTION.lead,
-    ...COMMERCIAL_SECTION.plan.features,
-  ];
-  return normalizeEditorialWhitespace(chunks.join(" "));
+  return buildHomeEditorialPlainText();
 }
 
 /** Rechaza si el cuerpo sectorial contiene porciones largas del texto principal de la home. */

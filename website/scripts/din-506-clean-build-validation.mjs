@@ -25,6 +25,8 @@ function sh(cmd, cwd) {
 const required = [
   "vite-plugins/cleaning-prerender-html.ts",
   "vite-plugins/cleaning-landing-prerender-plugin.ts",
+  "vite-plugins/home-prerender-html.ts",
+  "vite-plugins/home-prerender-plugin.ts",
   "vite.config.ts",
 ];
 

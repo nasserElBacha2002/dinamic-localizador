@@ -212,8 +212,8 @@ export function WhatsAppSection() {
             Fichaje con ubicación, avisos y cambios directamente por WhatsApp.
           </p>
           <p className={classes.whatsappBody}>
-            Cada colaborador recibe lo que necesita en su celular. Vos ves el estado de toda la operación en
-            tiempo real.
+            Cada colaborador recibe lo que necesita en su celular. Vos ves el estado de la operación en el tablero
+            conforme se registran las llegadas.
           </p>
           <ul className={classes.whatsappBenefits}>
             <li>Sin instalar otra app</li>

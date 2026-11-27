@@ -6,7 +6,12 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { cleanup } from "@testing-library/react";
-import { DEMO_FORM_PRIVACY_NOTICE, PRIVACY_POLICY, PRIVACY_POLICY_SEO } from "../content/privacy-policy-content";
+import {
+  DEMO_FORM_PRIVACY_NOTICE,
+  PRIVACY_COMMERCIAL_DATA_GUARANTEE,
+  PRIVACY_POLICY,
+  PRIVACY_POLICY_SEO,
+} from "../content/privacy-policy-content";
 import { renderPage } from "../test/render-page";
 import { PrivacyPolicyPage } from "./PrivacyPolicyPage";
 
@@ -26,6 +31,10 @@ describe("PrivacyPolicyPage", () => {
     for (const section of PRIVACY_POLICY.sections) {
       assert.equal(document.body.textContent?.includes(section.body), true);
     }
+    assert.ok(document.body.textContent?.includes("LinkedIn"));
+    assert.ok(document.body.textContent?.includes(PRIVACY_COMMERCIAL_DATA_GUARANTEE));
+    assert.ok(document.body.textContent?.includes("nombre, apellido y email laboral"));
+    assert.match(document.body.textContent ?? "", /Solo accede Nasser El Bacha/);
 
     const privacyLinks = getAllByRole("link", { name: "Política de privacidad" });
     assert.ok(privacyLinks.some((link) => link.getAttribute("href") === PRIVACY_POLICY_SEO.pathname));

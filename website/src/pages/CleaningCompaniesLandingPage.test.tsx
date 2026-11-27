@@ -7,7 +7,13 @@ import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { cleanup } from "@testing-library/react";
 import { renderPage } from "../test/render-page";
-import { CLEANING_LANDING_HERO, CLEANING_LANDING_SEO } from "../content/cleaning-landing-content";
+import {
+  CLEANING_LANDING_FAQ,
+  CLEANING_LANDING_HERO,
+  CLEANING_LANDING_INTERNAL_LINKS,
+  CLEANING_LANDING_PROBLEMS,
+  CLEANING_LANDING_SEO,
+} from "../content/cleaning-landing-content";
 import { CleaningCompaniesLandingPage } from "./CleaningCompaniesLandingPage";
 
 describe("CleaningCompaniesLandingPage", () => {
@@ -24,8 +30,31 @@ describe("CleaningCompaniesLandingPage", () => {
     const demoLinks = getAllByText(/^Pedí una demo$/i).map(
       (node) => node.closest("a")?.getAttribute("href") ?? "",
     );
-    assert.ok(demoLinks.length >= 1);
+    assert.ok(demoLinks.length >= 2);
     assert.ok(demoLinks.every((href) => href === CLEANING_LANDING_HERO.ctaPrimary.href));
+  });
+
+  it("incluye secciones editoriales, FAQ e H2 mínimos", () => {
+    const { getAllByRole, getByRole } = renderPage(<CleaningCompaniesLandingPage />);
+    const h2 = getAllByRole("heading", { level: 2 });
+    assert.ok(h2.length >= 4);
+    assert.ok(getByRole("heading", { level: 2, name: CLEANING_LANDING_PROBLEMS.sectionTitle }));
+    assert.ok(getByRole("heading", { level: 2, name: CLEANING_LANDING_FAQ.sectionTitle }));
+
+    const h3 = getAllByRole("heading", { level: 3 });
+    assert.ok(h3.length >= CLEANING_LANDING_PROBLEMS.items.length);
+
+    for (const faq of CLEANING_LANDING_FAQ.items) {
+      assert.ok(getByRole("heading", { level: 3, name: faq.question }));
+      assert.ok(document.querySelector(`[data-faq-id="${faq.id}"]`));
+    }
+  });
+
+  it("enlaza secciones internas de la home", () => {
+    const { container } = renderPage(<CleaningCompaniesLandingPage />);
+    assert.ok(container.querySelector(`a[href="${CLEANING_LANDING_INTERNAL_LINKS.comoFunciona}"]`));
+    assert.ok(container.querySelector(`a[href="${CLEANING_LANDING_INTERNAL_LINKS.situaciones}"]`));
+    assert.ok(container.querySelector(`a[href="${CLEANING_LANDING_INTERNAL_LINKS.solicitarDemo}"]`));
   });
 
   it("incluye el caso de uso del tablero operativo", () => {

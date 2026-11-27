@@ -26,6 +26,9 @@ describe("cleaning landing prerender modules", () => {
     const html = buildCleaningPrerenderHtml();
     assert.match(html, new RegExp(`<h1>${escapeRegex(CLEANING_LANDING_HERO.title)}</h1>`));
     assert.match(html, /href="\/#solicitar-demo"/);
+    assert.match(html, /href="\/#como-funciona"/);
+    assert.match(html, /href="\/#situaciones"/);
+    assert.match(html, /Preguntas frecuentes/);
     assert.match(html, /href="\//);
     assert.match(html, new RegExp(`src="${escapeRegex(CLEANING_LANDING_DASHBOARD_IMAGE.src)}"`));
   });

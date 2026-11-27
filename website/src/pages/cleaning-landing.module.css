@@ -71,6 +71,125 @@
   color: var(--m-ink);
 }
 
+.sectionTitle {
+  margin: 0 0 1rem;
+  font-size: clamp(1.5rem, 3.5vw, 2rem);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sectionIntro {
+  margin: 0 0 1.75rem;
+  max-width: 46rem;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--m-ink);
+}
+
+.contentSection,
+.contentSectionAlt {
+  padding-block: var(--m-section-y);
+}
+
+.contentSectionAlt {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, var(--m-surface) 100%);
+}
+
+.problemGrid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .problemGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.problemCard {
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--m-border);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 30, 43, 0.04);
+}
+
+.problemTitle {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.problemText {
+  margin: 0 0 0.65rem;
+  font-size: 0.9875rem;
+  line-height: 1.55;
+  color: var(--m-ink);
+}
+
+.problemText:last-child {
+  margin-bottom: 0;
+}
+
+.prose {
+  max-width: 46rem;
+}
+
+.proseParagraph {
+  margin: 0 0 1rem;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--m-ink);
+}
+
+.proseParagraph:last-child {
+  margin-bottom: 0;
+}
+
+.proseParagraph a {
+  color: var(--m-brand);
+  font-weight: 600;
+}
+
+.proseParagraph a:hover {
+  text-decoration: underline;
+}
+
+.faqList {
+  margin: 0;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.faqItem {
+  margin: 0;
+}
+
+.faqQuestion {
+  margin: 0 0 0.5rem;
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.faqAnswer {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--m-ink);
+}
+
+.faqAnswer a {
+  color: var(--m-brand);
+  font-weight: 600;
+}
+
+.faqAnswer a:hover {
+  text-decoration: underline;
+}
+
 .finalCta {
   padding-block: var(--m-section-y);
   text-align: center;

@@ -13,7 +13,7 @@ const INDUSTRY_TAGS = [
 const VALUE_POINTS = [
   "Control por servicio",
   "Alertas y reemplazos",
-  "Seguimiento en tiempo real",
+  "Seguimiento del día en el tablero",
 ] as const;
 
 export function DemoSection() {

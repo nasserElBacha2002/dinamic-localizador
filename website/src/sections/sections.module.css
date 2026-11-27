@@ -4246,6 +4246,49 @@
   transform: scale(1.03);
 }
 
+.faqSection {
+  background: var(--marketing-surface-muted, #f5f8fa);
+}
+
+.faqList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  max-width: 42rem;
+}
+
+.faqItem {
+  border-bottom: 1px solid rgba(8, 36, 51, 0.08);
+  padding: 0.35rem 0 0.75rem;
+}
+
+.faqQuestion {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  color: #082433;
+  list-style: none;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+.faqAnswer {
+  margin-top: 0.5rem;
+  color: rgba(8, 36, 51, 0.85);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.faqAnswer a {
+  color: #ff5a00;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .heroSceneDot[data-tone="warn"],
   .heroSceneDot[data-alert="true"],

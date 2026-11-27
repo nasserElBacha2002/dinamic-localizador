@@ -7,16 +7,17 @@ export const PRODUCT_VIDEO = {
 } as const;
 
 export const LANDING_SEO = {
-  title: "Software de gestión de personal y servicios | Dinamic Operations",
+  title: "Software de gestión operativa y asistencia por WhatsApp | Dinamic Operations",
   description:
-    "Planificá servicios, asigná personal y controlá asistencias en tiempo real. Detectá ausencias y puestos sin cubrir con Dinamic Operations.",
+    "Planificá servicios y equipos en cada ubicación. Registro de llegada por WhatsApp con ubicación y tablero para detectar ausencias y decidir cobertura.",
   canonicalUrl: "https://dinamicoperations.com/",
 } as const;
 
 export const HERO_CONTENT = {
-  title: "Software para gestionar personal y servicios en distintas ubicaciones",
+  eyebrow: "Gestión operativa para empresas de servicios",
+  title: "Planificá, supervisá y mantené cubiertos tus servicios",
   lead:
-    "Planificá quién cubre cada servicio, controlá la asistencia en tiempo real y detectá ausencias, llegadas tarde o puestos sin cubrir para actuar a tiempo.",
+    "Dinamic Operations es una plataforma de gestión operativa para empresas que coordinan personal y servicios en múltiples ubicaciones. Centralizá la planificación, el registro de asistencia por WhatsApp y el seguimiento de incidencias desde un mismo sistema.",
   ctaPrimary: { label: "Pedí una demo", href: "#solicitar-demo" as const },
   ctaSecondary: { label: "Ver cómo funciona", href: "#como-funciona" as const },
 } as const;

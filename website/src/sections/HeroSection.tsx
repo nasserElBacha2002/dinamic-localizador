@@ -20,7 +20,7 @@ export function HeroSection() {
         <div className={shared.sectionInner}>
           <div className={classes.heroSplit}>
             <div className={classes.heroCopy}>
-              <p className={shared.eyebrow}>Control operativo para empresas de servicios</p>
+              <p className={shared.eyebrow}>{HERO_CONTENT.eyebrow}</p>
               <h1 id="hero-title" className={shared.title}>
                 {HERO_CONTENT.title}
               </h1>

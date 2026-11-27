@@ -27,7 +27,7 @@ type DemoRequestFormProps = {
 
 type SubmitState = "idle" | "loading" | "success" | "error";
 
-export function DemoRequestForm({ id = "solicitar-demo" }: DemoRequestFormProps) {
+export function DemoRequestForm({ id = "solicitar-demo-form" }: DemoRequestFormProps) {
   const startedRef = useRef(false);
   const [honeypotTouched, setHoneypotTouched] = useState(false);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");

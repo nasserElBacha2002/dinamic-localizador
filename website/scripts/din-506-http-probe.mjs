@@ -127,6 +127,14 @@ async function assertCases(label, portNum, extra = []) {
     if (path.endsWith(".webp") && !String(r.type).includes("image/webp")) {
       throw new Error(`unexpected content-type: ${r.type}`);
     }
+    if (path === "/" && !r.body.includes("frontend-app")) {
+      if (!r.body.includes('id="home-seo-prerender"')) {
+        throw new Error("home prerender missing in HTML");
+      }
+      if (!r.body.includes("preguntas-frecuentes")) {
+        throw new Error("home FAQ anchor missing in HTML");
+      }
+    }
   }
   const landing = await httpGet(portNum, "/software-empresas-limpieza/");
   if (!landing.body.includes("id=\"cleaning-seo-prerender\"")) throw new Error("prerender missing in HTML");
